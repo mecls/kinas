@@ -1,0 +1,13 @@
+{
+  "name": "@kinas/cli",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kinas": "./src/main.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "@kinas/commands": "workspace:*",
+    "@kinas/store": "workspace:*"
+  }
+}

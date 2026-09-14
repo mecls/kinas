@@ -1,0 +1,11 @@
+{
+  "name": "@kinas/store",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./staleness": "./src/staleness.ts",
+    "./quota-line": "./src/quota-line.ts",
+    "./types": "./src/types.ts",
+    "./sqlite-readonly": "./src/sqlite-readonly.ts"
+  }
+}

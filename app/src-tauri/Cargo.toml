@@ -1,0 +1,41 @@
+[package]
+name = "kinas-app"
+version = "0.1.0"
+description = "Kinas"
+edition = "2021"
+publish = false
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the binary name.
+name = "kinas_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Every direct dependency is pinned exactly (PRD R6).
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-log = "=2.9.1"
+log = "=0.4.34"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+uuid = { version = "=1.26.1", features = ["v7"] }
+libc = "=0.2.189"
+# The embedded WebDriver server for the e2e suite. Only `--features e2e` (used by e2e/run.ts) pulls it
+# in, so release builds cannot contain it (build spec invariant 19).
+tauri-plugin-wdio-webdriver = { version = "=1.4.0", optional = true }
+
+[features]
+e2e = ["dep:tauri-plugin-wdio-webdriver"]
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

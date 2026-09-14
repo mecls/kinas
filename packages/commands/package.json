@@ -1,0 +1,11 @@
+{
+  "name": "@kinas/commands",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/registry.ts"
+  },
+  "dependencies": {
+    "@kinas/store": "workspace:*"
+  }
+}

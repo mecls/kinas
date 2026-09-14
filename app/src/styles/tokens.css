@@ -1,0 +1,97 @@
+/* Sintra Labs palette (reference design §3.4) inside the instrument-panel character: dark ground,
+   monospace labels, big numbers, thin lines. Colours are defined once, here. */
+:root {
+  --blue: #00549e;
+  --white: #f4f2ec;
+  --crimson: #c4262e;
+  --gold: #dfae3c;
+
+  --ground: #0b0d10;
+  --panel: #12151a;
+  --line: #232830;
+  --muted: #8a8f98;
+
+  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--ground);
+  color: var(--white);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  height: 100%;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.rail-item {
+  appearance: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 4px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+.rail-item[aria-current="page"] {
+  background: var(--line);
+  color: var(--white);
+}
+
+.content {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.page-header {
+  padding: 20px 28px 8px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.work {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}

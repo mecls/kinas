@@ -1,0 +1,28 @@
+{
+  "name": "kinas",
+  "private": true,
+  "type": "module",
+  "workspaces": ["app", "cli", "packages/*"],
+  "scripts": {
+    "dev": "cd app && bun run tauri dev",
+    "build": "cd app && bun run tauri build",
+    "typecheck": "tsc -p packages/store && tsc -p app",
+    "test": "bun test",
+    "test:rust": "cargo test --manifest-path app/src-tauri/Cargo.toml",
+    "lint:rust": "cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "check": "bun run typecheck && bun test && bun run test:rust && bun run lint:rust",
+    "e2e": "bun e2e/run.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@types/mocha": "10.0.10",
+    "@wdio/cli": "9.31.9",
+    "@wdio/globals": "9.31.3",
+    "@wdio/local-runner": "9.31.9",
+    "@wdio/mocha-framework": "9.31.9",
+    "@wdio/spec-reporter": "9.31.2",
+    "@wdio/tauri-service": "1.4.0",
+    "typescript": "7.0.2",
+    "webdriverio": "9.31.9"
+  }
+}

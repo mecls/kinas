@@ -65,6 +65,33 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
 - [x] Child exit shows `[process exited — press Enter to restart]`; Enter respawns — `automated (pane.e2e.ts)`
 - [x] WebGL gone → DOM renderer plus a notice, not a blank pane — `automated (pane.e2e.ts)`
 
+## Build 1 validation
+
+Checks from PRD §5, run on this Mac against `/Applications/Kinas.app` and its real store
+(`scripts/acceptance.sh` runs the repeatable ones).
+
+- **5.1 Repo greps** (2026-09-14, `build-1`): `scripts/acceptance.sh ac10` — both PRD §5.1 `git grep`s print
+  nothing outside `tasks/` and the script itself (which names the patterns; this file deliberately doesn't), and
+  `strings Kinas.app/Contents/MacOS/Kinas | grep -c -E 'wdio|__kinasTest'` → 0.
+- **5.2 Store shape** (2026-09-14): `PRAGMA journal_mode` → `wal`; tables without `org_id NOT NULL` → 0 rows;
+  `SELECT count(*) FROM orgs` → 1; `schema_migrations` → 1.
+- **5.3 No secrets at rest** — early run, 2026-09-14, minutes after the Ollama key was saved (the hour of use is
+  still to come): the key's first 12 characters, `sk-ant-` and `Bearer` → 0 in `kinas.sqlite`, `-wal`, `-shm` and
+  `kinas.log`; `kinas status --json | grep -c -E 'sk-ant-|Bearer'` → 0.
+- **5.5 Ollama against ollama.com**, first half (2026-09-14 19:09): ollama.com showed session 2 % used and weekly
+  0.4 % used; the store held `used_pct` 2.0 and 0.4, and the gauges read 98 % and 99 % left (floored). Removing the
+  key and checking for zero requests is still to do.
+- **5.7 Recount** (2026-09-14): `scripts/check-usage.ts` on 2026-09-11, -12 and -13 — 7 date·harness·model rows,
+  Claude Code and Pi, all equal.
+- **5.8 Idempotency**: relaunch → past totals unchanged. `DELETE FROM log_cursors` + relaunch **failed** on the
+  first build: the six days older than the 45-day `usage_seen` cutoff doubled exactly. Fixed by never pruning
+  `usage_seen` (PRD R26 amended). Re-run on the fixed build (2026-09-14, after rebuilding the usage tables from
+  the transcripts): `check-usage.ts` over all 34 past dates → all rows match; relaunch → 58 past rows unchanged;
+  `DELETE FROM log_cursors` + relaunch → unchanged. **Passes.**
+- **5.11 Host numbers** (2026-09-14): memory 16 GiB vs `hw.memsize` 16.0; disk free 17.14 GiB vs `df` 17.14 GiB;
+  CPU 90.7 % after 9 s of `yes` on every core.
+- **5.12 Done-when clock**: starts the first workday Miguel uses Kinas.app as his terminal.
+
 ## Found in daily use
 
 Write annoyances here as they happen (task 3.9).

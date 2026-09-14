@@ -70,6 +70,16 @@ describe("kinas status", () => {
     expect(stdout).not.toMatch(/sk-ant-|Bearer/);
   });
 
+  test("AC-2: a legacy Ollama plan at 2.5 % used is 97.5 left in JSON and 97% left in text", () => {
+    const ollama = makeStore((db, org, now) => {
+      db.run("INSERT INTO reader_status VALUES (?, 'ollama-cloud', 'ok', ?, ?, NULL, 600000, 43200000)", [org, now, now]);
+      db.run("INSERT INTO quotas VALUES (?, 'ollama-cloud', 'session', 2.5, NULL, NULL, 'ollama.com/api/usage', ?)", [org, now - 60_000]);
+    });
+    const json = JSON.parse(run(["status", "--json"], { KINAS_DATA_DIR: ollama }).stdout);
+    expect(json.quotas.find((q: { subscription: string }) => q.subscription === "ollama-cloud")).toMatchObject({ window: "session", used_pct: 2.5, left_pct: 97.5, state: "fresh" });
+    expect(run(["status"], { KINAS_DATA_DIR: ollama }).stdout).toMatch(/^Ollama · session\s+97% left/m);
+  });
+
   test("a store that does not exist exits 2", () => {
     const { code, stderr } = run(["status"], { KINAS_DATA_DIR: mkdtempSync(join(tmpdir(), "kinas-cli-empty-")) });
     expect(code).toBe(2);

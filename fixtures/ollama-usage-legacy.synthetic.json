@@ -1,0 +1,7 @@
+{
+  "limits": {
+    "session": { "usage": 0.025, "models": { "glm-5.3:cloud": { "request_count": 12 } } },
+    "weekly": { "usage": 0.335, "models": { "glm-5.3:cloud": { "request_count": 640 } } }
+  },
+  "activity": {}
+}

@@ -1,13 +1,17 @@
 import type { QuotaView, ReaderView } from "../api.ts";
-import { PROVIDER_LABEL, WINDOW_LABEL, asOf, leftPct, lisbonClock, resetsIn, tone } from "./format.ts";
+import { PROVIDER_LABEL, WINDOW_LABEL, asOf, leftPct, lisbonClock, resetsIn, tone, usedPct } from "./format.ts";
 
 // One quota window (R38). The number never lies: a dead reading shows "—" and why, a reset window shows
 // "—" because the stored number belongs to a window that ended, and a stale one keeps its number in gold.
+// The bar fills with what is used, like the providers' own pages; its colour still warns by what is left.
+// Ollama's number reads "% used", like ollama.com, and lists the requests per model it reports.
 
 export function Gauge({ quota, reader, now }: { quota: QuotaView; reader: ReaderView | undefined; now: number }) {
   const label = `${PROVIDER_LABEL[quota.subscription]} · ${WINDOW_LABEL[quota.window]}`;
   const left = leftPct(quota.used_pct);
   const hidden = quota.state === "dead" || quota.state === "reset";
+  const showsUsed = quota.subscription === "ollama-cloud";
+  const models = [...quota.models].sort((a, b) => b.request_count - a.request_count || a.name.localeCompare(b.name));
 
   let detail: string;
   if (quota.state === "reset") {
@@ -34,6 +38,11 @@ export function Gauge({ quota, reader, now }: { quota: QuotaView; reader: Reader
       <div className="gauge-number">
         {hidden ? (
           "—"
+        ) : showsUsed ? (
+          <>
+            {usedPct(quota.used_pct)}
+            <span className="gauge-unit">% used</span>
+          </>
         ) : (
           <>
             {left}
@@ -42,9 +51,21 @@ export function Gauge({ quota, reader, now }: { quota: QuotaView; reader: Reader
         )}
       </div>
       <div className="gauge-bar" aria-hidden="true">
-        {!hidden && <div className={`gauge-fill tone-${tone(left)}`} style={{ width: `${Math.max(0, Math.min(100, quota.left_pct))}%` }} />}
+        {!hidden && <div className={`gauge-fill tone-${tone(left)}`} style={{ width: `${Math.max(0, Math.min(100, quota.used_pct))}%` }} />}
       </div>
       <p className="gauge-detail">{detail}</p>
+      {!hidden && models.length > 0 && (
+        <ul className="gauge-models" aria-label={`Requests per model this ${WINDOW_LABEL[quota.window]}`}>
+          {models.map((m) => (
+            <li key={m.name} data-model={m.name}>
+              <span className="gauge-model">{m.name}</span>
+              <span className="gauge-model-count">
+                {m.request_count} {m.request_count === 1 ? "request" : "requests"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <p className={`gauge-asof${quota.state === "stale" ? " is-stale" : ""}`}>
         {asOf(quota.updated_at, now)}
         {quota.state === "stale" && " · stale"}

@@ -3,6 +3,7 @@
 //! stored limits (PRD R12).
 
 use crate::readers::claude_plan::HookStatus;
+use crate::readers::ollama_cloud::ModelRequests;
 use crate::readers::runtime::Backfill;
 use crate::redact::{Reader, DEAD_AFTER_MS};
 use crate::staleness::{reading_state, ReadingState};
@@ -24,6 +25,8 @@ pub struct QuotaView {
     pub source: String,
     pub updated_at: i64,
     pub state: ReadingState,
+    /// Per-model request counts the provider reports for this window (Ollama); empty otherwise.
+    pub models: Vec<ModelRequests>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -45,6 +48,8 @@ pub struct HostView {
     pub mem_total_gb: f64,
     pub disk_used_gb: f64,
     pub disk_total_gb: f64,
+    /// Finder's "available" (free space plus purgeable), GiB; `None` when macOS did not report it.
+    pub disk_available_gb: Option<f64>,
     pub updated_at: i64,
     pub state: ReadingState,
 }
@@ -85,6 +90,11 @@ fn default_limits(reader: &str) -> (i64, i64) {
     (r.stale_after_ms(), DEAD_AFTER_MS)
 }
 
+/// The stored `quotas.models` JSON; anything unreadable shows as no models rather than failing the page.
+fn models_from(stored: Option<String>) -> Vec<ModelRequests> {
+    stored.and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default()
+}
+
 /// The 30 Europe/Lisbon dates ending today, oldest first.
 pub fn chart_days(now_ms: i64) -> Vec<String> {
     let Ok(today) = jiff::Timestamp::from_millisecond(now_ms).and_then(|t| t.in_tz("Europe/Lisbon")).map(|z| z.date()) else {
@@ -120,7 +130,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
 
     let quotas = conn
         .prepare(
-            "SELECT subscription, \"window\", used_pct, resets_at, plan, source, updated_at FROM quotas
+            "SELECT subscription, \"window\", used_pct, resets_at, plan, source, updated_at, models FROM quotas
              WHERE org_id = ?1 ORDER BY subscription, CASE \"window\" WHEN 'session' THEN 0 WHEN 'week' THEN 1 ELSE 2 END",
         )?
         .query_map(params![org_id], |r| {
@@ -138,6 +148,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
                 source: r.get(5)?,
                 updated_at,
                 state: reading_state(Some(updated_at), stale, dead, resets_at, now),
+                models: models_from(r.get(7)?),
                 subscription,
             })
         })?
@@ -145,11 +156,11 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
 
     let host = conn
         .prepare(
-            "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, updated_at FROM hosts
+            "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, updated_at FROM hosts
              WHERE org_id = ?1 ORDER BY updated_at DESC LIMIT 1",
         )?
         .query_map(params![org_id], |r| {
-            let updated_at: i64 = r.get(6)?;
+            let updated_at: i64 = r.get(7)?;
             let (stale, dead) = limits_for("host");
             Ok(HostView {
                 machine: r.get(0)?,
@@ -158,6 +169,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
                 mem_total_gb: r.get(3)?,
                 disk_used_gb: r.get(4)?,
                 disk_total_gb: r.get(5)?,
+                disk_available_gb: r.get(6)?,
                 updated_at,
                 state: reading_state(Some(updated_at), stale, dead, None, now),
             })
@@ -222,7 +234,10 @@ mod tests {
         write_reader_status(&conn, org, Reader::OllamaCloud, Outcome::Success, NOW).unwrap();
         // Claude: 20 min old → fresh under its 30 min limit. Ollama: 11 min old → stale under its 10 min limit.
         conn.execute(
-            "INSERT INTO quotas VALUES (?1,'claude-plan','session',42,?2,NULL,'s',?3), (?1,'ollama-cloud','week',33.5,NULL,NULL,'o',?4), (?1,'claude-plan','week',10,?5,NULL,'s',?3)",
+            "INSERT INTO quotas (org_id, subscription, \"window\", used_pct, resets_at, plan, source, updated_at, models) VALUES
+               (?1,'claude-plan','session',42,?2,NULL,'s',?3,NULL),
+               (?1,'ollama-cloud','week',33.5,NULL,NULL,'o',?4,'[{\"name\":\"glm-5.3:cloud\",\"request_count\":640}]'),
+               (?1,'claude-plan','week',10,?5,NULL,'s',?3,'not json')",
             params![org, NOW + 3_600_000, NOW - 20 * 60_000, NOW - 11 * 60_000, NOW - 1],
         )
         .unwrap();
@@ -233,6 +248,9 @@ mod tests {
         assert_eq!(find("claude-plan", "session").left_pct, 58.0);
         assert_eq!(find("ollama-cloud", "week").state, ReadingState::Stale);
         assert_eq!(find("ollama-cloud", "week").left_pct, 66.5);
+        assert_eq!(find("ollama-cloud", "week").models, vec![ModelRequests { name: "glm-5.3:cloud".into(), request_count: 640 }]);
+        assert!(find("claude-plan", "session").models.is_empty());
+        assert!(find("claude-plan", "week").models.is_empty(), "unreadable JSON shows as no models");
         assert_eq!(find("claude-plan", "week").state, ReadingState::Reset);
         assert_eq!(snap.quotas[0].window, "session", "session sorts before week");
     }

@@ -49,7 +49,7 @@ describe("nothing connected, then a key", () => {
     await expect($(".sheet-message")).toHaveText("Saved");
     await browser.keys(["Escape"]);
     await $('.gauge[data-subscription="ollama-cloud"][data-window="session"]').waitForExist({ timeout: 60000 });
-    await expect($('.gauge[data-subscription="ollama-cloud"][data-window="session"]')).toHaveText(expect.stringContaining("97% left"));
+    await expect($('.gauge[data-subscription="ollama-cloud"][data-window="session"]')).toHaveText(expect.stringContaining("2.5% used"));
     expect(await stubRequests()).toBe(1);
   });
 

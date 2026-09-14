@@ -10,16 +10,24 @@ describe("the Usage page", () => {
     await gauge("claude-plan", "session").waitForExist({ timeout: 60000 });
     await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("58% left"));
     await expect(gauge("claude-plan", "session")).toHaveAttribute("data-state", "fresh");
-    // The app takes up to a minute to start under the driver, so the countdown has moved on a little.
-    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringMatching(/resets in 1 h \d{1,2} m \(\d{2}:\d{2}\)/));
+    // The app takes up to a minute to start under the driver, so the countdown has moved on a little; after
+    // 22:00 the reset is tomorrow and the clock carries the date.
+    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringMatching(/resets in 1 h \d{1,2} m \((\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}\)/));
     await expect(gauge("claude-plan", "week")).toHaveText(expect.stringContaining("76% left"));
   });
 
-  it("shows Ollama's session and week from the stub, with no reset time", async () => {
+  it("shows Ollama's session and week as % used, like ollama.com, with no reset time", async () => {
     await gauge("ollama-cloud", "session").waitForExist({ timeout: 60000 });
-    await expect(gauge("ollama-cloud", "session")).toHaveText(expect.stringContaining("97% left"));
+    await expect(gauge("ollama-cloud", "session")).toHaveText(expect.stringContaining("2.5% used"));
     await expect(gauge("ollama-cloud", "session")).toHaveText(expect.stringContaining("resets: not reported"));
-    await expect(gauge("ollama-cloud", "week")).toHaveText(expect.stringContaining("66% left"));
+    await expect(gauge("ollama-cloud", "week")).toHaveText(expect.stringContaining("34% used"));
+  });
+
+  it("lists Ollama's requests per model under each window, busiest first", async () => {
+    await expect(gauge("ollama-cloud", "session").$('li[data-model="glm-5.3:cloud"]')).toHaveText(expect.stringContaining("12 requests"));
+    const week = await gauge("ollama-cloud", "week").$$(".gauge-models li").map((li) => li.getAttribute("data-model"));
+    expect(week).toEqual(["glm-5.3:cloud", "gpt-oss:120b"]);
+    await expect(gauge("ollama-cloud", "week").$('li[data-model="gpt-oss:120b"]')).toHaveText(expect.stringContaining("9 requests"));
   });
 
   it("charts the transcripts and hatches the days before the first one", async () => {
@@ -30,10 +38,11 @@ describe("the Usage page", () => {
     await expect($(".chart-note*=No data before")).toBeDisplayed();
   });
 
-  it("shows this Mac", async () => {
+  it("shows this Mac, with disk space in Finder's GB", async () => {
     for (const tile of ["cpu", "memory", "disk"]) {
       await $(`.tile[data-tile="${tile}"]`).waitForExist({ timeout: 30000 });
       await expect($(`.tile[data-tile="${tile}"]`)).toHaveText(expect.stringContaining("as of"));
     }
+    await expect($('.tile[data-tile="disk"]')).toHaveText(expect.stringMatching(/\d+(\.\d)? GB[\s\S]*available of \d+ GB · \d+(\.\d)? GB free now/));
   });
 });

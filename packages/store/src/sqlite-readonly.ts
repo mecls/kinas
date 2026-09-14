@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_VERSION } from "./schema-version.ts";
-import type { HostRow, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "./types.ts";
+import type { HostRow, ModelRequests, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "./types.ts";
 
 export const DB_FILE = "kinas.sqlite";
 
@@ -45,6 +45,20 @@ export function openReadOnly(dir: string): OpenResult {
   return { ok: true, store };
 }
 
+/** The stored `quotas.models` JSON; anything unreadable is no models, never a failed status. */
+export function parseModels(stored: string | null): ModelRequests[] {
+  if (!stored) return [];
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (m): m is ModelRequests => typeof m === "object" && m !== null && typeof m.name === "string" && typeof m.request_count === "number",
+    );
+  } catch {
+    return [];
+  }
+}
+
 export class SqliteReadOnlyStore implements StorageAdapter {
   private org: string | undefined;
 
@@ -68,13 +82,21 @@ export class SqliteReadOnlyStore implements StorageAdapter {
     return row.v;
   }
 
+  /** Migration 2 added `quotas.models` and `hosts.disk_available_gb`; a store the app has not migrated yet lacks them. */
+  private get hasUsageDetails(): boolean {
+    return this.schemaVersion() >= 2;
+  }
+
   getQuotas(): QuotaRow[] {
-    return this.db
+    const rows = this.db
       .query(
-        `SELECT subscription, "window" AS window, used_pct, resets_at, plan, source, updated_at FROM quotas
+        `SELECT subscription, "window" AS window, used_pct, resets_at, plan, source, updated_at,
+                ${this.hasUsageDetails ? "models" : "NULL AS models"}
+         FROM quotas
          WHERE org_id = ?1 ORDER BY subscription, CASE "window" WHEN 'session' THEN 0 WHEN 'week' THEN 1 ELSE 2 END`,
       )
-      .all(this.orgId()) as QuotaRow[];
+      .all(this.orgId()) as (Omit<QuotaRow, "models"> & { models: string | null })[];
+    return rows.map((r) => ({ ...r, models: parseModels(r.models) }));
   }
 
   getReaderStatus(): ReaderRow[] {
@@ -89,7 +111,9 @@ export class SqliteReadOnlyStore implements StorageAdapter {
   getHost(): HostRow | null {
     return (this.db
       .query(
-        `SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, updated_at FROM hosts
+        `SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb,
+                ${this.hasUsageDetails ? "disk_available_gb" : "NULL AS disk_available_gb"}, updated_at
+         FROM hosts
          WHERE org_id = ?1 ORDER BY updated_at DESC LIMIT 1`,
       )
       .get(this.orgId()) ?? null) as HostRow | null;

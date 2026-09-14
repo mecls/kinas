@@ -1,7 +1,16 @@
 {
-  "limits": {
-    "session": { "usage": 0.025, "models": { "glm-5.3:cloud": { "request_count": 12 } } },
-    "weekly": { "usage": 0.335, "models": { "glm-5.3:cloud": { "request_count": 640 } } }
+  "activity": {
+    "cost": 0,
+    "period": { "type": "month", "starting_at": "2026-09-01T00:00:00Z", "ending_at": "2026-10-01T00:00:00Z" }
   },
-  "activity": {}
+  "limits": {
+    "session": { "usage": 0.025, "models": [{ "name": "glm-5.3:cloud", "request_count": 12 }] },
+    "weekly": {
+      "usage": 0.335,
+      "models": [
+        { "name": "glm-5.3:cloud", "request_count": 640 },
+        { "name": "gpt-oss:120b", "request_count": 9 }
+      ]
+    }
+  }
 }

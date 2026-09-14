@@ -4,8 +4,10 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
 
 - Files ending in `.synthetic.json` are **not** captured from a real service. They are built from
   documented or observed shapes and stand in until a real capture exists:
-  - `ollama-usage-legacy.synthetic.json` — shape from can1357/oh-my-pi#11739 (2026-09-11). Replace
-    with a real `ollama-usage-<legacy|credits>.json` from task 1.2.
+  - `ollama-usage-legacy.synthetic.json` — shape from can1357/oh-my-pi#11739 (2026-09-11), with field
+    paths re-checked against the live response on 2026-09-14 (`limits.<session|weekly>.usage`,
+    `limits.<window>.models[].{name, request_count}`, `activity.cost`, `activity.period.*`); every
+    value is made up. Replace with a real `ollama-usage-<legacy|credits>.json` from task 1.2.
   - `handoff/*.json` — status line hand-off files built from the documented status line schema
     (code.claude.com/docs/en/statusline): `used_percentage` 0–100, `resets_at` in epoch seconds.
 - Secrets in fixtures are obviously fake (`ollama-FAKE…`, `sk-ant-FAKE…`) so the repo greps in the

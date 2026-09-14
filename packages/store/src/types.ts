@@ -7,6 +7,11 @@ import type { QuotaWindow, Subscription } from "./quota-line.ts";
 export type { QuotaWindow, Subscription };
 export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host";
 
+export interface ModelRequests {
+  name: string;
+  request_count: number;
+}
+
 export interface QuotaRow {
   subscription: Subscription;
   window: QuotaWindow;
@@ -15,6 +20,8 @@ export interface QuotaRow {
   plan: string | null;
   source: string;
   updated_at: number;
+  /** Per-model request counts the provider reports for this window (Ollama); empty otherwise. */
+  models: ModelRequests[];
 }
 
 export interface ReaderRow {
@@ -27,6 +34,7 @@ export interface ReaderRow {
   dead_after_ms: number;
 }
 
+/** Sizes are GiB, whatever the `_gb` suffix says; surfaces convert disk sizes to Finder's decimal GB. */
 export interface HostRow {
   machine: string;
   cpu_pct: number | null;
@@ -34,6 +42,8 @@ export interface HostRow {
   mem_total_gb: number;
   disk_used_gb: number;
   disk_total_gb: number;
+  /** Finder's "available": free space plus purgeable space macOS clears; null when not reported. */
+  disk_available_gb: number | null;
   updated_at: number;
 }
 

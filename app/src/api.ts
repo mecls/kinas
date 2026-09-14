@@ -19,6 +19,8 @@ export interface QuotaView {
   source: string;
   updated_at: number;
   state: ReadingState;
+  /** Per-model request counts the provider reports for this window (Ollama); empty otherwise. */
+  models: { name: string; request_count: number }[];
 }
 
 export interface ReaderView {
@@ -38,6 +40,8 @@ export interface HostView {
   mem_total_gb: number;
   disk_used_gb: number;
   disk_total_gb: number;
+  /** Finder's "available" (free space plus purgeable), GiB; null when macOS did not report it. */
+  disk_available_gb: number | null;
   updated_at: number;
   state: ReadingState;
 }

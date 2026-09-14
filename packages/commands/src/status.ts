@@ -33,6 +33,9 @@ const DEFAULT_LIMITS: Record<string, [number, number]> = {
   host: [120_000, 43_200_000],
 };
 
+/** The store keeps GiB; disk sizes are shown in Finder's decimal GB. */
+const GB_PER_GIB = 1.073741824;
+
 const lisbonDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" });
 
 export function statusFromStore(store: StorageAdapter, now: number): StatusResult {
@@ -97,6 +100,7 @@ export function statusJson(result: StatusResult) {
         source: q.source,
         state: q.state as StatusState,
         reason: q.state === "dead" ? q.reason : null,
+        models: q.models,
       })),
       ...result.missing.map((m) => ({
         subscription: m.subscription,
@@ -109,6 +113,7 @@ export function statusJson(result: StatusResult) {
         source: null,
         state: m.state as StatusState,
         reason: m.reason,
+        models: [],
       })),
     ],
     usage_today: result.usageToday.map((u) => ({
@@ -120,12 +125,14 @@ export function statusJson(result: StatusResult) {
       tokens_out: u.tokens_out,
       messages: u.messages,
     })),
+    // Sizes in GiB, as stored.
     host: result.host && {
       machine: result.host.machine,
       cpu_pct: result.host.cpu_pct,
       mem_used_gb: result.host.mem_used_gb,
       mem_total_gb: result.host.mem_total_gb,
       disk_free_gb: result.host.disk_total_gb - result.host.disk_used_gb,
+      disk_available_gb: result.host.disk_available_gb,
       disk_total_gb: result.host.disk_total_gb,
       updated_at: iso(result.host.updated_at),
       state: result.host.state,
@@ -142,6 +149,13 @@ function compact(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, "")}k`;
   return String(n);
+}
+
+/** Finder's "available" when the app has it (free + purgeable), else free space; whole GB, floored. */
+function diskText(h: HostRow): string {
+  return h.disk_available_gb === null
+    ? `disk free ${Math.floor((h.disk_total_gb - h.disk_used_gb) * GB_PER_GIB)} GB`
+    : `disk available ${Math.floor(h.disk_available_gb * GB_PER_GIB)} GB`;
 }
 
 /** The text lines of `kinas status`. `color` adds gold to stale lines (TTY only). */
@@ -175,7 +189,7 @@ export function statusLines(result: StatusResult, color: boolean): string[] {
     const h = result.host;
     const stale = h.state === "stale";
     const cpu = h.cpu_pct === null ? "—" : `${Math.round(h.cpu_pct)}%`;
-    const line = `${"This Mac".padEnd(LABEL_WIDTH)}CPU ${cpu} · memory ${h.mem_used_gb.toFixed(1)}/${h.mem_total_gb.toFixed(1)} GiB · disk free ${(h.disk_total_gb - h.disk_used_gb).toFixed(0)} GiB · as of ${lisbonClock(h.updated_at, result.now)}${stale ? " (stale)" : ""}`;
+    const line = `${"This Mac".padEnd(LABEL_WIDTH)}CPU ${cpu} · memory ${h.mem_used_gb.toFixed(1)}/${h.mem_total_gb.toFixed(1)} GiB · ${diskText(h)} · as of ${lisbonClock(h.updated_at, result.now)}${stale ? " (stale)" : ""}`;
     lines.push(paint(line, stale));
   }
   return lines;

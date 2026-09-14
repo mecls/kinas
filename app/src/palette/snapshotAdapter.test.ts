@@ -8,7 +8,7 @@ const NOW = 1_789_390_320_000; // 2026-09-14T12:52:00Z = 13:52 in Lisbon
 const snapshot: UsageSnapshot = {
   now: NOW,
   quotas: [
-    { subscription: "claude-plan", window: "session", used_pct: 42, left_pct: 58, resets_at: 1_789_391_400_000, plan: null, source: "Claude Code status line", updated_at: NOW, state: "fresh" },
+    { subscription: "claude-plan", window: "session", used_pct: 42, left_pct: 58, resets_at: 1_789_391_400_000, plan: null, source: "Claude Code status line", updated_at: NOW, state: "fresh", models: [] },
   ],
   readers: [
     { reader: "claude-plan", state: "ok", last_attempt_at: NOW, last_success_at: NOW, last_error: null, stale_after_ms: 1_800_000, dead_after_ms: 43_200_000 },

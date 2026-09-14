@@ -1,12 +1,15 @@
 //! Ollama Cloud plan limits from `GET https://ollama.com/api/usage` (PRD R18–R19).
 //!
-//! The endpoint is undocumented, so parsing is strict about what it recognizes and says so by key name
-//! when it doesn't. Legacy plans report `limits.session.usage` and `limits.weekly.usage` as fractions used
-//! (0–1) with no reset times; the credit-plan shape has not been captured yet (PRD §7 Q2, task 1.2) and is
-//! reported as unrecognized until a real response is committed as a fixture.
+//! The endpoint is undocumented (docs.ollama.com documents only the `Authorization: Bearer` header), so
+//! parsing is strict about what it recognizes and says so by key name when it doesn't. Legacy plans report
+//! `limits.session` and `limits.weekly`, each with `usage` as a fraction used (0–1) and `models` as
+//! `[{name, request_count}]`, and no reset times — field paths checked against the live response on
+//! 2026-09-14. The credit-plan shape has not been captured yet (PRD §7 Q2, task 1.2) and is reported as
+//! unrecognized until a real response is committed as a fixture.
 
 use crate::redact::{write_reader_status, Outcome, Reader};
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
 
@@ -67,10 +70,18 @@ pub fn base_url() -> String {
     "https://ollama.com".into()
 }
 
+/// Requests per model in one window, as Ollama reports them; stored as JSON in `quotas.models`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelRequests {
+    pub name: String,
+    pub request_count: i64,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct UsageWindow {
     pub window: &'static str,
     pub used_pct: f64,
+    pub models: Vec<ModelRequests>,
 }
 
 pub fn parse_usage(body: &str) -> Result<Vec<UsageWindow>, String> {
@@ -84,7 +95,16 @@ pub fn parse_usage(body: &str) -> Result<Vec<UsageWindow>, String> {
             if !(0.0..=100.0).contains(&used) {
                 return Err(format!("out of range: {used}"));
             }
-            windows.push(UsageWindow { window, used_pct: used });
+            // Entries without a name or a whole-number count are skipped rather than failing the reading.
+            let models = limits[key]["models"]
+                .as_array()
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|m| Some(ModelRequests { name: m["name"].as_str()?.to_string(), request_count: m["request_count"].as_i64()? }))
+                        .collect()
+                })
+                .unwrap_or_default();
+            windows.push(UsageWindow { window, used_pct: used, models });
         }
     }
     if windows.is_empty() {
@@ -169,12 +189,14 @@ pub fn record_poll(conn: &mut Connection, org_id: &str, fetched: Option<Result<H
 fn upsert(conn: &mut Connection, org_id: &str, windows: &[UsageWindow], now: i64) -> Result<usize, String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     for w in windows {
+        let models = serde_json::to_string(&w.models).map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO quotas (org_id, subscription, \"window\", used_pct, resets_at, plan, source, updated_at)
-             VALUES (?1, 'ollama-cloud', ?2, ?3, NULL, NULL, ?4, ?5)
+            "INSERT INTO quotas (org_id, subscription, \"window\", used_pct, resets_at, plan, source, updated_at, models)
+             VALUES (?1, 'ollama-cloud', ?2, ?3, NULL, NULL, ?4, ?5, ?6)
              ON CONFLICT (org_id, subscription, \"window\") DO UPDATE SET
-               used_pct = excluded.used_pct, resets_at = NULL, source = excluded.source, updated_at = excluded.updated_at",
-            params![org_id, w.window, w.used_pct, SOURCE, now],
+               used_pct = excluded.used_pct, resets_at = NULL, source = excluded.source, updated_at = excluded.updated_at,
+               models = excluded.models",
+            params![org_id, w.window, w.used_pct, SOURCE, now, models],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -213,6 +235,10 @@ mod tests {
         std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/ollama-usage-legacy.synthetic.json")).unwrap()
     }
 
+    fn model(name: &str, request_count: i64) -> ModelRequests {
+        ModelRequests { name: name.into(), request_count }
+    }
+
     fn windows(store: &Store) -> Vec<(String, f64, Option<i64>)> {
         let conn = store.conn();
         let mut stmt = conn
@@ -226,11 +252,21 @@ mod tests {
     }
 
     #[test]
-    fn legacy_shape_is_fractions_used_with_no_reset_times() {
+    fn legacy_shape_is_fractions_used_and_requests_per_model_with_no_reset_times() {
         assert_eq!(
             parse_usage(&legacy()).unwrap(),
-            vec![UsageWindow { window: "session", used_pct: 2.5 }, UsageWindow { window: "week", used_pct: 33.5 }]
+            vec![
+                UsageWindow { window: "session", used_pct: 2.5, models: vec![model("glm-5.3:cloud", 12)] },
+                UsageWindow { window: "week", used_pct: 33.5, models: vec![model("glm-5.3:cloud", 640), model("gpt-oss:120b", 9)] },
+            ]
         );
+    }
+
+    #[test]
+    fn missing_or_malformed_model_entries_do_not_fail_the_reading() {
+        let parsed = parse_usage(r#"{"limits":{"session":{"usage":0.1,"models":[{"name":"a","request_count":2},{"name":"b"},{"request_count":3}]},"weekly":{"usage":0.2}}}"#).unwrap();
+        assert_eq!(parsed[0].models, vec![model("a", 2)]);
+        assert!(parsed[1].models.is_empty());
     }
 
     #[test]
@@ -251,12 +287,17 @@ mod tests {
     }
 
     #[test]
-    fn a_200_stores_both_windows() {
+    fn a_200_stores_both_windows_with_their_models() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).unwrap();
         let stub = Stub::new(200, &legacy());
         assert_eq!(poll(&mut store.conn(), store.org_id(), Some("ollama-FAKE-key"), &stub, "http://x", 5), PollResult::Applied(2));
         assert_eq!(windows(&store), vec![("session".into(), 2.5, None), ("week".into(), 33.5, None)]);
+        let week_models: String = store
+            .conn()
+            .query_row("SELECT models FROM quotas WHERE subscription = 'ollama-cloud' AND \"window\" = 'week'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(week_models, r#"[{"name":"glm-5.3:cloud","request_count":640},{"name":"gpt-oss:120b","request_count":9}]"#);
         assert_eq!(reader_error(&store), ("ok".into(), None));
     }
 

@@ -109,6 +109,10 @@ if want ac11; then
   free=$(echo "$json" | json_field 'j.host.disk_free_gb')
   avail=$(df -k /System/Volumes/Data | awk 'NR==2{print $4/1048576}')
   awk -v a="$free" -v b="$avail" 'BEGIN{d=(a-b)/b; if (d<0) d=-d; exit !(a != "" && d<=0.01)}' && pass "disk free $free GiB vs df $avail GiB" || fail "disk free '$free' vs df $avail"
+  # What the Disk tile leads with: Finder's "available" (free space plus purgeable), read independently through NSURL.
+  shown=$(echo "$json" | json_field 'j.host.disk_available_gb')
+  finder=$(osascript -l JavaScript -e 'ObjC.import("Foundation"); const k = "NSURLVolumeAvailableCapacityForImportantUsageKey"; const r = $.NSURL.fileURLWithPath("/System/Volumes/Data").resourceValuesForKeysError($([k]), null); String(r.objectForKey(k).js / 1073741824)')
+  awk -v a="$shown" -v b="$finder" 'BEGIN{d=(a-b)/b; if (d<0) d=-d; exit !(a != "" && d<=0.01)}' && pass "disk available $shown GiB vs Finder's $finder GiB" || fail "disk available '$shown' vs Finder's $finder"
   # With the window in the background the host reader samples every 60 s (R27), so allow 90 s of load.
   pids=(); for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes >/dev/null & pids+=($!); done
   ok=0; waited=0; cpu=""

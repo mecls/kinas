@@ -1,7 +1,8 @@
 import type { HostView, ReaderView } from "../api.ts";
-import { asOf, gib } from "./format.ts";
+import { asOf, gb, gib } from "./format.ts";
 
-// This Mac (R27): CPU, memory used / total, disk free (purgeable space counts as used).
+// This Mac (R27): CPU, memory used / total, and disk as Finder shows it — "available" counts the purgeable
+// space macOS clears for you, in decimal GB — with the space free right now underneath.
 
 export function MacTiles({ host, reader, now }: { host: HostView | null; reader: ReaderView | undefined; now: number }) {
   if (!host) {
@@ -13,10 +14,16 @@ export function MacTiles({ host, reader, now }: { host: HostView | null; reader:
   }
   const dead = host.state === "dead";
   const stale = host.state === "stale";
+  const free = host.disk_total_gb - host.disk_used_gb;
+  const available = host.disk_available_gb;
   const tiles = [
     { name: "CPU", value: host.cpu_pct === null || dead ? "—" : `${Math.round(host.cpu_pct)}%`, sub: "all cores" },
     { name: "Memory", value: dead ? "—" : gib(host.mem_used_gb), sub: `of ${gib(host.mem_total_gb)} used` },
-    { name: "Disk", value: dead ? "—" : gib(host.disk_total_gb - host.disk_used_gb), sub: `free (excl. purgeable) of ${gib(host.disk_total_gb)}` },
+    {
+      name: "Disk",
+      value: dead ? "—" : gb(available ?? free),
+      sub: available === null ? `free of ${gb(host.disk_total_gb)}` : `available of ${gb(host.disk_total_gb)} · ${gb(free)} free now`,
+    },
   ];
   return (
     <section className="tiles" aria-label="This Mac" data-state={host.state}>

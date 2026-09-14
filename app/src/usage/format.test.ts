@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asOf, compactTokens, gib, leftPct, resetsIn, tone } from "./format.ts";
+import { asOf, compactTokens, gb, gib, leftPct, resetsIn, tone, usedPct } from "./format.ts";
 
 const NOW = 1_789_390_320_000; // 2026-09-14T12:52:00Z = 13:52 in Lisbon
 const MIN = 60_000;
@@ -39,6 +39,18 @@ test("left is floored", () => {
   expect(leftPct(2.5)).toBe(97);
 });
 
+test("used reads like ollama.com: one decimal under 10, rounded up, whole numbers from 10", () => {
+  expect(usedPct(0)).toBe("0");
+  expect(usedPct(0.1)).toBe("0.1");
+  expect(usedPct(0.003 * 100)).toBe("0.3"); // not 0.4 from floating-point noise
+  expect(usedPct(0.8)).toBe("0.8");
+  expect(usedPct(0.84)).toBe("0.9");
+  expect(usedPct(2)).toBe("2");
+  expect(usedPct(2.5)).toBe("2.5");
+  expect(usedPct(33.5)).toBe("34");
+  expect(usedPct(100)).toBe("100");
+});
+
 test("compact numbers", () => {
   expect(compactTokens(950)).toBe("950");
   expect(compactTokens(34_000)).toBe("34k");
@@ -46,4 +58,11 @@ test("compact numbers", () => {
   expect(compactTokens(6_130_000_000)).toBe("6.1B");
   expect(gib(7.44)).toBe("7.4 GiB");
   expect(gib(460.2)).toBe("460 GiB");
+});
+
+test("disk sizes in Finder's GB, floored", () => {
+  // Measured on this Mac on 2026-09-14: Finder "40,27 GB available", NSURL 40.28 GB = 37.51 GiB; the volume 494.38 GB.
+  expect(gb(37.51)).toBe("40.2 GB");
+  expect(gb(460.43)).toBe("494 GB");
+  expect(gb(29.5)).toBe("31.6 GB");
 });

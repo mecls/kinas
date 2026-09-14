@@ -35,6 +35,9 @@ sysinfo = "=0.39.6"
 reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "json", "http2", "charset", "system-proxy", "blocking"] }
 tauri-plugin-global-shortcut = "=2.3.2"
 tauri-plugin-autostart = "=2.5.1"
+# Finder's "available" disk space (NSURL resource values); both are already in the tree through Tauri.
+objc2 = "=0.6.4"
+objc2-foundation = "=0.3.2"
 
 [features]
 e2e = ["dep:tauri-plugin-wdio-webdriver"]

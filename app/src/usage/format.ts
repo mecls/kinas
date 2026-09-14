@@ -33,6 +33,16 @@ export function tone(left: number): Tone {
   return "blue";
 }
 
+/**
+ * "% used" the way ollama.com writes it: one decimal under 10 ("0.4", "2.5"), whole numbers from 10. Rounded up,
+ * so usage is never understated — the mirror of flooring "left".
+ */
+export function usedPct(used: number): string {
+  // Stored values come from fractions × 100 (0.003 × 100 = 0.30000000000000004); drop that noise first.
+  const clean = Math.round(used * 1e6) / 1e6;
+  return clean < 10 ? String(Math.ceil(clean * 10) / 10) : String(Math.ceil(clean));
+}
+
 /** 950 · 34k · 1.2M · 6.1B */
 export function compactTokens(n: number): string {
   const abs = Math.abs(n);
@@ -48,6 +58,14 @@ function trim(v: number): string {
 
 export function gib(n: number): string {
   return `${n >= 100 ? n.toFixed(0) : n.toFixed(1)} GiB`;
+}
+
+const GB_PER_GIB = 1.073741824;
+
+/** A disk size stored in GiB, shown in Finder's decimal GB and floored, so free space is never overstated. */
+export function gb(gibValue: number): string {
+  const n = gibValue * GB_PER_GIB;
+  return n >= 100 ? `${Math.floor(n)} GB` : `${(Math.floor(n * 10) / 10).toFixed(1)} GB`;
 }
 
 export const PROVIDER_LABEL = { "claude-plan": "Claude", "ollama-cloud": "Ollama" } as const;

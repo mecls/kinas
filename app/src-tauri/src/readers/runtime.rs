@@ -195,7 +195,6 @@ fn logs_loop(app: AppHandle, machine: String, tx: Sender<()>, rx: Receiver<()>) 
     // Kept alive for the life of the thread.
     let _watcher = watch(&[&claude_root, &pi_root], notify::RecursiveMode::Recursive, tx);
     let mut first = true;
-    let mut pruned_on = String::new();
     loop {
         let files: Vec<(logs::Harness, Reader, PathBuf, Vec<PathBuf>)> = [
             (logs::Harness::ClaudeCode, Reader::ClaudeCodeLogs, claude_root.clone()),
@@ -260,13 +259,6 @@ fn logs_loop(app: AppHandle, machine: String, tx: Sender<()>, rx: Receiver<()>) 
             first = false;
         }
 
-        let today = logs::lisbon_date(&jiff::Timestamp::now().to_string()).unwrap_or_default();
-        if today != pruned_on {
-            with_conn(&app, |conn, org| {
-                let _ = logs::prune_seen(conn, org, &today);
-            });
-            pruned_on = today;
-        }
         if any_events {
             changed(&app);
         }

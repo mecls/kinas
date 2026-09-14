@@ -277,18 +277,6 @@ pub fn sweep(conn: &mut Connection, org_id: &str, machine: &str, harness: Harnes
     result
 }
 
-/// `usage_seen` rows older than 45 days can go: their transcripts are gone, so their ids cannot return (R26).
-pub fn prune_seen(conn: &Connection, org_id: &str, today: &str) -> rusqlite::Result<usize> {
-    let cutoff = jiff::civil::Date::strptime("%Y-%m-%d", today)
-        .ok()
-        .and_then(|d| d.checked_sub(jiff::Span::new().days(45)).ok())
-        .map(|d| d.strftime("%Y-%m-%d").to_string());
-    match cutoff {
-        Some(cutoff) => conn.execute("DELETE FROM usage_seen WHERE org_id = ?1 AND date < ?2", params![org_id, cutoff]),
-        None => Ok(0),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,14 +417,12 @@ mod tests {
     }
 
     #[test]
-    fn pruning_drops_only_rows_older_than_45_days() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = Store::open(dir.path()).unwrap();
-        ingest_fixtures(&store);
-        // Fixture dates: 2026-09-10, 2026-09-13, 2026-10-25. Today 2026-11-01 → cutoff 2026-09-17.
-        let removed = prune_seen(&store.conn(), store.org_id(), "2026-11-01").unwrap();
-        assert_eq!(removed, 3); // msg_A and both Pi messages
-        let left: i64 = store.conn().query_row("SELECT count(*) FROM usage_seen", [], |r| r.get(0)).unwrap();
-        assert_eq!(left, 2); // msg_B and msg_C
+    fn counted_message_keys_are_never_deleted() {
+        // A deleted key lets its line count twice the next time its file is read from zero, and
+        // transcripts outlive any fixed window (this Mac kept 59-day-old ones; 6 days doubled in AC-6).
+        let forbidden = concat!("DELETE FROM ", "usage_seen");
+        for (name, source) in [("logs.rs", include_str!("logs.rs")), ("runtime.rs", include_str!("runtime.rs"))] {
+            assert!(!source.contains(forbidden), "{name} deletes counted message keys");
+        }
     }
 }

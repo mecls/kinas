@@ -8,15 +8,18 @@ const stubRequests = async () => ((await (await fetch(`${stub}/__count`)).json()
 
 /** Sets a React-controlled input's value (WebDriver typing doubles characters in the embedded driver). */
 async function fill(selector: string, value: string) {
-  await browser.execute(
+  const found = await browser.execute(
     (sel: string, val: string) => {
-      const input = document.querySelector(sel) as HTMLInputElement;
+      const input = document.querySelector(sel);
+      if (!(input instanceof HTMLInputElement)) return false;
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, val);
       input.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
     },
     selector,
     value,
   );
+  if (!found) throw new Error(`no <input> matches ${selector}`);
 }
 
 describe("nothing connected, then a key", () => {

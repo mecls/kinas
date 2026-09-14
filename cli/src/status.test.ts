@@ -74,6 +74,8 @@ describe("kinas status", () => {
     const { code, stderr } = run(["status"], { KINAS_DATA_DIR: mkdtempSync(join(tmpdir(), "kinas-cli-empty-")) });
     expect(code).toBe(2);
     expect(stderr).toContain("Kinas hasn't run yet — open the app once");
+    // Plain text when stderr is not a terminal: no colour escapes.
+    expect(stderr).not.toContain("\x1b");
   });
 
   test("a store newer than the CLI exits 3", () => {

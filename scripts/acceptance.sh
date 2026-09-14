@@ -1,14 +1,14 @@
 #!/bin/bash
 # Build spec §13 checks that need the real, installed app: AC-5, AC-6, AC-9, AC-10, AC-11, AC-12.
 # Run after `bun run build` and copying Kinas.app to /Applications. Prints PASS/FAIL per check and the output
-# that proves it; exits 1 if any check failed.
+# that proves it; exits 1 if any check failed. Don't run e2e specs at the same time: test builds log to the
+# same folder and share the app name.
 #
 #   scripts/acceptance.sh            everything
 #   scripts/acceptance.sh ac10 ac9   only some
 
 set -u
 cd "$(dirname "$0")/.."
-ROOT="$PWD"
 APP=/Applications/Kinas.app
 BIN="$APP/Contents/MacOS/Kinas"
 DATA="$HOME/Library/Application Support/ai.sintralabs.kinas"
@@ -27,14 +27,24 @@ app_running() { pgrep -f "$BIN" >/dev/null; }
 quit_app() { osascript -e 'tell application "Kinas" to quit' >/dev/null 2>&1; for _ in $(seq 20); do app_running || return 0; sleep 0.5; done; pkill -f "$BIN"; sleep 1; }
 start_app() { app_running || open "$APP"; for _ in $(seq 60); do [ -f "$DB" ] && app_running && return 0; sleep 1; done; return 1; }
 
+# The installed app's log lines since its latest start. e2e debug builds write to the same file, with a store
+# under a temp folder, so every "store open at" line switches between "ours" and "theirs".
+app_log() { awk -v m="store open at $DB" '/store open at /{ on = index($0, m) > 0; if (on) buf = "" } on { buf = buf $0 "\n" } END { printf "%s", buf }' "$LOGS/kinas.log"; }
+
+# One field of `kinas status --json`, printed plain (console.log would colour numbers).
+json_field() { bun -e "const j = JSON.parse(await Bun.stdin.text()); process.stdout.write(String($1 ?? ''))"; }
+
 # Lisbon dates of the three days before today (today keeps changing while Claude Code runs).
 past_dates() { for d in 1 2 3; do TZ=Europe/Lisbon date -v-${d}d +%Y-%m-%d; done | sort | paste -sd, -; }
 
+WAS_RUNNING=0; app_running && WAS_RUNNING=1
+
 if want ac10; then
   section "AC-10 — nothing leaks, nothing ships that shouldn't"
-  hits=$(git grep -i -n -E "${KINAS_PRIVATE_NAMES:?set KINAS_PRIVATE_NAMES to the names that must never be committed}" -- ':!tasks' || true)
+  # This script names the patterns it looks for, so it is excluded along with tasks/.
+  hits=$(git grep -i -n -E "${KINAS_PRIVATE_NAMES:?set KINAS_PRIVATE_NAMES to the names that must never be committed}" -- ':!tasks' ':!scripts/acceptance.sh' || true)
   [ -z "$hits" ] && pass "no private names in the repository (planning documents are kept outside git)" || fail "private names found:$hits"
-  hits=$(git grep -n -E 'Claude Code-credentials|api\.anthropic\.com' -- ':!tasks' || true)
+  hits=$(git grep -n -E 'Claude Code-credentials|api\.anthropic\.com' -- ':!tasks' ':!scripts/acceptance.sh' || true)
   [ -z "$hits" ] && pass "no Claude credential or Anthropic API references" || fail "found: $hits"
   if [ -x "$BIN" ]; then
     n=$(strings "$BIN" | grep -c -E 'wdio|__kinasTest' || true)
@@ -55,11 +65,11 @@ if want ac9; then
   "$KINAS" status >/tmp/kinas-ac9.txt 2>&1; code=$?
   [ $code -eq 0 ] && pass "kinas status exits 0" || fail "kinas status exited $code"
   sed 's/^/      /' /tmp/kinas-ac9.txt
-  empty=$(mktemp -d); KINAS_DATA_DIR="$empty" "$KINAS" status >/dev/null 2>&1; code=$?
-  [ $code -eq 2 ] && pass "missing store exits 2" || fail "missing store exited $code"
+  empty=$(mktemp -d); KINAS_DATA_DIR="$empty" "$KINAS" status >/tmp/kinas-ac9.txt 2>&1; code=$?
+  [ $code -eq 2 ] && pass "missing store exits 2: $(head -1 /tmp/kinas-ac9.txt)" || fail "missing store exited $code"
   newer=$(mktemp -d); sqlite3 "$DB" ".backup '$newer/kinas.sqlite'" && sqlite3 "$newer/kinas.sqlite" "INSERT INTO schema_migrations VALUES (99, 0)"
-  KINAS_DATA_DIR="$newer" "$KINAS" status >/dev/null 2>&1; code=$?
-  [ $code -eq 3 ] && pass "newer schema exits 3" || fail "newer schema exited $code"
+  KINAS_DATA_DIR="$newer" "$KINAS" status >/tmp/kinas-ac9.txt 2>&1; code=$?
+  [ $code -eq 3 ] && pass "newer schema exits 3: $(head -1 /tmp/kinas-ac9.txt)" || fail "newer schema exited $code"
   n=$("$KINAS" status --json | grep -c -E 'sk-ant-|Bearer' || true)
   [ "$n" = "0" ] && pass "--json carries no secrets" || fail "--json matched $n secret-shaped strings"
   quit_app
@@ -71,16 +81,21 @@ if want ac12; then
   section "AC-12 — real side effects on this Mac"
   start_app || fail "app did not start"
   sleep 5
-  ls "$HOME/Library/LaunchAgents" 2>/dev/null | grep -i kinas >/dev/null && pass "launch at login: $(ls "$HOME/Library/LaunchAgents" | grep -i kinas)" || fail "no Kinas LaunchAgent"
-  if grep -a -q 'hotkey unavailable' "$LOGS/kinas.log" 2>/dev/null && [ "$(grep -a 'hotkey unavailable' "$LOGS/kinas.log" | tail -1 | cut -c2-11)" = "$(date -u +%Y-%m-%d)" ]; then
-    echo "      $(grep -a 'hotkey unavailable' "$LOGS/kinas.log" | tail -1)"
+  log=$(app_log)
+  plist="$HOME/Library/LaunchAgents/Kinas.plist"
+  program=$(plutil -extract ProgramArguments.0 raw "$plist" 2>/dev/null || true)
+  [ "$program" = "$BIN" ] && pass "launch at login: $plist → $program" || fail "launch at login: '$program'"
+  echo "$log" | grep -q 'launch at login unavailable' && fail "$(echo "$log" | grep 'launch at login unavailable' | tail -1)"
+  if echo "$log" | grep -q 'hotkey unavailable'; then
+    echo "      $(echo "$log" | grep 'hotkey unavailable' | tail -1)"
     pass "⌘⇧Space not registered, and Settings says so (no other chord registered)"
   else
-    pass "⌘⇧Space registered (no 'hotkey unavailable' today)"
+    pass "⌘⇧Space registered (no 'hotkey unavailable' since the installed app started)"
   fi
   [ -L "$KINAS" ] && pass "~/.local/bin/kinas is a symlink" || fail "~/.local/bin/kinas is not a symlink"
   herdr session list 2>/dev/null | grep -q '^default *running' && pass "Herdr default session running" || fail "Herdr default session not running"
-  grep -a 'terminal: starting' "$LOGS/kinas.log" | tail -1 | grep -q '"herdr; exec' && pass "the pane attached Herdr's default session" || fail "the pane did not start herdr"
+  started=$(echo "$log" | grep 'terminal: starting' | tail -1)
+  echo "$started" | grep -q '"herdr; exec' && pass "the pane attached Herdr's default session: ${started##*INFO] }" || fail "the pane did not start herdr: '$started'"
 fi
 
 if want ac11; then
@@ -88,16 +103,18 @@ if want ac11; then
   start_app || fail "app did not start"
   sleep 12
   json=$("$KINAS" status --json)
-  mem=$(echo "$json" | bun -e 'const j=JSON.parse(await Bun.stdin.text()); console.log(j.host.mem_total_gb)')
+  mem=$(echo "$json" | json_field 'j.host.mem_total_gb')
   real=$(echo "$(sysctl -n hw.memsize) / 1073741824" | bc -l)
-  awk -v a="$mem" -v b="$real" 'BEGIN{d=a-b; if (d<0) d=-d; exit !(d<=0.1)}' && pass "memory total $mem GiB vs hw.memsize $real" || fail "memory total $mem vs $real"
-  free=$(echo "$json" | bun -e 'const j=JSON.parse(await Bun.stdin.text()); console.log(j.host.disk_free_gb)')
+  awk -v a="$mem" -v b="$real" 'BEGIN{d=a-b; if (d<0) d=-d; exit !(a != "" && d<=0.1)}' && pass "memory total $mem GiB vs hw.memsize $real" || fail "memory total '$mem' vs $real"
+  free=$(echo "$json" | json_field 'j.host.disk_free_gb')
   avail=$(df -k /System/Volumes/Data | awk 'NR==2{print $4/1048576}')
-  awk -v a="$free" -v b="$avail" 'BEGIN{d=(a-b)/b; if (d<0) d=-d; exit !(d<=0.01)}' && pass "disk free $free GiB vs df $avail GiB" || fail "disk free $free vs df $avail"
+  awk -v a="$free" -v b="$avail" 'BEGIN{d=(a-b)/b; if (d<0) d=-d; exit !(a != "" && d<=0.01)}' && pass "disk free $free GiB vs df $avail GiB" || fail "disk free '$free' vs df $avail"
+  # With the window in the background the host reader samples every 60 s (R27), so allow 90 s of load.
   pids=(); for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes >/dev/null & pids+=($!); done
-  ok=0; for _ in $(seq 10); do sleep 3; cpu=$("$KINAS" status --json | bun -e 'const j=JSON.parse(await Bun.stdin.text()); console.log(j.host.cpu_pct ?? 0)'); awk -v c="$cpu" 'BEGIN{exit !(c>=90)}' && { ok=1; break; }; done
-  kill "${pids[@]}" 2>/dev/null
-  [ $ok -eq 1 ] && pass "CPU reads $cpu% under load" || fail "CPU only reached ${cpu:-?}% under load"
+  ok=0; waited=0; cpu=""
+  for _ in $(seq 30); do sleep 3; waited=$((waited + 3)); cpu=$("$KINAS" status --json | json_field 'j.host.cpu_pct'); awk -v c="$cpu" 'BEGIN{exit !(c != "" && c + 0 >= 90)}' && { ok=1; break; }; done
+  { kill "${pids[@]}"; wait "${pids[@]}"; } 2>/dev/null
+  [ $ok -eq 1 ] && pass "CPU reads $cpu% under load after ${waited} s" || fail "CPU only reached '${cpu}'% after ${waited} s under load"
 fi
 
 if want ac5; then
@@ -113,6 +130,7 @@ if want ac6; then
   sums() { sqlite3 "$DB" "SELECT date, harness, model, sum(tokens_in), sum(tokens_cache_read), sum(tokens_out), sum(messages) FROM usage_daily WHERE date < '$(TZ=Europe/Lisbon date +%Y-%m-%d)' GROUP BY 1,2,3 ORDER BY 1,2,3"; }
   start_app || fail "app did not start"; sleep 20
   before=$(sums)
+  echo "      $(echo "$before" | wc -l | tr -d ' ') date·harness·model rows before today"
   quit_app; start_app; sleep 30
   [ "$(sums)" = "$before" ] && pass "relaunch leaves past totals unchanged" || fail "relaunch changed past totals"
   quit_app
@@ -120,6 +138,9 @@ if want ac6; then
   start_app; sleep 60
   [ "$(sums)" = "$before" ] && pass "re-reading every transcript from zero leaves past totals unchanged" || fail "re-read changed past totals"
 fi
+
+# Leave the app as it was found.
+[ $WAS_RUNNING -eq 1 ] && ! app_running && start_app >/dev/null
 
 echo
 [ $FAILED -eq 0 ] && echo "ALL REQUESTED CHECKS PASS" || echo "SOME CHECKS FAILED"

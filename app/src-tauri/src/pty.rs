@@ -51,6 +51,7 @@ pub fn default_profile() -> Profile {
     let home = home_dir();
     let projects = home.join("Documents/Projects/SintraLabs/apps");
     let cwd = if projects.is_dir() { projects } else { home };
+    #[cfg_attr(not(debug_assertions), allow(unused_mut))]
     let mut profile = Profile::login_shell_then(&login_shell(), first_command().as_deref(), cwd, locale_lang());
     #[cfg(debug_assertions)]
     if let Some(path) = std::env::var_os("KINAS_E2E_HERDR_CONFIG_PATH") {

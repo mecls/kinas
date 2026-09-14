@@ -17,6 +17,11 @@ function usage(): string {
   return ["usage: kinas status [--json]", "", "  status   how much of each plan is left, today's model usage, and this Mac"].join("\n");
 }
 
+/** Plain text on stderr: Bun's console.error colours its output even when stderr is a file or a pipe. */
+function printError(message: string) {
+  process.stderr.write(`${message}\n`);
+}
+
 async function main(argv: string[]): Promise<number> {
   const [name, ...rest] = argv;
   if (!name || name === "--help" || name === "-h" || name === "help") {
@@ -25,27 +30,27 @@ async function main(argv: string[]): Promise<number> {
   }
   const command = cliCommand(name);
   if (!command) {
-    console.error(`kinas: unknown command "${name}"\n\n${usage()}`);
+    printError(`kinas: unknown command "${name}"\n\n${usage()}`);
     return EXIT.usage;
   }
   const json = rest.includes("--json");
   const unknown = rest.filter((a) => a !== "--json");
   if (unknown.length) {
-    console.error(`kinas ${name}: unknown option ${unknown[0]}\n\n${usage()}`);
+    printError(`kinas ${name}: unknown option ${unknown[0]}\n\n${usage()}`);
     return EXIT.usage;
   }
 
   const opened = openReadOnly(dataDir());
   if (!opened.ok) {
     if (opened.reason === "missing") {
-      console.error("Kinas hasn't run yet — open the app once");
+      printError("Kinas hasn't run yet — open the app once");
       return EXIT.missing;
     }
     if (opened.reason === "newer") {
-      console.error("This kinas CLI is older than the app's store — the ~/.local/bin link is stale");
+      printError("This kinas CLI is older than the app's store — the ~/.local/bin link is stale");
       return EXIT.newer;
     }
-    console.error(`kinas: could not read the store: ${opened.message}`);
+    printError(`kinas: could not read the store: ${opened.message}`);
     return EXIT.error;
   }
 

@@ -1,6 +1,16 @@
+mod cli_link;
 mod commands;
+mod keychain;
 mod paths;
+mod pty;
+mod quota_line;
+mod readers;
+mod readings;
+mod redact;
+mod staleness;
 mod store;
+mod system;
+mod tray;
 
 use std::path::Path;
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -18,6 +28,10 @@ pub fn run() {
                 .level(log::LevelFilter::Info)
                 .build(),
         );
+    let builder = builder
+        .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(system::on_hotkey).build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .manage(system::SystemState::default());
     #[cfg(feature = "e2e")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
 
@@ -28,6 +42,18 @@ pub fn run() {
                 Ok(store) => {
                     log::info!("store open at {}", store.path().display());
                     app.manage(store);
+                    let keys = readers::runtime::start(app.handle(), dir.clone());
+                    app.manage(keychain::Keys(keys));
+                    // R35: ~/.local/bin/kinas → the CLI in this bundle, never clobbering anything else.
+                    let link = cli_link::ensure_for_running_app();
+                    log::info!("cli link: {link:?}");
+                    app.manage(cli_link::CliLink(link));
+                    // R39: the menu bar item.
+                    if let Err(e) = tray::install(app.handle()) {
+                        log::error!("menu bar item: {e}");
+                    }
+                    // R29, R30: launch at login and the global hotkey.
+                    system::setup(app.handle());
                 }
                 Err(error) => {
                     // Nothing works without the store (PRD §3.1 step 1): say where and why, then quit.
@@ -38,7 +64,27 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::store_info])
+        .manage(pty::PtyState::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::store_info,
+            commands::pty_start,
+            commands::pty_write,
+            commands::pty_write_binary,
+            commands::pty_resize,
+            commands::pty_pid,
+            commands::get_usage_snapshot,
+            commands::set_usage_visible,
+            commands::refresh_readings,
+            commands::ollama_key_status,
+            commands::save_ollama_key,
+            commands::remove_ollama_key,
+            commands::cli_link_status,
+            commands::get_settings,
+            commands::set_org_name,
+            commands::set_menu_bar_quota,
+            commands::set_global_hotkey,
+            commands::set_launch_at_login,
+        ])
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -49,16 +95,21 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Kinas");
 
-    app.run(|handle, event| {
+    app.run(|handle, event| match event {
+        // ⌘Q: hang up the terminal's child, SIGKILL after 2 s. Herdr's server keeps its sessions (R28).
+        RunEvent::Exit => {
+            if let Some(pty) = handle.try_state::<pty::PtyState>() {
+                pty.shutdown();
+            }
+        }
         #[cfg(target_os = "macos")]
-        if let RunEvent::Reopen { .. } = event {
+        RunEvent::Reopen { .. } => {
             if let Some(window) = handle.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = (handle, event);
+        _ => {}
     });
 }
 

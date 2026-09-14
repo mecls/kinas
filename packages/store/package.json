@@ -6,6 +6,7 @@
     "./staleness": "./src/staleness.ts",
     "./quota-line": "./src/quota-line.ts",
     "./types": "./src/types.ts",
+    "./schema-version": "./src/schema-version.ts",
     "./sqlite-readonly": "./src/sqlite-readonly.ts"
   }
 }

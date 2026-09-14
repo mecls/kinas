@@ -1,0 +1,194 @@
+import { useEffect, useRef, useState } from "react";
+import { Terminal as XTerm } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import "@xterm/xterm/css/xterm.css";
+import { dispatchAppAction } from "../actions.ts";
+import { decideKey } from "./keyContract.ts";
+import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
+
+const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
+
+export function Terminal({ active }: { active: boolean }) {
+  const host = useRef<HTMLDivElement>(null);
+  const term = useRef<XTerm | null>(null);
+  const fit = useRef<FitAddon | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const el = host.current!;
+    const xterm = new XTerm({
+      macOptionIsMeta: false,
+      scrollback: 10000,
+      fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      theme: { background: "#000000", foreground: "#f4f2ec", cursor: "#f4f2ec" },
+    });
+    const fitAddon = new FitAddon();
+    xterm.loadAddon(fitAddon);
+    xterm.open(el);
+    term.current = xterm;
+    fit.current = fitAddon;
+
+    // WebGL, falling back to xterm's DOM renderer, never a blank pane (R33).
+    let webgl: WebglAddon | null = null;
+    let renderer: "webgl" | "dom" = "dom";
+    const fallBackToDom = (why: string) => {
+      webgl?.dispose();
+      webgl = null;
+      renderer = "dom";
+      setNotice(`WebGL unavailable — using the DOM renderer (${why})`);
+    };
+    try {
+      webgl = new WebglAddon();
+      webgl.onContextLoss(() => fallBackToDom("context lost"));
+      xterm.loadAddon(webgl);
+      renderer = "webgl";
+    } catch (e) {
+      fallBackToDom(String(e));
+    }
+
+    const kitty = new KittyKeyboardTracker();
+    let exited = false;
+    let disposed = false;
+    // Debug builds only: the last 4 KB of raw output and the last 20 key decisions, for e2e diagnostics.
+    let rawTail: number[] = [];
+    let keyLog: string[] = [];
+
+    const send = (data: string) => void invoke("pty_write", { data }).catch(() => {});
+
+    xterm.attachCustomKeyEventHandler((ev) => {
+      const decision = decideKey(ev, kitty.flags);
+      if (import.meta.env.TAURI_ENV_DEBUG === "true") {
+        const mods = `${ev.ctrlKey ? "⌃" : ""}${ev.altKey ? "⌥" : ""}${ev.shiftKey ? "⇧" : ""}${ev.metaKey ? "⌘" : ""}`;
+        keyLog = [...keyLog, `${ev.type} ${mods}${ev.key} flags=${kitty.flags} → ${JSON.stringify(decision)}`].slice(-20);
+      }
+      switch (decision.kind) {
+        case "app":
+          ev.preventDefault();
+          dispatchAppAction(decision.action);
+          return false;
+        case "native":
+          return false;
+        case "pty":
+          ev.preventDefault();
+          if (!exited) send(decision.data);
+          return false;
+        case "xterm":
+          return true;
+      }
+    });
+
+    const start = async () => {
+      kitty.reset();
+      const onData = new Channel<ArrayBuffer>();
+      onData.onmessage = (chunk) => {
+        const bytes = new Uint8Array(chunk);
+        if (import.meta.env.TAURI_ENV_DEBUG === "true") rawTail = [...rawTail, ...bytes].slice(-4096);
+        for (const reply of kitty.feed(bytes)) send(reply);
+        xterm.write(bytes);
+      };
+      const onExit = new Channel<number | null>();
+      onExit.onmessage = () => {
+        if (disposed) return;
+        exited = true;
+        kitty.reset();
+        xterm.write(EXITED);
+      };
+      try {
+        await invoke<number | null>("pty_start", { onData, onExit, cols: xterm.cols, rows: xterm.rows });
+        exited = false;
+      } catch (e) {
+        exited = true;
+        xterm.write(`\r\n[could not start the terminal: ${String(e)} — press Enter to retry]\r\n`);
+      }
+    };
+
+    xterm.onData((data) => {
+      if (exited) {
+        if (data === "\r") void start();
+        return;
+      }
+      send(data);
+    });
+    xterm.onBinary((data) => {
+      if (!exited) void invoke("pty_write_binary", { data: Array.from(data, (c) => c.charCodeAt(0) & 0xff) }).catch(() => {});
+    });
+
+    let timer: number | undefined;
+    const resize = () => {
+      if (el.offsetParent === null) return; // hidden: measure again when shown
+      fitAddon.fit();
+      void invoke("pty_resize", { cols: xterm.cols, rows: xterm.rows }).catch(() => {});
+    };
+    const observer = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(resize, 50);
+    });
+    observer.observe(el);
+
+    fitAddon.fit();
+    void start();
+
+    if (import.meta.env.TAURI_ENV_DEBUG === "true") {
+      void import("../testHooks.ts").then(({ registerTestHooks }) =>
+        registerTestHooks({
+          terminalText: () => {
+            const buffer = xterm.buffer.active;
+            const lines: string[] = [];
+            for (let i = 0; i < buffer.length; i++) lines.push(buffer.getLine(i)?.translateToString(true) ?? "");
+            return lines.join("\n");
+          },
+          terminalFocused: () => document.activeElement === xterm.textarea,
+          terminalRenderer: () => renderer,
+          terminalFallBackToDom: () => fallBackToDom("forced by test"),
+          ptyPid: () => invoke("pty_pid"),
+          keyLog: () => keyLog.join("\n"),
+          // A real keydown on xterm's textarea: the same path a physical key takes through
+          // attachCustomKeyEventHandler and decideKey.
+          dispatchKey: (spec?: unknown) => {
+            const s = (spec ?? {}) as { key: string; code?: string; keyCode?: number; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean; metaKey?: boolean };
+            xterm.textarea?.focus();
+            xterm.textarea?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...s }));
+          },
+          terminalRawTail: () =>
+            rawTail.map((b) => (b === 0x1b ? "\\e" : b === 0x0d ? "\\r" : b === 0x0a ? "\\n\n" : b < 0x20 || b > 0x7e ? `\\x${b.toString(16).padStart(2, "0")}` : String.fromCharCode(b))).join(""),
+          kittyFlags: () => kitty.flags,
+          focusTerminal: () => xterm.focus(),
+          // Types as if the user had, through xterm's own input path (onData), for when WebDriver's
+          // synthetic key events cannot produce printable characters.
+          terminalInput: (text?: unknown) => xterm.input(String(text ?? ""), true),
+        }),
+      );
+    }
+
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      window.clearTimeout(timer);
+      xterm.dispose();
+      term.current = null;
+    };
+  }, []);
+
+  // Becoming visible again: re-measure (the size may have changed while hidden) and take focus.
+  useEffect(() => {
+    if (!active || !term.current || !fit.current) return;
+    const xterm = term.current;
+    const fitAddon = fit.current;
+    requestAnimationFrame(() => {
+      fitAddon.fit();
+      void invoke("pty_resize", { cols: xterm.cols, rows: xterm.rows }).catch(() => {});
+      xterm.focus();
+    });
+  }, [active]);
+
+  return (
+    <div className="terminal">
+      {notice && <div className="terminal-notice">{notice}</div>}
+      <div ref={host} className="terminal-host" />
+    </div>
+  );
+}

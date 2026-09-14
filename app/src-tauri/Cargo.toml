@@ -15,7 +15,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "=2.11.5", features = [] }
+tauri = { version = "=2.11.5", features = ["tray-icon"] }
 tauri-plugin-log = "=2.9.1"
 log = "=0.4.34"
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -26,6 +26,15 @@ libc = "=0.2.189"
 # The embedded WebDriver server for the e2e suite. Only `--features e2e` (used by e2e/run.ts) pulls it
 # in, so release builds cannot contain it (build spec invariant 19).
 tauri-plugin-wdio-webdriver = { version = "=1.4.0", optional = true }
+portable-pty = "=0.9.0"
+jiff = "=0.2.37"
+notify = "=8.2.0"
+sysinfo = "=0.39.6"
+# native-tls uses macOS's Security framework instead of compiling aws-lc-rs; blocking suits the readers'
+# plain polling threads.
+reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "json", "http2", "charset", "system-proxy", "blocking"] }
+tauri-plugin-global-shortcut = "=2.3.2"
+tauri-plugin-autostart = "=2.5.1"
 
 [features]
 e2e = ["dep:tauri-plugin-wdio-webdriver"]

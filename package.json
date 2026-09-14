@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "cd app && bun run tauri dev",
     "build": "cd app && bun run tauri build",
-    "typecheck": "tsc -p packages/store && tsc -p app",
+    "typecheck": "tsc -p packages/store && tsc -p packages/commands && tsc -p cli && tsc -p app",
     "test": "bun test",
     "test:rust": "cargo test --manifest-path app/src-tauri/Cargo.toml",
     "lint:rust": "cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings",
-    "check": "bun run typecheck && bun test && bun run test:rust && bun run lint:rust",
+    "build:cli": "cd app && bun run build:cli",
+    "check": "bun run typecheck && bun test && bun run build:cli && bun run test:rust && bun run lint:rust",
     "e2e": "bun e2e/run.ts"
   },
   "devDependencies": {

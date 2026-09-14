@@ -1,0 +1,36 @@
+{
+  "note": "One quota line, shared by the CLI (TypeScript) and the menu bar (Rust). now = 2026-09-14T12:52:00Z = 13:52 in Lisbon. Left is floor(100 - used_pct).",
+  "now": 1789390320000,
+  "cases": [
+    {
+      "name": "fresh session window, reset later today",
+      "input": { "provider": "claude-plan", "window": "session", "used_pct": 42, "resets_at": 1789391400000, "updated_at": 1789390320000, "state": "fresh", "reason": null },
+      "expected": "Claude · session   58% left · resets 14:10 · as of 13:52"
+    },
+    {
+      "name": "stale week window resetting on another day, left floored",
+      "input": { "provider": "claude-plan", "window": "week", "used_pct": 23.5, "resets_at": 1789714800000, "updated_at": 1789387800000, "state": "stale", "reason": null },
+      "expected": "Claude · week      76% left · resets 2026-09-18 08:00 · as of 13:10 (stale)"
+    },
+    {
+      "name": "Ollama reports no reset time",
+      "input": { "provider": "ollama-cloud", "window": "session", "used_pct": 2.5, "resets_at": null, "updated_at": 1789390200000, "state": "fresh", "reason": null },
+      "expected": "Ollama · session   97% left · resets: not reported · as of 13:50"
+    },
+    {
+      "name": "credits window label",
+      "input": { "provider": "ollama-cloud", "window": "month_credits", "used_pct": 60, "resets_at": null, "updated_at": 1789390200000, "state": "fresh", "reason": null },
+      "expected": "Ollama · credits   40% left · resets: not reported · as of 13:50"
+    },
+    {
+      "name": "dead reading shows the reason and when it was last true",
+      "input": { "provider": "ollama-cloud", "window": "week", "used_pct": 33.5, "resets_at": null, "updated_at": 1789290000000, "state": "dead", "reason": "API key rejected" },
+      "expected": "Ollama · week      — · API key rejected · as of 2026-09-13 10:00"
+    },
+    {
+      "name": "reset window hides the old number",
+      "input": { "provider": "claude-plan", "window": "session", "used_pct": 90, "resets_at": 1789387800000, "updated_at": 1789380000000, "state": "reset", "reason": null },
+      "expected": "Claude · session   — · reset at 13:10 · waiting for a new reading"
+    }
+  ]
+}

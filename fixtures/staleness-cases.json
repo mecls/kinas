@@ -1,0 +1,83 @@
+[
+  {
+    "name": "age exactly at the stale limit is fresh",
+    "updated_at": 1000000,
+    "now": 1600000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": null,
+    "expected": "fresh"
+  },
+  {
+    "name": "1 ms past the stale limit is stale",
+    "updated_at": 1000000,
+    "now": 1600001,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": null,
+    "expected": "stale"
+  },
+  {
+    "name": "age exactly at the dead limit is still stale",
+    "updated_at": 1000000,
+    "now": 44200000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": null,
+    "expected": "stale"
+  },
+  {
+    "name": "1 ms past the dead limit is dead",
+    "updated_at": 1000000,
+    "now": 44200001,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": null,
+    "expected": "dead"
+  },
+  {
+    "name": "never succeeded is dead",
+    "updated_at": null,
+    "now": 1000000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": null,
+    "expected": "dead"
+  },
+  {
+    "name": "a window whose resets_at has arrived is reset",
+    "updated_at": 1000000,
+    "now": 1100000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": 1100000,
+    "expected": "reset"
+  },
+  {
+    "name": "reset outranks dead: the number belongs to a window that ended",
+    "updated_at": 1000000,
+    "now": 50000000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": 2000000,
+    "expected": "reset"
+  },
+  {
+    "name": "a reset still in the future does not change a fresh reading",
+    "updated_at": 1000000,
+    "now": 1100000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": 1100001,
+    "expected": "fresh"
+  },
+  {
+    "name": "claude-plan: 30 min without a response turns stale",
+    "updated_at": 1000000,
+    "now": 2800001,
+    "stale_after_ms": 1800000,
+    "dead_after_ms": 43200000,
+    "resets_at": 99000000,
+    "expected": "stale"
+  }
+]

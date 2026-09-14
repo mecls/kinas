@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:web": "vite",
+    "dev:web": "bun run build:cli && vite",
     "build:web": "vite build",
+    "build:cli": "bun build --compile --target=bun-darwin-arm64 ../cli/src/main.ts --outfile src-tauri/binaries/kinas-aarch64-apple-darwin",
     "tauri": "tauri"
   },
   "dependencies": {

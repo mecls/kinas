@@ -1,16 +1,22 @@
 #!/usr/bin/env bun
 // Builds the debug app (with the embedded WebDriver and test hooks), then runs each spec against a
 // fresh KINAS_DATA_DIR. A spec may ship `<name>.setup.ts` exporting `setup(dataDir)`, which prepares
-// fixtures and returns extra environment variables for the app.
+// fixtures and returns extra environment variables for the app, and optionally `teardown()`. WebdriverIO
+// runs as an async child process, so a setup can keep a stub server answering while the spec runs.
 //
 //   bun e2e/run.ts            build, then every spec
 //   bun e2e/run.ts shell      only specs whose file name contains "shell"
 //   KINAS_E2E_SKIP_BUILD=1    reuse the last debug build
 
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+interface SpecSetup {
+  setup?: (dataDir: string) => Promise<Record<string, string>> | Record<string, string>;
+  teardown?: () => Promise<void> | void;
+}
 
 const root = join(import.meta.dir, "..");
 const specsDir = join(root, "e2e/specs");
@@ -28,6 +34,14 @@ if (!process.env.KINAS_E2E_SKIP_BUILD) {
   if (build.status !== 0) process.exit(build.status ?? 1);
 }
 
+function run(command: string, args: string[], env: Record<string, string>): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { cwd: root, env, stdio: "inherit" });
+    child.on("exit", (code) => resolve(code ?? 1));
+    child.on("error", () => resolve(1));
+  });
+}
+
 const failed: string[] = [];
 for (const spec of specs) {
   const dataDir = mkdtempSync(join(tmpdir(), "kinas-e2e-"));
@@ -37,20 +51,31 @@ for (const spec of specs) {
     if (value !== undefined && !key.toUpperCase().includes("HERDR")) env[key] = value;
   }
   env.KINAS_DATA_DIR = dataDir;
+  // No spec attaches Herdr's `default` session (build spec invariant 20): a plain shell unless the
+  // spec's setup asks for a throwaway session explicitly.
+  env.KINAS_PANE_SHELL_ONLY = "1";
+  // Readers see empty transcript roots, an unreachable Ollama and an in-memory Keychain unless the spec's
+  // setup says otherwise: no e2e run reads Miguel's history, calls ollama.com or touches his Keychain.
+  for (const sub of ["claude", "pi"]) mkdirSync(join(dataDir, "empty", sub), { recursive: true });
+  env.KINAS_CLAUDE_PROJECTS_DIR = join(dataDir, "empty", "claude");
+  env.KINAS_PI_SESSIONS_DIR = join(dataDir, "empty", "pi");
+  env.KINAS_OLLAMA_BASE_URL = "http://127.0.0.1:9";
+  env.KINAS_E2E_MEMORY_KEYCHAIN = "1";
+  // Test launches never register the real global hotkey or a login item.
+  env.KINAS_E2E_NO_SYSTEM_HOOKS = "1";
 
   const setupFile = join(specsDir, spec.replace(/\.e2e\.ts$/, ".setup.ts"));
-  if (existsSync(setupFile)) {
-    const { setup } = (await import(setupFile)) as { setup: (dir: string) => Promise<Record<string, string>> | Record<string, string> };
-    Object.assign(env, await setup(dataDir));
-  }
+  const hooks: SpecSetup = existsSync(setupFile) ? ((await import(setupFile)) as SpecSetup) : {};
+  if (hooks.setup) Object.assign(env, await hooks.setup(dataDir));
 
   console.log(`\n=== ${spec} (data: ${dataDir})`);
-  const run = spawnSync(join(root, "node_modules/.bin/wdio"), ["run", join(root, "e2e/wdio.conf.ts"), "--spec", join(specsDir, spec)], {
-    cwd: root,
-    env,
-    stdio: "inherit",
-  });
-  if (run.status === 0) {
+  let status = 1;
+  try {
+    status = await run(join(root, "node_modules/.bin/wdio"), ["run", join(root, "e2e/wdio.conf.ts"), "--spec", join(specsDir, spec)], env);
+  } finally {
+    await hooks.teardown?.();
+  }
+  if (status === 0) {
     rmSync(dataDir, { recursive: true, force: true });
   } else {
     failed.push(spec);

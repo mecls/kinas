@@ -1,0 +1,9 @@
+{
+  "note": "Totals for fixtures/transcripts, derived by hand from PRD R20–R23. msg_A is counted once at its largest output_tokens (112) although it appears four times in two files; msg_S (<synthetic>) and the malformed line are skipped; msg_B and msg_C straddle the 2026-10-25 DST change and both fall on Lisbon date 2026-10-25.",
+  "rows": [
+    { "date": "2026-09-10", "harness": "claude-code", "provider": "anthropic", "model": "claude-opus-5", "tokens_in": 203, "tokens_cache_read": 5000, "tokens_out": 112, "messages": 1 },
+    { "date": "2026-09-13", "harness": "pi", "provider": "ollama", "model": "glm-5.3:cloud", "tokens_in": 11259, "tokens_cache_read": 704, "tokens_out": 53, "messages": 2 },
+    { "date": "2026-10-25", "harness": "claude-code", "provider": "anthropic", "model": "claude-opus-5", "tokens_in": 10, "tokens_cache_read": 0, "tokens_out": 7, "messages": 1 },
+    { "date": "2026-10-25", "harness": "claude-code", "provider": "anthropic", "model": "claude-sonnet-5", "tokens_in": 150, "tokens_cache_read": 1000, "tokens_out": 20, "messages": 1 }
+  ]
+}

@@ -90,6 +90,11 @@ Checks from PRD §5, run on this Mac against `/Applications/Kinas.app` and its r
   `DELETE FROM log_cursors` + relaunch → unchanged. **Passes.**
 - **5.11 Host numbers** (2026-09-14): memory 16 GiB vs `hw.memsize` 16.0; disk free 17.14 GiB vs `df` 17.14 GiB;
   CPU 90.7 % after 9 s of `yes` on every core.
+  Re-run 2026-09-15 after the Disk tile moved to Finder's number:
+  - disk available 33.32306 GiB vs NSURL's `VolumeAvailableCapacityForImportantUsage`, read through JXA,
+    33.32302 GiB
+  - disk free 25.31 GiB vs `df`'s 25.31 GiB
+  - CPU 99 % after 15 s
 - **5.12 Done-when clock**: starts the first workday Miguel uses Kinas.app as his terminal.
 
 ## Found in daily use

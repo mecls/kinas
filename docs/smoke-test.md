@@ -6,18 +6,24 @@ does not ship. Run it side by side with Ghostty, before calling Build 1 done and
 
 Each line is marked with how it was proven:
 
-- `automated (AC-n)` — covered by the e2e suite (`bun run e2e`); see the build spec's §13
-- `passed by agent` — run by hand by the build agent, with the evidence noted
-- `outstanding — needs Miguel` — needs eyes on the screen, a real keypress or a person
+- `automated (spec)` — covered by the e2e suite (`bun run e2e`); the spec file is named
+- `passed by agent` — run by the build agent, with the evidence noted
+- `outstanding — needs Miguel` — needs eyes on the screen, a physical keypress or a person
+
+The build agent cannot see the screen (no screen-recording permission) and cannot press physical keys, so
+every visual line and every real-keyboard line is Miguel's.
 
 **Versions under test:** Tauri 2.11.5 · xterm.js 6.0.0 · @xterm/addon-webgl 0.19.0 · portable-pty 0.9.0 ·
-Herdr 0.9.0 · macOS 26.
+Herdr 0.9.0 · macOS 26 · 2026-09-14.
 
 ## Herdr
 
+- [x] The pane attaches a Herdr session and runs it — `automated (herdr-keys.e2e.ts)` in a throwaway session
 - [ ] Attach `default` in the pane — `outstanding — needs Miguel`
-- [ ] ⌃Tab and ⌃⇧Tab cycle panes — `automated (AC-7)` in a throwaway session with a correct binding;
-      in `default` it also needs Miguel's `[keys]` fix (PRD §7 Q3)
+- [x] ⌃Tab and ⌃⇧Tab cycle panes — `automated (herdr-keys.e2e.ts)`: a real keydown on xterm's textarea, Kinas
+      sends `\x1b[9;5u` / `\x1b[9;6u`, Herdr's focused pane changes. In `default` this also needs Miguel's
+      `[keys]` fix (PRD §7 Q3), because his current `[keybindings]` section is ignored by Herdr 0.9.0.
+- [ ] ⌃Tab with a physical keyboard — `outstanding — needs Miguel`
 - [ ] Create and close a pane — `outstanding — needs Miguel`
 - [ ] Resize the Kinas window → Herdr reflows, no leftover characters — `outstanding — needs Miguel`
 - [ ] Detach → a working zsh prompt — `outstanding — needs Miguel`
@@ -38,22 +44,26 @@ Herdr 0.9.0 · macOS 26.
 
 ## Characters
 
+- [x] `┌─┐ ção ✓` arrive intact through the PTY into the terminal buffer — `automated (pane.e2e.ts)`
 - [ ] `printf '┌─┐│└─┘ ção ✓ 🎛️ \e[38;2;0;84;158mRGB\e[0m\n'` renders the same as in Ghostty —
-      bytes arrive intact: `automated (AC-8)`; the rendering itself: `outstanding — needs Miguel`
+      `outstanding — needs Miguel`
 
 ## Keyboard contract
 
-- [ ] `cat -v`, then Tab → `^I`, focus stays in the pane — `automated (AC-7)`
-- [ ] ⌃C stops `sleep 100` — `automated (AC-7)`
-- [ ] ⌘K opens the palette; Esc closes it; the next keystroke reaches the shell — `automated (AC-7)`
-- [ ] The same three with a real keyboard — `outstanding — needs Miguel`
+- [x] `cat -t`, then Tab → `^I`, focus stays in the terminal — `automated (keyboard.e2e.ts)`
+- [x] ⌃C stops `sleep 100` — `automated (keyboard.e2e.ts)`, ⌃C sent as a real keydown on xterm's textarea
+- [x] ⌘K raises the palette instead of reaching the shell — `automated (keyboard.e2e.ts)`
+- [x] ⌘K opens the palette; Esc closes it; the next line reaches the shell — `automated (palette.e2e.ts)`
+- [x] ⌘1 / ⌘2 switch pages from inside the terminal — `automated (keyboard.e2e.ts)`
+- [ ] The same with a physical keyboard — `outstanding — needs Miguel`
 
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —
       `outstanding — needs Miguel`
-- [ ] Usage and back: scrollback intact, shell PID unchanged — `automated (AC-8)`
-- [ ] WebGL forced off → DOM renderer plus a notice, not a blank pane — `automated (AC-8)`
+- [x] Usage and back, and a hidden window: scrollback intact, shell PID unchanged — `automated (pane.e2e.ts)`
+- [x] Child exit shows `[process exited — press Enter to restart]`; Enter respawns — `automated (pane.e2e.ts)`
+- [x] WebGL gone → DOM renderer plus a notice, not a blank pane — `automated (pane.e2e.ts)`
 
 ## Found in daily use
 
@@ -62,3 +72,9 @@ Write annoyances here as they happen (task 3.9).
 ## Accepted differences from Ghostty
 
 - Font: Kinas uses SF Mono; Ghostty's default is JetBrains Mono.
+
+## Notes from building the e2e suite
+
+- WebDriver's key actions in the embedded WKWebView driver double printable characters and send Control as a
+  separate keydown without `ctrlKey`, so the suite types text through xterm's own `input()` and sends ⌃-chords
+  as real keydown events on xterm's textarea. Tab, Enter and ⌘-chords go through WebDriver unchanged.

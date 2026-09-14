@@ -1,4 +1,4 @@
-import { browser, $, expect } from "@wdio/globals";
+import { browser, $, $$, expect } from "@wdio/globals";
 
 // AC-3 (Journey B): with nothing connected the gauges say so and no request is made; saving a key in Settings
 // makes exactly one request and the Ollama gauges appear. Settings also shows the Claude hook lines.
@@ -32,7 +32,11 @@ describe("nothing connected, then a key", () => {
     await $('.gauge-empty[data-subscription="ollama-cloud"] .button').click();
     await expect($(".sheet")).toBeDisplayed();
     await expect($('[data-testid="hook-status"]')).toHaveText(expect.stringContaining("never seen"));
-    await expect($(".hook-line code*=claude-rate-limits.json")).toBeExisting();
+    // The embedded WebKit driver rejects text selectors mixed with CSS, so read the lines instead.
+    const lines = await $$(".hook-line code").map((code) => code.getText());
+    expect(lines).toHaveLength(3);
+    expect(lines.join("\n")).toContain("claude-rate-limits.json");
+    expect(lines.join("\n")).not.toContain("refreshInterval");
     await expect($('[data-testid="cli-link"]')).toHaveText(expect.stringContaining("not linked"));
   });
 

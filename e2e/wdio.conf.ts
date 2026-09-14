@@ -1,8 +1,10 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 // Run through e2e/run.ts, which builds the debug app once and gives every spec its own data folder.
 const root = join(import.meta.dirname, "..");
-const app = join(root, "app/src-tauri/target/debug/kinas-app");
+// The executable is named Kinas (tauri.conf.json mainBinaryName); older builds were kinas-app.
+const app = [join(root, "app/src-tauri/target/debug/Kinas"), join(root, "app/src-tauri/target/debug/kinas-app")].find((p) => existsSync(p)) ?? join(root, "app/src-tauri/target/debug/Kinas");
 
 export const config: WebdriverIO.Config = {
   runner: "local",

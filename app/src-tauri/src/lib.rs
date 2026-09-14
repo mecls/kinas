@@ -37,6 +37,11 @@ pub fn run() {
 
     let app = builder
         .setup(|app| {
+            // e2e launches run as background apps: no Dock icon, no stolen focus while Miguel works.
+            #[cfg(all(feature = "e2e", target_os = "macos"))]
+            if std::env::var("KINAS_E2E_NO_SYSTEM_HOOKS").as_deref() == Ok("1") {
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
             let dir = paths::data_dir(app.handle())?;
             match store::Store::open(&dir) {
                 Ok(store) => {

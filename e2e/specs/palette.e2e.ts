@@ -7,7 +7,14 @@ import { hook, typeLine, waitForShell, waitForTerminal } from "../helpers.ts";
 describe("the command palette", () => {
   it("opens with ⌘K and lists exactly the palette commands", async () => {
     await $('section[data-page="usage"]').waitForDisplayed({ timeout: 60000 });
-    await browser.keys(["Meta", "k"]);
+    // Right after launch the first chord can land before the window's listeners are attached; press until open.
+    await browser.waitUntil(
+      async () => {
+        await browser.keys(["Meta", "k"]);
+        return (await $(".palette").isExisting()) || (await browser.pause(500), await $(".palette").isExisting());
+      },
+      { timeout: 20000, interval: 1000, timeoutMsg: "⌘K never opened the palette" },
+    );
     await expect($(".palette")).toBeDisplayed();
     const ids = await $$(".palette-item").map((item) => item.getAttribute("data-command"));
     expect(ids).toEqual(["status", "refresh", "go.usage", "go.work", "settings"]);

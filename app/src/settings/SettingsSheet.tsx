@@ -10,6 +10,7 @@ import {
   type LinkStatus,
   type SettingsView,
 } from "../api.ts";
+import { chordFromEvent } from "./chord.ts";
 
 // The ⌘, sheet (PRD §3.9). A sheet, not a page: two pages is the rule.
 
@@ -45,14 +46,6 @@ function linkText(link: LinkStatus): string {
     case "no_bundle":
       return "not linked: this build is not running from Kinas.app";
   }
-}
-
-/** A keydown → Tauri accelerator ("Cmd+Shift+Space"). Returns null for a bare modifier. */
-export function chordFromEvent(e: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">): string | null {
-  if (["Meta", "Control", "Alt", "Shift"].includes(e.key)) return null;
-  const parts = [e.metaKey && "Cmd", e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift"].filter(Boolean) as string[];
-  const key = e.code === "Space" ? "Space" : e.code.startsWith("Key") ? e.code.slice(3) : e.code.startsWith("Digit") ? e.code.slice(5) : e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  return [...parts, key].join("+");
 }
 
 export function SettingsSheet({ onClose }: { onClose: () => void }) {

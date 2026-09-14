@@ -8,6 +8,9 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 const BUNDLE_MARKER: &str = "Kinas.app/Contents/MacOS/";
+/// Inside the bundle the CLI is `kinas-cli`, next to the `Kinas` executable: `kinas` and `Kinas` would be the same
+/// file on the case-insensitive disk. The link on PATH is still called `kinas`.
+const BUNDLED_CLI: &str = "kinas-cli";
 
 /// What happened to the link at launch, for Settings.
 pub struct CliLink(pub LinkStatus);
@@ -28,7 +31,7 @@ pub fn bundled_cli(exe: &Path) -> Option<PathBuf> {
     if !exe.to_string_lossy().contains(BUNDLE_MARKER) {
         return None;
     }
-    let cli = exe.parent()?.join("kinas");
+    let cli = exe.parent()?.join(BUNDLED_CLI);
     cli.is_file().then_some(cli)
 }
 
@@ -87,7 +90,7 @@ mod tests {
     fn fake_bundle(root: &Path, name: &str) -> PathBuf {
         let dir = root.join(name).join("Kinas.app/Contents/MacOS");
         std::fs::create_dir_all(&dir).unwrap();
-        let cli = dir.join("kinas");
+        let cli = dir.join(BUNDLED_CLI);
         std::fs::write(&cli, "#!/bin/sh\n").unwrap();
         cli
     }
@@ -132,8 +135,8 @@ mod tests {
     fn only_a_bundled_executable_has_a_cli_to_link() {
         let root = tempfile::tempdir().unwrap();
         let cli = fake_bundle(root.path(), "Applications");
-        let exe = cli.with_file_name("kinas-app");
+        let exe = cli.with_file_name("Kinas");
         assert_eq!(bundled_cli(&exe), Some(cli));
-        assert_eq!(bundled_cli(Path::new("/x/target/debug/kinas-app")), None);
+        assert_eq!(bundled_cli(Path::new("/x/target/debug/Kinas")), None);
     }
 }

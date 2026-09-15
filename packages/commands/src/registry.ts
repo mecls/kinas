@@ -9,6 +9,10 @@ export interface CommandContext {
   now: number;
   /** Both doors: the CLI reads the store read-only, the palette asks the app. */
   getStatus?: () => Promise<StatusResult>;
+  /** CLI only: the context packet, rendered for the operator or for an agent. */
+  getContext?: () => Promise<string>;
+  /** CLI only: the lines that point at a markdown file. */
+  openFile?: () => Promise<string[]>;
   /** Palette only. */
   navigate?: (page: "usage" | "work") => void;
   refresh?: () => Promise<void>;
@@ -18,6 +22,8 @@ export interface CommandContext {
 export interface CommandOutput {
   /** Text to show: printed by the CLI, shown inside the palette. */
   lines?: string[];
+  /** Preformatted text, printed as is. */
+  text?: string;
   result?: StatusResult;
 }
 
@@ -44,6 +50,26 @@ export const commands: readonly Command[] = [
     async run(ctx) {
       const result = await need(ctx.getStatus, "status")();
       return { result };
+    },
+  },
+  {
+    // The context packet (CLI v0): `kinas context` for the operator, `--agent` for the start of an agent session.
+    id: "context",
+    title: "Context",
+    cliName: "context",
+    doors: ["cli"],
+    async run(ctx) {
+      return { text: await need(ctx.getContext, "context")() };
+    },
+  },
+  {
+    // The app has no markdown reader yet, so the CLI door prints the file's path (CLI v0).
+    id: "open",
+    title: "Open a markdown file",
+    cliName: "open",
+    doors: ["cli"],
+    async run(ctx) {
+      return { lines: await need(ctx.openFile, "open")() };
     },
   },
   {

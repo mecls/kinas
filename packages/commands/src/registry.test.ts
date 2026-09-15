@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { cliCommand, commands, commandsFor, paletteMatches } from "./registry.ts";
 
-describe("the Build 1 registry (R36)", () => {
+describe("the registry (R36, CLI v0)", () => {
   test("holds exactly these commands and doors", () => {
     expect(commands.map((c) => [c.id, [...c.doors]])).toEqual([
       ["status", ["cli", "palette"]],
+      ["context", ["cli"]],
+      ["open", ["cli"]],
       ["refresh", ["palette"]],
       ["go.usage", ["palette"]],
       ["go.work", ["palette"]],
@@ -12,13 +14,8 @@ describe("the Build 1 registry (R36)", () => {
     ]);
   });
 
-  test("has no open command, not even a stub", () => {
-    expect(commands.some((c) => c.id.includes("open") || c.cliName === "open")).toBe(false);
-    expect(cliCommand("open")).toBeUndefined();
-  });
-
-  test("the CLI door is status only", () => {
-    expect(commandsFor("cli").map((c) => c.cliName)).toEqual(["status"]);
+  test("the CLI door is status, context and open", () => {
+    expect(commandsFor("cli").map((c) => c.cliName)).toEqual(["status", "context", "open"]);
     expect(cliCommand("refresh")).toBeUndefined();
   });
 
@@ -31,5 +28,12 @@ describe("the Build 1 registry (R36)", () => {
 
   test("a command whose context is missing says so", async () => {
     await expect(commands.find((c) => c.id === "refresh")!.run({ now: 0 })).rejects.toThrow("refresh is not available here");
+    await expect(cliCommand("context")!.run({ now: 0 })).rejects.toThrow("context is not available here");
+    await expect(cliCommand("open")!.run({ now: 0 })).rejects.toThrow("open is not available here");
+  });
+
+  test("context and open return what their door supplies", async () => {
+    expect(await cliCommand("context")!.run({ now: 0, getContext: async () => "# Kinas context\n" })).toEqual({ text: "# Kinas context\n" });
+    expect(await cliCommand("open")!.run({ now: 0, openFile: async () => ["/a/b.md"] })).toEqual({ lines: ["/a/b.md"] });
   });
 });

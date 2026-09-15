@@ -8,6 +8,12 @@
   "dependencies": {
     "@clack/prompts": "1.8.1",
     "@kinas/commands": "workspace:*",
-    "@kinas/store": "workspace:*"
+    "@kinas/context": "workspace:*",
+    "@kinas/store": "workspace:*",
+    "ink": "7.1.1",
+    "react": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0"
   }
 }

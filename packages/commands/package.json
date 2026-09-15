@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/registry.ts"
+    ".": "./src/registry.ts",
+    "./theme": "./src/theme.ts"
   },
   "dependencies": {
     "@kinas/store": "workspace:*"

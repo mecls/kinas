@@ -1,0 +1,13 @@
+{
+  "name": "@kinas/context",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/world.ts"
+  },
+  "dependencies": {
+    "@kinas/commands": "workspace:*",
+    "@kinas/store": "workspace:*"
+  }
+}

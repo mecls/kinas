@@ -134,8 +134,8 @@ describe("kinas status", () => {
     expect(stdout).toContain("Today              no model usage yet");
   });
 
-  test("unknown commands and options exit 64; open does not exist", () => {
-    expect(run(["open", "x.md"], { KINAS_DATA_DIR: healthy }).code).toBe(64);
+  test("unknown commands and options exit 64", () => {
+    expect(run(["deploy"], { KINAS_DATA_DIR: healthy }).code).toBe(64);
     expect(run(["status", "--yaml"], { KINAS_DATA_DIR: healthy }).code).toBe(64);
   });
 });

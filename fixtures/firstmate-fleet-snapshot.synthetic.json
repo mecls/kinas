@@ -1,0 +1,119 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-09-14T21:00:00Z",
+  "fm_home": "__FM_HOME__",
+  "roots": {
+    "fm_root": "__FM_HOME__",
+    "state": "__FM_HOME__/state",
+    "data": "__FM_HOME__/data",
+    "config": "__FM_HOME__/config",
+    "projects": "__FM_HOME__/projects"
+  },
+  "backlog": {
+    "path": "__FM_HOME__/data/backlog.md",
+    "present": true,
+    "records": [
+      {
+        "order": 1,
+        "state": "in_flight",
+        "structured": true,
+        "id": "t-101",
+        "checked": false,
+        "title": "Add login rate limiting",
+        "repo": "acme",
+        "kind": "ship",
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "captain_actionable": false,
+        "hold_bucket": null,
+        "since": "2026-09-13"
+      },
+      {
+        "order": 2,
+        "state": "queued",
+        "structured": true,
+        "id": "t-102",
+        "checked": false,
+        "title": "Pick a payments provider",
+        "repo": "acme",
+        "kind": "scout",
+        "hold_reason": "Stripe or Adyen: the report is in",
+        "hold_kind": "decision",
+        "hold_until": null,
+        "captain_actionable": true,
+        "hold_bucket": "live",
+        "since": "2026-09-12"
+      },
+      {
+        "order": 3,
+        "state": "queued",
+        "structured": true,
+        "id": "t-103",
+        "checked": false,
+        "title": "Write the onboarding email",
+        "repo": "hub",
+        "kind": "ship",
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "captain_actionable": false,
+        "hold_bucket": null,
+        "since": "2026-09-14"
+      },
+      {
+        "order": 4,
+        "state": "done",
+        "structured": true,
+        "id": "t-090",
+        "checked": true,
+        "title": "Set up the storefront repo",
+        "repo": "acme",
+        "kind": "ship",
+        "captain_actionable": false,
+        "hold_bucket": null,
+        "merged": "2026-09-10"
+      },
+      {
+        "order": 5,
+        "state": "queued",
+        "structured": false,
+        "id": null,
+        "raw": "- a loose note someone typed into the backlog",
+        "body_lines": [],
+        "body_excerpt": null
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "t-101",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "direct-pr",
+      "yolo": "",
+      "project": "acme",
+      "spawn_gen": "1",
+      "backend": "herdr",
+      "remote": null,
+      "paths": {
+        "meta": { "path": "__FM_HOME__/state/t-101.meta", "present": true },
+        "status_log": { "path": "__FM_HOME__/state/t-101.status", "present": true, "kind": "event_history", "last_event": { "state": "working", "note": "running tests", "raw": "working: running tests" } },
+        "worktree": { "path": "__ROOT__/clients/acme-t-101", "present": true },
+        "home": { "path": null, "present": false },
+        "report": { "path": null, "present": false }
+      },
+      "secondmate_projects": [],
+      "current_state": { "state": "working", "source": "status", "detail": "running tests", "raw": "working running tests", "observed_at": "2026-09-14T21:00:00Z", "freshness": "fresh" },
+      "endpoint": { "target": "w1:p1", "exists": true, "agent_alive": "not_checked", "status": "unknown", "observed_at": "2026-09-14T21:00:00Z", "freshness": "fresh" },
+      "pr": { "url": null, "source": "" },
+      "hints": { "pending_decision": false, "blocked_event": false, "open_decisions": [], "scout_report_present": false, "last_event_text": "working: running tests" },
+      "backlog": null
+    }
+  ],
+  "main_inventory": { "valid": true, "reason": null, "orphan_in_flight": [], "unstructured_current_count": 1 },
+  "scout_reports": [{ "id": "t-095", "path": "__FM_HOME__/data/t-095/report.md", "kind": "scout" }],
+  "secondmate_current": { "records": [], "total": 0, "shown": 0, "truncated": false },
+  "secondmate_landed": { "records": [], "truncated": [], "unreadable": [], "partial": [] },
+  "secondmate_guidance": { "note": "synthetic fixture" }
+}

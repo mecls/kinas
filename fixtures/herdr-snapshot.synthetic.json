@@ -1,0 +1,45 @@
+{
+  "id": "kinas:context",
+  "result": {
+    "type": "session_snapshot",
+    "snapshot": {
+      "version": "0.9.0",
+      "protocol": 22,
+      "focused_workspace_id": "w1",
+      "focused_tab_id": "w1:t1",
+      "focused_pane_id": "w1:p1",
+      "workspaces": [
+        { "workspace_id": "w1", "number": 1, "label": "acme", "focused": true, "pane_count": 2, "tab_count": 1, "active_tab_id": "w1:t1", "agent_status": "working" }
+      ],
+      "tabs": [],
+      "panes": [],
+      "layouts": [],
+      "agents": [
+        {
+          "agent": "claude",
+          "agent_status": "working",
+          "cwd": "__ROOT__/clients/acme",
+          "foreground_cwd": "__ROOT__/clients/acme",
+          "focused": true,
+          "pane_id": "w1:p1",
+          "tab_id": "w1:t1",
+          "workspace_id": "w1",
+          "terminal_title": "◐ Rate limiting",
+          "terminal_title_stripped": "Rate limiting"
+        },
+        {
+          "agent": "pi",
+          "agent_status": "idle",
+          "cwd": "__ROOT__/hub",
+          "foreground_cwd": null,
+          "focused": false,
+          "pane_id": "w1:p2",
+          "tab_id": "w1:t1",
+          "workspace_id": "w1",
+          "terminal_title": null,
+          "terminal_title_stripped": "Conventions review"
+        }
+      ]
+    }
+  }
+}

@@ -5,7 +5,7 @@
   "scripts": {
     "dev:web": "bun run build:cli && vite",
     "build:web": "vite build",
-    "build:cli": "bun build --compile --target=bun-darwin-arm64 ../cli/src/main.ts --outfile src-tauri/binaries/kinas-cli-aarch64-apple-darwin",
+    "build:cli": "bun ../scripts/build-cli.ts src-tauri/binaries/kinas-cli-aarch64-apple-darwin",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -79,6 +79,19 @@ The one key the app takes without ⌘:
 | Esc | Back to the page Settings was opened from |
 | Change, then a chord with ⌘ | Bind that chord. Esc cancels; while recording, no shortcut runs |
 
+## Reader (Work page, left of the terminal)
+
+The reader adds no key bindings of its own.
+
+| Key | Action |
+|---|---|
+| Space, ↑ / ↓, Page Up / Page Down, Home / End | Scroll the document: the webview's own keys, only while the reader has focus (after a click inside it) |
+| The ⌘ shortcuts above | Unchanged while the reader has focus |
+
+Opening a file (`kinas open`, a link, the file tree), a live reload and the confirmation card for a file outside
+the projects root never move keyboard focus. If the terminal had it, it keeps it, so Enter goes to the PTY and can
+never accept the card; Open and Dismiss take a click. Closing the reader with × gives the terminal focus.
+
 ## Launch screen (the Work pane at start, and `kinas` in any terminal)
 
 The pane opens on the Kinas launch screen. The screen reads these keys itself, as the program running in the PTY;

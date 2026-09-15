@@ -10,6 +10,7 @@ describe("the registry (R36, CLI v0)", () => {
       ["refresh", ["palette"]],
       ["go.usage", ["palette"]],
       ["go.work", ["palette"]],
+      ["sidebar", ["palette"]],
       ["settings", ["palette"]],
     ]);
   });
@@ -20,9 +21,10 @@ describe("the registry (R36, CLI v0)", () => {
   });
 
   test("palette filtering by title", () => {
-    expect(paletteMatches("").map((c) => c.id)).toEqual(["status", "refresh", "go.usage", "go.work", "settings"]);
+    expect(paletteMatches("").map((c) => c.id)).toEqual(["status", "refresh", "go.usage", "go.work", "sidebar", "settings"]);
     expect(paletteMatches("go to").map((c) => c.id)).toEqual(["go.usage", "go.work"]);
     expect(paletteMatches("REFR").map((c) => c.id)).toEqual(["refresh"]);
+    expect(paletteMatches("sidebar").map((c) => c.id)).toEqual(["sidebar"]);
     expect(paletteMatches("nothing like this")).toEqual([]);
   });
 

@@ -1,7 +1,9 @@
 // The keyboard contract for the terminal pane (PRD R31, keymap.md), as a pure function so it can be
 // unit-tested without a browser.
 
-export type AppAction = "palette" | "go.usage" | "go.work" | "settings";
+import { actionForEvent, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
+
+export type { AppAction };
 
 export type KeyDecision =
   /** The app handles it; xterm must not see it. */
@@ -16,6 +18,8 @@ export type KeyDecision =
 export interface KeyInput {
   type: string;
   key: string;
+  /** The physical key ("KeyK"), which shortcuts match on. */
+  code: string;
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
@@ -28,18 +32,14 @@ const CTRL_SHIFT_TAB = "\x1b[9;6u";
 /**
  * @param kittyFlags the flags from KittyKeyboardTracker; 0 when the program has not enabled the
  *   kitty keyboard protocol.
+ * @param shortcuts the in-window shortcuts as Settings has them, so a rebound chord works in the pane too.
  */
-export function decideKey(ev: KeyInput, kittyFlags: number): KeyDecision {
+export function decideKey(ev: KeyInput, kittyFlags: number, shortcuts: Shortcuts): KeyDecision {
   if (ev.metaKey) {
-    // ⌘ chords never produce terminal input, so none of them reaches the PTY.
+    // ⌘ chords never produce terminal input, so none of them reaches the PTY. Every shortcut includes ⌘.
     if (ev.type !== "keydown") return { kind: "native" };
-    const plain = !ev.ctrlKey && !ev.altKey && !ev.shiftKey;
-    const key = ev.key.toLowerCase();
-    if (plain && key === "k") return { kind: "app", action: "palette" };
-    if (plain && key === "1") return { kind: "app", action: "go.usage" };
-    if (plain && key === "2") return { kind: "app", action: "go.work" };
-    if (plain && key === ",") return { kind: "app", action: "settings" };
-    return { kind: "native" };
+    const action = actionForEvent(ev, shortcuts);
+    return action ? { kind: "app", action } : { kind: "native" };
   }
 
   if (ev.type === "keydown" && ev.key === "Tab" && ev.ctrlKey && !ev.altKey && kittyFlags > 0) {

@@ -60,6 +60,11 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
 - [x] ⌘K raises the palette instead of reaching the shell — `automated (keyboard.e2e.ts)`
 - [x] ⌘K opens the palette; Esc closes it; the next line reaches the shell — `automated (palette.e2e.ts)`
 - [x] ⌘1 / ⌘2 switch pages from inside the terminal — `automated (keyboard.e2e.ts)`
+- [x] ⌘S hides and shows the sidebar from inside the terminal; the next line reaches the shell —
+      `automated (keyboard.e2e.ts)`
+- [x] A shortcut rebound in Settings (⌘B for the sidebar) works, its old chord does nothing, and a chord that is
+      already taken is refused with whose it is — `automated (settings.e2e.ts)`
+- [ ] The sidebar, the gear and the Settings page look right — `outstanding — needs Miguel`
 - [ ] The same with a physical keyboard — `outstanding — needs Miguel`
 
 ## Throughput, page switch, renderer

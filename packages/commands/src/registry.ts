@@ -16,6 +16,7 @@ export interface CommandContext {
   /** Palette only. */
   navigate?: (page: "usage" | "work") => void;
   refresh?: () => Promise<void>;
+  toggleSidebar?: () => void;
   openSettings?: () => void;
 }
 
@@ -97,6 +98,15 @@ export const commands: readonly Command[] = [
     doors: ["palette"],
     async run(ctx) {
       need(ctx.navigate, "navigation")("work");
+      return {};
+    },
+  },
+  {
+    id: "sidebar",
+    title: "Hide or show the sidebar",
+    doors: ["palette"],
+    async run(ctx) {
+      need(ctx.toggleSidebar, "the sidebar")();
       return {};
     },
   },

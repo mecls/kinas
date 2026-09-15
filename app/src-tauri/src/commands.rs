@@ -8,6 +8,7 @@ use crate::readers::runtime::ReaderControl;
 use crate::readings::{self, UsageSnapshot};
 use crate::store::{now_ms, Store};
 use crate::system::{self, SystemState};
+use std::collections::BTreeMap;
 use tauri::AppHandle;
 
 /// Everything the Usage page shows, with states computed now (R12).
@@ -52,7 +53,7 @@ pub struct SettingsView {
     pub claude_hook: claude_plan::HookStatus,
 }
 
-/// Settings (§3.9): everything the sheet shows. Never a secret.
+/// Settings (§3.9): everything the Settings page shows. Never a secret.
 #[tauri::command]
 pub fn get_settings(
     store: State<'_, Store>,
@@ -121,6 +122,35 @@ pub fn set_launch_at_login(app: AppHandle, store: State<'_, Store>, system: Stat
     let result = system::apply_launch_at_login(&app, enabled);
     *system.autostart_error.lock().unwrap_or_else(|p| p.into_inner()) = result.as_ref().err().cloned();
     result
+}
+
+#[derive(Serialize)]
+pub struct UiPrefs {
+    /// The in-window shortcuts Settings saved, by action; the webview fills in the rest from its defaults.
+    pub shortcuts: BTreeMap<String, String>,
+    pub sidebar_visible: bool,
+}
+
+/// What the window needs before it draws: the shortcuts and whether the sidebar is shown.
+#[tauri::command]
+pub fn get_ui_prefs(store: State<'_, Store>) -> UiPrefs {
+    let conn = store.conn();
+    let org = store.org_id();
+    UiPrefs {
+        shortcuts: system::get_setting(&conn, org, "shortcuts").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default(),
+        sidebar_visible: system::get_setting(&conn, org, "sidebar_visible").and_then(|v| v.as_bool()).unwrap_or(true),
+    }
+}
+
+#[tauri::command]
+pub fn set_shortcuts(store: State<'_, Store>, shortcuts: BTreeMap<String, String>) -> Result<(), String> {
+    system::check_shortcuts(&shortcuts)?;
+    system::put_setting(&store.conn(), store.org_id(), "shortcuts", &serde_json::json!(shortcuts)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_sidebar_visible(store: State<'_, Store>, visible: bool) -> Result<(), String> {
+    system::put_setting(&store.conn(), store.org_id(), "sidebar_visible", &serde_json::json!(visible)).map_err(|e| e.to_string())
 }
 
 /// Settings: what happened to ~/.local/bin/kinas at launch (R35).

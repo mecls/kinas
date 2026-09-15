@@ -118,6 +118,17 @@ export const setLaunchAtLogin = (enabled: boolean) => invoke<void>("set_launch_a
 export const saveOllamaKey = (key: string) => invoke<void>("save_ollama_key", { key });
 export const removeOllamaKey = () => invoke<void>("remove_ollama_key");
 
+export interface UiPrefs {
+  /** The in-window shortcuts Settings saved, by action; missing actions use settings/shortcuts.ts's defaults. */
+  shortcuts: Record<string, string>;
+  sidebar_visible: boolean;
+}
+
+export const getUiPrefs = () => invoke<UiPrefs>("get_ui_prefs");
+/** Rejected by the app unless every action is known, every chord includes ⌘ and no chord is used twice. */
+export const setShortcuts = (shortcuts: Record<string, string>) => invoke<void>("set_shortcuts", { shortcuts });
+export const setSidebarVisible = (visible: boolean) => invoke<void>("set_sidebar_visible", { visible });
+
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);
 export const onReadingsChanged = (handler: () => void): Promise<UnlistenFn> => listen("readings_changed", handler);
 export const onBackfillProgress = (handler: (b: Backfill) => void): Promise<UnlistenFn> =>

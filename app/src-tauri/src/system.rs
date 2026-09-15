@@ -3,6 +3,7 @@
 
 use crate::store::Store;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
@@ -40,6 +41,27 @@ pub fn has_command_modifier(chord: &str) -> bool {
         .split('+')
         .map(|p| p.trim().to_ascii_lowercase())
         .any(|p| matches!(p.as_str(), "cmd" | "command" | "super" | "meta"))
+}
+
+/// The app actions with an in-window shortcut (app/src/settings/shortcuts.ts, keymap.md).
+pub const SHORTCUT_ACTIONS: [&str; 5] = ["palette", "go.usage", "go.work", "sidebar", "settings"];
+
+/// In-window shortcuts as Settings saves them: known actions, one chord each, and every chord with ⌘ so a shortcut
+/// never takes a key from the terminal (R31). The webview explains clashes before a change gets this far.
+pub fn check_shortcuts(shortcuts: &BTreeMap<String, String>) -> Result<(), String> {
+    let mut chords = HashSet::new();
+    for (action, chord) in shortcuts {
+        if !SHORTCUT_ACTIONS.contains(&action.as_str()) {
+            return Err(format!("unknown shortcut {action}"));
+        }
+        if !has_command_modifier(chord) {
+            return Err(format!("the shortcut for {action} must include ⌘"));
+        }
+        if !chords.insert(chord.as_str()) {
+            return Err(format!("{chord} is bound twice"));
+        }
+    }
+    Ok(())
 }
 
 /// e2e launches (debug builds with `KINAS_E2E_NO_SYSTEM_HOOKS=1`) register neither the hotkey nor a login item.
@@ -131,6 +153,16 @@ mod tests {
         assert!(has_command_modifier("super+k"));
         assert!(!has_command_modifier("Ctrl+Alt+K"));
         assert!(!has_command_modifier("Shift+Space"));
+    }
+
+    #[test]
+    fn shortcuts_name_known_actions_once_each_and_include_command() {
+        let map = |pairs: &[(&str, &str)]| pairs.iter().map(|(a, c)| (a.to_string(), c.to_string())).collect::<BTreeMap<_, _>>();
+        assert!(check_shortcuts(&map(&[("sidebar", "Cmd+B"), ("palette", "Cmd+K"), ("settings", "Cmd+Shift++")])).is_ok());
+        assert!(check_shortcuts(&map(&[])).is_ok());
+        assert!(check_shortcuts(&map(&[("sidebar", "Ctrl+B")])).is_err());
+        assert!(check_shortcuts(&map(&[("launch", "Cmd+L")])).is_err());
+        assert!(check_shortcuts(&map(&[("go.usage", "Cmd+1"), ("go.work", "Cmd+1")])).is_err());
     }
 
     #[test]

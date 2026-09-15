@@ -17,7 +17,7 @@ describe("the command palette", () => {
     );
     await expect($(".palette")).toBeDisplayed();
     const ids = await $$(".palette-item").map((item) => item.getAttribute("data-command"));
-    expect(ids).toEqual(["status", "refresh", "go.usage", "go.work", "settings"]);
+    expect(ids).toEqual(["status", "refresh", "go.usage", "go.work", "sidebar", "settings"]);
   });
 
   it("runs Status and shows the status lines", async () => {

@@ -5,16 +5,22 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 import { dispatchAppAction } from "../actions.ts";
+import type { Shortcuts } from "../settings/shortcuts.ts";
 import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
 
 const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
 
-export function Terminal({ active }: { active: boolean }) {
+export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Shortcuts }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<XTerm | null>(null);
   const fit = useRef<FitAddon | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The key handler is attached once, so it reads the current shortcuts through a ref.
+  const shortcutsRef = useRef(shortcuts);
+  useEffect(() => {
+    shortcutsRef.current = shortcuts;
+  }, [shortcuts]);
 
   useEffect(() => {
     const el = host.current!;
@@ -60,7 +66,7 @@ export function Terminal({ active }: { active: boolean }) {
     const send = (data: string) => void invoke("pty_write", { data }).catch(() => {});
 
     xterm.attachCustomKeyEventHandler((ev) => {
-      const decision = decideKey(ev, kitty.flags);
+      const decision = decideKey(ev, kitty.flags, shortcutsRef.current);
       if (import.meta.env.TAURI_ENV_DEBUG === "true") {
         const mods = `${ev.ctrlKey ? "⌃" : ""}${ev.altKey ? "⌥" : ""}${ev.shiftKey ? "⇧" : ""}${ev.metaKey ? "⌘" : ""}`;
         keyLog = [...keyLog, `${ev.type} ${mods}${ev.key} flags=${kitty.flags} → ${JSON.stringify(decision)}`].slice(-20);
@@ -68,7 +74,8 @@ export function Terminal({ active }: { active: boolean }) {
       switch (decision.kind) {
         case "app":
           ev.preventDefault();
-          dispatchAppAction(decision.action);
+          // A held chord repeats; the sidebar would flicker on every repeat.
+          if (!ev.repeat) dispatchAppAction(decision.action);
           return false;
         case "native":
           return false;

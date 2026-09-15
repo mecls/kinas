@@ -39,6 +39,11 @@ body,
   height: 100%;
 }
 
+/* ⌘S (keymap.md): the rail goes, and the page takes the whole width. */
+.shell[data-sidebar="hidden"] {
+  grid-template-columns: 1fr;
+}
+
 .rail {
   display: flex;
   flex-direction: column;
@@ -59,6 +64,17 @@ body,
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: default;
+}
+
+.rail-item:hover {
+  color: var(--white);
+}
+
+/* Settings sits at the foot of the rail, apart from the pages. */
+.rail-settings {
+  display: grid;
+  place-items: center;
+  margin-top: auto;
 }
 
 .rail-item[aria-current="page"] {

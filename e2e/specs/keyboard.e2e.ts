@@ -66,4 +66,14 @@ describe("the keyboard contract in a plain shell", () => {
     await browser.keys(["Meta", "2"]);
     await expect($('section[data-page="work"]')).toBeDisplayed();
   });
+
+  it("⌘S hides and shows the sidebar from inside the terminal, and nothing reaches the shell", async () => {
+    await hook("focusTerminal");
+    await browser.keys(["Meta", "s"]);
+    await expect($(".rail")).not.toBeDisplayed();
+    await browser.keys(["Meta", "s"]);
+    await expect($(".rail")).toBeDisplayed();
+    await typeLine("echo AFTER''_CMD_S");
+    await waitForTerminal(/^AFTER_CMD_S\s*$/m, 5000);
+  });
 });

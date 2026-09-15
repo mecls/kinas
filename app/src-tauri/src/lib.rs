@@ -89,6 +89,9 @@ pub fn run() {
             commands::set_menu_bar_quota,
             commands::set_global_hotkey,
             commands::set_launch_at_login,
+            commands::get_ui_prefs,
+            commands::set_shortcuts,
+            commands::set_sidebar_visible,
         ])
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).

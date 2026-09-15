@@ -1,7 +1,7 @@
 // App actions raised from anywhere in the window (the terminal's ⌘ chords, a gauge's "Add API key"),
 // handled by App.tsx. A window event keeps the terminal and the pages from importing each other.
 
-import type { AppAction } from "./terminal/keyContract.ts";
+import type { AppAction } from "./settings/shortcuts.ts";
 
 export type { AppAction };
 

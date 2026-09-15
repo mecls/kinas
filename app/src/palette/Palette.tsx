@@ -39,6 +39,7 @@ export function Palette({ onClose }: { onClose: () => void }) {
         },
         navigate: (page) => dispatchAppAction(page === "usage" ? "go.usage" : "go.work"),
         refresh: () => refreshReadings(),
+        toggleSidebar: () => dispatchAppAction("sidebar"),
         openSettings: () => dispatchAppAction("settings"),
       });
       if (out.result) {

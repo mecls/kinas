@@ -1,0 +1,1 @@
+Not markdown: `kinas open notes.txt` exits 65.

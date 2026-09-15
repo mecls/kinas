@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
-import { getUiPrefs, onOpenPalette, setShortcuts as saveShortcuts, setSidebarVisible } from "./api.ts";
+import { getUiPrefs, onOpenPalette, onReaderShow, setReaderWidth as saveReaderWidth, setShortcuts as saveShortcuts, setSidebarVisible } from "./api.ts";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
-import { WorkPage } from "./pages/Work.tsx";
+import { DEFAULT_READER_PCT, type ReaderPane, WorkPage } from "./pages/Work.tsx";
 import { Palette } from "./palette/Palette.tsx";
 import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 
@@ -17,6 +17,9 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [sidebar, setSidebar] = useState(true);
   const [shortcuts, setShortcuts] = useState<Shortcuts>(DEFAULT_SHORTCUTS);
+  const [reader, setReader] = useState<ReaderPane>({ open: false, request: null });
+  const readerSeq = useRef(0);
+  const [readerWidth, setReaderWidth] = useState(DEFAULT_READER_PCT);
   const shortcutsRef = useRef(shortcuts);
   const sidebarShown = useRef(true);
   /** Where Esc on Settings goes back to. */
@@ -59,6 +62,7 @@ export function App() {
       (prefs) => {
         setShortcuts(withDefaults(prefs.shortcuts));
         showSidebar(prefs.sidebar_visible);
+        setReaderWidth(prefs.reader_width_pct);
       },
       () => {},
     );
@@ -92,6 +96,35 @@ export function App() {
   useEffect(() => {
     const stop = onOpenPalette(() => setPalette(true));
     return () => void stop.then((u) => u());
+  }, []);
+
+  // An accepted `kinas open`: Rust has brought the window forward; show the reader on the Work page (reader R18).
+  // Keyboard focus stays where it was (R34): an agent opens its plan while Miguel is typing to it in the pane.
+  useEffect(() => {
+    const stop = onReaderShow((event) => {
+      const had = document.activeElement;
+      const inTerminal = had instanceof HTMLElement && had.closest(".terminal") !== null;
+      setPage("work");
+      setReader({ open: true, request: { ...event, seq: ++readerSeq.current } });
+      if (inTerminal) {
+        // Bringing the window forward can move focus when the app activates, after this frame; put it back then too.
+        const restore = () => {
+          if (had.isConnected && document.activeElement !== had) had.focus({ preventScroll: true });
+        };
+        requestAnimationFrame(restore);
+        window.addEventListener("focus", restore, { once: true });
+        window.setTimeout(() => window.removeEventListener("focus", restore), 1000);
+      }
+    });
+    return () => void stop.then((u) => u());
+  }, []);
+
+  const closeReader = useCallback(() => setReader((r) => ({ ...r, open: false })), []);
+
+  // The divider between the reader and the terminal; remembered across launches like the sidebar.
+  const changeReaderWidth = useCallback((pct: number) => {
+    setReaderWidth(pct);
+    void saveReaderWidth(pct).catch(() => {});
   }, []);
 
   const changeShortcuts = useCallback(async (next: Shortcuts) => {
@@ -136,7 +169,14 @@ export function App() {
           <UsagePage active={page === "usage"} />
         </section>
         <section className="page" data-page="work" hidden={page !== "work"}>
-          <WorkPage active={page === "work"} shortcuts={shortcuts} />
+          <WorkPage
+            active={page === "work"}
+            shortcuts={shortcuts}
+            reader={reader}
+            onReaderClose={closeReader}
+            readerWidth={readerWidth}
+            onReaderWidth={changeReaderWidth}
+          />
         </section>
         <section className="page" data-page="settings" hidden={page !== "settings"}>
           <SettingsPage active={page === "settings"} shortcuts={shortcuts} onShortcutsChange={changeShortcuts} />

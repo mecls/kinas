@@ -14,3 +14,6 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
   build spec's AC-10 stay meaningful.
 - No fixture contains a real transcript. Transcript fixtures are hand-written lines in the same
   shape as `~/.claude/projects/**/*.jsonl` and `~/.pi/agent/sessions/**/*.jsonl`.
+- `reader/` — the projects root for `e2e/specs/reader.e2e.ts` and the release speed check: `plan-300.md` (exactly 300
+  lines, generated once: frontmatter, one Mermaid diagram, a table, a task list, a link to `other.md#part`, a 1×1
+  `diagram.png`), `other.md`, `docs/`, `hostile.md` (HTML and links that must not run) and `notes.txt` (not markdown).

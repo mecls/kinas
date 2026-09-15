@@ -129,7 +129,53 @@ body,
 .work {
   position: absolute;
   inset: 0;
+  display: flex;
   background: var(--ground);
+}
+
+/* The terminal's box: the whole row with the reader closed, the rest of it beside the reader (reader R32). */
+.work-terminal {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+
+/* The divider between the reader and the terminal: a thin line with a wider grip. */
+.work-divider {
+  position: relative;
+  flex: 0 0 6px;
+  margin: 0 -3px;
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.work-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--line);
+}
+
+.work-divider:hover::after,
+.work[data-dragging] .work-divider::after {
+  left: 1px;
+  width: 3px;
+  background: var(--blue);
+}
+
+/* While dragging, nothing selects text and the cursor stays a resize cursor over the terminal too. */
+.work[data-dragging] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.work[data-dragging] .work-terminal,
+.work[data-dragging] .reader {
+  pointer-events: none;
 }
 
 .terminal {

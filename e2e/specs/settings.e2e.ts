@@ -95,4 +95,28 @@ describe("Settings from the sidebar, and its shortcuts", () => {
     await browser.keys(["Meta", "b"]);
     await expect($(".rail")).toBeDisplayed();
   });
+
+  it("refuses a blank editor for Open in editor, and stores a real one", async () => {
+    const field = 'input[aria-label="Editor for Open in editor"]';
+    const blur = () =>
+      browser.execute((sel: string) => {
+        const input = document.querySelector<HTMLInputElement>(sel)!;
+        input.focus();
+        input.blur();
+      }, field);
+    const stored = () =>
+      browser.execute(() =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<{ reader_editor: string }> } }).__TAURI_INTERNALS__.invoke("get_settings").then((s) => s.reader_editor),
+      );
+
+    await expect($(field)).toHaveValue("vim");
+    await fill(field, "   ");
+    await blur();
+    await expect($('[data-section="reader"] .settings-message')).toHaveText("the editor command is empty");
+    expect(await stored()).toBe("vim");
+
+    await fill(field, "nvim -R");
+    await blur();
+    await browser.waitUntil(async () => (await stored()) === "nvim -R", { timeout: 10000, timeoutMsg: "the editor was not stored" });
+  });
 });

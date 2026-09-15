@@ -4,8 +4,6 @@ mod keychain;
 mod paths;
 mod pty;
 mod quota_line;
-// Task 4.1 wires the reader commands that use the rest of `reader::access`; until then parts of it are unused.
-#[allow(dead_code)]
 mod reader;
 mod readers;
 mod readings;
@@ -93,12 +91,24 @@ pub fn run() {
             commands::cli_link_status,
             commands::get_settings,
             commands::set_org_name,
+            commands::set_reader_editor,
             commands::set_menu_bar_quota,
             commands::set_global_hotkey,
             commands::set_launch_at_login,
             commands::get_ui_prefs,
             commands::set_shortcuts,
             commands::set_sidebar_visible,
+            commands::set_reader_width,
+            reader::reader_open,
+            reader::reader_read_text,
+            reader::reader_list_dir,
+            reader::reader_read_image,
+            reader::reader_confirm,
+            reader::reader_allow_click,
+            reader::reader_close,
+            reader::open_external,
+            reader::reader_rendered,
+            reader::reader_open_in_editor,
         ])
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).

@@ -1,0 +1,599 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  openExternal,
+  type ReaderShow,
+  onReaderChanged,
+  readerAllowClick,
+  readerClose,
+  readerConfirm,
+  readerErrorOf,
+  readerListDir,
+  readerOpen,
+  readerOpenInEditor,
+  readerReadImage,
+  readerReadText,
+  readerRendered,
+} from "../api.ts";
+import type { FrontmatterView } from "./frontmatter.ts";
+import { classifyLink } from "./links.ts";
+import { cachedSvg, renderDiagram } from "./mermaid.ts";
+import { type Rendered, renderMarkdown } from "./render.ts";
+import { FileTree } from "./tree.tsx";
+
+// The reader (tasks/prd-kinas-open.md): the file `kinas open` named, beside the terminal. It only reads. Opening,
+// reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one step, keeping every
+// diagram and image that did not change (R30).
+
+export interface ReaderRequest extends ReaderShow {
+  seq: number;
+}
+
+interface Doc {
+  path: string;
+  displayPath: string;
+  root: string;
+  hash: string;
+  lines: number;
+  rendered: Rendered;
+}
+
+interface Pending {
+  mode: "new" | "reload";
+  fragment?: string | null;
+  scrollTop?: number;
+  receivedAt?: number;
+}
+
+const STATUS_MS = 6000;
+const OPENING_AFTER_MS = 150;
+const BACK_CAP = 50;
+const NARROW_PX = 640;
+const FOLLOW_TAIL_PX = 48;
+
+const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
+
+/** Every status line this session, for the debug-only `readerStatusLog` hook. */
+const statusLog: string[] = [];
+
+const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+const mimeOf = (path: string) => MIME[path.slice(path.lastIndexOf(".") + 1).toLowerCase()] ?? "application/octet-stream";
+
+function focusTerminal() {
+  document.querySelector<HTMLTextAreaElement>(".work-terminal .xterm-helper-textarea")?.focus({ preventScroll: true });
+}
+
+/** Builds the new page off-screen and swaps it in one step, keeping unchanged diagrams and images (R30). */
+function swapBody(body: HTMLElement, scroller: HTMLElement, rendered: Rendered, reload: boolean) {
+  const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_TAIL_PX;
+  const top = scroller.scrollTop;
+  const template = document.createElement("template");
+  template.innerHTML = rendered.html;
+  const fresh = template.content;
+
+  const oldBlocks = new Map<string, HTMLElement>();
+  const oldImages = new Map<string, HTMLImageElement>();
+  if (reload) {
+    for (const block of body.querySelectorAll<HTMLElement>(".mermaid-block")) oldBlocks.set(block.dataset.index ?? "", block);
+    for (const img of body.querySelectorAll<HTMLImageElement>("img[data-src][data-loaded]")) oldImages.set(img.dataset.src ?? "", img);
+  }
+  for (const block of fresh.querySelectorAll<HTMLElement>(".mermaid-block")) {
+    const hash = block.dataset.hash ?? "";
+    const old = oldBlocks.get(block.dataset.index ?? "");
+    if (old && old.dataset.hash === hash && old.dataset.drawn === hash) {
+      // The same node, so the diagram is not redrawn.
+      block.replaceWith(old);
+      continue;
+    }
+    const svg = cachedSvg(hash);
+    if (svg !== undefined) {
+      block.innerHTML = svg;
+      block.dataset.drawn = hash;
+    } else if (old?.firstElementChild) {
+      // The previous drawing holds the place until the changed one is drawn.
+      block.append(old.firstElementChild.cloneNode(true));
+    }
+  }
+  for (const img of fresh.querySelectorAll<HTMLImageElement>("img[data-src]")) {
+    const old = oldImages.get(img.dataset.src ?? "");
+    if (old) {
+      img.replaceWith(old);
+      oldImages.delete(img.dataset.src ?? "");
+    }
+  }
+  body.replaceChildren(fresh);
+  if (reload) scroller.scrollTop = atBottom ? scroller.scrollHeight : top;
+}
+
+function FrontmatterCard({ view }: { view: FrontmatterView }) {
+  if (!view.ok) {
+    return (
+      <section className="reader-frontmatter is-problem">
+        <p className="reader-frontmatter-error">Frontmatter could not be read: {view.error}</p>
+        <pre>{view.raw}</pre>
+      </section>
+    );
+  }
+  return (
+    <section className="reader-frontmatter">
+      {view.title && <h2 className="reader-frontmatter-title">{view.title}</h2>}
+      {view.rows.length > 0 && (
+        <dl>
+          {view.rows.map((row) => (
+            <div key={row.key} className="reader-frontmatter-row">
+              <dt>{row.key}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+export function Reader({ request, onClose }: { request: ReaderRequest | null; onClose: () => void }) {
+  const [doc, setDoc] = useState<Doc | null>(null);
+  const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
+  const [folder, setFolder] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ path: string; root: string } | null>(null);
+  const [status, setStatus] = useState<{ text: string; sticky: boolean } | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [back, setBack] = useState<{ path: string; scrollTop: number }[]>([]);
+  const [tall, setTall] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+  const [overlay, setOverlay] = useState<"files" | "contents" | null>(null);
+  const [currentSlug, setCurrentSlug] = useState<string | null>(null);
+
+  const frame = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const article = useRef<HTMLElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const docRef = useRef<Doc | null>(null);
+  const pending = useRef<Pending | null>(null);
+  const generation = useRef(0);
+  const blobs = useRef(new Set<string>());
+  const statusTimer = useRef<number | undefined>(undefined);
+
+  const say = useCallback((text: string, sticky = false) => {
+    // Debug builds only: e2e reads what was said, since a 6 s line can come and go between two slow driver lookups.
+    if (import.meta.env.TAURI_ENV_DEBUG === "true") statusLog.push(text);
+    window.clearTimeout(statusTimer.current);
+    setStatus({ text, sticky });
+    if (!sticky) statusTimer.current = window.setTimeout(() => setStatus(null), STATUS_MS);
+  }, []);
+
+  const scrollToId = useCallback((id: string) => {
+    const target = body.current?.querySelector(`[id="${CSS.escape(id)}"]`);
+    if (target && scroller.current) scroller.current.scrollTop += target.getBoundingClientRect().top - scroller.current.getBoundingClientRect().top;
+  }, []);
+
+  const show = useCallback(
+    async function show(path: string, opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number }): Promise<void> {
+      const gen = ++generation.current;
+      const timer = window.setTimeout(() => {
+        if (gen === generation.current && !docRef.current) setOpening(baseName(path));
+      }, OPENING_AFTER_MS);
+      try {
+        const opened = await readerOpen(path);
+        if (gen !== generation.current) return;
+        if (opened.kind === "dir" || !opened.text) {
+          await openFolder(opened.path);
+          return;
+        }
+        const previous = docRef.current;
+        if (opts.push && previous && previous.path !== opened.path) {
+          const scrollTop = scroller.current?.scrollTop ?? 0;
+          setBack((b) => [...b, { path: previous.path, scrollTop }].slice(-BACK_CAP));
+        }
+        pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
+        const next: Doc = {
+          path: opened.path,
+          displayPath: opened.display_path,
+          root: opened.root,
+          hash: opened.text.hash,
+          lines: opened.text.text.split("\n").length,
+          rendered: renderMarkdown(opened.text.text),
+        };
+        docRef.current = next;
+        setDoc(next);
+        setProblem(null);
+        setOpening(null);
+        setStatus((s) => (s?.sticky ? null : s));
+      } catch (e) {
+        if (gen !== generation.current) return;
+        const error = readerErrorOf(e);
+        setOpening(null);
+        if (error.code === "too_large" || error.code === "not_utf8") {
+          docRef.current = null;
+          setDoc(null);
+          setProblem({ displayPath: path, message: error.message });
+        } else {
+          say(error.message);
+        }
+      } finally {
+        window.clearTimeout(timer);
+      }
+    },
+    // openFolder is hoisted below and only reads refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [say],
+  );
+
+  async function openFolder(path: string) {
+    try {
+      const listing = await readerListDir(path);
+      setFolder(path);
+      setOverlay(null);
+      const readme =
+        listing.entries.find((e) => e.kind === "file" && e.name === "README.md") ?? listing.entries.find((e) => e.kind === "file" && e.name.toLowerCase() === "readme.md");
+      if (readme) {
+        await show(readme.path, { push: true });
+      } else {
+        generation.current++;
+        docRef.current = null;
+        setDoc(null);
+        setProblem(null);
+      }
+    } catch (e) {
+      say(readerErrorOf(e).message);
+    }
+  }
+
+  const follow = useCallback(
+    async (path: string, fragment: string | null) => {
+      try {
+        const target = await readerAllowClick(path);
+        if (target.kind === "dir") await openFolder(target.path);
+        else await show(target.path, { push: true, fragment });
+      } catch (e) {
+        say(readerErrorOf(e).message);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [say, show],
+  );
+
+  const loadImage = useCallback(async (img: HTMLImageElement, current: Doc) => {
+    const src = img.dataset.src ?? "";
+    const target = classifyLink(src, current.path, current.root);
+    const fallBack = () => {
+      img.dataset.failed = "1";
+      img.hidden = true;
+      const label = document.createElement(target.kind === "external" ? "a" : "span");
+      label.className = "reader-image-alt";
+      label.textContent = img.alt || src;
+      if (target.kind === "external") label.setAttribute("href", target.url);
+      img.after(label);
+    };
+    // Remote images are never fetched (R20).
+    if (target.kind !== "file") return fallBack();
+    try {
+      const bytes = await readerReadImage(target.path);
+      if (!img.isConnected) return;
+      const url = URL.createObjectURL(new Blob([bytes], { type: mimeOf(target.path) }));
+      blobs.current.add(url);
+      img.src = url;
+      img.dataset.loaded = "1";
+    } catch {
+      fallBack();
+    }
+  }, []);
+
+  // Draws what the swap could not reuse, then reports how long the open took.
+  const hydrate = useCallback(
+    async (current: Doc, receivedAt: number | undefined) => {
+      const el = body.current;
+      if (!el) return;
+      const gen = generation.current;
+      const blocks = [...el.querySelectorAll<HTMLElement>(".mermaid-block")].filter((b) => b.dataset.drawn !== b.dataset.hash);
+      const images = [...el.querySelectorAll<HTMLImageElement>("img[data-src]:not([data-loaded]):not([data-failed])")];
+      await Promise.all([
+        ...blocks.map(async (block) => {
+          const diagram = current.rendered.diagrams[Number(block.dataset.index)];
+          if (!diagram || diagram.hash !== block.dataset.hash) return;
+          const result = await renderDiagram(diagram.hash, diagram.source);
+          if (!block.isConnected || block.dataset.hash !== diagram.hash) return;
+          if ("svg" in result) {
+            block.innerHTML = result.svg;
+          } else {
+            const line = document.createElement("p");
+            line.className = "mermaid-error";
+            line.textContent = result.error;
+            const source = document.createElement("pre");
+            source.textContent = diagram.source;
+            block.replaceChildren(line, source);
+          }
+          block.dataset.drawn = diagram.hash;
+        }),
+        ...images.map((img) => loadImage(img, current)),
+      ]);
+      if (gen !== generation.current || docRef.current !== current) return;
+      article.current?.setAttribute("data-rendered", "");
+      if (receivedAt !== undefined) void readerRendered(current.lines, current.rendered.diagrams.length, Math.max(0, Date.now() - receivedAt)).catch(() => {});
+    },
+    [loadImage],
+  );
+
+  // The DOM swap happens before paint, in the same frame as the header and frontmatter card.
+  useLayoutEffect(() => {
+    const el = body.current;
+    const sc = scroller.current;
+    const p = pending.current;
+    pending.current = null;
+    if (!el || !sc) return;
+    if (!doc) {
+      el.replaceChildren();
+      article.current?.removeAttribute("data-rendered");
+      return;
+    }
+    if (!p) return;
+    if (p.mode === "new") article.current?.removeAttribute("data-rendered");
+    swapBody(el, sc, doc.rendered, p.mode === "reload");
+    if (p.mode === "new") {
+      sc.scrollTop = p.scrollTop ?? 0;
+      if (p.fragment) scrollToId(p.fragment);
+    }
+    const inUse = new Set([...el.querySelectorAll("img")].map((i) => i.src));
+    for (const url of blobs.current) {
+      if (!inUse.has(url)) {
+        URL.revokeObjectURL(url);
+        blobs.current.delete(url);
+      }
+    }
+    void hydrate(doc, p.receivedAt);
+  }, [doc, hydrate, scrollToId]);
+
+  // A `kinas open` request.
+  useEffect(() => {
+    if (!request) return;
+    if (request.confirm) {
+      setConfirm({ path: request.path, root: request.root });
+      return;
+    }
+    if (request.kind === "dir") {
+      void openFolder(request.path);
+    } else {
+      setFolder(null);
+      void show(request.path, { push: true, receivedAt: request.received_at_ms });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request]);
+
+  // Live reload (R29, R30): Rust watches the open file's folder and names the file that changed.
+  useEffect(() => {
+    const stop = onReaderChanged(async ({ path }) => {
+      const current = docRef.current;
+      if (!current || current.path !== path) return;
+      try {
+        const text = await readerReadText(path);
+        const latest = docRef.current;
+        if (!latest || latest.path !== path) return;
+        setStatus((s) => (s?.sticky ? null : s));
+        if (text.hash === latest.hash) return;
+        pending.current = { mode: "reload" };
+        const next: Doc = { ...latest, hash: text.hash, lines: text.text.split("\n").length, rendered: renderMarkdown(text.text) };
+        docRef.current = next;
+        setDoc(next);
+      } catch (e) {
+        const error = readerErrorOf(e);
+        if (error.code === "missing") say(`${baseName(path)} was removed; showing the last version`, true);
+        else say(error.message);
+      }
+    });
+    return () => void stop.then((u) => u());
+  }, [say]);
+
+  // Contents only for a page taller than the reader (R28); the side column folds away when the reader is narrow (R33).
+  useEffect(() => {
+    const sc = scroller.current;
+    const el = body.current;
+    const box = frame.current;
+    if (!sc || !el || !box) return;
+    const measure = () => {
+      setTall(sc.scrollHeight > sc.clientHeight + 1);
+      setNarrow(box.clientWidth > 0 && box.clientWidth < NARROW_PX);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(sc);
+    observer.observe(el);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+
+  const frameRequest = useRef(0);
+  const onScroll = () => {
+    if (frameRequest.current) return;
+    frameRequest.current = requestAnimationFrame(() => {
+      frameRequest.current = 0;
+      const sc = scroller.current;
+      const current = docRef.current;
+      if (!sc || !current) return;
+      const line = sc.getBoundingClientRect().top + 16;
+      let slug: string | null = null;
+      for (const heading of current.rendered.headings) {
+        const el = body.current?.querySelector(`[id="${CSS.escape(heading.slug)}"]`);
+        if (el && el.getBoundingClientRect().top <= line) slug = heading.slug;
+      }
+      setCurrentSlug(slug);
+    });
+  };
+
+  // Every link click is the reader's: the webview never navigates (R19, R21).
+  const onClickCapture = (event: React.MouseEvent) => {
+    const anchor = (event.target as Element).closest?.("a");
+    if (!anchor || !body.current?.contains(anchor)) return;
+    event.preventDefault();
+    const current = docRef.current;
+    if (!current) return;
+    const target = classifyLink(anchor.getAttribute("href"), current.path, current.root);
+    if (target.kind === "fragment") scrollToId(target.id);
+    else if (target.kind === "external") void openExternal(target.url).catch((e) => say(readerErrorOf(e).message));
+    else if (target.kind === "file") void follow(target.path, target.fragment);
+  };
+
+  const goBack = () => {
+    const last = back.at(-1);
+    if (!last) return;
+    setBack((b) => b.slice(0, -1));
+    void show(last.path, { push: false, scrollTop: last.scrollTop });
+  };
+
+  // R37: a new Herdr pane with the editor; on success the keys go to the terminal, where that pane now is.
+  const openInEditor = async () => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      await readerOpenInEditor(current.path);
+      focusTerminal();
+    } catch (e) {
+      say(readerErrorOf(e).message);
+    }
+  };
+
+  const close = () => {
+    generation.current++;
+    void readerClose().catch(() => {});
+    docRef.current = null;
+    setDoc(null);
+    setFolder(null);
+    setBack([]);
+    setConfirm(null);
+    setProblem(null);
+    setStatus(null);
+    setOverlay(null);
+    onClose();
+    focusTerminal();
+  };
+
+  const openConfirmed = async () => {
+    const pendingPath = confirm?.path;
+    if (!pendingPath) return;
+    setConfirm(null);
+    try {
+      await readerConfirm(pendingPath, true);
+      await show(pendingPath, { push: true });
+    } catch (e) {
+      say(readerErrorOf(e).message);
+    }
+  };
+
+  const dismiss = () => {
+    const pendingPath = confirm?.path;
+    setConfirm(null);
+    if (pendingPath) void readerConfirm(pendingPath, false).catch(() => {});
+    if (!docRef.current && !folder && !problem) onClose();
+  };
+
+  // Debug builds only: e2e proves a reload keeps the diagram's node (R30), and can see where focus went (R34).
+  useEffect(() => {
+    if (import.meta.env.TAURI_ENV_DEBUG !== "true") return;
+    const focusLog: string[] = [];
+    const describe = (target: EventTarget | null) =>
+      target === window ? "window" : target instanceof Element ? `${target.tagName.toLowerCase()}${typeof target.className === "string" && target.className ? `.${target.className.trim().split(/\s+/).join(".")}` : ""}` : String(target);
+    const record = (event: Event) => {
+      focusLog.push(`${Date.now()} ${event.type} ${describe(event.target)} related=${describe((event as FocusEvent).relatedTarget ?? null)}`);
+      focusLog.splice(0, Math.max(0, focusLog.length - 60));
+    };
+    for (const type of ["focusin", "focusout"]) document.addEventListener(type, record, true);
+    for (const type of ["focus", "blur"]) window.addEventListener(type, (e) => e.target === window && record(e));
+    void import("../testHooks.ts").then(({ registerTestHooks }) =>
+      registerTestHooks({
+        readerFocusLog: () => focusLog.join("\n"),
+        readerStatusLog: () => statusLog.join("\n"),
+        readerMarkDiagram: () => {
+          const svg = body.current?.querySelector(".mermaid-block svg") as (Element & { __kinasMark?: number }) | null;
+          if (!svg) return false;
+          svg.__kinasMark = 1;
+          return true;
+        },
+        readerDiagramMarked: () => Boolean((body.current?.querySelector(".mermaid-block svg") as (Element & { __kinasMark?: number }) | null)?.__kinasMark),
+      }),
+    );
+  }, []);
+
+  const headings = doc?.rendered.headings ?? [];
+  const contents = Boolean(doc) && tall && headings.length >= 2;
+  const sideShown = (folder !== null || contents) && (!narrow || overlay !== null);
+
+  return (
+    <div className="reader-frame" ref={frame}>
+      <header className="reader-head">
+        <button type="button" className="reader-button" onClick={goBack} disabled={back.length === 0} aria-label="Back" title="Back">
+          ←
+        </button>
+        <span className="reader-path" title={doc?.path ?? folder ?? ""}>
+          {doc?.displayPath ?? problem?.displayPath ?? (folder ? baseName(folder) : "")}
+        </span>
+        {narrow && folder && (
+          <button type="button" className="reader-button" aria-pressed={overlay === "files"} onClick={() => setOverlay((o) => (o === "files" ? null : "files"))}>
+            Files
+          </button>
+        )}
+        {narrow && contents && (
+          <button type="button" className="reader-button" aria-pressed={overlay === "contents"} onClick={() => setOverlay((o) => (o === "contents" ? null : "contents"))}>
+            Contents
+          </button>
+        )}
+        <button type="button" className="reader-button" disabled={!doc} title="Open this file in an editor pane in Herdr" onClick={() => void openInEditor()}>
+          Open in editor
+        </button>
+        <button type="button" className="reader-button reader-close" onClick={close} aria-label="Close the reader" title="Close">
+          ×
+        </button>
+      </header>
+      {status && (
+        <p className="reader-status" role="status">
+          {status.text}
+        </p>
+      )}
+      <div className="reader-main" data-narrow={narrow ? "" : undefined}>
+        {sideShown && (
+          <div className="reader-side" data-overlay={narrow ? "" : undefined}>
+            {folder && (!narrow || overlay === "files") && (
+              <section className="reader-files" aria-label="Files">
+                <h2 className="reader-label">Files</h2>
+                <FileTree root={folder} selected={doc?.path ?? null} onOpen={(path) => void follow(path, null)} />
+              </section>
+            )}
+            {contents && (!narrow || overlay === "contents") && (
+              <nav className="reader-contents" aria-label="Contents">
+                <h2 className="reader-label">Contents</h2>
+                <ol>
+                  {headings.map((heading) => (
+                    <li key={heading.slug} data-level={heading.level}>
+                      <button type="button" aria-current={heading.slug === currentSlug ? "true" : undefined} onClick={() => scrollToId(heading.slug)}>
+                        {heading.text}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+            )}
+          </div>
+        )}
+        <div className="reader-scroll" ref={scroller} onClickCapture={onClickCapture} onScroll={onScroll}>
+          {confirm && (
+            <div className="reader-confirm" role="group" aria-label="Open a file outside the projects root">
+              <p className="reader-confirm-title">Open a file outside {confirm.root}?</p>
+              <code className="reader-confirm-path">{confirm.path}</code>
+              <div className="reader-confirm-actions">
+                <button type="button" className="button" onClick={() => void openConfirmed()}>
+                  Open
+                </button>
+                <button type="button" className="button" onClick={dismiss}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          {opening && !doc && <p className="reader-note">Opening {opening}…</p>}
+          {problem && <p className="reader-problem">{problem.message}</p>}
+          {!doc && !problem && !opening && folder && <p className="reader-note">Choose a file</p>}
+          <article className="reader-doc" ref={article} hidden={!doc}>
+            {doc?.rendered.frontmatter && <FrontmatterCard view={doc.rendered.frontmatter} />}
+            <div className="reader-body" ref={body} />
+          </article>
+        </div>
+      </div>
+    </div>
+  );
+}

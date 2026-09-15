@@ -119,6 +119,7 @@ Keychain (service `ai.sintralabs.kinas`, account `ollama-cloud-api-key`), never 
 | `KINAS_OLLAMA_BASE_URL` | debug | Point the Ollama reader at a stub server |
 | `KINAS_E2E_MEMORY_KEYCHAIN=1`, `KINAS_E2E_OLLAMA_KEY` | debug | An in-memory key store, optionally pre-filled |
 | `KINAS_E2E_NO_SYSTEM_HOOKS=1` | debug | Do not register the global hotkey or the login item |
+| `KINAS_E2E_NO_OPEN=1` | debug | The reader logs an external link click instead of opening the browser |
 
 The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug builds with the `e2e` feature and
 `TAURI_ENV_DEBUG`; release builds contain neither.

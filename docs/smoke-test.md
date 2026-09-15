@@ -95,6 +95,37 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
 - [ ] lazygit inside Herdr: mouse clicks still select panels (the lazygit line above still passes) —
       `outstanding — needs Miguel`
 
+## Reader
+
+`kinas open` and the reader beside the terminal (`tasks/prd-kinas-open.md`, build spec AC-1 to AC-8).
+
+- [x] `kinas open plan-300.md` opens the reader on the left with the frontmatter card, the diagram, the image and
+      Contents, the terminal keeps focus and its PTY — `automated (reader.e2e.ts, AC-1)`
+- [ ] Dragging the divider resizes the reader against the terminal, the terminal refits, the width survives a
+      relaunch, and double-click restores 55 % — `automated (reader.e2e.ts)`; the drag by hand with a real mouse is
+      `outstanding — needs Miguel`
+- [x] A relative link lands on its fragment and Back returns to the same scroll position —
+      `automated (reader.e2e.ts, AC-3)`
+- [x] An append is on screen in under 1 s without redrawing the diagram; a growing file stays at the bottom; a
+      rename over the file and a removal are followed — `automated (reader.e2e.ts, AC-2)`
+- [x] `kinas open ~/.zshrc` → 65; `/tmp/x.md` → 77 with one line; a symlink out of the root → 77; a missing file
+      → 66 and nothing is created — `automated (reader.e2e.ts, AC-4; cli/src/open.test.ts)`
+- [x] `--anywhere` shows the card, Enter in the terminal does not accept it, Open does —
+      `automated (reader.e2e.ts, AC-5)`
+- [x] Script, `onerror`, `javascript:` links and remote images in a file do nothing — `automated (reader.e2e.ts, AC-6)`
+- [x] Open in editor splits the focused Herdr pane with the editor on the file; with no Herdr it says so —
+      `automated (reader-editor.e2e.ts, AC-7)`, in the throwaway session `kinas-e2e-editor`
+- [ ] Release build: the median of opens 2–5 of `fixtures/reader/plan-300.md` is under 200 ms (run 1: ___ ms,
+      median: ___ ms) — `passed by agent` once measured in task 7.7
+- [ ] Edit a plan in vim in a Herdr pane beside the reader and save three times: the page updates each time with
+      no blank frame and no diagram flash — `outstanding — needs Miguel`
+- [ ] Open in editor from a plan in your own `default` session opens vim in a new pane beside the focused one —
+      `outstanding — needs Miguel`
+- [ ] Narrow the window until the reader is under 640 px: Files and Contents move into the header and open over
+      the page — `outstanding — needs Miguel`
+- [ ] Cursor not opened to read markdown since ____ (the plan's first "done when", after a week) —
+      `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

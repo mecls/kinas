@@ -7,6 +7,7 @@ import {
   setLaunchAtLogin,
   setMenuBarQuota,
   setOrgName,
+  setReaderEditor,
   type LinkStatus,
   type SettingsView,
 } from "../api.ts";
@@ -265,6 +266,22 @@ export function SettingsPage({
               }}
             />
             {note("org")}
+          </section>
+
+          <section className="settings-section" data-section="reader">
+            <h2>Reader</h2>
+            <p className="muted">Open in editor splits Herdr&apos;s focused pane and runs this command with the file.</p>
+            <input
+              className="field"
+              aria-label="Editor for Open in editor"
+              defaultValue={settings.reader_editor}
+              spellCheck={false}
+              onBlur={(e) => {
+                const value = e.currentTarget.value.trim();
+                if (value !== settings.reader_editor) void act("reader", () => setReaderEditor(value));
+              }}
+            />
+            {note("reader")}
           </section>
 
           <section className="settings-section" data-section="cli">

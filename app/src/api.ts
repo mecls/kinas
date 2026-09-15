@@ -107,10 +107,14 @@ export interface SettingsView {
   cli_link: LinkStatus;
   ollama_key_saved: boolean;
   claude_hook: HookStatus;
+  /** The command Open in editor runs in a new Herdr pane (reader R36). */
+  reader_editor: string;
 }
 
 export const getSettings = () => invoke<SettingsView>("get_settings");
 export const setOrgName = (name: string) => invoke<void>("set_org_name", { name });
+/** Rejected unless one line of 1–200 characters after trimming. */
+export const setReaderEditor = (value: string) => invoke<void>("set_reader_editor", { value });
 export const setMenuBarQuota = (value: string) => invoke<void>("set_menu_bar_quota", { value });
 /** Rejected by the app unless the chord includes ⌘ (R30). */
 export const setGlobalHotkey = (chord: string) => invoke<void>("set_global_hotkey", { chord });
@@ -122,12 +126,81 @@ export interface UiPrefs {
   /** The in-window shortcuts Settings saved, by action; missing actions use settings/shortcuts.ts's defaults. */
   shortcuts: Record<string, string>;
   sidebar_visible: boolean;
+  /** The reader's share of the Work page, 20–80 percent (default 55). */
+  reader_width_pct: number;
 }
 
 export const getUiPrefs = () => invoke<UiPrefs>("get_ui_prefs");
 /** Rejected by the app unless every action is known, every chord includes ⌘ and no chord is used twice. */
 export const setShortcuts = (shortcuts: Record<string, string>) => invoke<void>("set_shortcuts", { shortcuts });
 export const setSidebarVisible = (visible: boolean) => invoke<void>("set_sidebar_visible", { visible });
+/** Rejected outside 20–80 percent. */
+export const setReaderWidth = (pct: number) => invoke<void>("set_reader_width", { pct });
+
+// The reader (tasks/prd-kinas-open.md). Every command re-checks its path in Rust; a refusal arrives as ReaderError.
+
+export type ReaderKind = "file" | "dir";
+
+export interface ReaderText {
+  text: string;
+  /** Unchanged hash: a reload does nothing (R30). */
+  hash: string;
+  mtime_ms: number;
+  size: number;
+}
+
+export interface ReaderDoc {
+  path: string;
+  display_path: string;
+  /** The projects root's real path, for links that start with `/`. */
+  root: string;
+  kind: ReaderKind;
+  text: ReaderText | null;
+}
+
+/** An accepted `kinas open` (R18). */
+export interface ReaderShow {
+  path: string;
+  kind: ReaderKind;
+  confirm: boolean;
+  received_at_ms: number;
+  root: string;
+}
+
+export interface ReaderError {
+  code: string;
+  message: string;
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  kind: ReaderKind;
+}
+
+export interface DirListing {
+  entries: DirEntry[];
+  more: number;
+}
+
+export function readerErrorOf(e: unknown): ReaderError {
+  if (e && typeof e === "object" && "message" in e && "code" in e) return e as ReaderError;
+  return { code: "unknown", message: String(e) };
+}
+
+export const readerOpen = (path: string) => invoke<ReaderDoc>("reader_open", { path });
+export const readerReadText = (path: string) => invoke<ReaderText>("reader_read_text", { path });
+export const readerListDir = (path: string) => invoke<DirListing>("reader_list_dir", { path });
+export const readerReadImage = (path: string) => invoke<ArrayBuffer>("reader_read_image", { path });
+export const readerConfirm = (path: string, allow: boolean) => invoke<void>("reader_confirm", { path, allow });
+export const readerAllowClick = (path: string) => invoke<{ path: string; kind: ReaderKind }>("reader_allow_click", { path });
+export const readerClose = () => invoke<void>("reader_close");
+export const openExternal = (url: string) => invoke<void>("open_external", { url });
+export const readerRendered = (lines: number, diagrams: number, ms: number) => invoke<void>("reader_rendered", { lines, diagrams, ms });
+export const readerOpenInEditor = (path: string) => invoke<void>("reader_open_in_editor", { path });
+export const onReaderShow = (handler: (e: ReaderShow) => void): Promise<UnlistenFn> => listen<ReaderShow>("reader_show", (e) => handler(e.payload));
+export const onReaderChanged = (handler: (e: { path: string }) => void): Promise<UnlistenFn> =>
+  listen<{ path: string }>("reader_changed", (e) => handler(e.payload));
 
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);
 export const onReadingsChanged = (handler: () => void): Promise<UnlistenFn> => listen("readings_changed", handler);

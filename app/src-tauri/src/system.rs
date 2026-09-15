@@ -91,7 +91,10 @@ pub fn bring_forward(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
-        let _ = window.set_focus();
+        // Already the key window: focusing it again gains nothing and could move focus inside the page (reader R34).
+        if !window.is_focused().unwrap_or(false) {
+            let _ = window.set_focus();
+        }
     }
 }
 

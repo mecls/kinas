@@ -51,6 +51,8 @@ pub struct SettingsView {
     pub cli_link: crate::cli_link::LinkStatus,
     pub ollama_key_saved: bool,
     pub claude_hook: claude_plan::HookStatus,
+    /// The command Open in editor runs in a new Herdr pane (reader R36).
+    pub reader_editor: String,
 }
 
 /// Settings (§3.9): everything the Settings page shows. Never a secret.
@@ -62,7 +64,7 @@ pub fn get_settings(
     control: State<'_, ReaderControl>,
     system: State<'_, SystemState>,
 ) -> Result<SettingsView, String> {
-    let (org_name, menu_bar_quota, global_hotkey, launch_at_login) = {
+    let (org_name, menu_bar_quota, global_hotkey, launch_at_login, reader_editor) = {
         let conn = store.conn();
         let org = store.org_id();
         let name: String = conn.query_row("SELECT name FROM orgs WHERE id = ?1", [org], |r| r.get(0)).map_err(|e| e.to_string())?;
@@ -72,6 +74,7 @@ pub fn get_settings(
             text("menu_bar_quota", "claude-plan/session"),
             text("global_hotkey", system::DEFAULT_HOTKEY),
             system::get_setting(&conn, org, "launch_at_login").and_then(|v| v.as_bool()).unwrap_or(true),
+            text("reader_editor", crate::reader::editor::DEFAULT_EDITOR),
         )
     };
     Ok(SettingsView {
@@ -84,6 +87,7 @@ pub fn get_settings(
         cli_link: link.0.clone(),
         ollama_key_saved: keys.0.get(OLLAMA_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
         claude_hook: claude_plan::hook_status(control.data_dir(), now_ms()),
+        reader_editor,
     })
 }
 
@@ -95,6 +99,13 @@ pub fn set_org_name(store: State<'_, Store>, name: String) -> Result<(), String>
     }
     store.conn().execute("UPDATE orgs SET name = ?1 WHERE id = ?2", rusqlite::params![name, store.org_id()]).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The command Open in editor runs (reader R36): one trimmed line of at most 200 characters.
+#[tauri::command]
+pub fn set_reader_editor(store: State<'_, Store>, value: String) -> Result<(), String> {
+    let value = crate::reader::editor::check_editor(&value)?;
+    system::put_setting(&store.conn(), store.org_id(), "reader_editor", &serde_json::json!(value)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -129,9 +140,20 @@ pub struct UiPrefs {
     /// The in-window shortcuts Settings saved, by action; the webview fills in the rest from its defaults.
     pub shortcuts: BTreeMap<String, String>,
     pub sidebar_visible: bool,
+    /// The reader's share of the Work page in percent, set by dragging the divider (reader R32, amended 2026-09-15).
+    pub reader_width_pct: f64,
 }
 
-/// What the window needs before it draws: the shortcuts and whether the sidebar is shown.
+pub const READER_WIDTH_DEFAULT: f64 = 55.0;
+const READER_WIDTH_MIN: f64 = 20.0;
+const READER_WIDTH_MAX: f64 = 80.0;
+
+/// A stored width in range, else the default: a hand-edited or older value never lays the page out badly.
+fn reader_width(value: Option<serde_json::Value>) -> f64 {
+    value.and_then(|v| v.as_f64()).filter(|p| p.is_finite() && (READER_WIDTH_MIN..=READER_WIDTH_MAX).contains(p)).unwrap_or(READER_WIDTH_DEFAULT)
+}
+
+/// What the window needs before it draws: the shortcuts, whether the sidebar is shown, and the reader's width.
 #[tauri::command]
 pub fn get_ui_prefs(store: State<'_, Store>) -> UiPrefs {
     let conn = store.conn();
@@ -139,6 +161,31 @@ pub fn get_ui_prefs(store: State<'_, Store>) -> UiPrefs {
     UiPrefs {
         shortcuts: system::get_setting(&conn, org, "shortcuts").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default(),
         sidebar_visible: system::get_setting(&conn, org, "sidebar_visible").and_then(|v| v.as_bool()).unwrap_or(true),
+        reader_width_pct: reader_width(system::get_setting(&conn, org, "reader_width_pct")),
+    }
+}
+
+/// Saved when a drag of the divider ends, rounded to a tenth of a percent.
+#[tauri::command]
+pub fn set_reader_width(store: State<'_, Store>, pct: f64) -> Result<(), String> {
+    if !pct.is_finite() || !(READER_WIDTH_MIN..=READER_WIDTH_MAX).contains(&pct) {
+        return Err(format!("the reader's width must be between {READER_WIDTH_MIN} and {READER_WIDTH_MAX} percent"));
+    }
+    system::put_setting(&store.conn(), store.org_id(), "reader_width_pct", &serde_json::json!((pct * 10.0).round() / 10.0)).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod reader_width_tests {
+    use super::*;
+
+    #[test]
+    fn a_stored_width_outside_20_to_80_percent_falls_back_to_55() {
+        assert_eq!(reader_width(Some(serde_json::json!(35.5))), 35.5);
+        assert_eq!(reader_width(Some(serde_json::json!(80))), 80.0);
+        for bad in [serde_json::json!(5), serde_json::json!(95.0), serde_json::json!("40"), serde_json::Value::Null] {
+            assert_eq!(reader_width(Some(bad)), READER_WIDTH_DEFAULT);
+        }
+        assert_eq!(reader_width(None), READER_WIDTH_DEFAULT);
     }
 }
 

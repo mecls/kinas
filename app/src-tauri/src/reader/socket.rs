@@ -70,10 +70,12 @@ pub struct ShowEvent {
     pub kind: Kind,
     pub confirm: bool,
     pub received_at_ms: i64,
+    /// The projects root's real path, which the confirmation card names (R7).
+    pub root: String,
 }
 
-fn show(path: &Path, kind: Kind, confirm: bool, received_at_ms: i64) -> Option<ShowEvent> {
-    Some(ShowEvent { path: path.display().to_string(), kind, confirm, received_at_ms })
+fn show(path: &Path, kind: Kind, confirm: bool, received_at_ms: i64, root: &Path) -> Option<ShowEvent> {
+    Some(ShowEvent { path: path.display().to_string(), kind, confirm, received_at_ms, root: root.display().to_string() })
 }
 
 /// One request against the root and this session's state. Pure apart from canonicalize and stat, so every branch
@@ -96,12 +98,12 @@ pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -
             match access::resolve(&path) {
                 Err(denied) => refuse(denied, &path),
                 Ok((real, kind)) if access::permitted(&real, root, &inner.allowed) => {
-                    (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms))
+                    (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms, &real_root))
                 }
                 // Outside the root: only a click in the app can open it (R7). Nothing is allowed here.
                 Ok((real, kind)) if request.anywhere => {
                     inner.pending_confirm = Some(real.clone());
-                    (Response::accepted("confirm", &real), show(&real, kind, true, received_at_ms))
+                    (Response::accepted("confirm", &real), show(&real, kind, true, received_at_ms, &real_root))
                 }
                 Ok((real, _)) => refuse(Denied::Outside, &real),
             }
@@ -113,7 +115,7 @@ pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -
             match access::resolve(&last) {
                 Err(denied) => refuse(denied, &last),
                 Ok((real, kind)) if access::permitted(&real, root, &inner.allowed) => {
-                    (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms))
+                    (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms, &real_root))
                 }
                 Ok((real, _)) => refuse(Denied::Outside, &real),
             }
@@ -243,7 +245,10 @@ mod tests {
         let mut inner = Inner::default();
         let (response, event) = handle(&open(&t.root.join("a.md"), false), &t.root, &mut inner, 7);
         assert_eq!(serde_json::to_string(&response).unwrap(), format!(r#"{{"ok":true,"result":"opened","path":"{}"}}"#, t.root.join("a.md").display()));
-        assert_eq!(event, Some(ShowEvent { path: t.root.join("a.md").display().to_string(), kind: Kind::File, confirm: false, received_at_ms: 7 }));
+        assert_eq!(
+            event,
+            Some(ShowEvent { path: t.root.join("a.md").display().to_string(), kind: Kind::File, confirm: false, received_at_ms: 7, root: t.root.display().to_string() })
+        );
         let (_, folder) = handle(&open(&t.root.join("docs"), false), &t.root, &mut inner, 7);
         assert_eq!(folder.map(|e| e.kind), Some(Kind::Dir));
     }

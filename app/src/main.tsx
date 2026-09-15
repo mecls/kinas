@@ -4,6 +4,7 @@ import "./styles/tokens.css";
 import "./styles/usage.css";
 import "./styles/settings.css";
 import "./styles/overlay.css";
+import "./styles/reader.css";
 
 if (import.meta.env.TAURI_ENV_DEBUG === "true") {
   void import("./testHooks.ts").then((m) => m.installTestHooks());

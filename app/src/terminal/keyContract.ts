@@ -1,5 +1,5 @@
 // The keyboard contract for the terminal pane (PRD R31, keymap.md), as a pure function so it can be
-// unit-tested without a browser.
+// unit-tested without a browser. Every key without ⌘ goes to the PTY, except ⌫ over a selection at the prompt.
 
 import { actionForEvent, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 
@@ -33,13 +33,21 @@ const CTRL_SHIFT_TAB = "\x1b[9;6u";
  * @param kittyFlags the flags from KittyKeyboardTracker; 0 when the program has not enabled the
  *   kitty keyboard protocol.
  * @param shortcuts the in-window shortcuts as Settings has them, so a rebound chord works in the pane too.
+ * @param selectionDelete for a plain ⌫: the bytes that remove the selection at the prompt, or null
+ *   (selectionDelete.ts). Called for that key only, so the terminal is only inspected then.
  */
-export function decideKey(ev: KeyInput, kittyFlags: number, shortcuts: Shortcuts): KeyDecision {
+export function decideKey(ev: KeyInput, kittyFlags: number, shortcuts: Shortcuts, selectionDelete: () => string | null = () => null): KeyDecision {
   if (ev.metaKey) {
     // ⌘ chords never produce terminal input, so none of them reaches the PTY. Every shortcut includes ⌘.
     if (ev.type !== "keydown") return { kind: "native" };
     const action = actionForEvent(ev, shortcuts);
     return action ? { kind: "app", action } : { kind: "native" };
+  }
+
+  if (ev.type === "keydown" && ev.key === "Backspace" && !ev.ctrlKey && !ev.altKey && !ev.shiftKey) {
+    // The one key without ⌘ the app may take (keymap.md); with nothing to remove, ⌫ is xterm's as usual.
+    const data = selectionDelete();
+    if (data !== null) return { kind: "pty", data };
   }
 
   if (ev.type === "keydown" && ev.key === "Tab" && ev.ctrlKey && !ev.altKey && kittyFlags > 0) {

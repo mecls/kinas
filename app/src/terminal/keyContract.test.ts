@@ -75,6 +75,35 @@ describe("shortcuts rebound in Settings", () => {
   });
 });
 
+describe("⌫ over a selection at the prompt", () => {
+  const bytes = "\x1b[D\x7f";
+  const counting = (result: string | null) => {
+    const calls = { count: 0 };
+    return { calls, deleter: () => (calls.count++, result) };
+  };
+
+  test("a plain ⌫ sends the bytes that remove the selection", () => {
+    expect(decideKey(key("Backspace"), 0, DEFAULT_SHORTCUTS, () => bytes)).toEqual({ kind: "pty", data: bytes });
+  });
+  test("with nothing to remove, ⌫ is left to xterm", () => {
+    expect(decideKey(key("Backspace"), 0, DEFAULT_SHORTCUTS, () => null)).toEqual({ kind: "xterm" });
+    expect(decide(key("Backspace"))).toEqual({ kind: "xterm" });
+  });
+  test("⌥⌫, ⌃⌫ and ⇧⌫ reach the PTY without inspecting the selection", () => {
+    for (const mods of [{ altKey: true }, { ctrlKey: true }, { shiftKey: true }]) {
+      const { calls, deleter } = counting(bytes);
+      expect(decideKey(key("Backspace", mods), 0, DEFAULT_SHORTCUTS, deleter)).toEqual({ kind: "xterm" });
+      expect(calls.count).toBe(0);
+    }
+  });
+  test("⌘⌫ stays with the macOS menu, and a keyup never inspects the selection", () => {
+    const { calls, deleter } = counting(bytes);
+    expect(decideKey(key("Backspace", { metaKey: true }), 0, DEFAULT_SHORTCUTS, deleter)).toEqual({ kind: "native" });
+    expect(decideKey({ ...key("Backspace"), type: "keyup" }, 0, DEFAULT_SHORTCUTS, deleter)).toEqual({ kind: "xterm" });
+    expect(calls.count).toBe(0);
+  });
+});
+
 describe("⌃Tab (task 1.5)", () => {
   test("with kitty flags pushed, ⌃Tab sends CSI 9;5u", () => {
     expect(decide(key("Tab", { ctrlKey: true }), 7)).toEqual({ kind: "pty", data: "\x1b[9;5u" });

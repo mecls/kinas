@@ -240,6 +240,44 @@ pub fn pty_pid(state: State<'_, PtyState>) -> Option<u32> {
     state.session().ok().and_then(|s| s.pid())
 }
 
+/// The most a single copy may put on the clipboard, in UTF-8 bytes. `app/src/terminal/clipboard.ts` holds the
+/// same number, so the webview does not send what this would refuse.
+pub const CLIPBOARD_MAX_BYTES: usize = 1_048_576;
+
+/// Whether text may go on the clipboard: never empty, so no program can wipe what was copied, and never over
+/// the limit, so a program printing OSC 52 in a loop cannot push megabytes through IPC. The error names the
+/// size, never the text.
+pub fn check_clipboard_text(text: &str) -> Result<(), String> {
+    if text.is_empty() {
+        return Err("nothing to copy".into());
+    }
+    if text.len() > CLIPBOARD_MAX_BYTES {
+        return Err(format!("{} bytes is over the {CLIPBOARD_MAX_BYTES}-byte clipboard limit", text.len()));
+    }
+    Ok(())
+}
+
+/// Puts text on the macOS clipboard: a selection in the pane, or a program's OSC 52 write. There is
+/// deliberately no command that reads the clipboard, so nothing running in the pane can get at it.
+#[tauri::command]
+pub fn clipboard_write_text(text: String) -> Result<(), String> {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_foundation::NSString;
+
+    if let Err(e) = check_clipboard_text(&text) {
+        log::warn!("clipboard: refused a write: {e}");
+        return Err(e);
+    }
+    let pasteboard = NSPasteboard::generalPasteboard();
+    pasteboard.clearContents();
+    // SAFETY: NSPasteboardTypeString is an immutable AppKit constant.
+    if !pasteboard.setString_forType(&NSString::from_str(&text), unsafe { NSPasteboardTypeString }) {
+        log::warn!("clipboard: the pasteboard refused {} bytes", text.len());
+        return Err("the pasteboard refused the text".into());
+    }
+    Ok(())
+}
+
 #[derive(Serialize)]
 pub struct StoreInfo {
     pub org_id: String,
@@ -258,4 +296,23 @@ pub fn store_info(store: State<'_, Store>) -> Result<StoreInfo, String> {
         path: store.path().display().to_string(),
         schema_version,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipboard_text_is_never_empty_and_never_over_the_limit() {
+        assert!(check_clipboard_text("").is_err());
+        assert!(check_clipboard_text("ção ✓").is_ok());
+        assert!(check_clipboard_text(&"a".repeat(CLIPBOARD_MAX_BYTES)).is_ok());
+        assert!(check_clipboard_text(&"a".repeat(CLIPBOARD_MAX_BYTES + 1)).is_err());
+    }
+
+    #[test]
+    fn the_clipboard_limit_counts_bytes_not_characters() {
+        // 524 289 "ç" are fewer characters than the limit, but 1 048 578 bytes.
+        assert!(check_clipboard_text(&"ç".repeat(524_289)).is_err());
+    }
 }

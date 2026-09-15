@@ -39,9 +39,9 @@ the five, it means the chord bound to it now.
 
 ## Terminal pane (Work page), while it has focus
 
-**Every keystroke without ⌘ goes to the PTY**, exactly as xterm.js encodes it. No app handler may act
-on it or `preventDefault` it, and no webview default (Tab focus traversal) may consume it. That
-explicitly includes:
+**Every keystroke without ⌘ goes to the PTY**, exactly as xterm.js encodes it, with one exception: ⌫ over a
+selection at the prompt (below). No app handler may act on any other key or `preventDefault` it, and no webview
+default (Tab focus traversal) may consume it. That explicitly includes:
 
 - Tab, ⇧Tab
 - ⌃Tab, ⌃⇧Tab (Herdr's pane-cycling bindings)
@@ -62,6 +62,15 @@ The only ⌘ chords the app handles in the pane:
 | ⌘S | Hide or show the sidebar |
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |
+
+A mouse selection is also copied when the button is released, and a program's OSC 52 write (how Herdr copies)
+reaches the clipboard. Nothing in the pane can read the clipboard.
+
+The one key the app takes without ⌘:
+
+| Key | Action |
+|---|---|
+| ⌫ | With a selection on one row, the cursor's row, on the normal screen (so not inside Herdr, vim or lazygit): remove the selected text, by moving the cursor to its end and sending one ⌫ per character. Any other time, ⌫ goes to the PTY |
 
 ## Settings page
 

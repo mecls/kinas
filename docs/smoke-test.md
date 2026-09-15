@@ -82,6 +82,10 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
 - [x] A mouse selection is copied when the button is released — `automated (selection.e2e.ts)`, driven by DOM
       mouse events. WebDriver drags reach the page but make no selection, so the physical drag below is the only
       proof that the OS mouse works
+- [x] Copying a mouse selection, or ⌘C over a selection, shows "copied to clipboard" at the bottom right of the pane
+      for 1.5 s; an OSC 52 write shows nothing, because Herdr shows its own — `automated (selection.e2e.ts)`
+- [ ] The toast looks right: gold border and dot on the dark ground, bottom right, gone after about 1.5 s, and a click
+      on it reaches the terminal — `outstanding — needs Miguel`
 - [ ] Plain zsh: drag over `mefes` → ⌘V in Notes pastes `mefes`; ⌫ removes it from the prompt —
       `outstanding — needs Miguel`
 - [ ] Plain zsh: double-click a word in earlier output → it copies; ⌫ at the prompt deletes one character, as

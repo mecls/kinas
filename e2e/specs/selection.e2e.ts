@@ -62,6 +62,11 @@ async function drag(row: number, from: number, to: number): Promise<void> {
 
 const backspace = () => hookWith("dispatchKey", { key: "Backspace", code: "Backspace", keyCode: 8 });
 
+/** The pane's "copied to clipboard" toast, or null when none is up. */
+const toastText = () => browser.execute(() => document.querySelector(".terminal-toast")?.textContent?.trim() ?? null);
+const toastShows = (why: string) =>
+  browser.waitUntil(async () => (await toastText()) === "copied to clipboard", { timeout: 3000, timeoutMsg: `no "copied to clipboard" toast ${why}` });
+
 describe("selection and clipboard in a plain shell", () => {
   let saved = "";
 
@@ -98,6 +103,8 @@ describe("selection and clipboard in a plain shell", () => {
     // Typed as ASCII: the payload is base64 of "ção ✓".
     await typeLine(`printf '\\e]52;c;%s\\a' '${Buffer.from("ção ✓", "utf8").toString("base64")}'`);
     await clipboardBecomes("ção ✓");
+    // Herdr shows its own toast for the copies it sends this way, so the pane stays quiet.
+    expect(await toastText()).toBeNull();
   });
 
   it("an OSC 52 query never reads the clipboard and types nothing back", async () => {
@@ -118,6 +125,30 @@ describe("selection and clipboard in a plain shell", () => {
     await drag(await rowOf("clmefes"), 0, 7);
     expect(await hook<string>("terminalSelection")).toBe("clmefes");
     await clipboardBecomes("clmefes");
+    await toastShows("after a mouse copy");
+    // In the lower part of the pane, at the right, clear of a prompt typed from the left.
+    const place = await browser.execute(() => {
+      const toast = document.querySelector(".terminal-toast")!.getBoundingClientRect();
+      const pane = document.querySelector(".terminal")!.getBoundingClientRect();
+      return { inLowerHalf: toast.top > pane.top + pane.height / 2, fromBottom: pane.bottom - toast.bottom, fromRight: pane.right - toast.right };
+    });
+    expect(place.inLowerHalf).toBe(true);
+    expect(place.fromBottom).toBeLessThan(40);
+    expect(place.fromRight).toBeLessThan(40);
+    await browser.waitUntil(async () => (await toastText()) === null, { timeout: 5000, timeoutMsg: "the toast never went away" });
+  });
+
+  it("⌘C over a selection says copied to clipboard", async () => {
+    await typeLine("echo tost''ed");
+    await waitForTerminal(/^tosted\s*$/m);
+    await hookWith("terminalSelect", { column: 0, row: await rowOf("tosted"), length: 6 });
+    // The macOS menu's Copy reaches the terminal as a copy event on xterm's focused textarea.
+    await browser.execute(() => {
+      const target = document.querySelector(".xterm-helper-textarea") ?? document.querySelector(".xterm")!;
+      const event = typeof ClipboardEvent === "function" ? new ClipboardEvent("copy", { bubbles: true, cancelable: true }) : new Event("copy", { bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+    });
+    await toastShows("after ⌘C");
   });
 
   it("⌫ removes the selection from the line being typed", async () => {

@@ -14,6 +14,9 @@ import { type SelectionSnapshot, selectionDeleteBytes } from "./selectionDelete.
 
 const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
 
+/** How long "copied to clipboard" stays up after a copy. */
+const COPIED_TOAST_MS = 1500;
+
 /** The pane's colours come from tokens.css like every other colour in the app, read once when the terminal starts. */
 function terminalTheme(): ITheme {
   const css = getComputedStyle(document.documentElement);
@@ -48,6 +51,8 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
   const term = useRef<XTerm | null>(null);
   const fit = useRef<FitAddon | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // "copied to clipboard", up for a moment after the pane itself puts a selection on the clipboard.
+  const [copied, setCopied] = useState(false);
   // The key handler is attached once, so it reads the current shortcuts through a ref.
   const shortcutsRef = useRef(shortcuts);
   useEffect(() => {
@@ -72,11 +77,20 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
 
     // A program's OSC 52 write (how Herdr copies a mouse selection) reaches the macOS clipboard; a query never reads
     // it. The handler claims every OSC 52, so xterm never prints one.
+    // No toast for these: Herdr shows its own "copied to clipboard" when it copies.
     const osc52 = xterm.parser.registerOscHandler(52, (data) => {
       const parsed = parseOsc52(data);
-      if (parsed.kind === "write") writeClipboard(parsed.text);
+      if (parsed.kind === "write") void writeClipboard(parsed.text);
       return true;
     });
+
+    // Only a copy that reached the clipboard says so; another copy while it is up keeps it up.
+    let copiedTimer: number | undefined;
+    const showCopied = () => {
+      setCopied(true);
+      window.clearTimeout(copiedTimer);
+      copiedTimer = window.setTimeout(() => setCopied(false), COPIED_TOAST_MS);
+    };
 
     // A mouse selection is copied when the button is released: not on onSelectionChange, which fires on every move
     // of a drag. Both listeners capture, so a program's mouse reporting cannot hide them, and the copy waits a tick
@@ -90,11 +104,20 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       pointerSelecting = false;
       if (ev.button !== 0) return;
       window.setTimeout(() => {
-        if (xterm.hasSelection()) writeClipboard(xterm.getSelection());
+        if (!xterm.hasSelection()) return;
+        void writeClipboard(xterm.getSelection()).then((ok) => {
+          if (ok) showCopied();
+        });
       }, 0);
+    };
+    // ⌘C still copies through xterm's own handler for the macOS menu's copy event, which does not stop the event
+    // here; capturing runs first, while the selection is still there.
+    const onCopy = () => {
+      if (xterm.hasSelection() && xterm.getSelection() !== "") showCopied();
     };
     el.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("mouseup", onMouseUp, true);
+    el.addEventListener("copy", onCopy, true);
 
     // WebGL, falling back to xterm's DOM renderer, never a blank pane (R33).
     let webgl: WebglAddon | null = null;
@@ -270,8 +293,10 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       observer.disconnect();
       window.clearTimeout(timer);
       osc52.dispose();
+      window.clearTimeout(copiedTimer);
       el.removeEventListener("mousedown", onMouseDown, true);
       document.removeEventListener("mouseup", onMouseUp, true);
+      el.removeEventListener("copy", onCopy, true);
       xterm.dispose();
       term.current = null;
     };
@@ -293,6 +318,12 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
     <div className="terminal">
       {notice && <div className="terminal-notice">{notice}</div>}
       <div ref={host} className="terminal-host" />
+      {copied && (
+        <div className="terminal-toast" role="status">
+          <span className="terminal-toast-dot" aria-hidden="true" />
+          copied to clipboard
+        </div>
+      )}
     </div>
   );
 }

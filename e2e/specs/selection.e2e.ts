@@ -126,6 +126,15 @@ describe("selection and clipboard in a plain shell", () => {
     expect(await hook<string>("terminalSelection")).toBe("clmefes");
     await clipboardBecomes("clmefes");
     await toastShows("after a mouse copy");
+    // In the lower part of the pane, at the right, clear of a prompt typed from the left.
+    const place = await browser.execute(() => {
+      const toast = document.querySelector(".terminal-toast")!.getBoundingClientRect();
+      const pane = document.querySelector(".terminal")!.getBoundingClientRect();
+      return { inLowerHalf: toast.top > pane.top + pane.height / 2, fromBottom: pane.bottom - toast.bottom, fromRight: pane.right - toast.right };
+    });
+    expect(place.inLowerHalf).toBe(true);
+    expect(place.fromBottom).toBeLessThan(40);
+    expect(place.fromRight).toBeLessThan(40);
     await browser.waitUntil(async () => (await toastText()) === null, { timeout: 5000, timeoutMsg: "the toast never went away" });
   });
 

@@ -153,10 +153,11 @@ body,
   font: 11px/1.4 var(--mono);
 }
 
-/* "copied to clipboard": a moment in the pane's top right corner. It never takes a click from the terminal. */
+/* "copied to clipboard": a moment in the pane's bottom right corner, clear of a prompt typed from the left. It never
+   takes a click from the terminal. */
 .terminal-toast {
   position: absolute;
-  top: 10px;
+  bottom: 12px;
   right: 14px;
   z-index: 2;
   display: flex;
@@ -181,7 +182,7 @@ body,
 @keyframes terminal-toast-in {
   from {
     opacity: 0;
-    transform: translateY(-2px);
+    transform: translateY(2px);
   }
 }
 

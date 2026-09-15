@@ -34,6 +34,7 @@ Tools the terminal expects, already on this Mac: `herdr`, `pi`, `lazygit`, `clau
 | `bun run e2e` | Build the debug app with the embedded WebDriver, then run every spec in `e2e/specs` |
 | `bun e2e/run.ts <name>` | Only specs whose file name contains `<name>`; `KINAS_E2E_SKIP_BUILD=1` reuses the last build |
 | `bun scripts/check-usage.ts` | Recount tokens from the transcripts and compare with the store (AC-5) |
+| `python3 scripts/logo.py [logo.png]` | Rebuild the app icon source and the CLI's braille logo from `app/src-tauri/icons/source/kinas-logo.png` (then `tauri icon`, as its header says) |
 
 ### Install
 

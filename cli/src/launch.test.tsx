@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BANNER, visibleWidth } from "@kinas/commands/theme";
+import { BANNER, logoLines, visibleWidth } from "@kinas/commands/theme";
 import { computePacket, loadConfig, type Packet } from "@kinas/context";
 import { makeWorld, type World } from "@kinas/context/testing";
 import { renderLaunch, shortNote } from "./launch.tsx";
@@ -28,6 +28,19 @@ describe("the launch screen", () => {
     expect(out).toContain("Acme Ops · operations");
     expect(out).toContain("Pick a payments provider");
     expect(lines(out).at(-1)).toBe(" 2 projects · 2 sessions · 1 decision waiting on you · kinas --help for commands");
+  });
+
+  test("the logo sits beside the banner, and gives way to it below 64 columns", () => {
+    const wide = renderLaunch(packet, { columns: 100, color: false, now: world.now });
+    for (const row of logoLines(false)) expect(wide).toContain(row);
+    const bannerTop = lines(wide).find((l) => l.includes(BANNER[0]!))!;
+    expect(logoLines(false).some((row) => bannerTop.includes(row))).toBe(true);
+
+    expect(renderLaunch(packet, { columns: 64, color: false, now: world.now })).toContain(logoLines(false)[5]!);
+    const tight = renderLaunch(packet, { columns: 60, color: false, now: world.now });
+    expect(tight).not.toContain(logoLines(false)[5]!);
+    for (const row of BANNER) expect(tight).toContain(row);
+    for (const l of lines(tight)) expect(visibleWidth(l)).toBeLessThanOrEqual(60);
   });
 
   test("never wider than 100 columns, and stacked when narrow", () => {

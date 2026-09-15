@@ -1,7 +1,7 @@
 // `kinas` with no arguments: the launch screen. A static Ink render — drawn once, then the shell prompt returns. It
 // reads no keys at all, so it never captures Tab and nothing can hold the terminal; there is nothing to quit.
 
-import { accentLine, bannerLines, BANNER_WIDTH, glyph, paint, type Tone } from "@kinas/commands/theme";
+import { accentLine, bannerLines, BANNER_WIDTH, glyph, LOGO_WIDTH, logoLines, paint, type Tone } from "@kinas/commands/theme";
 import { age, ago, packetCounts, plural, until, type Packet, type QuotaLine, type Section } from "@kinas/context";
 import { Box, renderToString, Text } from "ink";
 import { homedir } from "node:os";
@@ -9,6 +9,8 @@ import { homedir } from "node:os";
 /** The screen is designed for 100 columns and never wider; below this the panels stack. */
 export const MAX_COLUMNS = 100;
 const SIDE_BY_SIDE_MIN = 88;
+/** Below this the logo is left out and the banner stands alone. */
+export const WITH_LOGO_MIN = 2 + LOGO_WIDTH + 3 + BANNER_WIDTH;
 const LEFT_WIDTH = 34;
 const ROWS = { projects: 8, crew: 3, sessions: 4, decisions: 3, recent: 5 } as const;
 
@@ -170,11 +172,22 @@ function Launch({ p, o }: { p: Packet; o: LaunchOptions }) {
   return (
     <Box flexDirection="column" width={width}>
       <Text> </Text>
-      {bannerLines(o.color).map((l, i) => (
-        <Text key={i}>{`  ${l}`}</Text>
-      ))}
-      <Text>{`  ${accentLine(BANNER_WIDTH, o.color)}`}</Text>
-      <Line>{`  ${paint("muted", `${p.instance.org} · ${p.instance.instance}`, o.color)}`}</Line>
+      <Box flexDirection="row" marginLeft={2}>
+        {width >= WITH_LOGO_MIN && (
+          <Box flexDirection="column" marginRight={3}>
+            {logoLines(o.color).map((l, i) => (
+              <Text key={i}>{l}</Text>
+            ))}
+          </Box>
+        )}
+        <Box flexDirection="column" justifyContent="center">
+          {bannerLines(o.color).map((l, i) => (
+            <Text key={i}>{l}</Text>
+          ))}
+          <Text>{accentLine(BANNER_WIDTH, o.color)}</Text>
+          <Line>{paint("muted", `${p.instance.org} · ${p.instance.instance}`, o.color)}</Line>
+        </Box>
+      </Box>
       <Text> </Text>
       <Box flexDirection={sideBySide ? "row" : "column"} gap={sideBySide ? 1 : 0}>
         <Panel width={sideBySide ? LEFT_WIDTH : width} o={o}>

@@ -10,3 +10,7 @@ app/src-tauri/gen/
 spikes/
 .DS_Store
 *.log
+
+# Planning documents and the names AC-10 looks for stay on this Mac: the repository is public
+tasks/
+scripts/private-names

@@ -11,7 +11,8 @@ A local macOS app with two pages and a CLI:
 
 Everything runs on this Mac. State is one SQLite file in `~/Library/Application Support/ai.sintralabs.kinas/`,
 written only by the app; the CLI keeps its own cache beside it.
-The product spec is `tasks/prd-kinas-build-1.md`; the build plan is `tasks/tasks-kinas-build-1.md`.
+The product spec, build spec and task list live in `tasks/`, which is git-ignored: planning documents stay on
+this Mac, and code comments cite their rule numbers (R7, AC-10…).
 
 ## Setup
 

@@ -41,9 +41,15 @@ WAS_RUNNING=0; app_running && WAS_RUNNING=1
 
 if want ac10; then
   section "AC-10 — nothing leaks, nothing ships that shouldn't"
-  # This script names the patterns it looks for, so it is excluded along with tasks/.
-  hits=$(git grep -i -n -E "${KINAS_PRIVATE_NAMES:?set KINAS_PRIVATE_NAMES to the names that must never be committed}" -- ':!tasks' ':!scripts/acceptance.sh' || true)
-  [ -z "$hits" ] && pass "no private names in the repository (planning documents are kept outside git)" || fail "private names found:$hits"
+  # The names that must never be committed are private too, so they are not written here: an extended regex in
+  # KINAS_PRIVATE_NAMES, or in scripts/private-names (git-ignored, like tasks/).
+  names=${KINAS_PRIVATE_NAMES:-$(cat scripts/private-names 2>/dev/null || true)}
+  if [ -z "$names" ]; then
+    fail "no private names to look for: set KINAS_PRIVATE_NAMES or write scripts/private-names"
+  else
+    hits=$(git grep -i -n -E "$names" || true)
+    [ -z "$hits" ] && pass "no private names in the repository (planning documents in tasks/ are git-ignored)" || fail "private names found: $hits"
+  fi
   hits=$(git grep -n -E 'Claude Code-credentials|api\.anthropic\.com' -- ':!tasks' ':!scripts/acceptance.sh' || true)
   [ -z "$hits" ] && pass "no Claude credential or Anthropic API references" || fail "found: $hits"
   if [ -x "$BIN" ]; then

@@ -1,4 +1,5 @@
 # Kinas
+<img width="2288" height="1160" alt="SL" src="https://github.com/user-attachments/assets/94271395-da35-4f67-ae6f-eb9d96e91752" />
 
 A local macOS app with two pages and a CLI:
 

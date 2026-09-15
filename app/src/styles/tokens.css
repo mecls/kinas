@@ -11,6 +11,26 @@
   --line: #232830;
   --muted: #8a8f98;
 
+  /* The terminal pane draws on --ground in --white. Its 16 ANSI colours are steps of the palette light enough to
+     read on --ground, so Herdr (theme "terminal") and every program in the pane use the app's colours. */
+  --ansi-black: #232830;
+  --ansi-red: #e0444b;
+  --ansi-green: #4fb286;
+  --ansi-yellow: #dfae3c;
+  --ansi-blue: #3d8fd9;
+  --ansi-magenta: #c27ab8;
+  --ansi-cyan: #4ab3c2;
+  --ansi-white: #c9c6bf;
+  --ansi-bright-black: #8a8f98;
+  --ansi-bright-red: #f06a70;
+  --ansi-bright-green: #7fd3a8;
+  --ansi-bright-yellow: #f0c96a;
+  --ansi-bright-blue: #72b0ea;
+  --ansi-bright-magenta: #dca2d4;
+  --ansi-bright-cyan: #7fd0db;
+  --ansi-bright-white: #f4f2ec;
+  --selection: #18406b;
+
   --mono: "SF Mono", ui-monospace, Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 
@@ -109,7 +129,7 @@ body,
 .work {
   position: absolute;
   inset: 0;
-  background: #000;
+  background: var(--ground);
 }
 
 .terminal {
@@ -117,7 +137,7 @@ body,
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #000;
+  background: var(--ground);
 }
 
 .terminal-host {

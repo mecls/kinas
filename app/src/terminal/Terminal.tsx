@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { Terminal as XTerm, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Channel, invoke } from "@tauri-apps/api/core";
@@ -10,6 +10,35 @@ import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
 
 const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
+
+/** The pane's colours come from tokens.css like every other colour in the app, read once when the terminal starts. */
+function terminalTheme(): ITheme {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name: string) => css.getPropertyValue(`--${name}`).trim();
+  return {
+    background: token("ground"),
+    foreground: token("white"),
+    cursor: token("white"),
+    cursorAccent: token("ground"),
+    selectionBackground: token("selection"),
+    black: token("ansi-black"),
+    red: token("ansi-red"),
+    green: token("ansi-green"),
+    yellow: token("ansi-yellow"),
+    blue: token("ansi-blue"),
+    magenta: token("ansi-magenta"),
+    cyan: token("ansi-cyan"),
+    white: token("ansi-white"),
+    brightBlack: token("ansi-bright-black"),
+    brightRed: token("ansi-bright-red"),
+    brightGreen: token("ansi-bright-green"),
+    brightYellow: token("ansi-bright-yellow"),
+    brightBlue: token("ansi-bright-blue"),
+    brightMagenta: token("ansi-bright-magenta"),
+    brightCyan: token("ansi-bright-cyan"),
+    brightWhite: token("ansi-bright-white"),
+  };
+}
 
 export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Shortcuts }) {
   const host = useRef<HTMLDivElement>(null);
@@ -30,7 +59,7 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
       fontSize: 13,
       cursorBlink: true,
-      theme: { background: "#000000", foreground: "#f4f2ec", cursor: "#f4f2ec" },
+      theme: terminalTheme(),
     });
     const fitAddon = new FitAddon();
     xterm.loadAddon(fitAddon);

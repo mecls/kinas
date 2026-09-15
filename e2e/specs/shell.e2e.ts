@@ -1,6 +1,6 @@
 import { browser, $, expect } from "@wdio/globals";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 // AC-1 (the empty app and its store), and the shell rules R28 (close hides) and R33 (pages stay mounted).
@@ -24,7 +24,10 @@ describe("Kinas shell", () => {
   it("AC-1: opens a WAL store with one org and the latest schema", async () => {
     const info = await hook<{ org_id: string; path: string; schema_version: number }>("storeInfo");
     expect(info.path).toBe(db);
-    expect(info.schema_version).toBe(1);
+    // The latest schema is the number of migrations, so this does not go stale when one is added (it said 1 after
+    // 0002_usage_details.sql raised SCHEMA_VERSION to 2).
+    const latest = readdirSync(join(process.cwd(), "migrations")).filter((f) => f.endsWith(".sql")).length;
+    expect(info.schema_version).toBe(latest);
     expect(sql("PRAGMA journal_mode")).toBe("wal");
     expect(sql("SELECT count(*) FROM orgs")).toBe("1");
     expect(sql("SELECT id FROM orgs")).toBe(info.org_id);

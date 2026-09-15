@@ -56,6 +56,18 @@ The only ⌘ chords the app handles in the pane:
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |
 
+## Launch screen (the Work pane at start, and `kinas` in any terminal)
+
+The pane opens on the Kinas launch screen. The screen reads these keys itself, as the program running in the PTY;
+the app still passes every non-⌘ key through (above). Piped or redirected, `kinas` prints the screen and exits.
+
+| Key | In the Work pane | Run by hand |
+|---|---|---|
+| Enter | Attach Herdr's `default` session | Close the screen |
+| q, ⌃C | Stay in the shell (type `herdr` later) | Close the screen |
+
+Every other key — Tab, arrows, escape sequences, other letters — is ignored.
+
 ## Exit message
 
 | Key | Action |

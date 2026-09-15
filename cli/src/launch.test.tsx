@@ -69,11 +69,12 @@ describe("the launch screen", () => {
 });
 
 describe("the keyboard contract", () => {
-  test("no CLI source reads keys: nothing captures Tab, nothing holds the terminal", () => {
+  test("hold.ts is the only CLI source that reads keys", () => {
     const dir = import.meta.dir;
-    for (const f of readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && !f.includes(".test."))) {
-      expect([f, readFileSync(join(dir, f), "utf8")]).not.toEqual([f, expect.stringMatching(/setRawMode|useInput|usePaste|useFocus|readline/)]);
-    }
+    const readers = readdirSync(dir)
+      .filter((f) => /\.tsx?$/.test(f) && !f.includes(".test."))
+      .filter((f) => /setRawMode|useInput|usePaste|useFocus|readline/.test(readFileSync(join(dir, f), "utf8")));
+    expect(readers).toEqual(["hold.ts"]);
   });
 
   test("the background refresh re-runs this CLI the way it was started", () => {

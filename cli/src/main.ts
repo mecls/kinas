@@ -8,12 +8,12 @@
 //   kinas status [--json]    the Usage page as text or JSON
 //   kinas open <file>        the path of a markdown file (the app has no reader yet)
 //
-// Nothing here reads keys: no command captures Tab, and each one prints and exits, so q and Ctrl+C never have
-// anything to interrupt but a running read.
+// Only the launch screen reads keys, and only on a terminal: it holds until Enter, q or Ctrl+C and ignores every
+// other key, Tab included (hold.ts, keymap.md). Every other command prints and exits.
 //
 // Exit codes: 0 (even when readings are stale — staleness is data), 1 (other errors), 2 (`status`: the store does
-// not exist yet), 3 (`status`: the store is newer than this CLI: the ~/.local/bin link is stale), 64 (unknown
-// usage), 66 (`open`: no such file).
+// not exist yet), 3 (`status`: the store is newer than this CLI: the ~/.local/bin link is stale), 10 (the launch
+// screen in the Work pane: q or Ctrl+C, stay in the shell), 64 (unknown usage), 66 (`open`: no such file).
 
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -24,7 +24,7 @@ import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, render
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
 
-const EXIT = { ok: 0, error: 1, missing: 2, newer: 3, usage: 64, noInput: 66 } as const;
+const EXIT = { ok: 0, error: 1, missing: 2, newer: 3, stay: 10, usage: 64, noInput: 66 } as const;
 
 /** The launch screen draws the cached packet and refreshes it in the background once it is older than this. */
 const LAUNCH_REFRESH_AFTER_MS = 15_000;
@@ -92,6 +92,7 @@ async function launch(): Promise<number> {
   const now = Date.now();
   const config = loadConfig();
   const cache = openCache(config);
+  const color = colorEnabled();
   try {
     const org = currentOrg(config);
     const cached = cache?.readPacket(org) ?? null;
@@ -100,12 +101,30 @@ async function launch(): Promise<number> {
     if (old && cache?.claimRefresh(org, now, REFRESH_LEASE_MS)) spawnRefresh();
 
     const { MAX_COLUMNS, renderLaunch } = await import("./launch.tsx");
-    process.stdout.write(renderLaunch(packet, { columns: process.stdout.columns ?? MAX_COLUMNS, color: colorEnabled(), now }));
+    process.stdout.write(renderLaunch(packet, { columns: process.stdout.columns ?? MAX_COLUMNS, color, now }));
     if (config.problem) printError(`kinas: ${config.problem}`);
-    return EXIT.ok;
   } finally {
     cache?.close();
   }
+
+  // Piped or redirected, the screen is printed and that is all.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return EXIT.ok;
+
+  // Listen before the hint appears: a key pressed the moment it shows is read in raw mode, not echoed and held in a
+  // half-typed line.
+  const { waitForLaunchKey } = await import("./hold.ts");
+  const pressed = waitForLaunchKey();
+
+  // The Work pane starts `KINAS_ENTER=herdr kinas`: Enter goes on to Herdr, q stays in the shell.
+  const next = process.env.KINAS_ENTER === "herdr" ? "Herdr" : null;
+  const key = (label: string) => paint("white", label, color, true);
+  const hint = next
+    ? `  ${key("Enter")}  ${paint("muted", `open ${next}`, color)}    ${key("q")}  ${paint("muted", "stay in the shell", color)}`
+    : `  ${key("Enter")} or ${key("q")}  ${paint("muted", "close", color)}`;
+  process.stdout.write(`${hint}\n`);
+
+  const answer = await pressed;
+  return next && answer === "quit" ? EXIT.stay : EXIT.ok;
 }
 
 async function context(args: string[]): Promise<number> {

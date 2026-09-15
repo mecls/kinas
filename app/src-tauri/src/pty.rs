@@ -6,7 +6,7 @@
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::ffi::{CStr, OsString};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -61,9 +61,10 @@ pub fn default_profile() -> Profile {
     profile
 }
 
-/// `herdr` attaches the persistent `default` session. Debug builds accept two test switches:
-/// `KINAS_PANE_SHELL_ONLY` (no Herdr) and `KINAS_HERDR_SESSION=<name>` (a throwaway session, so
-/// automated input never reaches `default` — build spec invariant 20).
+/// The pane opens on the Kinas launch screen, then `herdr` attaches the persistent `default` session (keymap.md).
+/// Debug builds accept two test switches, which skip the launch screen: `KINAS_PANE_SHELL_ONLY` (no Herdr) and
+/// `KINAS_HERDR_SESSION=<name>` (a throwaway session, so automated input never reaches `default` — build spec
+/// invariant 20).
 fn first_command() -> Option<String> {
     #[cfg(debug_assertions)]
     {
@@ -76,7 +77,22 @@ fn first_command() -> Option<String> {
             }
         }
     }
-    Some("herdr".into())
+    let cli = std::env::current_exe().ok().and_then(|exe| crate::cli_link::bundled_cli(&exe));
+    Some(launch_then_herdr(cli.as_deref()))
+}
+
+/// The launch screen's exit code when q or Ctrl+C asks to stay in the shell (cli/src/main.ts).
+const STAY_IN_SHELL: u8 = 10;
+
+/// `KINAS_ENTER=herdr '<cli>'; [ $? -eq 10 ] || herdr`: the launch screen, then Herdr unless it was asked to stay in
+/// the shell. The bundled CLI is run by path, because the pane can start before `~/.local/bin/kinas` is linked. A
+/// launch screen that fails for any other reason still attaches Herdr, and outside a bundle (development) there is
+/// no CLI to run, so the pane attaches Herdr directly, as before.
+pub fn launch_then_herdr(cli: Option<&Path>) -> String {
+    match cli {
+        Some(path) => format!("KINAS_ENTER=herdr {}; [ $? -eq {STAY_IN_SHELL} ] || herdr", sh_quote(&path.to_string_lossy())),
+        None => "herdr".into(),
+    }
 }
 
 /// Every variable whose name contains HERDR. Inherited from a Herdr pane (how Kinas is developed),
@@ -319,6 +335,37 @@ mod tests {
         assert!(p.set_env.contains(&("COLORTERM".into(), "truecolor".into())));
         assert!(p.set_env.contains(&("TERM_PROGRAM".into(), "kinas".into())));
         assert!(p.set_env.contains(&("LANG".into(), "pt_PT.UTF-8".into())));
+    }
+
+    #[test]
+    fn the_pane_opens_on_the_launch_screen_then_herdr() {
+        assert_eq!(
+            launch_then_herdr(Some(Path::new("/Applications/Kinas.app/Contents/MacOS/kinas-cli"))),
+            "KINAS_ENTER=herdr '/Applications/Kinas.app/Contents/MacOS/kinas-cli'; [ $? -eq 10 ] || herdr"
+        );
+        assert_eq!(launch_then_herdr(None), "herdr");
+    }
+
+    #[test]
+    fn herdr_attaches_after_the_launch_screen_unless_it_asked_to_stay_in_the_shell() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("kinas-pty-launch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let write_script = |name: &str, body: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        write_script("herdr", "printf herdr");
+        // Enter (0) and a broken launch screen (1) go on to Herdr; q or Ctrl+C (10) stays in the shell.
+        for (code, expected) in [(0, "screen:herdr|herdr"), (10, "screen:herdr|"), (1, "screen:herdr|herdr")] {
+            let cli = write_script("kinas-cli", &format!("printf 'screen:%s|' \"$KINAS_ENTER\"\nexit {code}"));
+            let script = format!("PATH={}:\"$PATH\"; {}", sh_quote(&dir.to_string_lossy()), launch_then_herdr(Some(&cli)));
+            let (out, _) = run(&sh(&script), 80, 24);
+            assert_eq!(String::from_utf8(out).unwrap(), expected, "launch screen exit {code}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

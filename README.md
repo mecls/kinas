@@ -4,8 +4,8 @@ A local macOS app with two pages and a CLI:
 
 - **Usage** — how much of the Claude and Ollama Cloud plans is left (with how old each number is), model
   usage by day from Claude Code and Pi transcripts, and this Mac's CPU, memory and disk.
-- **Work** — the terminal: a real PTY running your login shell, attached to Herdr, with a keyboard contract
-  that gives every non-⌘ key to the terminal.
+- **Work** — the terminal: a real PTY running your login shell. It opens on the Kinas launch screen; Enter attaches
+  Herdr, q stays in the shell. A keyboard contract gives every non-⌘ key to the terminal.
 - **`kinas`** — the CLI. With no arguments, a launch screen that says where the operation is right now; `kinas
   context --agent` prints the same situation as a markdown packet for the start of an agent session.
 
@@ -51,7 +51,7 @@ is not Kinas's), turns on launch at login, and registers the global hotkey ⌘�
 
 | Command | What it does |
 |---|---|
-| `kinas` | The launch screen: identity on the left; projects, crew, sessions, decisions, quotas and recent activity on the right. Drawn from the cached packet (about 0.1 s), refreshed in the background |
+| `kinas` | The launch screen: identity on the left; projects, crew, sessions, decisions, quotas and recent activity on the right. Drawn from the cached packet (about 0.1 s), refreshed in the background. On a terminal it holds until Enter or q |
 | `kinas context` | The counts, what is waiting on you, and what changed recently |
 | `kinas context --agent` | The whole context packet as markdown: `# Kinas context`, `## Projects`, `## Artifacts`, `## Conventions`, `## Crew`, `## Sessions`, `## Decisions`, `## Quotas`, `## Recent` — rarely-changing sections first |
 | `kinas context --agent --cwd <dir>` | The same, or nothing when `<dir>` is outside the projects root (for session hooks) |
@@ -59,7 +59,8 @@ is not Kinas's), turns on launch at login, and registers the global hotkey ⌘�
 | `kinas status [--json]` | The Usage page as text or JSON |
 | `kinas open <file>` | The path of a markdown file (the app has no reader yet) |
 
-No command reads keys: nothing captures Tab, and every command prints and exits.
+Only the launch screen reads keys (Enter, q, Ctrl+C; see `keymap.md`); it ignores Tab and everything else, and every
+other command prints and exits.
 
 Where each section comes from — every source is read-only, and one that cannot be read becomes one line:
 

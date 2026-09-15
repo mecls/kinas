@@ -19,6 +19,11 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
 ## Herdr
 
 - [x] The pane attaches a Herdr session and runs it — `automated (herdr-keys.e2e.ts)` in a throwaway session
+- [ ] The Work page opens on the Kinas launch screen, logo and banner intact — `outstanding — needs Miguel`
+      (the key handling is `automated (hold.terminal.test.ts)` on a real terminal; the pane command is covered by
+      `pty.rs` tests)
+- [ ] On the launch screen, Enter attaches `default`; q leaves a working zsh prompt, and `herdr` attaches later
+      — `outstanding — needs Miguel`
 - [ ] Attach `default` in the pane — `outstanding — needs Miguel`
 - [x] ⌃Tab and ⌃⇧Tab cycle panes — `automated (herdr-keys.e2e.ts)`: a real keydown on xterm's textarea, Kinas
       sends `\x1b[9;5u` / `\x1b[9;6u`, Herdr's focused pane changes. In `default` this also needs Miguel's

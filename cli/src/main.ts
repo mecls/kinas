@@ -6,25 +6,28 @@
 //   kinas context            the counts, what is waiting on you, and what changed recently
 //   kinas context --agent    the whole context packet as markdown, for the start of an agent session
 //   kinas status [--json]    the Usage page as text or JSON
-//   kinas open <file>        the path of a markdown file (the app has no reader yet)
+//   kinas open [<path>]      a markdown file or folder in the Kinas reader; no path reopens the last one (open.ts)
 //
 // Only the launch screen reads keys, and only on a terminal: it holds until Enter, q or Ctrl+C and ignores every
 // other key, Tab included (hold.ts, keymap.md). Every other command prints and exits.
 //
-// Exit codes: 0 (even when readings are stale — staleness is data), 1 (other errors), 2 (`status`: the store does
-// not exist yet), 3 (`status`: the store is newer than this CLI: the ~/.local/bin link is stale), 10 (the launch
-// screen in the Work pane: q or Ctrl+C, stay in the shell), 64 (unknown usage), 66 (`open`: no such file).
+// Exit codes: 0 (even when readings are stale — staleness is data; `open`: opened, asked, or the app is not running
+// and the path was printed), 1 (other errors), 2 (`status`: the store does not exist yet), 3 (`status`: the store is
+// newer than this CLI: the ~/.local/bin link is stale), 10 (the launch screen in the Work pane: q or Ctrl+C, stay in
+// the shell), 64 (unknown usage), 65 (`open`: not a .md or .mdx file), 66 (`open`: no such file, or nothing to
+// reopen), 77 (`open`: outside the projects root).
 
-import { existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { join } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
 import { cliCommand, statusFromStore, statusJson, statusLines } from "@kinas/commands";
 import { colorEnabled, paint } from "@kinas/commands/theme";
 import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, renderAgentPacket, renderOperator, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
+import { ask, LAUNCH_TIMEOUT_MS, launchAndAsk, OPEN_EXIT, type OpenRequest, outcome, resolveTarget } from "./open.ts";
 
-const EXIT = { ok: 0, error: 1, missing: 2, newer: 3, stay: 10, usage: 64, noInput: 66 } as const;
+// 0, 1, 65, 66 and 77 come from open.ts, which owns `kinas open`'s codes.
+const EXIT = { ...OPEN_EXIT, missing: 2, newer: 3, stay: 10, usage: 64 } as const;
 
 /** The launch screen draws the cached packet and refreshes it in the background once it is older than this. */
 const LAUNCH_REFRESH_AFTER_MS = 15_000;
@@ -43,7 +46,9 @@ function usage(): string {
     "    --cwd <dir>       print nothing unless <dir> is inside the projects root (for session hooks)",
     "    --refresh         recompute the cached packet and print nothing",
     "  status [--json]     how much of each plan is left, today's model usage, and this Mac",
-    "  open <file>         the path of a markdown file, for reading",
+    "  open [<path>]       open a markdown file or folder in the Kinas reader; no path reopens the last one",
+    "    --anywhere        ask Kinas to open a path outside the projects root",
+    "    --launch          start Kinas first when it is not running",
   ].join("\n");
 }
 
@@ -211,21 +216,47 @@ async function status(args: string[]): Promise<number> {
 }
 
 async function open(args: string[]): Promise<number> {
-  const parsed = parseArgs(args, [], []);
+  const parsed = parseArgs(args, ["--anywhere", "--launch"], []);
   if (parsed.problem) return usageError(`kinas open: ${parsed.problem}`);
-  if (parsed.positional.length !== 1) return usageError("kinas open: name one markdown file");
+  if (parsed.positional.length > 1) return usageError("kinas open: name one markdown file or folder");
 
-  const path = resolve(parsed.positional[0]!);
-  if (!existsSync(path) || !statSync(path).isFile()) {
-    printError(`kinas open: no such file: ${path}`);
-    return EXIT.noInput;
+  const anywhere = parsed.flags.has("--anywhere");
+  let path: string | null = null;
+  let request: OpenRequest = { v: 1, op: "reopen" };
+  if (parsed.positional.length === 1) {
+    const target = resolveTarget(parsed.positional[0]!, { cwd: process.cwd(), root: loadConfig().root, anywhere });
+    if (!target.ok) {
+      printError(target.message);
+      return target.exit;
+    }
+    path = target.path;
+    request = { v: 1, op: "open", path, anywhere };
   }
-  if (!/\.(md|mdx|markdown)$/i.test(path)) return usageError(`kinas open: ${path} is not a markdown file`);
 
-  const { lines } = await cliCommand("open")!.run({ now: Date.now(), openFile: async () => [path] });
-  process.stdout.write(`${(lines ?? []).join("\n")}\n`);
-  if (process.stderr.isTTY) printError(paint("muted", "The Kinas app has no markdown reader yet, so this is the path to open.", colorEnabled(process.stderr)));
-  return EXIT.ok;
+  let exit: number = EXIT.ok;
+  const { lines } = await cliCommand("open")!.run({
+    now: Date.now(),
+    openFile: async () => {
+      const socket = join(dataDir(), "kinas.sock");
+      let answer = await ask(socket, request);
+      if (answer.kind === "down" && parsed.flags.has("--launch")) {
+        const launched = await launchAndAsk(socket, request);
+        if (!launched) {
+          exit = EXIT.error;
+          printError(`kinas open: Kinas did not start within ${LAUNCH_TIMEOUT_MS / 1000} s`);
+          return path ? [path] : [];
+        }
+        answer = launched;
+      }
+      const result = outcome(answer, { path, tty: Boolean(process.stderr.isTTY) });
+      exit = result.exit;
+      if (result.stderr !== null) printError(result.stderr);
+      return result.stdout === null ? [] : [result.stdout];
+    },
+  });
+  // stdout carries exactly the resolved path, or nothing (R11).
+  if (lines && lines.length > 0) process.stdout.write(`${lines.join("\n")}\n`);
+  return exit;
 }
 
 async function main(argv: string[]): Promise<number> {

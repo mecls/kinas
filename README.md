@@ -54,7 +54,7 @@ is not Kinas's), turns on launch at login, and registers the global hotkey âŒ˜â‡
 | `kinas context --agent --cwd <dir>` | The same, or nothing when `<dir>` is outside the projects root (for session hooks) |
 | `kinas context --refresh` | Recompute the cached packet; prints nothing |
 | `kinas status [--json]` | The Usage page as text or JSON |
-| `kinas open <file>` | The path of a markdown file (the app has no reader yet) |
+| `kinas open [<path>] [--anywhere] [--launch]` | Open a markdown file (`.md`, `.mdx`) or a folder in the reader beside the terminal; no path reopens the last file. Paths outside the projects root are refused unless `--anywhere`, which asks for a click in Kinas. Prints the resolved path. Exit 0 (opened, asked, or Kinas not running: the path is printed), 1, 64 usage, 65 not markdown, 66 missing or nothing to reopen, 77 outside the root |
 
 Only the launch screen reads keys (Enter, q, Ctrl+C; see `keymap.md`); it ignores Tab and everything else, and every
 other command prints and exits.

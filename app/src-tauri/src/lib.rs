@@ -4,6 +4,9 @@ mod keychain;
 mod paths;
 mod pty;
 mod quota_line;
+// Task 4.1 wires the reader commands that use the rest of `reader::access`; until then parts of it are unused.
+#[allow(dead_code)]
+mod reader;
 mod readers;
 mod readings;
 mod redact;
@@ -47,6 +50,8 @@ pub fn run() {
                 Ok(store) => {
                     log::info!("store open at {}", store.path().display());
                     app.manage(store);
+                    // Reader R15: `kinas open` reaches this instance through <data dir>/kinas.sock.
+                    reader::socket::start(app.handle().clone(), &dir);
                     let keys = readers::runtime::start(app.handle(), dir.clone());
                     app.manage(keychain::Keys(keys));
                     // R35: ~/.local/bin/kinas → the CLI in this bundle, never clobbering anything else.
@@ -70,6 +75,7 @@ pub fn run() {
             Ok(())
         })
         .manage(pty::PtyState::default())
+        .manage(reader::ReaderState::default())
         .invoke_handler(tauri::generate_handler![
             commands::store_info,
             commands::pty_start,
@@ -109,6 +115,10 @@ pub fn run() {
         RunEvent::Exit => {
             if let Some(pty) = handle.try_state::<pty::PtyState>() {
                 pty.shutdown();
+            }
+            // Only the socket this instance bound; another Kinas's live socket stays (reader R16).
+            if let Some(socket) = handle.try_state::<reader::ReaderState>().and_then(|r| r.lock().socket.clone()) {
+                let _ = std::fs::remove_file(socket);
             }
         }
         #[cfg(target_os = "macos")]

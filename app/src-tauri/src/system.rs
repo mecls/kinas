@@ -82,12 +82,17 @@ pub fn on_hotkey(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
     if event.state() != ShortcutState::Pressed {
         return;
     }
+    bring_forward(app);
+    let _ = app.emit(OPEN_PALETTE, ());
+}
+
+/// Shows, unminimizes and focuses the main window: the global hotkey (R30) and an accepted `kinas open` (reader R18).
+pub fn bring_forward(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
-    let _ = app.emit(OPEN_PALETTE, ());
 }
 
 pub fn register_hotkey(app: &AppHandle, chord: &str) -> Result<(), String> {

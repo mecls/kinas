@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { rmSync, writeFileSync } from "node:fs";
+import { realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_HEADINGS } from "@kinas/context";
 import { makeWorld, type World, type WorldOptions } from "@kinas/context/testing";
@@ -139,19 +139,21 @@ describe("kinas (the launch screen)", () => {
 });
 
 describe("kinas open, help and usage", () => {
-  test("open prints a markdown file's path; a missing file is 66; anything else is 64", async () => {
+  test("with Kinas not running, open prints the real path (0); missing is 66, not markdown 65, nothing to reopen 66", async () => {
     const w = await start();
-    expect(await kinas(["open", join(w.acme, "README.md")], w.env)).toMatchObject({ code: 0, stdout: `${join(w.acme, "README.md")}\n` });
-    expect((await kinas(["open", join(w.acme, "nope.md")], w.env)).code).toBe(66);
-    expect((await kinas(["open", join(w.acme, "src/index.ts")], w.env)).code).toBe(64);
-    expect((await kinas(["open"], w.env)).code).toBe(64);
+    const readme = realpathSync.native(join(w.acme, "README.md"));
+    expect(await kinas(["open", join(w.acme, "README.md")], w.env)).toMatchObject({ code: 0, stdout: `${readme}\n` });
+    expect(await kinas(["open", join(w.acme, "nope.md")], w.env)).toMatchObject({ code: 66, stdout: "" });
+    expect((await kinas(["open", join(w.acme, "src/index.ts")], w.env)).code).toBe(65);
+    expect(await kinas(["open"], w.env)).toMatchObject({ code: 66, stdout: "" });
+    expect((await kinas(["open", "a.md", "b.md"], w.env)).code).toBe(64);
   });
 
   test("--help names every command; unknown commands and options are 64", async () => {
     const w = await start();
     const help = await kinas(["--help"], w.env);
     expect(help.code).toBe(0);
-    for (const c of ["context --agent", "status [--json]", "open <file>"]) expect(help.stdout).toContain(c);
+    for (const c of ["context --agent", "status [--json]", "open [<path>]", "--anywhere", "--launch"]) expect(help.stdout).toContain(c);
     expect((await kinas(["deploy"], w.env)).code).toBe(64);
     expect((await kinas(["context", "--bogus"], w.env)).code).toBe(64);
   });

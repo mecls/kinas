@@ -64,7 +64,8 @@ export const commands: readonly Command[] = [
     },
   },
   {
-    // The app has no markdown reader yet, so the CLI door prints the file's path (CLI v0).
+    // Hands a markdown file or folder to the running app's reader over its socket, and prints the resolved path
+    // (tasks/prd-kinas-open.md). The reader itself lives on the Work page, so there is no palette door (5A).
     id: "open",
     title: "Open a markdown file",
     cliName: "open",

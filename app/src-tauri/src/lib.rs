@@ -77,6 +77,7 @@ pub fn run() {
             commands::pty_write_binary,
             commands::pty_resize,
             commands::pty_pid,
+            commands::clipboard_write_text,
             commands::get_usage_snapshot,
             commands::set_usage_visible,
             commands::refresh_readings,

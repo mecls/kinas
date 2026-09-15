@@ -6,8 +6,11 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 import { dispatchAppAction } from "../actions.ts";
 import type { Shortcuts } from "../settings/shortcuts.ts";
+import { writeClipboard } from "./clipboard.ts";
 import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
+import { parseOsc52 } from "./osc52.ts";
+import { type SelectionSnapshot, selectionDeleteBytes } from "./selectionDelete.ts";
 
 const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
 
@@ -67,6 +70,32 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
     term.current = xterm;
     fit.current = fitAddon;
 
+    // A program's OSC 52 write (how Herdr copies a mouse selection) reaches the macOS clipboard; a query never reads
+    // it. The handler claims every OSC 52, so xterm never prints one.
+    const osc52 = xterm.parser.registerOscHandler(52, (data) => {
+      const parsed = parseOsc52(data);
+      if (parsed.kind === "write") writeClipboard(parsed.text);
+      return true;
+    });
+
+    // A mouse selection is copied when the button is released: not on onSelectionChange, which fires on every move
+    // of a drag. Both listeners capture, so a program's mouse reporting cannot hide them, and the copy waits a tick
+    // for xterm's own mouseup to finish the selection.
+    let pointerSelecting = false;
+    const onMouseDown = (ev: MouseEvent) => {
+      pointerSelecting = ev.button === 0;
+    };
+    const onMouseUp = (ev: MouseEvent) => {
+      if (!pointerSelecting) return;
+      pointerSelecting = false;
+      if (ev.button !== 0) return;
+      window.setTimeout(() => {
+        if (xterm.hasSelection()) writeClipboard(xterm.getSelection());
+      }, 0);
+    };
+    el.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("mouseup", onMouseUp, true);
+
     // WebGL, falling back to xterm's DOM renderer, never a blank pane (R33).
     let webgl: WebglAddon | null = null;
     let renderer: "webgl" | "dom" = "dom";
@@ -94,8 +123,30 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
 
     const send = (data: string) => void invoke("pty_write", { data }).catch(() => {});
 
+    // What ⌫ over a selection needs to know. decideKey only asks for it on a plain ⌫, before xterm clears the
+    // selection on input.
+    const snapshot = (): SelectionSnapshot => {
+      const buffer = xterm.buffer.active;
+      const cursorRow = buffer.baseY + buffer.cursorY;
+      const line = buffer.getLine(cursorRow);
+      const row: SelectionSnapshot["row"] = [];
+      for (let x = 0; x < xterm.cols; x++) {
+        const cell = line?.getCell(x);
+        row.push({ chars: cell?.getChars() ?? "", width: cell?.getWidth() ?? 1 });
+      }
+      return {
+        bufferType: buffer.type,
+        kittyFlags: kitty.flags,
+        appCursor: xterm.modes.applicationCursorKeysMode,
+        cursorX: buffer.cursorX,
+        cursorRow,
+        selection: xterm.getSelectionPosition(),
+        row,
+      };
+    };
+
     xterm.attachCustomKeyEventHandler((ev) => {
-      const decision = decideKey(ev, kitty.flags, shortcutsRef.current);
+      const decision = decideKey(ev, kitty.flags, shortcutsRef.current, () => selectionDeleteBytes(snapshot()));
       if (import.meta.env.TAURI_ENV_DEBUG === "true") {
         const mods = `${ev.ctrlKey ? "⌃" : ""}${ev.altKey ? "⌥" : ""}${ev.shiftKey ? "⇧" : ""}${ev.metaKey ? "⌘" : ""}`;
         keyLog = [...keyLog, `${ev.type} ${mods}${ev.key} flags=${kitty.flags} → ${JSON.stringify(decision)}`].slice(-20);
@@ -111,6 +162,8 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
         case "pty":
           ev.preventDefault();
           if (!exited) send(decision.data);
+          // The app's bytes stand in for the key, so the selection goes, as xterm clears it on any input.
+          xterm.clearSelection();
           return false;
         case "xterm":
           return true;
@@ -196,6 +249,18 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
           // Types as if the user had, through xterm's own input path (onData), for when WebDriver's
           // synthetic key events cannot produce printable characters.
           terminalInput: (text?: unknown) => xterm.input(String(text ?? ""), true),
+          // Selections for the selection and clipboard spec: rows are absolute buffer rows, as xterm counts them.
+          terminalSelect: (spec?: unknown) => {
+            const s = spec as { column: number; row: number; length: number };
+            xterm.select(s.column, s.row, s.length);
+          },
+          terminalSelection: () => xterm.getSelection(),
+          terminalSelectionPosition: () => xterm.getSelectionPosition() ?? null,
+          terminalCursor: () => {
+            const buffer = xterm.buffer.active;
+            return { x: buffer.cursorX, row: buffer.baseY + buffer.cursorY, viewportY: buffer.viewportY };
+          },
+          terminalSize: () => ({ cols: xterm.cols, rows: xterm.rows }),
         }),
       );
     }
@@ -204,6 +269,9 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       disposed = true;
       observer.disconnect();
       window.clearTimeout(timer);
+      osc52.dispose();
+      el.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("mouseup", onMouseUp, true);
       xterm.dispose();
       term.current = null;
     };

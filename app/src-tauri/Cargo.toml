@@ -38,6 +38,8 @@ tauri-plugin-autostart = "=2.5.1"
 # Finder's "available" disk space (NSURL resource values); both are already in the tree through Tauri.
 objc2 = "=0.6.4"
 objc2-foundation = "=0.3.2"
+# The pane's clipboard writes (NSPasteboard), also already in the tree through Tauri.
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSPasteboard"] }
 
 [features]
 e2e = ["dep:tauri-plugin-wdio-webdriver"]

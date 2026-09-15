@@ -29,7 +29,17 @@ const GIT_ENV = {
 };
 
 export function git(cwd: string, ...args: string[]): string {
-  const r = Bun.spawnSync(["git", ...args], { cwd, env: { ...process.env, ...GIT_ENV } });
+  return gitWith({}, cwd, args);
+}
+
+/** A commit at a chosen time: git keeps whole seconds, so commits made in one test run would otherwise tie. */
+export function commitAt(cwd: string, message: string, at: number): string {
+  const date = `@${Math.floor(at / 1000)} +0000`;
+  return gitWith({ GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }, cwd, ["commit", "-q", "-m", message]);
+}
+
+function gitWith(extra: Record<string, string>, cwd: string, args: string[]): string {
+  const r = Bun.spawnSync(["git", ...args], { cwd, env: { ...process.env, ...GIT_ENV, ...extra } });
   if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")} in ${cwd}: ${r.stderr.toString()}`);
   return r.stdout.toString();
 }
@@ -118,7 +128,7 @@ export async function makeWorld(opts: WorldOptions = {}): Promise<World> {
   write(join(hub, "conventions/con-commits.md"), "# Commits\n\nSay why, not what.\n");
   git(hub, "init", "-q", "-b", "main");
   git(hub, "add", ".");
-  git(hub, "commit", "-q", "-m", "Hub rules");
+  commitAt(hub, "Hub rules", now - 2 * 3_600_000);
 
   const acme = join(root, "clients/acme");
   write(join(acme, "README.md"), "# Acme storefront\n");
@@ -128,7 +138,7 @@ export async function makeWorld(opts: WorldOptions = {}): Promise<World> {
   write(join(acme, "notes.md"), "# Not an artifact\n");
   git(acme, "init", "-q", "-b", "main");
   git(acme, "add", ".");
-  git(acme, "commit", "-q", "-m", "Storefront skeleton");
+  commitAt(acme, "Storefront skeleton", now - 3_600_000);
   write(join(acme, "src/index.ts"), "export const ready = true;\n");
   write(join(acme, "scratch.txt"), "wip\n");
   // A repository inside node_modules is not a project.

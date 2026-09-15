@@ -164,6 +164,12 @@ export function renderDecisions(p: Packet): string {
   return `## Decisions\n\n${rows.map((d) => `- ${d.source === "crew" ? `Crew task \`${d.id}\`` : `Session ${d.id}`}: ${d.title}${d.reason ? ` — ${d.reason}` : ""}`).join("\n")}`;
 }
 
+/** "not connected: no Codex folder", without repeating the state when the note already starts with it. */
+export function stateCell(state: string, note: string | null): string {
+  if (!note) return state;
+  return note.toLowerCase().startsWith(state) ? note : `${state}: ${note}`;
+}
+
 export function renderQuotas(p: Packet): string {
   const now = p.generated_at;
   return `## Quotas\n\nA reading older than 15 minutes is stale.\n\n${table(
@@ -174,7 +180,7 @@ export function renderQuotas(p: Packet): string {
       q.left_pct === null ? null : `${q.left_pct}%`,
       q.resets_at === null ? null : lisbonStamp(q.resets_at),
       q.updated_at === null ? null : `${lisbonStamp(q.updated_at)} (${ago(q.updated_at, now)})`,
-      q.note ? `${q.state.replace("_", " ")}: ${q.note}` : q.state.replace("_", " "),
+      stateCell(q.state.replace("_", " "), q.note),
     ]),
   )}`;
 }

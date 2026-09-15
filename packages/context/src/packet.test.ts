@@ -7,7 +7,7 @@ import { ContextCache } from "./cache.ts";
 import { loadConfig } from "./config.ts";
 import type { Crew, Packet, Section } from "./packet.ts";
 import { computePacket } from "./refresh.ts";
-import { AGENT_HEADINGS, nestHeadings, renderAgentPacket } from "./render-agent.ts";
+import { AGENT_HEADINGS, nestHeadings, renderAgentPacket, stateCell } from "./render-agent.ts";
 import { makeWorld, write, type World } from "./testing/world.ts";
 
 let world: World;
@@ -78,6 +78,12 @@ describe("the context packet", () => {
   test("a brief starts on the rails: Conventions, then Projects", () => {
     const preamble = briefPreamble(packet);
     expect(headings(preamble)).toEqual(["## Conventions", "## Projects"]);
+  });
+
+  test("a quota note that already names its state does not repeat it", () => {
+    expect(stateCell("not connected", "not connected — add the Claude Code hook in Settings")).toBe("not connected — add the Claude Code hook in Settings");
+    expect(stateCell("not connected", "no Codex folder on this Mac")).toBe("not connected: no Codex folder on this Mac");
+    expect(stateCell("fresh", null)).toBe("fresh");
   });
 
   test("a section that cannot be read is one line", () => {

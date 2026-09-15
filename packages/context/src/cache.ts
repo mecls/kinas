@@ -115,7 +115,8 @@ export class ContextCache {
 
   recent(org: string, limit: number): ActivityRow[] {
     return this.db
-      .query("SELECT at, kind, project, text FROM activity_log WHERE org_id = ? ORDER BY at DESC, recorded_at DESC LIMIT ?")
+      // `ref` settles ties (git keeps whole seconds), so the same log always renders in the same order.
+      .query("SELECT at, kind, project, text FROM activity_log WHERE org_id = ? ORDER BY at DESC, recorded_at DESC, ref LIMIT ?")
       .all(org, limit) as { at: number; kind: ActivityKind; project: string | null; text: string }[];
   }
 }

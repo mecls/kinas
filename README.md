@@ -1,19 +1,15 @@
 # Kinas
 <img width="2288" height="1160" alt="SL" src="https://github.com/user-attachments/assets/94271395-da35-4f67-ae6f-eb9d96e91752" />
 
-A local macOS app with two pages and a CLI:
+The operating system for a company that runs on AI agents. Local first, one person first.
 
-- **Usage** — how much of the Claude and Ollama Cloud plans is left (with how old each number is), model
-  usage by day from Claude Code and Pi transcripts, and this Mac's CPU, memory and disk.
-- **Work** — the terminal: a real PTY running your login shell. It opens on the Kinas launch screen; Enter attaches
-  Herdr, q stays in the shell. A keyboard contract gives every non-⌘ key to the terminal.
-- **`kinas`** — the CLI. With no arguments, a launch screen that says where the operation is right now; `kinas
-  context --agent` prints the same situation as a markdown packet for the start of an agent session.
+Kinas is a Mac app with the kinas CLI inside it. It gives one developer a single place to work: a terminal pane with Herdr and the crew, a usage page that shows what every provider subscription and this machine are doing, and, as the agents move in, the run feed, the approvals that reach your phone, and the deployer that ships client changes with rollback.
 
-Everything runs on this Mac. State is one SQLite file in `~/Library/Application Support/ai.sintralabs.kinas/`,
-written only by the app; the CLI keeps its own cache beside it.
-The product spec, build spec and task list live in `tasks/`, which is git-ignored: planning documents stay on
-this Mac, and code comments cite their rule numbers (R7, AC-10…).
+Everything runs on your Mac. No server, no SSH, no API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows locally.
+
+Kinas is built as a castle: it decides the contracts, the doors, the gates, and the record. Everything inside is a seam you fill with your own tools: the harness, the store, the session runtime, the build conductor, the review loop, the channel, the providers. Defaults are shipped for every seam and none is required.
+
+Built by Sintra Labs to run Miraside, its first customer. Grown in tested increments: an empty castle first, then one room at a time.
 
 ## Setup
 

@@ -67,6 +67,30 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
 - [ ] The sidebar, the gear and the Settings page look right — `outstanding — needs Miguel`
 - [ ] The same with a physical keyboard — `outstanding — needs Miguel`
 
+## Selection and clipboard
+
+Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a selection at a plain shell prompt
+(`tasks/prd-selection-clipboard.md`).
+
+- [x] An OSC 52 write reaches the clipboard: `printf '\e]52;c;%s\a' "$(printf 'ção ✓' | base64)"` → `pbpaste`
+      prints `ção ✓` — `automated (selection.e2e.ts)`
+- [x] An OSC 52 query (`printf '\e]52;c;?\a'`) leaves the clipboard unchanged and types nothing at the prompt —
+      `automated (selection.e2e.ts)`
+- [x] Type `clmefes`, select `cl`, ⌫ → the line reads `mefes` — `automated (selection.e2e.ts)`, ⌫ sent as a
+      real keydown on xterm's textarea
+- [x] ⌫ over a selection in `less` is an ordinary ⌫ — `automated (selection.e2e.ts)`
+- [x] A mouse selection is copied when the button is released — `automated (selection.e2e.ts)`, driven by DOM
+      mouse events. WebDriver drags reach the page but make no selection, so the physical drag below is the only
+      proof that the OS mouse works
+- [ ] Plain zsh: drag over `mefes` → ⌘V in Notes pastes `mefes`; ⌫ removes it from the prompt —
+      `outstanding — needs Miguel`
+- [ ] Plain zsh: double-click a word in earlier output → it copies; ⌫ at the prompt deletes one character, as
+      usual — `outstanding — needs Miguel`
+- [ ] Herdr, in a Claude Code pane: drag over part of a response → ⌘V in Notes pastes it —
+      `outstanding — needs Miguel`
+- [ ] lazygit inside Herdr: mouse clicks still select panels (the lazygit line above still passes) —
+      `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

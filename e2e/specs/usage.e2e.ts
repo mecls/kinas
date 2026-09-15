@@ -6,14 +6,14 @@ import { browser, $, $$, expect } from "@wdio/globals";
 const gauge = (subscription: string, window: string) => $(`.gauge[data-subscription="${subscription}"][data-window="${window}"]`);
 
 describe("the Usage page", () => {
-  it("shows Claude's session and week from the hand-off, fresh, left floored", async () => {
+  it("shows Claude's session and week from the hand-off, fresh, as % used like Claude's /usage", async () => {
     await gauge("claude-plan", "session").waitForExist({ timeout: 60000 });
-    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("58% left"));
+    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("42% used"));
     await expect(gauge("claude-plan", "session")).toHaveAttribute("data-state", "fresh");
     // The app takes up to a minute to start under the driver, so the countdown has moved on a little; after
     // 22:00 the reset is tomorrow and the clock carries the date.
     await expect(gauge("claude-plan", "session")).toHaveText(expect.stringMatching(/resets in 1 h \d{1,2} m \((\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}\)/));
-    await expect(gauge("claude-plan", "week")).toHaveText(expect.stringContaining("76% left"));
+    await expect(gauge("claude-plan", "week")).toHaveText(expect.stringContaining("24% used"));
   });
 
   it("shows Ollama's session and week as % used, like ollama.com, with no reset time", async () => {

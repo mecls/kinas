@@ -3,14 +3,13 @@ import { PROVIDER_LABEL, WINDOW_LABEL, asOf, leftPct, lisbonClock, resetsIn, ton
 
 // One quota window (R38). The number never lies: a dead reading shows "—" and why, a reset window shows
 // "—" because the stored number belongs to a window that ended, and a stale one keeps its number in gold.
-// The bar fills with what is used, like the providers' own pages; its colour still warns by what is left.
-// Ollama's number reads "% used", like ollama.com, and lists the requests per model it reports.
+// The number and the bar read what is used, like the providers' own pages (Claude's /usage, ollama.com); the
+// bar's colour still warns by what is left. Ollama also lists the requests per model it reports.
 
 export function Gauge({ quota, reader, now }: { quota: QuotaView; reader: ReaderView | undefined; now: number }) {
   const label = `${PROVIDER_LABEL[quota.subscription]} · ${WINDOW_LABEL[quota.window]}`;
   const left = leftPct(quota.used_pct);
   const hidden = quota.state === "dead" || quota.state === "reset";
-  const showsUsed = quota.subscription === "ollama-cloud";
   const models = [...quota.models].sort((a, b) => b.request_count - a.request_count || a.name.localeCompare(b.name));
 
   let detail: string;
@@ -38,15 +37,10 @@ export function Gauge({ quota, reader, now }: { quota: QuotaView; reader: Reader
       <div className="gauge-number">
         {hidden ? (
           "—"
-        ) : showsUsed ? (
+        ) : (
           <>
             {usedPct(quota.used_pct)}
             <span className="gauge-unit">% used</span>
-          </>
-        ) : (
-          <>
-            {left}
-            <span className="gauge-unit">% left</span>
           </>
         )}
       </div>

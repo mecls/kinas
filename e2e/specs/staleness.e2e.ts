@@ -11,7 +11,7 @@ describe("numbers that are no longer true", () => {
   it("dates the Claude reading by the session's last response, so it is stale", async () => {
     await gauge("claude-plan", "session").waitForExist({ timeout: 60000 });
     await expect(gauge("claude-plan", "session")).toHaveAttribute("data-state", "stale");
-    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("50% left"));
+    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("50% used"));
     await expect(gauge("claude-plan", "session")).toHaveText(expect.stringMatching(/as of \d{2}:\d{2} · stale/));
   });
 

@@ -26,6 +26,16 @@ pub fn run() {
                     }),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                 ])
+                // The plugin's defaults are a 40 KB file deleted outright when it fills (`KeepOne`). That threw
+                // the evidence away twice on 2026-09-16 while the frozen window and the slow first read were
+                // being diagnosed — once in the middle of a measuring run, which read as a hung app. 2 MiB a
+                // file and five files holds several sessions, caps the folder at 10 MiB rather than growing
+                // without end, and never discards everything at once. Rotation renames the filled file to
+                // `kinas_<date>.log` and reopens `kinas.log`, so anything reading the live path keeps working:
+                // `scripts/acceptance.sh` reads `kinas.log` by name, and its §5.3 secret scan globs the whole
+                // folder, so the rotated files are scanned too.
+                .max_file_size(2 * 1024 * 1024)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
                 .level(log::LevelFilter::Info)
                 .build(),
         );

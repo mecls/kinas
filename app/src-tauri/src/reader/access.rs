@@ -72,6 +72,55 @@ fn megabytes(bytes: u64) -> String {
     format!("{:.1} MB", bytes as f64 / 1_000_000.0)
 }
 
+/// How many bytes of a file's head decide whether it is text (R1).
+///
+/// One page. WHATWG mimesniff looks at 1445; 4096 costs the same syscall and catches a text header over a binary
+/// payload — a `.sqlite`, a uuencoded blob — which 1445 can miss.
+//
+// `allow(dead_code)` until task 2.0 calls these from `read_text` and `list_dir`. Task 1.0 writes the rule and its
+// shared case table before anything uses it, so the Rust and TypeScript halves cannot be born disagreeing — and
+// clippy runs with `-D warnings`, so the attribute is what lets that land as its own commit. Remove all three in
+// 2.0. Build 2 did the same for `mod reader` until task 4.1.
+#[allow(dead_code)]
+pub const SNIFF_BYTES: usize = 4096;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum Content {
+    Text,
+    Binary,
+}
+
+/// Whether a file's head reads as text (R1).
+///
+/// Two tests, in order: no binary-data byte, then valid UTF-8. The byte set is taken verbatim from WHATWG
+/// mimesniff's "binary data byte" — `0x00–0x08`, `0x0B`, `0x0E–0x1A`, `0x1C–0x1F` — which is the algorithm
+/// browsers already use to decide `text/plain` against `application/octet-stream`. Do not replace it with a
+/// control-character ratio: a ratio needs a threshold, every threshold is arbitrary, and this one is citable.
+///
+/// Two absences earn their place. `0x1B` (ESC) is not a binary byte, so an ANSI-coloured log opens. `0x09`,
+/// `0x0A`, `0x0C` and `0x0D` are not either, so tabs and newlines open. `0x08` is, which is what makes ELF,
+/// Mach-O, PNG and zip fail inside their first bytes.
+///
+/// A multi-byte sequence chopped by the 4096-byte window is tolerated: the rest of it is simply not here yet,
+/// so up to three trailing bytes are dropped before the last UTF-8 attempt. An empty head is text.
+#[allow(dead_code)] // Until task 2.0 calls it; see the note on SNIFF_BYTES above.
+pub fn sniff(head: &[u8]) -> Content {
+    let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
+    if head.iter().any(|b| matches!(b, 0x00..=0x08 | 0x0B | 0x0E..=0x1A | 0x1C..=0x1F)) {
+        return Content::Binary;
+    }
+    if std::str::from_utf8(head).is_ok() {
+        return Content::Text;
+    }
+    for cut in 1..=3.min(head.len()) {
+        if std::str::from_utf8(&head[..head.len() - cut]).is_ok() {
+            return Content::Text;
+        }
+    }
+    Content::Binary
+}
+
 /// `.md` or `.mdx`, case-insensitive (R3). Callers pass the real path, so a `plan.md` link to a `.txt` is refused.
 pub fn is_markdown(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("mdx"))
@@ -263,6 +312,31 @@ mod tests {
         assert_eq!(display_path(&t.root.join("docs/README.md"), &t.root, Path::new("/nowhere")), "docs/README.md");
         assert_eq!(display_path(&t.base.join("outside/b.md"), &t.root, &t.base), "~/outside/b.md");
         assert_eq!(display_path(&t.base.join("outside/b.md"), &t.root, Path::new("/nowhere")), t.base.join("outside/b.md").display().to_string());
+    }
+
+    // The same cases as cli/src/sniff.test.ts, so the CLI and the app agree on what a text file is. The table
+    // stores bytes as hex because a NUL cannot be written as JSON text.
+    #[test]
+    fn the_sniff_matches_the_shared_cases() {
+        #[derive(serde::Deserialize)]
+        struct Case {
+            name: String,
+            hex: String,
+            expected: String,
+        }
+
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/reader/sniff-cases.json");
+        let cases: Vec<Case> = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+        assert!(!cases.is_empty());
+        for c in cases {
+            assert!(c.hex.len() % 2 == 0, "odd hex: {}", c.name);
+            let bytes: Vec<u8> = (0..c.hex.len()).step_by(2).map(|i| u8::from_str_radix(&c.hex[i..i + 2], 16).unwrap()).collect();
+            let got = match sniff(&bytes) {
+                Content::Text => "text",
+                Content::Binary => "binary",
+            };
+            assert_eq!(got, c.expected, "{}", c.name);
+        }
     }
 
     #[test]

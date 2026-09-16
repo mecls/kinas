@@ -1,0 +1,82 @@
+[
+  {
+    "name": "an empty file is text, and renders as an empty page",
+    "hex": "",
+    "expected": "text"
+  },
+  {
+    "name": "plain ASCII is text",
+    "hex": "73656c656374202a2066726f6d206c656164733b0a",
+    "expected": "text"
+  },
+  {
+    "name": "accented UTF-8 is text",
+    "hex": "6372696163c3a36f0a",
+    "expected": "text"
+  },
+  {
+    "name": "a UTF-8 BOM is stripped before judging, so BOM + text is text",
+    "hex": "efbbbf23205469746c650a",
+    "expected": "text"
+  },
+  {
+    "name": "a multi-byte sequence cut off at the end of the window is text: the rest of it is simply not here yet",
+    "hex": "706c616ee2",
+    "expected": "text"
+  },
+  {
+    "name": "an ANSI-coloured log line is text: ESC (0x1b) is deliberately not a binary byte",
+    "hex": "1b5b33326d4f4b1b5b306d0a",
+    "expected": "text"
+  },
+  {
+    "name": "tabs, newlines, form feeds and carriage returns are text",
+    "hex": "610962090c0d0a62",
+    "expected": "text"
+  },
+  {
+    "name": "a lone NUL makes it binary",
+    "hex": "68656c6c6f00776f726c64",
+    "expected": "binary"
+  },
+  {
+    "name": "a PNG header is binary",
+    "hex": "89504e470d0a1a0a0000000d49484452",
+    "expected": "binary"
+  },
+  {
+    "name": "a Mach-O header is binary",
+    "hex": "cffaedfe070000010300000002000000",
+    "expected": "binary"
+  },
+  {
+    "name": "an ELF header is binary",
+    "hex": "7f454c4602010100000000000000000002003e00",
+    "expected": "binary"
+  },
+  {
+    "name": "a zip header is binary: 0x08 is in the binary set, which is what catches archives early",
+    "hex": "504b03040a0000000800",
+    "expected": "binary"
+  },
+  {
+    "name": "UTF-16LE text is binary to us: every other byte is NUL, and we render UTF-8 only",
+    "hex": "680065006c006c006f000a00",
+    "expected": "binary"
+  },
+  {
+    "name": "invalid UTF-8 carrying no binary byte is still binary: a bare 0xff is not a code point",
+    "hex": "706c616eff6e6f74757466380a",
+    "expected": "binary"
+  },
+  {
+    "name": "a lone 0x0b (vertical tab) makes it binary, per mimesniff, though 0x09 and 0x0c do not",
+    "hex": "6c696e650b6c696e65",
+    "expected": "binary"
+  },
+  {
+    "name": "0x1e (record separator) is binary: a file of ASCII separators is not something to read",
+    "hex": "611e621e63",
+    "expected": "binary"
+  }
+]

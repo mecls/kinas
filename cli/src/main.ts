@@ -6,7 +6,7 @@
 //   kinas context            the counts, what is waiting on you, and what changed recently
 //   kinas context --agent    the whole context packet as markdown, for the start of an agent session
 //   kinas status [--json]    the Usage page as text or JSON
-//   kinas open [<path>]      a markdown file or folder in the Kinas reader; no path reopens the last one (open.ts)
+//   kinas open [<path>]      any text file, image or folder in the Kinas reader; no path reopens the last one (open.ts)
 //
 // Only the launch screen reads keys, and only on a terminal: it holds until Enter, q or Ctrl+C and ignores every
 // other key, Tab included (hold.ts, keymap.md). Every other command prints and exits.
@@ -14,8 +14,8 @@
 // Exit codes: 0 (even when readings are stale — staleness is data; `open`: opened, asked, or the app is not running
 // and the path was printed), 1 (other errors), 2 (`status`: the store does not exist yet), 3 (`status`: the store is
 // newer than this CLI: the ~/.local/bin link is stale), 10 (the launch screen in the Work pane: q or Ctrl+C, stay in
-// the shell), 64 (unknown usage), 65 (`open`: not a .md or .mdx file), 66 (`open`: no such file, or nothing to
-// reopen), 77 (`open`: outside the projects root).
+// the shell), 64 (unknown usage), 65 (`open`: not a text file Kinas can open — binary content, or not a regular
+// file), 66 (`open`: no such file, or nothing to reopen), 77 (`open`: outside the projects root).
 
 import { join } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
@@ -46,7 +46,7 @@ function usage(): string {
     "    --cwd <dir>       print nothing unless <dir> is inside the projects root (for session hooks)",
     "    --refresh         recompute the cached packet and print nothing",
     "  status [--json]     how much of each plan is left, today's model usage, and this Mac",
-    "  open [<path>]       open a markdown file or folder in the Kinas reader; no path reopens the last one",
+    "  open [<path>]       open a file or folder in the Kinas reader; no path reopens the last one",
     "    --anywhere        ask Kinas to open a path outside the projects root",
     "    --launch          start Kinas first when it is not running",
   ].join("\n");
@@ -218,7 +218,7 @@ async function status(args: string[]): Promise<number> {
 async function open(args: string[]): Promise<number> {
   const parsed = parseArgs(args, ["--anywhere", "--launch"], []);
   if (parsed.problem) return usageError(`kinas open: ${parsed.problem}`);
-  if (parsed.positional.length > 1) return usageError("kinas open: name one markdown file or folder");
+  if (parsed.positional.length > 1) return usageError("kinas open: name one file or folder");
 
   const anywhere = parsed.flags.has("--anywhere");
   let path: string | null = null;

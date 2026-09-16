@@ -7,7 +7,12 @@ import { realpathSync, statSync } from "node:fs";
 import net from "node:net";
 import { isAbsolute, resolve } from "node:path";
 import { findByName } from "./find.ts";
+import { sniffFile } from "./sniff.ts";
 
+/**
+ * Exit codes (R12). `notMarkdown` keeps its name and its value: the wire code it maps to, `"not_markdown"`, is a
+ * frozen constant, and 65 now means "not a text file Kinas can open" — binary content, or not a regular file.
+ */
 export const OPEN_EXIT = { ok: 0, error: 1, notMarkdown: 65, noInput: 66, outside: 77 } as const;
 
 /** How long the CLI waits for the app to answer, and for `--launch` to bring the socket up (R12, R14). */
@@ -21,8 +26,18 @@ export type Target =
   | { ok: true; pick: string[] }
   | { ok: false; exit: number; message: string };
 
-export function isMarkdown(path: string): boolean {
-  return /\.mdx?$/i.test(path);
+/**
+ * The image extensions the reader shows as images (R2), so the CLI never reads one to recognise it.
+ *
+ * Deliberately a second copy of `IMAGE_EXTENSIONS` in `app/src-tauri/src/reader/access.rs`: the two are read by
+ * different languages at different moments, and neither can import the other. Keep them in step — a name here
+ * that is missing there means the CLI sniffs a file the app recognises by extension, and the reverse means the CLI
+ * sends bytes the app will refuse.
+ */
+const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i;
+
+export function isImage(path: string): boolean {
+  return IMAGE.test(path);
 }
 
 /** `real` is `realRoot` or inside it; the trailing `/` keeps `SintraLabs-old` out of `SintraLabs` (R2). */
@@ -61,7 +76,7 @@ export function resolveTarget(arg: string, opts: { cwd: string; root: string; an
 function missing(arg: string, root: string): Target {
   return isAbsolute(arg) || arg.includes("/")
     ? { ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no such file: ${arg.startsWith("/") ? arg : resolve(root, arg)}` }
-    : { ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no markdown file named ${arg} under ${root}` };
+    : { ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no file named ${arg} under ${root}` };
 }
 
 /** One candidate path, or null when nothing is there (so the next step may try). */
@@ -76,9 +91,16 @@ function at(candidate: string, root: string, anywhere: boolean): Target | null {
   }
   const stat = statSync(real);
   const kind = stat.isDirectory() ? "dir" : "file";
-  // Judged on the real path: a `plan.md` link to a `.txt` is not markdown (R3).
-  if (kind === "file" && (!stat.isFile() || !isMarkdown(real))) {
-    return { ok: false, exit: OPEN_EXIT.notMarkdown, message: `kinas open: ${real} is not a .md or .mdx file` };
+  // Judged on the real path, and by content rather than extension (R1). The CLI sniffs here itself so exit 65
+  // stays precise: the socket handler must never read file contents, or a slow or hostile file could stall the
+  // socket thread (R6). An image answers by its extension, so it is never read to be recognised.
+  if (kind === "file") {
+    if (!stat.isFile()) {
+      return { ok: false, exit: OPEN_EXIT.notMarkdown, message: `kinas open: ${real} is not a file Kinas can open` };
+    }
+    if (!isImage(real) && sniffFile(real) === "binary") {
+      return { ok: false, exit: OPEN_EXIT.notMarkdown, message: `kinas open: ${real} is not a text file` };
+    }
   }
   if (!anywhere && !insideRoot(real, root)) {
     return { ok: false, exit: OPEN_EXIT.outside, message: `kinas open: ${real} is outside ${root}; add --anywhere to ask Kinas to open it` };

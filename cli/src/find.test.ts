@@ -23,11 +23,15 @@ write("deep/1/2/3/4/5/6/7/8/9/buried.md", 1000);
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("names a bare argument may mean", () => {
-  test("with an extension it is taken as given; without one, .md and .mdx", () => {
+  test("any extension is taken as given; without one, .md and .mdx and the bare name", () => {
     expect(candidateNames("reader.md")).toEqual(["reader.md"]);
     expect(candidateNames("Reader.MD")).toEqual(["reader.md"]);
-    expect(candidateNames("reader")).toEqual(["reader.md", "reader.mdx"]);
     expect(candidateNames("./reader.md")).toEqual(["reader.md"]);
+    // Any extension, not only markdown, so `0008_funnel_stage.sql` is searched for as itself.
+    expect(candidateNames("0008_funnel_stage.sql")).toEqual(["0008_funnel_stage.sql"]);
+    // The bare name last, which is what makes `kinas open Dockerfile` and `kinas open Makefile` work.
+    expect(candidateNames("reader")).toEqual(["reader.md", "reader.mdx", "reader"]);
+    expect(candidateNames("Dockerfile")).toEqual(["dockerfile.md", "dockerfile.mdx", "dockerfile"]);
   });
 
   test("a path is not a name, so it is never searched for", () => {
@@ -47,8 +51,10 @@ describe("the search", () => {
     expect(findByName(root, "READER.md")).toHaveLength(2);
   });
 
-  test("finds nothing for a name that is not markdown, or is too deep", () => {
-    expect(findByName(root, "notes.txt")).toEqual([]);
+  test("finds any name, and nothing for one that is absent or too deep", () => {
+    // Not markdown is no longer a reason to find nothing: the search matches names, and whether the reader can
+    // open a match is judged later, by `at()` in open.ts.
+    expect(findByName(root, "notes.txt").map((m) => m.path)).toEqual([join(root, "a/notes.txt")]);
     expect(findByName(root, "buried.md")).toEqual([]);
     expect(findByName(root, "nothing.md")).toEqual([]);
   });

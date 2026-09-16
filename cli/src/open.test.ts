@@ -55,9 +55,9 @@ describe("resolving from any folder (R1b)", () => {
   });
 
   test("a name with no match says so and exits 66; a real path is judged as a path", () => {
-    expect(elsewhere("nothing.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no markdown file named nothing.md under ${root}` });
-    // `notes.txt` exists under the projects folder, so it is a path, and a path that is not markdown is 65.
-    expect(elsewhere("notes.txt")).toMatchObject({ ok: false, exit: OPEN_EXIT.notMarkdown });
+    expect(elsewhere("nothing.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no file named nothing.md under ${root}` });
+    // `notes.txt` exists under the projects folder, so it is a path — and text, so it opens (R1).
+    expect(elsewhere("notes.txt")).toMatchObject({ ok: true, kind: "file" });
   });
 });
 
@@ -68,10 +68,12 @@ describe("resolving a path", () => {
     expect(at("docs")).toEqual({ ok: true, path: join(root, "docs"), kind: "dir" });
   });
 
-  test("a symlink out of the root is outside (77), and a .md link to a .txt is not markdown (65)", () => {
+  test("a symlink out of the root is outside (77); a .md link to a text file opens as that file", () => {
     expect(at("link.md")).toMatchObject({ ok: false, exit: OPEN_EXIT.outside });
-    expect(at("plan.md")).toEqual({ ok: false, exit: OPEN_EXIT.notMarkdown, message: `kinas open: ${join(root, "notes.txt")} is not a .md or .mdx file` });
-    expect(at("notes.txt")).toMatchObject({ ok: false, exit: OPEN_EXIT.notMarkdown });
+    // Judged on the real path, so `plan.md` is the `notes.txt` it points at — and text opens (R1). Reach is a
+    // separate question from content: `link.md` above still refuses, because it leaves the projects folder.
+    expect(at("plan.md")).toEqual({ ok: true, path: join(root, "notes.txt"), kind: "file" });
+    expect(at("notes.txt")).toMatchObject({ ok: true, kind: "file" });
   });
 
   test("a sibling that starts with the root's name is outside, in one line naming the root", () => {
@@ -84,7 +86,7 @@ describe("resolving a path", () => {
 
   test("a missing file is 66 and is never created", () => {
     // A bare name that is nowhere is reported as a name, not as one path that was tried (R1b).
-    expect(at("new.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no markdown file named new.md under ${root}` });
+    expect(at("new.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no file named new.md under ${root}` });
     expect(at("./missing/new.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no such file: ${join(root, "missing/new.md")}` });
     expect(at("a.md/child.md")).toMatchObject({ ok: false, exit: OPEN_EXIT.noInput });
     expect(existsSync(join(root, "new.md"))).toBe(false);

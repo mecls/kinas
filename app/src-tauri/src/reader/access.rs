@@ -6,8 +6,11 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-/// Larger markdown is refused in the reader (R10). The largest markdown file under the root was 2 342 lines.
-pub const MAX_MARKDOWN_BYTES: u64 = 2 * 1024 * 1024;
+/// Larger text is refused in the reader (R10).
+///
+/// 2 MiB was chosen for markdown, where the largest file under the root was 2 342 lines. Raised to 4 MiB when the
+/// reader learned to open any text file, because minified JavaScript and large JSON are the real counter-cases.
+pub const MAX_TEXT_BYTES: u64 = 4 * 1024 * 1024;
 /// Larger images are shown as their alt text (R20).
 pub const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 pub const IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
@@ -22,7 +25,8 @@ pub enum Kind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Denied {
     Missing,
-    NotMarkdown,
+    /// Binary content, or not a regular file. Named for what it means, not for the wire code it carries.
+    NotText,
     Outside,
     TooLarge(u64),
     NotUtf8,
@@ -31,10 +35,15 @@ pub enum Denied {
 
 impl Denied {
     /// The socket protocol's error code (R17).
+    ///
+    /// `"not_markdown"` is a frozen wire constant, not a description. It maps to exit 65 in `cli/src/open.ts`, is
+    /// listed in the reader PRD's response table, and is asserted in four test files — and during development an
+    /// old CLI talks to a new app, where an unrecognised code degrades silently to exit 1. The variant was renamed
+    /// when the reader learned to open any text file; this string was deliberately left alone.
     pub fn code(&self) -> &'static str {
         match self {
             Denied::Missing => "missing",
-            Denied::NotMarkdown => "not_markdown",
+            Denied::NotText => "not_markdown",
             Denied::Outside => "outside",
             Denied::TooLarge(_) => "too_large",
             Denied::NotUtf8 => "not_utf8",
@@ -47,7 +56,7 @@ impl Denied {
         let path = path.display();
         match self {
             Denied::Missing => format!("kinas open: no such file: {path}"),
-            Denied::NotMarkdown => format!("kinas open: {path} is not a .md or .mdx file"),
+            Denied::NotText => format!("kinas open: {path} is not a text file"),
             Denied::Outside => format!("kinas open: {path} is outside {}; add --anywhere to ask Kinas to open it", root.display()),
             Denied::TooLarge(bytes) => format!("kinas open: {path} is too large to read here ({})", megabytes(*bytes)),
             Denied::NotUtf8 => format!("kinas open: {path} is not UTF-8 text"),
@@ -59,7 +68,7 @@ impl Denied {
     pub fn reader_message(&self, path: &Path) -> String {
         match self {
             Denied::Missing => format!("No such file: {}", path.display()),
-            Denied::NotMarkdown => format!("Kinas reads only .md and .mdx: {}", path.display()),
+            Denied::NotText => format!("Not a text file: {}", path.display()),
             Denied::Outside => format!("{} is outside the projects root", path.display()),
             Denied::TooLarge(bytes) => format!("Too large to read here ({})", megabytes(*bytes)),
             Denied::NotUtf8 => "Not UTF-8 text".into(),
@@ -76,16 +85,9 @@ fn megabytes(bytes: u64) -> String {
 ///
 /// One page. WHATWG mimesniff looks at 1445; 4096 costs the same syscall and catches a text header over a binary
 /// payload — a `.sqlite`, a uuencoded blob — which 1445 can miss.
-//
-// `allow(dead_code)` until task 2.0 calls these from `read_text` and `list_dir`. Task 1.0 writes the rule and its
-// shared case table before anything uses it, so the Rust and TypeScript halves cannot be born disagreeing — and
-// clippy runs with `-D warnings`, so the attribute is what lets that land as its own commit. Remove all three in
-// 2.0. Build 2 did the same for `mod reader` until task 4.1.
-#[allow(dead_code)]
 pub const SNIFF_BYTES: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum Content {
     Text,
     Binary,
@@ -104,7 +106,6 @@ pub enum Content {
 ///
 /// A multi-byte sequence chopped by the 4096-byte window is tolerated: the rest of it is simply not here yet,
 /// so up to three trailing bytes are dropped before the last UTF-8 attempt. An empty head is text.
-#[allow(dead_code)] // Until task 2.0 calls it; see the note on SNIFF_BYTES above.
 pub fn sniff(head: &[u8]) -> Content {
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     if head.iter().any(|b| matches!(b, 0x00..=0x08 | 0x0B | 0x0E..=0x1A | 0x1C..=0x1F)) {
@@ -126,6 +127,52 @@ pub fn is_markdown(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("mdx"))
 }
 
+/// How the webview shows a file (R2). What a file *is on disk* is `Kind`; this is a different question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Render {
+    Markdown,
+    Source,
+    Html,
+    Image,
+}
+
+/// Which mode a resolved file renders in (R2), judged on the real path so a `plan.md` symlink to a `.sql` is
+/// shown as SQL.
+///
+/// Precedence, first match wins: markdown, then image, then HTML, then anything that reads as text. The three
+/// extension arms answer without a head, which is why an image is never read merely to be recognised — pass
+/// `None` when no bytes are to hand and a `Source` candidate will be reported as `NotText` rather than guessed at.
+///
+/// Rust decides this, not the webview: `Render::Html` is the difference between escaping text and executing code,
+/// so the judgement belongs beside the read that produced the bytes, not in the surface being protected.
+pub fn render_of(real: &Path, head: Option<&[u8]>) -> Result<Render, Denied> {
+    if is_markdown(real) {
+        return Ok(Render::Markdown);
+    }
+    if is_image(real) {
+        return Ok(Render::Image);
+    }
+    let ext = real.extension().and_then(|e| e.to_str()).unwrap_or_default();
+    if ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm") {
+        return Ok(Render::Html);
+    }
+    match head {
+        Some(head) if sniff(head) == Content::Text => Ok(Render::Source),
+        _ => Err(Denied::NotText),
+    }
+}
+
+/// The lowercased extension, or the lowercased file name when there is none, so `Dockerfile` and `Makefile` can
+/// pick a highlighter. Empty when neither applies.
+pub fn ext_of(real: &Path) -> String {
+    real.extension()
+        .or_else(|| real.file_name())
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default()
+}
+
 pub fn is_image(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| IMAGE_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
 }
@@ -138,15 +185,20 @@ fn io_denied(e: std::io::Error) -> Denied {
     }
 }
 
-/// The real path and what it is. A directory is accepted (R4); a file must be markdown by its real name (R3).
+/// The real path and what it is. A directory is accepted (R4); a file must be a regular file (R1).
+///
+/// Deliberately reads no bytes, so it says nothing about whether a file is text. `socket::handle` calls this, and
+/// the socket handler must never read file contents — that is what stops a slow or hostile file stalling the
+/// socket thread (R6). The three places that already read bytes do the judging instead: `read_text` on its head,
+/// `list_dir` per entry, and the CLI before it sends. A fifo, socket or device is refused here.
 pub fn resolve(path: &Path) -> Result<(PathBuf, Kind), Denied> {
     let real = std::fs::canonicalize(path).map_err(io_denied)?;
     let meta = std::fs::metadata(&real).map_err(io_denied)?;
     if meta.is_dir() {
         return Ok((real, Kind::Dir));
     }
-    if !meta.is_file() || !is_markdown(&real) {
-        return Err(Denied::NotMarkdown);
+    if !meta.is_file() {
+        return Err(Denied::NotText);
     }
     Ok((real, Kind::File))
 }
@@ -182,14 +234,25 @@ pub struct Text {
     pub size: u64,
 }
 
-/// Reads a markdown file whose real path was already resolved and permitted (R10).
-pub fn read_markdown(real: &Path) -> Result<Text, Denied> {
+/// Reads a text file whose real path was already resolved and permitted (R1, R10).
+///
+/// The sniff happens here, on the head, rather than in `resolve`: `resolve` is called by the socket handler, and
+/// that handler must never read file contents, or a slow or hostile file could stall the socket thread. So the
+/// three places that already read bytes do the judging — this function, `list_dir`, and the CLI before it sends.
+///
+/// Sniff before the UTF-8 check, so a binary file is refused as "not a text file" rather than as "not UTF-8":
+/// the first names what is wrong, the second describes a symptom. `NotUtf8` is kept for the case the sniff cannot
+/// see — a clean head over a tail that is not valid UTF-8.
+pub fn read_text(real: &Path) -> Result<Text, Denied> {
     let meta = std::fs::metadata(real).map_err(io_denied)?;
-    if meta.len() > MAX_MARKDOWN_BYTES {
+    if meta.len() > MAX_TEXT_BYTES {
         return Err(Denied::TooLarge(meta.len()));
     }
     let bytes = std::fs::read(real).map_err(io_denied)?;
     let body = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+    if sniff(&body[..SNIFF_BYTES.min(body.len())]) == Content::Binary {
+        return Err(Denied::NotText);
+    }
     let hash = fnv1a(body);
     let text = String::from_utf8(body.to_vec()).map_err(|_| Denied::NotUtf8)?;
     let mtime_ms = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0);
@@ -269,7 +332,9 @@ mod tests {
         let (real, _) = resolve(&t.root.join("link.md")).unwrap();
         assert_eq!(real, t.base.join("outside/b.md"));
         assert!(!inside(&real, &t.root));
-        assert_eq!(resolve(&t.root.join("plan.md")), Err(Denied::NotMarkdown));
+        // Judged by its target, and a text file opens whatever the link is called (R1). `link.md` above still
+        // refuses: that is about reach, which widening the gate did not touch.
+        assert_eq!(resolve(&t.root.join("plan.md")).unwrap(), (t.root.join("notes.txt"), Kind::File));
     }
 
     #[test]
@@ -291,17 +356,22 @@ mod tests {
     }
 
     #[test]
-    fn markdown_is_read_with_limits() {
+    fn text_is_read_with_limits() {
         let t = tree();
         let big = t.root.join("big.md");
-        fs::write(&big, vec![b'a'; (MAX_MARKDOWN_BYTES + 1) as usize]).unwrap();
-        assert!(matches!(read_markdown(&big), Err(Denied::TooLarge(_))));
+        fs::write(&big, vec![b'a'; (MAX_TEXT_BYTES + 1) as usize]).unwrap();
+        assert!(matches!(read_text(&big), Err(Denied::TooLarge(_))));
+        // A NUL in the head is refused as binary, which names what is wrong. NotUtf8 is left for what the sniff
+        // cannot see: a clean head over a tail that is not valid UTF-8.
         let bad = t.root.join("bad.md");
         fs::write(&bad, [0xff, 0xfe, 0x00]).unwrap();
-        assert_eq!(read_markdown(&bad), Err(Denied::NotUtf8));
+        assert_eq!(read_text(&bad), Err(Denied::NotText));
+        let tail = t.root.join("tail.md");
+        fs::write(&tail, [b"# Title\n".as_slice(), &vec![b'a'; SNIFF_BYTES], &[0xff]].concat()).unwrap();
+        assert_eq!(read_text(&tail), Err(Denied::NotUtf8));
         let bom = t.root.join("bom.md");
         fs::write(&bom, b"\xEF\xBB\xBF# Title\n").unwrap();
-        let text = read_markdown(&bom).unwrap();
+        let text = read_text(&bom).unwrap();
         assert_eq!(text.text, "# Title\n");
         assert_eq!(text.hash, fnv1a(b"# Title\n"));
     }

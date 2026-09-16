@@ -1,6 +1,10 @@
-// Finding a markdown file by name under the projects folder (reader PRD R11, amended 2026-09-16): `kinas open
-// reader.md` works from any folder, so a name that is not a path is searched for. Pure apart from reading directories,
-// and bounded, so a big tree cannot make the CLI hang.
+// Finding a file by name under the projects folder (reader PRD R11, amended 2026-09-16): `kinas open reader.md` and
+// `kinas open 0008_funnel_stage.sql` work from any folder, so a name that is not a path is searched for. Pure apart
+// from reading directories, and bounded, so a big tree cannot make the CLI hang.
+//
+// Names only, never contents: whether a match is something the reader can open is judged later, by `at()` in
+// open.ts. So a search can offer a file that then refuses, which is the honest order — finding it is cheap, and
+// reading every candidate to filter the list would not be.
 
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -17,14 +21,19 @@ export interface Match {
   mtimeMs: number;
 }
 
-const MARKDOWN = /\.mdx?$/i;
-
-/** The names a bare argument may mean: `reader.md`, or `reader` for `reader.md` and `reader.mdx`. */
+/**
+ * The names a bare argument may mean.
+ *
+ * An explicit extension is taken as given, so `0008_funnel_stage.sql` searches for exactly that and is not
+ * expanded into `.md` candidates that do not exist. Without one, `reader` still means `reader.md` or `reader.mdx`
+ * — the reader's common case — plus the bare name itself, which is what makes `kinas open Dockerfile` and
+ * `kinas open Makefile` work. Lowercased throughout, because `findByName` compares against a lowercased entry.
+ */
 export function candidateNames(arg: string): string[] {
-  const name = arg.replace(/^\.\//, "");
+  const name = arg.replace(/^\.\//, "").toLowerCase();
   if (name.includes("/")) return [];
-  if (MARKDOWN.test(name)) return [name.toLowerCase()];
-  return [`${name.toLowerCase()}.md`, `${name.toLowerCase()}.mdx`];
+  if (/\.[^./]+$/.test(name)) return [name];
+  return [`${name}.md`, `${name}.mdx`, name];
 }
 
 /**

@@ -11,7 +11,7 @@ export interface CommandContext {
   getStatus?: () => Promise<StatusResult>;
   /** CLI only: the context packet, rendered for the operator or for an agent. */
   getContext?: () => Promise<string>;
-  /** CLI only: the lines that point at a markdown file. */
+  /** CLI only: the lines that point at the file being opened. */
   openFile?: () => Promise<string[]>;
   /** Palette only. */
   navigate?: (page: "usage" | "work") => void;
@@ -64,10 +64,11 @@ export const commands: readonly Command[] = [
     },
   },
   {
-    // Hands a markdown file or folder to the running app's reader over its socket, and prints the resolved path
-    // (tasks/prd-kinas-open.md). The reader itself lives on the Work page, so there is no palette door (5A).
+    // Hands a file or folder to the running app's reader over its socket, and prints the resolved path
+    // (tasks/prd-kinas-open.md, tasks/prd-reader-any-file.md). The reader itself lives on the Work page, so there
+    // is no palette door (5A).
     id: "open",
-    title: "Open a markdown file",
+    title: "Open a file",
     cliName: "open",
     doors: ["cli"],
     async run(ctx) {

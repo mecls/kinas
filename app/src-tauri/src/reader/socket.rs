@@ -337,12 +337,14 @@ mod tests {
     }
 
     #[test]
-    fn missing_non_markdown_and_malformed_requests_are_refused() {
+    fn missing_and_malformed_requests_are_refused_but_any_text_file_opens() {
         let t = tree();
         let mut inner = Inner::default();
         assert_eq!(handle(&open(&t.root.join("new.md"), false), &t.root, &mut inner, 0).0.code, Some("missing"));
         assert!(!t.root.join("new.md").exists());
-        assert_eq!(handle(&open(&t.root.join("notes.txt"), false), &t.root, &mut inner, 0).0.code, Some("not_markdown"));
+        // A `.txt` is text, so it opens (R1). The socket reads no bytes to know that — `resolve` only stats — so a
+        // binary path is accepted here and refused later, by `read_text` in the command.
+        assert_eq!(handle(&open(&t.root.join("notes.txt"), false), &t.root, &mut inner, 0).0, Response::accepted("opened", &t.root.join("notes.txt")));
         for line in [r#"{"v":1,"op":"open","path":"relative.md"}"#, r#"{"v":2,"op":"reopen"}"#, r#"{"v":1,"op":"delete"}"#, "not json"] {
             assert_eq!(handle(line, &t.root, &mut inner, 0), (Response::bad_request(), None), "{line}");
         }

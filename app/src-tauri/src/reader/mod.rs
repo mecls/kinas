@@ -78,6 +78,11 @@ pub struct ReaderDoc {
     /// The projects root's real path, for links that start with `/`.
     root: String,
     kind: Kind,
+    /// How the webview shows it (R2). None for a folder, which has no document.
+    render: Option<access::Render>,
+    /// The lowercased extension, or file name when there is none, so the webview can pick a highlighter (R11).
+    /// A neutral fact about the file: the mapping to a highlighter's own language ids lives in the webview.
+    ext: String,
     text: Option<Text>,
 }
 
@@ -150,9 +155,19 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
         let (real, kind) = checked(&state, &root, &path)?;
         // Each step is timed on its own, so a repeat of the freeze says in the log which one blocked.
         let started = std::time::Instant::now();
-        let text = match kind {
-            Kind::File => Some(access::read_markdown(&real).map_err(|d| ReaderError::denied(&d, &real))?),
-            Kind::Dir => None,
+        // An image is recognised by its extension and never read as text (R2); its bytes go to the webview
+        // later, through reader_read_image. Everything else is read first, because deciding between `source`
+        // and a refusal needs the head — and `read_text` sniffs it anyway, so there is no second read.
+        let (render, text) = match kind {
+            Kind::Dir => (None, None),
+            Kind::File if access::is_image(&real) => (Some(access::Render::Image), None),
+            Kind::File => {
+                let text = access::read_text(&real).map_err(|d| ReaderError::denied(&d, &real))?;
+                let head = text.text.as_bytes();
+                let render = access::render_of(&real, Some(&head[..access::SNIFF_BYTES.min(head.len())]))
+                    .map_err(|d| ReaderError::denied(&d, &real))?;
+                (Some(render), Some(text))
+            }
         };
         let read_ms = started.elapsed().as_millis();
         let watch_started = std::time::Instant::now();
@@ -173,6 +188,8 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
             root: access::real_root(&root).display().to_string(),
             path: real.display().to_string(),
             kind,
+            render,
+            ext: access::ext_of(&real),
             text,
         })
     })
@@ -187,9 +204,11 @@ pub async fn reader_read_text(app: tauri::AppHandle, path: String) -> Result<Tex
         let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
         if kind != Kind::File {
-            return Err(ReaderError::denied(&Denied::NotMarkdown, &real));
+            // Its own code: a folder is not "not a text file". Reusing the text refusal here was a misuse from
+            // the start, and it is webview-only — it never crosses the CLI wire — so a new code costs nothing.
+            return Err(ReaderError::new("not_file", format!("Not a file: {}", real.display())));
         }
-        access::read_markdown(&real).map_err(|d| ReaderError::denied(&d, &real))
+        access::read_text(&real).map_err(|d| ReaderError::denied(&d, &real))
     })
     .await
 }
@@ -209,8 +228,28 @@ pub async fn reader_list_dir(app: tauri::AppHandle, path: String) -> Result<DirL
     .await
 }
 
-/// One folder for the tree (R35): folders and markdown only, no dot-names or build output, folders first, symlinks
-/// followed only to where the reader may go.
+/// Whether a file's head reads as text, for the tree's filter (R8).
+///
+/// Reads at most `SNIFF_BYTES`, not the file: a video sitting in a folder must cost one page, not its whole
+/// length. An unreadable file answers false, so a permission error omits one row instead of failing the listing.
+fn reads_as_text(real: &Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(real) else {
+        return false;
+    };
+    let mut head = [0u8; access::SNIFF_BYTES];
+    match file.read(&mut head) {
+        Ok(read) => access::sniff(&head[..read]) == access::Content::Text,
+        Err(_) => false,
+    }
+}
+
+/// One folder for the tree (R35, R8): everything the reader can open, no dot-names or build output, folders first,
+/// symlinks followed only to where the reader may go.
+///
+/// Binaries are omitted rather than greyed out: a greyed row needs a third tree state and names a file that
+/// cannot be opened at all. A file over `MAX_TEXT_BYTES` is still listed — hiding a file Miguel can see in Finder
+/// is worse than a clear refusal when he clicks it.
 pub fn list_dir(dir: &Path, permitted: &dyn Fn(&Path) -> bool, cap: usize) -> std::io::Result<DirListing> {
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(dir)?.flatten() {
@@ -221,9 +260,16 @@ pub fn list_dir(dir: &Path, permitted: &dyn Fn(&Path) -> bool, cap: usize) -> st
         let Ok((real, kind)) = access::resolve(&entry.path()) else {
             continue;
         };
-        if permitted(&real) {
-            entries.push(DirEntry { name, path: real.display().to_string(), kind });
+        if !permitted(&real) {
+            continue;
         }
+        // The sniff comes last, after every cheap filter, so most entries never cost a read. An image answers by
+        // its extension, so a folder of screenshots reads nothing. Only the head is read: reading whole files to
+        // list a folder would be absurd, and this runs inside `off_main`, never on the main thread.
+        if kind == Kind::File && !access::is_image(&real) && !reads_as_text(&real) {
+            continue;
+        }
+        entries.push(DirEntry { name, path: real.display().to_string(), kind });
     }
     entries.sort_by(|a, b| (a.kind != Kind::Dir).cmp(&(b.kind != Kind::Dir)).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
     let more = entries.len().saturating_sub(cap);
@@ -381,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_lists_folders_then_markdown_without_hidden_or_build_output() {
+    fn a_folder_lists_folders_then_every_openable_file_without_hidden_or_build_output() {
         let dir = tempfile::tempdir().unwrap();
         let base = fs::canonicalize(dir.path()).unwrap();
         let root = base.join("root");
@@ -397,12 +443,18 @@ mod tests {
         let permitted = |p: &Path| access::inside(p, &root);
         let listing = list_dir(&root, &permitted, LIST_CAP).unwrap();
         let names: Vec<&str> = listing.entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names, ["b", "z", "A.md", "alias.md", "c.MDX"]);
-        assert_eq!(listing.entries[3].path, root.join("A.md").display().to_string());
+        // Folders first, then every openable file: `notes.txt` is listed now (R8). Still absent, each for its own
+        // reason: `build` and `node_modules` by name, `.hidden.md` and `.git` by the dot rule, and `out.md`
+        // because its target leaves the root.
+        assert_eq!(names, ["b", "z", "A.md", "alias.md", "c.MDX", "notes.txt"]);
+        // Found by name, not by index: an index asserts the sort order a second time and then breaks for the
+        // wrong reason when the list changes.
+        let a_md = listing.entries.iter().find(|e| e.name == "A.md").expect("A.md is listed");
+        assert_eq!(a_md.path, root.join("A.md").display().to_string());
         assert_eq!(listing.more, 0);
 
         let capped = list_dir(&root, &permitted, 2).unwrap();
-        assert_eq!((capped.entries.len(), capped.more), (2, 3));
+        assert_eq!((capped.entries.len(), capped.more), (2, 4));
     }
 
     #[test]

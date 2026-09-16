@@ -144,7 +144,8 @@ describe("kinas open, help and usage", () => {
     const readme = realpathSync.native(join(w.acme, "README.md"));
     expect(await kinas(["open", join(w.acme, "README.md")], w.env)).toMatchObject({ code: 0, stdout: `${readme}\n` });
     expect(await kinas(["open", join(w.acme, "nope.md")], w.env)).toMatchObject({ code: 66, stdout: "" });
-    expect((await kinas(["open", join(w.acme, "src/index.ts")], w.env)).code).toBe(65);
+    // A .ts file is text, so it opens (R1). This is the end-to-end proof of the widening: the real CLI, a real tree.
+    expect((await kinas(["open", join(w.acme, "src/index.ts")], w.env)).code).toBe(0);
     expect(await kinas(["open"], w.env)).toMatchObject({ code: 66, stdout: "" });
     expect((await kinas(["open", "a.md", "b.md"], w.env)).code).toBe(64);
   });

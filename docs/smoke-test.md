@@ -108,21 +108,35 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
       `automated (reader.e2e.ts, AC-3)`
 - [x] An append is on screen in under 1 s without redrawing the diagram; a growing file stays at the bottom; a
       rename over the file and a removal are followed — `automated (reader.e2e.ts, AC-2)`
-- [x] `kinas open ~/.zshrc` → 65; `/tmp/x.md` → 77 with one line; a symlink out of the root → 77; a missing file
-      → 66 and nothing is created — `automated (reader.e2e.ts, AC-4; cli/src/open.test.ts)`
+- [x] `kinas open fixtures/reader/binary.bin` → 65 with one line (`~/.zshrc` used to be the 65 case and now opens:
+      it is text); `/tmp/x.md` → 77 with one line; a symlink out of the root → 77; a missing file → 66 and nothing
+      is created — `automated (reader.e2e.ts, AC-4; cli/src/open.test.ts)`
+- [x] `kinas open 0008_funnel_stage.sql` from an unrelated folder opens it as source: `data-render="source"`, the
+      code element carries `language-sql`, and no Contents rail appears because source has no headings. A plain
+      `.txt` opens the same way with no language class — `automated (reader.e2e.ts)`, and both confirmed on the
+      installed build 2026-09-16 (`.sql` exit 0, `binary.bin` exit 65)
+- [x] The file tree lists every openable file plus images and omits binaries; an empty folder reads `Nothing to
+      open in <folder>` — `automated (reader.e2e.ts; mod.rs list_dir tests)`
 - [x] `--anywhere` shows the card, Enter in the terminal does not accept it, Open does —
       `automated (reader.e2e.ts, AC-5)`
 - [x] Script, `onerror`, `javascript:` links and remote images in a file do nothing — `automated (reader.e2e.ts, AC-6)`
 - [x] Open in editor splits the focused Herdr pane with the editor on the file; with no Herdr it says so —
       `automated (reader-editor.e2e.ts, AC-7)`, in the throwaway session `kinas-e2e-editor`
-- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 39 ms**
-      over 5 opens (42, 39, 37, 40, 37) on the build from `16dad3b`, with `read in 0 ms, watch in 0–1 ms`
+- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 30 ms**
+      over 5 opens (41, 35, 30, 28, 29) on the build from `96892b0`, with `read in 0 ms, watch in 0–1 ms`
       throughout — `passed by agent` 2026-09-16. **The installed bundle must be ad-hoc signed**
       (`codesign --force --deep --sign - /Applications/Kinas.app`): unsigned, a freshly copied bundle's first file
       read is held by macOS for minutes. **Wait the cold read out and measure only warm opens.** It has run 1 s,
-      21 s and 82 s on three installs of the same bundle, growing each time it was re-copied and re-signed, because
-      macOS assesses the new code. The window stays usable while it happens, since reads are off the main thread
+      19 s, 21 s and 82 s across installs, growing when the same bundle is re-copied and re-signed, because macOS
+      assesses the new code. The window stays usable while it happens, since reads are off the main thread
       (PRD R9, amended); the median above is what an open costs in use
+- [x] **Measure from a log this run owns.** Empty `~/Library/Logs/ai.sintralabs.kinas/kinas.log` immediately before
+      the first open, and count matching lines — never line offsets (the logger discards the file when it outgrows
+      its cap) and never timestamps (the app stamps UTC, `date` prints local: an hour apart here). An install
+      failed for a fourth reason on 2026-09-16 — the baseline already held ten `plan-300` renders from the e2e, so
+      the count could not grow past it and the gate read that as "never rendered", while the same bundle run in
+      place rendered in 1332 ms. Keep the CLI's exit code and stderr too: discarding them cost a whole diagnosis
+      cycle, because nothing distinguished "the request never arrived" from "it arrived and hung"
 - [ ] Edit a plan in vim in a Herdr pane beside the reader and save three times: the page updates each time with
       no blank frame and no diagram flash — `outstanding — needs Miguel`
 - [ ] Open in editor from a plan in your own `default` session opens vim in a new pane beside the focused one —

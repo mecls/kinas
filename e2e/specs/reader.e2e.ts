@@ -210,7 +210,10 @@ describe("kinas open and the reader", () => {
     const outside = kinas("../outside/x.md");
     expect(outside.code).toBe(77);
     expect(outside.stderr.trim().split("\n")).toEqual([`kinas open: ${realpathSync(join(dataDir, "outside/x.md"))} is outside ${root}; add --anywhere to ask Kinas to open it`]);
-    expect(kinas("notes.txt").code).toBe(65);
+    // 65 is now "not a text file": binary content, or not a regular file. `notes.txt` opens, and has its own case.
+    const binary = kinas("binary.bin");
+    expect(binary.code).toBe(65);
+    expect(binary.stderr.trim().split("\n")).toEqual([`kinas open: ${join(root, "binary.bin")} is not a text file`]);
     expect(kinas("link-out.md").code).toBe(77);
     expect(kinas("missing.md").code).toBe(66);
     expect(existsSync(join(root, "missing.md"))).toBe(false);
@@ -286,6 +289,50 @@ describe("kinas open and the reader", () => {
 
     await browser.execute(() => document.querySelector<HTMLButtonElement>(".reader-picks .reader-pick")!.click());
     await waitForHeader("two/dup.md");
+  });
+
+  it("opens a .sql and a .txt as source, with no Contents rail", async () => {
+    // The file that started this build: `kinas open 0008_funnel_stage.sql` printed "is not a .md or .mdx file"
+    // and exited 65. Run from /private/tmp, so the name is searched for under the projects folder as well.
+    const fromElsewhere = (...args: string[]) => {
+      const result = spawnSync(CLI, ["open", ...args], { cwd: "/private/tmp", env: process.env, encoding: "utf8", timeout: 20000 });
+      return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+    };
+    expect(fromElsewhere("0008_funnel_stage.sql")).toMatchObject({ code: 0, stdout: `${join(root, "0008_funnel_stage.sql")}\n` });
+    await waitForHeader("0008_funnel_stage.sql");
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered]") !== null, "the .sql never finished rendering");
+
+    // Every page fact in one call: a `$` lookup costs about 5 s here, and a handful runs past mocha's timeout.
+    const sql = await browser.execute(() => ({
+      render: document.querySelector(".reader-doc")?.getAttribute("data-render") ?? null,
+      source: document.querySelector(".reader-source") !== null,
+      language: document.querySelector(".reader-source code")?.className ?? "",
+      text: document.querySelector(".reader-source")?.textContent ?? "",
+      // A source file has no headings, so the rail must not appear (R28). This is what would catch source
+      // accidentally routing through renderMarkdown.
+      contents: document.querySelector(".reader-contents") !== null,
+      frontmatter: document.querySelector(".reader-frontmatter") !== null,
+    }));
+    expect(sql.render).toBe("source");
+    expect(sql.source).toBe(true);
+    expect(sql.language).toBe("language-sql");
+    expect(sql.text).toContain("alter table leads");
+    expect(sql.text).toContain("create index leads_by_stage");
+    expect(sql.contents).toBe(false);
+    expect(sql.frontmatter).toBe(false);
+
+    // The fixture that used to assert its own refusal. No extension the table knows, so no language class.
+    expect(kinas("notes.txt")).toMatchObject({ code: 0, stdout: `${join(root, "notes.txt")}\n` });
+    await waitForHeader("notes.txt");
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered]") !== null, "notes.txt never finished rendering");
+    const txt = await browser.execute(() => ({
+      render: document.querySelector(".reader-doc")?.getAttribute("data-render") ?? null,
+      language: document.querySelector(".reader-source code")?.className ?? "",
+      text: document.querySelector(".reader-source")?.textContent ?? "",
+    }));
+    expect(txt.render).toBe("source");
+    expect(txt.language).toBe("");
+    expect(txt.text).toContain("A plain text file, opened as source.");
   });
 
   it("AC-6: nothing in a file runs, navigates or fetches", async () => {

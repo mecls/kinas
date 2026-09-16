@@ -1,1 +1,11 @@
-Not markdown: `kinas open notes.txt` exits 65.
+A plain text file, opened as source.
+
+This fixture used to say the opposite: `kinas open notes.txt` exited 65, because the
+reader read only .md and .mdx. It is the file the widening is measured against, so its
+text says what is true now rather than what used to be.
+
+No extension the reader knows, no highlighter language, no headings — so the Contents
+rail stays away and the page is monospace, wrapped in nothing.
+
+Tabs	survive.
+So do trailing spaces and a final newline.

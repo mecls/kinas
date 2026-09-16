@@ -115,10 +115,14 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
 - [x] Script, `onerror`, `javascript:` links and remote images in a file do nothing — `automated (reader.e2e.ts, AC-6)`
 - [x] Open in editor splits the focused Herdr pane with the editor on the file; with no Herdr it says so —
       `automated (reader-editor.e2e.ts, AC-7)`, in the throwaway session `kinas-e2e-editor`
-- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 38 ms**
-      over 5 opens (28, 65, 38, 38, 24); the first, cold open read in 1044 ms and rendered in 1483 ms — `passed by
-      agent` 2026-09-16. **The installed bundle must be ad-hoc signed** (`codesign --force --deep --sign -
-      /Applications/Kinas.app`): unsigned, a freshly copied bundle's first file read is held by macOS for minutes
+- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 39 ms**
+      over 5 opens (42, 39, 37, 40, 37) on the build from `16dad3b`, with `read in 0 ms, watch in 0–1 ms`
+      throughout — `passed by agent` 2026-09-16. **The installed bundle must be ad-hoc signed**
+      (`codesign --force --deep --sign - /Applications/Kinas.app`): unsigned, a freshly copied bundle's first file
+      read is held by macOS for minutes. **Wait the cold read out and measure only warm opens.** It has run 1 s,
+      21 s and 82 s on three installs of the same bundle, growing each time it was re-copied and re-signed, because
+      macOS assesses the new code. The window stays usable while it happens, since reads are off the main thread
+      (PRD R9, amended); the median above is what an open costs in use
 - [ ] Edit a plan in vim in a Herdr pane beside the reader and save three times: the page updates each time with
       no blank frame and no diagram flash — `outstanding — needs Miguel`
 - [ ] Open in editor from a plan in your own `default` session opens vim in a new pane beside the focused one —

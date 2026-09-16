@@ -155,12 +155,23 @@ export interface ReaderText {
   size: number;
 }
 
+/**
+ * How the reader shows a document (R2). Rust decides this, next to the read that produced the bytes, because
+ * `"html"` is the difference between escaping text and executing code — the webview is what that protects, so the
+ * webview does not get to choose.
+ */
+export type ReaderRender = "markdown" | "source" | "html" | "image";
+
 export interface ReaderDoc {
   path: string;
   display_path: string;
   /** The projects root's real path, for links that start with `/`. */
   root: string;
   kind: ReaderKind;
+  /** Null for a folder, which has no document to render. */
+  render: ReaderRender | null;
+  /** The lowercased extension, or file name when there is none, so a highlighter can be chosen (R11). */
+  ext: string;
   text: ReaderText | null;
 }
 

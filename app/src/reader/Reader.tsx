@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   openExternal,
+  type ReaderRender,
   type ReaderShow,
   onReaderChanged,
   readerAllowClick,
@@ -15,9 +16,11 @@ import {
   readerRendered,
 } from "../api.ts";
 import type { FrontmatterView } from "./frontmatter.ts";
+import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
 import { cachedSvg, renderDiagram } from "./mermaid.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
+import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
 
 // The reader (tasks/prd-kinas-open.md): the file `kinas open` named, beside the terminal. It only reads. Opening,
@@ -34,7 +37,31 @@ interface Doc {
   root: string;
   hash: string;
   lines: number;
+  /** How Rust said to show it (R2), kept so a reload renders the same way without asking again. */
+  render: ReaderRender;
+  /** The lowercased extension, for the highlighter's language. */
+  ext: string;
   rendered: Rendered;
+}
+
+/**
+ * One document, rendered the way Rust said to (R2).
+ *
+ * Rust decides the mode, because `"html"` is the difference between escaping text and executing code; this only
+ * dispatches on the answer. Every branch returns the same `Rendered` shape, which is why `swapBody`, `hydrate`,
+ * the layout effect and the Contents gate need no knowledge of modes at all.
+ */
+function renderDoc(text: string, render: ReaderRender, ext: string, path: string): Rendered {
+  switch (render) {
+    case "markdown":
+      return renderMarkdown(text);
+    case "image":
+      return renderImage(path);
+    // The preview lands in task 7.0; until then HTML is read as what it is, which is also its Source view.
+    case "html":
+    case "source":
+      return renderSource(text, languageFor(ext));
+  }
 }
 
 interface Pending {
@@ -177,6 +204,31 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
       try {
         const opened = await readerOpen(path);
         if (gen !== generation.current) return;
+        // An image before the no-text check: `reader_open` sends an image's mode and no text, and without this
+        // every `.png` named on the command line would open the file tree instead of the image.
+        if (opened.kind === "file" && opened.render === "image") {
+          const previous = docRef.current;
+          if (opts.push && previous && previous.path !== opened.path) {
+            setBack((b) => [...b, { path: previous.path, scrollTop: scroller.current?.scrollTop ?? 0 }].slice(-BACK_CAP));
+          }
+          pending.current = { mode: "new", fragment: null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
+          const next: Doc = {
+            path: opened.path,
+            displayPath: opened.display_path,
+            root: opened.root,
+            hash: opened.path,
+            lines: 0,
+            render: "image",
+            ext: opened.ext,
+            rendered: renderDoc("", "image", opened.ext, opened.path),
+          };
+          docRef.current = next;
+          setDoc(next);
+          setProblem(null);
+          setOpening(null);
+          setStatus((s) => (s?.sticky ? null : s));
+          return;
+        }
         if (opened.kind === "dir" || !opened.text) {
           await openFolder(opened.path);
           return;
@@ -187,13 +239,17 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           setBack((b) => [...b, { path: previous.path, scrollTop }].slice(-BACK_CAP));
         }
         pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
+        // A file always carries a mode; only a folder has none, and that returned above.
+        const render = opened.render ?? "source";
         const next: Doc = {
           path: opened.path,
           displayPath: opened.display_path,
           root: opened.root,
           hash: opened.text.hash,
           lines: opened.text.text.split("\n").length,
-          rendered: renderMarkdown(opened.text.text),
+          render,
+          ext: opened.ext,
+          rendered: renderDoc(opened.text.text, render, opened.ext, opened.path),
         };
         docRef.current = next;
         setDoc(next);
@@ -204,7 +260,9 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
         if (gen !== generation.current) return;
         const error = readerErrorOf(e);
         setOpening(null);
-        if (error.code === "too_large" || error.code === "not_utf8") {
+        // `not_markdown` joins these: a binary clicked in the tree must say so and stay said. A six-second status
+        // line that vanishes would leave the reader blank with no explanation of why.
+        if (error.code === "too_large" || error.code === "not_utf8" || error.code === "not_markdown") {
           docRef.current = null;
           setDoc(null);
           setProblem({ displayPath: path, message: error.message });
@@ -377,7 +435,13 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
         setStatus((s) => (s?.sticky ? null : s));
         if (text.hash === latest.hash) return;
         pending.current = { mode: "reload" };
-        const next: Doc = { ...latest, hash: text.hash, lines: text.text.split("\n").length, rendered: renderMarkdown(text.text) };
+        // The same mode the open used: a `.sql` saved in the pane beside the reader must not come back as markdown.
+        const next: Doc = {
+          ...latest,
+          hash: text.hash,
+          lines: text.text.split("\n").length,
+          rendered: renderDoc(text.text, latest.render, latest.ext, latest.path),
+        };
         docRef.current = next;
         setDoc(next);
       } catch (e) {
@@ -617,7 +681,9 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           {opening && !doc && <p className="reader-note">Opening {opening}…</p>}
           {problem && <p className="reader-problem">{problem.message}</p>}
           {!doc && !problem && !opening && folder && <p className="reader-note">Choose a file</p>}
-          <article className="reader-doc" ref={article} hidden={!doc}>
+          {/* data-render carries the mode to the stylesheet (source and images are not capped at a prose measure)
+              and to the e2e, which asserts how a file opened. */}
+          <article className="reader-doc" data-render={doc?.render} ref={article} hidden={!doc}>
             {doc?.rendered.frontmatter && <FrontmatterCard view={doc.rendered.frontmatter} />}
             <div className="reader-body" ref={body} />
           </article>

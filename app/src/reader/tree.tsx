@@ -33,7 +33,7 @@ function Folder({ path, selected, onOpen, top = false }: { path: string; selecte
 
   if (listing === "loading") return <li className="tree-note">Loading…</li>;
   if ("error" in listing) return <li className="tree-note">Could not read this folder</li>;
-  if (top && listing.entries.length === 0) return <li className="tree-note">No markdown files in {baseName(path)}</li>;
+  if (top && listing.entries.length === 0) return <li className="tree-note">Nothing to open in {baseName(path)}</li>;
   return (
     <>
       {listing.entries.map((entry) =>

@@ -276,6 +276,34 @@
   overflow-wrap: break-word;
 }
 
+/* 72ch is a measure for prose. Source wants the width it has, and code must not be reflowed to fit a column. */
+.reader-doc[data-render="source"],
+.reader-doc[data-render="html"],
+.reader-doc[data-render="image"] {
+  max-width: none;
+}
+
+/*
+ * The source view is the whole page, not a block inside one, so it reuses `.reader-body pre`'s mono and scrolling
+ * and drops the border, background and padding that frame a snippet within prose.
+ */
+.reader-source {
+  overflow-x: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  tab-size: 2;
+  white-space: pre;
+}
+
+/* An image opened as the document: shown at its own size, never stretched, and never wider than the reader. */
+.reader-image img {
+  max-width: 100%;
+  height: auto;
+}
+
 .reader-frontmatter {
   margin: 0 0 20px;
   padding: 12px 14px;

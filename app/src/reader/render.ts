@@ -45,7 +45,13 @@ export function hashText(text: string): string {
 }
 
 const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
-const escape = md.utils.escapeHtml;
+/**
+ * markdown-it's own HTML escaper, exported so `source.ts` uses this one rather than a second implementation.
+ *
+ * A source view is nothing but escaping: the file's bytes go into a `<pre>` and must come out as text, including
+ * `<script>` and `onerror=`. One escaper, used everywhere, is the only version of that worth having.
+ */
+export const escape = md.utils.escapeHtml;
 
 const inlineText = (token: Token | undefined) =>
   (token?.children ?? [])

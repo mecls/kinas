@@ -155,7 +155,14 @@ pub fn start(app: AppHandle, dir: &Path) {
     let spawned = std::thread::Builder::new().name("reader-socket".into()).spawn(move || {
         for stream in listener.incoming() {
             match stream {
-                Ok(stream) => serve(&app, stream),
+                // One thread per request: a request stuck on the disk (a macOS privacy prompt for ~/Documents, found
+                // on the first prod install) must not hold up every `kinas open` after it.
+                Ok(stream) => {
+                    let app = app.clone();
+                    if let Err(e) = std::thread::Builder::new().name("reader-request".into()).spawn(move || serve(&app, stream)) {
+                        log::warn!("reader socket: could not start a request thread: {e}");
+                    }
+                }
                 Err(e) => log::warn!("reader socket: {e}"),
             }
         }
@@ -186,7 +193,10 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
         let _ = writeln!(stream, "{json}");
     }
     if let Some(event) = event {
-        crate::system::bring_forward(app);
+        // Dispatched, never waited on: window calls from this thread block until the main thread runs them, and on the
+        // first prod install the main thread was stuck in a file read, so the socket stopped answering altogether.
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || crate::system::bring_forward(&handle));
         let _ = app.emit(READER_SHOW, event);
     }
 }

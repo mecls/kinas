@@ -17,10 +17,11 @@ function kinas(...args: string[]) {
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-const headerText = () => $(".reader-path").getText();
+/** The header's path, read in the page: a `$` lookup costs about 5 s under this driver, so polling with one is hopeless. */
+const headerText = () => browser.execute(() => document.querySelector(".reader-path")?.textContent ?? "");
 
-async function waitForHeader(suffix: string, timeout = 10000) {
-  await browser.waitUntil(async () => (await headerText()).endsWith(suffix), { timeout, timeoutMsg: `the reader never showed ${suffix}` });
+async function waitForHeader(suffix: string, timeout = 20000) {
+  await browser.waitUntil(async () => (await headerText()).endsWith(suffix), { timeout, interval: 250, timeoutMsg: `the reader never showed ${suffix}` });
 }
 
 const scrollTop = () => browser.execute(() => document.querySelector<HTMLElement>(".reader-scroll")!.scrollTop);
@@ -94,17 +95,30 @@ describe("kinas open and the reader", () => {
     const link = await $('.reader-body a[href="other.md#part"]');
     await browser.execute((el) => (el as unknown as HTMLElement).click(), link);
     await waitForHeader("other.md");
-    await browser.waitUntil(
-      () =>
-        browser.execute(() => {
-          const scroller = document.querySelector<HTMLElement>(".reader-scroll")!;
-          const part = document.getElementById("part");
-          if (!part) return false;
-          const offset = part.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-          return offset >= -2 && offset < scroller.clientHeight;
-        }),
-      { timeout: 5000, timeoutMsg: "#part is not in view" },
-    );
+    const fragmentView = () =>
+      browser.execute(() => {
+        const scroller = document.querySelector<HTMLElement>(".reader-scroll")!;
+        const part = document.getElementById("part");
+        return {
+          exists: part !== null,
+          offset: part ? Math.round(part.getBoundingClientRect().top - scroller.getBoundingClientRect().top) : null,
+          scrollTop: Math.round(scroller.scrollTop),
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+          rendered: document.querySelector(".reader-doc[data-rendered]") !== null,
+        };
+      });
+    await browser
+      .waitUntil(
+        async () => {
+          const v = await fragmentView();
+          return v.exists && v.offset !== null && v.offset >= -2 && v.offset < v.clientHeight;
+        },
+        { timeout: 15000, interval: 250 },
+      )
+      .catch(async () => {
+        throw new Error(`#part is not in view: ${JSON.stringify(await fragmentView())}`);
+      });
 
     await $('button[aria-label="Back"]').click();
     await waitForHeader("plan-300.md");

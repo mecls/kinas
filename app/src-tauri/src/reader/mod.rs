@@ -123,55 +123,90 @@ fn checked(state: &ReaderState, root: &Path, path: &str) -> Result<(PathBuf, Kin
     Ok((real, kind))
 }
 
+/// Runs a reader command's file work on a worker thread.
+///
+/// A sync Tauri command runs on the main thread. On the first prod install (2026-09-15) one read never returned, and
+/// that froze the window, the terminal pane with it, and — through the window call in the socket's handler — every
+/// `kinas open` after it. Nothing in the reader touches the disk on the main thread any more. A slow read is logged
+/// with its duration only: never a path or any file content (R9's privacy rule).
+async fn off_main<T: Send + 'static>(work: impl FnOnce() -> Result<T, ReaderError> + Send + 'static) -> Result<T, ReaderError> {
+    let started = std::time::Instant::now();
+    let finished = tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| ReaderError::new("internal", format!("the reader's file work did not finish: {e}")))?;
+    let ms = started.elapsed().as_millis();
+    if ms > 1000 {
+        log::warn!("reader: file work took {ms} ms");
+    }
+    finished
+}
+
 /// Opens a file (its text, R10) or a folder (no text) and records the file for `kinas open` with no path (R38).
 #[tauri::command]
-pub fn reader_open(app: tauri::AppHandle, state: State<'_, ReaderState>, path: String) -> Result<ReaderDoc, ReaderError> {
-    let root = crate::paths::projects_root();
-    let (real, kind) = checked(&state, &root, &path)?;
-    let text = match kind {
-        Kind::File => Some(access::read_markdown(&real).map_err(|d| ReaderError::denied(&d, &real))?),
-        Kind::Dir => None,
-    };
-    {
-        let mut inner = state.lock();
-        if kind == Kind::File {
-            inner.remember(real.clone());
-            // One watch at a time: the previous file's is dropped here (R29).
-            inner.watcher = watch::watch_file(app, real.clone());
+pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDoc, ReaderError> {
+    off_main(move || {
+        let state = app.state::<ReaderState>();
+        let root = crate::paths::projects_root();
+        let (real, kind) = checked(&state, &root, &path)?;
+        // Each step is timed on its own, so a repeat of the freeze says in the log which one blocked.
+        let started = std::time::Instant::now();
+        let text = match kind {
+            Kind::File => Some(access::read_markdown(&real).map_err(|d| ReaderError::denied(&d, &real))?),
+            Kind::Dir => None,
+        };
+        let read_ms = started.elapsed().as_millis();
+        let watch_started = std::time::Instant::now();
+        {
+            let mut inner = state.lock();
+            if kind == Kind::File {
+                inner.remember(real.clone());
+                // One watch at a time: the previous file's is dropped here (R29).
+                inner.watcher = watch::watch_file(app.clone(), real.clone());
+            }
+            if inner.pending_confirm.as_deref() == Some(real.as_path()) {
+                inner.pending_confirm = None;
+            }
         }
-        if inner.pending_confirm.as_deref() == Some(real.as_path()) {
-            inner.pending_confirm = None;
-        }
-    }
-    Ok(ReaderDoc {
-        display_path: access::display_path(&real, &root, &home()),
-        root: access::real_root(&root).display().to_string(),
-        path: real.display().to_string(),
-        kind,
-        text,
+        log::info!("reader: read in {read_ms} ms, watch in {} ms", watch_started.elapsed().as_millis());
+        Ok(ReaderDoc {
+            display_path: access::display_path(&real, &root, &home()),
+            root: access::real_root(&root).display().to_string(),
+            path: real.display().to_string(),
+            kind,
+            text,
+        })
     })
+    .await
 }
 
 /// The open file again, for a live reload (R30).
 #[tauri::command]
-pub fn reader_read_text(state: State<'_, ReaderState>, path: String) -> Result<Text, ReaderError> {
-    let root = crate::paths::projects_root();
-    let (real, kind) = checked(&state, &root, &path)?;
-    if kind != Kind::File {
-        return Err(ReaderError::denied(&Denied::NotMarkdown, &real));
-    }
-    access::read_markdown(&real).map_err(|d| ReaderError::denied(&d, &real))
+pub async fn reader_read_text(app: tauri::AppHandle, path: String) -> Result<Text, ReaderError> {
+    off_main(move || {
+        let state = app.state::<ReaderState>();
+        let root = crate::paths::projects_root();
+        let (real, kind) = checked(&state, &root, &path)?;
+        if kind != Kind::File {
+            return Err(ReaderError::denied(&Denied::NotMarkdown, &real));
+        }
+        access::read_markdown(&real).map_err(|d| ReaderError::denied(&d, &real))
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn reader_list_dir(state: State<'_, ReaderState>, path: String) -> Result<DirListing, ReaderError> {
-    let root = crate::paths::projects_root();
-    let (real, kind) = checked(&state, &root, &path)?;
-    if kind != Kind::Dir {
-        return Err(ReaderError::new("not_dir", format!("Not a folder: {}", real.display())));
-    }
-    let allowed = state.lock().allowed.clone();
-    list_dir(&real, &|p| access::permitted(p, &root, &allowed), LIST_CAP).map_err(|e| ReaderError::new("unreadable", format!("Could not read this folder: {e}")))
+pub async fn reader_list_dir(app: tauri::AppHandle, path: String) -> Result<DirListing, ReaderError> {
+    off_main(move || {
+        let state = app.state::<ReaderState>();
+        let root = crate::paths::projects_root();
+        let (real, kind) = checked(&state, &root, &path)?;
+        if kind != Kind::Dir {
+            return Err(ReaderError::new("not_dir", format!("Not a folder: {}", real.display())));
+        }
+        let allowed = state.lock().allowed.clone();
+        list_dir(&real, &|p| access::permitted(p, &root, &allowed), LIST_CAP).map_err(|e| ReaderError::new("unreadable", format!("Could not read this folder: {e}")))
+    })
+    .await
 }
 
 /// One folder for the tree (R35): folders and markdown only, no dot-names or build output, folders first, symlinks
@@ -198,11 +233,15 @@ pub fn list_dir(dir: &Path, permitted: &dyn Fn(&Path) -> bool, cap: usize) -> st
 
 /// An image a page shows (R20), as raw bytes for a Blob URL.
 #[tauri::command]
-pub fn reader_read_image(state: State<'_, ReaderState>, path: String) -> Result<tauri::ipc::Response, ReaderError> {
-    let root = crate::paths::projects_root();
-    let path = absolute(&path)?;
-    let allowed = state.lock().allowed.clone();
-    image_bytes(&path, &|p| access::permitted(p, &root, &allowed)).map(tauri::ipc::Response::new)
+pub async fn reader_read_image(app: tauri::AppHandle, path: String) -> Result<tauri::ipc::Response, ReaderError> {
+    off_main(move || {
+        let state = app.state::<ReaderState>();
+        let root = crate::paths::projects_root();
+        let path = absolute(&path)?;
+        let allowed = state.lock().allowed.clone();
+        image_bytes(&path, &|p| access::permitted(p, &root, &allowed)).map(tauri::ipc::Response::new)
+    })
+    .await
 }
 
 pub fn image_bytes(path: &Path, permitted: &dyn Fn(&Path) -> bool) -> Result<Vec<u8>, ReaderError> {
@@ -225,10 +264,16 @@ pub fn image_bytes(path: &Path, permitted: &dyn Fn(&Path) -> bool) -> Result<Vec
 
 /// Open or Dismiss on the confirmation card (R7). Only the exact pending path can be allowed.
 #[tauri::command]
-pub fn reader_confirm(state: State<'_, ReaderState>, path: String, allow: bool) -> Result<(), ReaderError> {
-    let given = absolute(&path)?;
-    let real = std::fs::canonicalize(&given).map_err(|_| ReaderError::denied(&Denied::Missing, &given))?;
-    confirm(&mut state.lock(), &real, allow)
+pub async fn reader_confirm(app: tauri::AppHandle, path: String, allow: bool) -> Result<(), ReaderError> {
+    off_main(move || {
+        let state = app.state::<ReaderState>();
+        let given = absolute(&path)?;
+        let real = std::fs::canonicalize(&given).map_err(|_| ReaderError::denied(&Denied::Missing, &given))?;
+        // The guard is bound, not a temporary in the tail expression: it must drop before `state` does.
+        let mut inner = state.lock();
+        confirm(&mut inner, &real, allow)
+    })
+    .await
 }
 
 pub fn confirm(inner: &mut Inner, real: &Path, allow: bool) -> Result<(), ReaderError> {
@@ -244,11 +289,15 @@ pub fn confirm(inner: &mut Inner, real: &Path, allow: bool) -> Result<(), Reader
 
 /// A link or tree click is Miguel's intent (R8): an existing markdown file or folder becomes allowed.
 #[tauri::command]
-pub fn reader_allow_click(state: State<'_, ReaderState>, path: String) -> Result<ClickTarget, ReaderError> {
-    let path = absolute(&path)?;
-    let (real, kind) = access::resolve(&path).map_err(|d| ReaderError::denied(&d, &path))?;
-    state.lock().allowed.insert(real.clone());
-    Ok(ClickTarget { path: real.display().to_string(), kind })
+pub async fn reader_allow_click(app: tauri::AppHandle, path: String) -> Result<ClickTarget, ReaderError> {
+    off_main(move || {
+        let state = app.state::<ReaderState>();
+        let path = absolute(&path)?;
+        let (real, kind) = access::resolve(&path).map_err(|d| ReaderError::denied(&d, &path))?;
+        state.lock().allowed.insert(real.clone());
+        Ok(ClickTarget { path: real.display().to_string(), kind })
+    })
+    .await
 }
 
 #[tauri::command]

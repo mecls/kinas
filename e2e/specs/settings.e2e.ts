@@ -96,6 +96,34 @@ describe("Settings from the sidebar, and its shortcuts", () => {
     await expect($(".rail")).toBeDisplayed();
   });
 
+  it("R1b: refuses a projects folder that does not exist, and stores one that does", async () => {
+    const field = 'input[aria-label="Projects folder"]';
+    const blur = () =>
+      browser.execute((sel: string) => {
+        const input = document.querySelector<HTMLInputElement>(sel)!;
+        input.focus();
+        input.blur();
+      }, field);
+    const stored = () =>
+      browser.execute(() =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<{ projects_root: string }> } }).__TAURI_INTERNALS__.invoke("get_settings").then((s) => s.projects_root),
+      );
+    const before = await stored();
+
+    await fill(field, "/nowhere/at/all");
+    await blur();
+    await expect($('[data-section="projects"] .settings-message')).toHaveText(expect.stringContaining("does not exist"));
+    expect(await stored()).toBe(before);
+
+    await fill(field, "/private/tmp");
+    await blur();
+    await browser.waitUntil(async () => (await stored()) === "/private/tmp", { timeout: 10000, timeoutMsg: "the projects folder was not stored" });
+    // Put it back, so the rest of the run sees the folder it started with.
+    await fill(field, before);
+    await blur();
+    await browser.waitUntil(async () => (await stored()) === before, { timeout: 10000, timeoutMsg: "the projects folder was not restored" });
+  });
+
   it("refuses a blank editor for Open in editor, and stores a real one", async () => {
     const field = 'input[aria-label="Editor for Open in editor"]';
     const blur = () =>

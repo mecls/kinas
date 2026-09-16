@@ -92,6 +92,7 @@ pub fn run() {
             commands::get_settings,
             commands::set_org_name,
             commands::set_reader_editor,
+            commands::set_projects_root,
             commands::set_menu_bar_quota,
             commands::set_global_hotkey,
             commands::set_launch_at_login,

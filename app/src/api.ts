@@ -109,12 +109,18 @@ export interface SettingsView {
   claude_hook: HookStatus;
   /** The command Open in editor runs in a new Herdr pane (reader R36). */
   reader_editor: string;
+  /** The projects folder the reader and the CLI work from (reader R1b). */
+  projects_root: string;
+  /** True when KINAS_ROOT overrides the saved folder, so the field is not in charge. */
+  projects_root_from_env: boolean;
 }
 
 export const getSettings = () => invoke<SettingsView>("get_settings");
 export const setOrgName = (name: string) => invoke<void>("set_org_name", { name });
 /** Rejected unless one line of 1–200 characters after trimming. */
 export const setReaderEditor = (value: string) => invoke<void>("set_reader_editor", { value });
+/** The projects folder (reader R1b): an absolute path that exists. Answers with the canonical path it stored. */
+export const setProjectsRoot = (path: string) => invoke<string>("set_projects_root", { path });
 export const setMenuBarQuota = (value: string) => invoke<void>("set_menu_bar_quota", { value });
 /** Rejected by the app unless the chord includes ⌘ (R30). */
 export const setGlobalHotkey = (chord: string) => invoke<void>("set_global_hotkey", { chord });
@@ -165,6 +171,8 @@ export interface ReaderShow {
   confirm: boolean;
   received_at_ms: number;
   root: string;
+  /** Several files matched the name: the reader lists these and opens none until one is clicked (R1b). */
+  pick?: string[];
 }
 
 export interface ReaderError {

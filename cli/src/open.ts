@@ -5,7 +5,8 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
 import net from "node:net";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
+import { findByName } from "./find.ts";
 
 export const OPEN_EXIT = { ok: 0, error: 1, notMarkdown: 65, noInput: 66, outside: 77 } as const;
 
@@ -14,7 +15,11 @@ export const ANSWER_TIMEOUT_MS = 2000;
 export const LAUNCH_TIMEOUT_MS = 15_000;
 const LAUNCH_POLL_MS = 100;
 
-export type Target = { ok: true; path: string; kind: "file" | "dir" } | { ok: false; exit: number; message: string };
+export type Target =
+  | { ok: true; path: string; kind: "file" | "dir" }
+  /** Several files carry that name: the reader shows a picker and opens nothing until Miguel chooses (R1b). */
+  | { ok: true; pick: string[] }
+  | { ok: false; exit: number; message: string };
 
 export function isMarkdown(path: string): boolean {
   return /\.mdx?$/i.test(path);
@@ -34,15 +39,40 @@ export function realRoot(root: string): string {
   }
 }
 
+/**
+ * Where an argument points (R1b, amended 2026-09-16): a path in the shell's folder, else the same path under the
+ * projects folder, else a markdown file of that name anywhere under it. So `kinas open reader.md` works from any
+ * folder, and nothing inside the projects folder ever needs a flag.
+ */
 export function resolveTarget(arg: string, opts: { cwd: string; root: string; anywhere: boolean }): Target {
-  const abs = resolve(opts.cwd, arg);
+  const root = realRoot(opts.root);
+  const tries = [resolve(opts.cwd, arg), ...(isAbsolute(arg) ? [] : [resolve(root, arg)])];
+  for (const candidate of tries) {
+    const found = at(candidate, root, opts.anywhere);
+    if (found) return found;
+  }
+  // Not a path anywhere: search the projects folder by name.
+  const matches = findByName(root, arg);
+  if (matches.length === 1) return at(matches[0]!.path, root, opts.anywhere) ?? missing(arg, root);
+  if (matches.length > 1) return { ok: true, pick: matches.map((m) => m.path) };
+  return missing(arg, root);
+}
+
+function missing(arg: string, root: string): Target {
+  return isAbsolute(arg) || arg.includes("/")
+    ? { ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no such file: ${arg.startsWith("/") ? arg : resolve(root, arg)}` }
+    : { ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no markdown file named ${arg} under ${root}` };
+}
+
+/** One candidate path, or null when nothing is there (so the next step may try). */
+function at(candidate: string, root: string, anywhere: boolean): Target | null {
   let real: string;
   try {
-    real = realpathSync.native(abs);
+    real = realpathSync.native(candidate);
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return { ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no such file: ${abs}` };
-    return { ok: false, exit: OPEN_EXIT.error, message: `kinas open: could not read ${abs}: ${(e as Error).message}` };
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    return { ok: false, exit: OPEN_EXIT.error, message: `kinas open: could not read ${candidate}: ${(e as Error).message}` };
   }
   const stat = statSync(real);
   const kind = stat.isDirectory() ? "dir" : "file";
@@ -50,17 +80,21 @@ export function resolveTarget(arg: string, opts: { cwd: string; root: string; an
   if (kind === "file" && (!stat.isFile() || !isMarkdown(real))) {
     return { ok: false, exit: OPEN_EXIT.notMarkdown, message: `kinas open: ${real} is not a .md or .mdx file` };
   }
-  const root = realRoot(opts.root);
-  if (!opts.anywhere && !insideRoot(real, root)) {
+  if (!anywhere && !insideRoot(real, root)) {
     return { ok: false, exit: OPEN_EXIT.outside, message: `kinas open: ${real} is outside ${root}; add --anywhere to ask Kinas to open it` };
   }
   return { ok: true, path: real, kind };
 }
 
-export type OpenRequest = { v: 1; op: "open"; path: string; anywhere: boolean } | { v: 1; op: "reopen" };
+export type OpenRequest =
+  | { v: 1; op: "open"; path: string; anywhere: boolean }
+  | { v: 1; op: "reopen" }
+  /** Several matches by name: the app shows a picker (R1b). */
+  | { v: 1; op: "pick"; paths: string[] };
 
 export type AppResponse =
   | { ok: true; result: "opened" | "confirm"; path: string }
+  | { ok: true; result: "pick"; paths: string[] }
   | { ok: false; code: string; error: string };
 
 export type Answer = { kind: "down" } | { kind: "silent" } | { kind: "failed"; message: string } | { kind: "answer"; body: AppResponse };
@@ -137,6 +171,10 @@ export function outcome(answer: Answer, ctx: { path: string | null; tty: boolean
   switch (answer.kind) {
     case "answer": {
       const body = answer.body;
+      if (body.ok && body.result === "pick") {
+        // Every match on stdout, so a script can see them; the reader waits for a click.
+        return { exit: OPEN_EXIT.ok, stdout: body.paths.join("\n"), stderr: `Kinas is asking which of the ${body.paths.length} files you mean` };
+      }
       if (body.ok) {
         return { exit: OPEN_EXIT.ok, stdout: body.path, stderr: body.result === "confirm" ? "Kinas is asking whether to open it" : null };
       }

@@ -45,6 +45,25 @@ export function openReadOnly(dir: string): OpenResult {
   return { ok: true, store };
 }
 
+/**
+ * One row of `settings`, read without opening the whole store: the CLI needs the projects folder the app's Settings
+ * page saved, and must work whether or not the app has ever run. Anything unreadable is `null`, never a failure.
+ */
+export function readSetting(dir: string, key: string): unknown {
+  const path = join(dir, DB_FILE);
+  if (!existsSync(path)) return null;
+  let db: Database | undefined;
+  try {
+    db = new Database(`file:${path}?mode=ro`, { readonly: true });
+    const row = db.query("SELECT value FROM settings WHERE key = ?1 LIMIT 1").get(key) as { value: string } | null;
+    return row ? JSON.parse(row.value) : null;
+  } catch {
+    return null;
+  } finally {
+    db?.close();
+  }
+}
+
 /** The stored `quotas.models` JSON; anything unreadable is no models, never a failed status. */
 export function parseModels(stored: string | null): ModelRequests[] {
   if (!stored) return [];

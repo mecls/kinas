@@ -197,6 +197,48 @@
   color: var(--gold);
 }
 
+/* Several files match a name: the list waits for a click (R1b). */
+.reader-picks {
+  max-width: 72ch;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.reader-picks-title {
+  margin: 0 0 8px;
+  color: var(--white);
+  font: 500 13px/1.4 var(--sans);
+}
+
+.reader-picks ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reader-pick {
+  display: block;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 6px;
+  background: transparent;
+  color: var(--ansi-bright-blue);
+  font: 12px/1.5 var(--mono);
+  text-align: left;
+  cursor: default;
+  overflow-wrap: anywhere;
+}
+
+.reader-pick:hover {
+  background: var(--line);
+  color: var(--white);
+}
+
 .reader-confirm {
   max-width: 72ch;
   margin: 0 0 18px;

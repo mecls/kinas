@@ -135,6 +135,8 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
   const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ path: string; root: string } | null>(null);
+  /** Several files matched a name: listed newest first, none opened until one is clicked (R1b). */
+  const [picks, setPicks] = useState<{ paths: string[]; root: string } | null>(null);
   const [status, setStatus] = useState<{ text: string; sticky: boolean } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [back, setBack] = useState<{ path: string; scrollTop: number }[]>([]);
@@ -345,6 +347,11 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
   // A `kinas open` request.
   useEffect(() => {
     if (!request) return;
+    if (request.pick && request.pick.length > 0) {
+      setPicks({ paths: request.pick, root: request.root });
+      return;
+    }
+    setPicks(null);
     if (request.confirm) {
       setConfirm({ path: request.path, root: request.root });
       return;
@@ -583,6 +590,28 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
                   Dismiss
                 </button>
               </div>
+            </div>
+          )}
+          {picks && (
+            <div className="reader-picks" role="group" aria-label="Several files match that name">
+              <p className="reader-picks-title">Which one? {picks.paths.length} files match, most recently changed first.</p>
+              <ul>
+                {picks.paths.map((path) => (
+                  <li key={path}>
+                    <button
+                      type="button"
+                      className="reader-pick"
+                      title={path}
+                      onClick={() => {
+                        setPicks(null);
+                        void show(path, { push: true });
+                      }}
+                    >
+                      {path.startsWith(`${picks.root}/`) ? path.slice(picks.root.length + 1) : path}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           {opening && !doc && <p className="reader-note">Opening {opening}…</p>}

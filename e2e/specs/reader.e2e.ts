@@ -1,6 +1,6 @@
 import { $, $$, browser, expect } from "@wdio/globals";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hook, waitForShell } from "../helpers.ts";
 
@@ -257,6 +257,35 @@ describe("kinas open and the reader", () => {
       throw new Error(`README.md is not selected in the tree: ${JSON.stringify(await tree())}`);
     });
     expect((await tree()).files).toContain("guide.md");
+  });
+
+  it("R1b: opens by bare name from an unrelated folder, and lists several matches without opening one", async () => {
+    // Run from /private/tmp, nowhere near the projects folder: the name is searched for under it.
+    const fromElsewhere = (...args: string[]) => {
+      const result = spawnSync(CLI, ["open", ...args], { cwd: "/private/tmp", env: process.env, encoding: "utf8", timeout: 20000 });
+      return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+    };
+    expect(fromElsewhere("other.md")).toMatchObject({ code: 0, stdout: `${join(root, "other.md")}\n` });
+    await waitForHeader("other.md");
+
+    // Two files of the same name: the reader lists them, newest first, and opens neither until one is clicked.
+    mkdirSync(join(root, "one"), { recursive: true });
+    mkdirSync(join(root, "two"), { recursive: true });
+    writeFileSync(join(root, "one/dup.md"), "# The older one\n");
+    writeFileSync(join(root, "two/dup.md"), "# The newer one\n");
+    utimesSync(join(root, "one/dup.md"), new Date(1_000_000), new Date(1_000_000));
+    utimesSync(join(root, "two/dup.md"), new Date(2_000_000), new Date(2_000_000));
+
+    const picked = fromElsewhere("dup");
+    expect(picked.code).toBe(0);
+    expect(picked.stdout.trim().split("\n")).toEqual([join(root, "two/dup.md"), join(root, "one/dup.md")]);
+    expect(picked.stderr).toContain("which of the 2 files");
+    await waitInPage(() => document.querySelectorAll(".reader-picks .reader-pick").length === 2, "the picker never listed both matches");
+    // toEndWith is Bun's matcher, not WebdriverIO's.
+    expect(await headerText()).toMatch(/other\.md$/);
+
+    await browser.execute(() => document.querySelector<HTMLButtonElement>(".reader-picks .reader-pick")!.click());
+    await waitForHeader("two/dup.md");
   });
 
   it("AC-6: nothing in a file runs, navigates or fetches", async () => {

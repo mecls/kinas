@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +18,48 @@ writeFileSync(join(base, "notasocket.sock"), "");
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
 const at = (arg: string, anywhere = false) => resolveTarget(arg, { cwd: root, root, anywhere });
+
+describe("resolving from any folder (R1b)", () => {
+  // Miguel's shell is somewhere else entirely; the projects folder is `root`.
+  const elsewhere = (arg: string) => resolveTarget(arg, { cwd: base, root, anywhere: false });
+
+  test("a path is tried in the shell's folder, then under the projects folder", () => {
+    expect(elsewhere("root/a.md")).toEqual({ ok: true, path: join(root, "a.md"), kind: "file" });
+    expect(elsewhere("docs")).toEqual({ ok: true, path: join(root, "docs"), kind: "dir" });
+  });
+
+  test("a bare name is searched for under the projects folder", () => {
+    expect(elsewhere("a.md")).toEqual({ ok: true, path: join(root, "a.md"), kind: "file" });
+    expect(elsewhere("a")).toEqual({ ok: true, path: join(root, "a.md"), kind: "file" });
+    expect(elsewhere("README.md")).toEqual({ ok: true, path: join(root, "docs/README.md"), kind: "file" });
+  });
+
+  test("a name that is also a path under the projects folder is taken as that path", () => {
+    // `a.md` sits at the top of the projects folder, so step 2 finds it and the search never runs.
+    expect(elsewhere("a.md")).toEqual({ ok: true, path: join(root, "a.md"), kind: "file" });
+  });
+
+  test("several matches are handed over as a picker, newest first", () => {
+    mkdirSync(join(root, "one"), { recursive: true });
+    mkdirSync(join(root, "two"), { recursive: true });
+    writeFileSync(join(root, "one/dup.md"), "# older\n");
+    writeFileSync(join(root, "two/dup.md"), "# newer\n");
+    // Distinct times, so "newest first" is being tested rather than the order the folders were walked in.
+    utimesSync(join(root, "one/dup.md"), new Date(1_000_000), new Date(1_000_000));
+    utimesSync(join(root, "two/dup.md"), new Date(2_000_000), new Date(2_000_000));
+    expect(elsewhere("dup.md")).toEqual({ ok: true, pick: [join(root, "two/dup.md"), join(root, "one/dup.md")] });
+    // Without the extension too, and the picker survives `--anywhere`.
+    expect(resolveTarget("dup", { cwd: base, root, anywhere: true })).toMatchObject({ ok: true, pick: [join(root, "two/dup.md"), join(root, "one/dup.md")] });
+    rmSync(join(root, "one"), { recursive: true });
+    rmSync(join(root, "two"), { recursive: true });
+  });
+
+  test("a name with no match says so and exits 66; a real path is judged as a path", () => {
+    expect(elsewhere("nothing.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no markdown file named nothing.md under ${root}` });
+    // `notes.txt` exists under the projects folder, so it is a path, and a path that is not markdown is 65.
+    expect(elsewhere("notes.txt")).toMatchObject({ ok: false, exit: OPEN_EXIT.notMarkdown });
+  });
+});
 
 describe("resolving a path", () => {
   test("a markdown file inside the root resolves to its real path", () => {
@@ -41,7 +83,9 @@ describe("resolving a path", () => {
   });
 
   test("a missing file is 66 and is never created", () => {
-    expect(at("new.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no such file: ${join(root, "new.md")}` });
+    // A bare name that is nowhere is reported as a name, not as one path that was tried (R1b).
+    expect(at("new.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no markdown file named new.md under ${root}` });
+    expect(at("./missing/new.md")).toEqual({ ok: false, exit: OPEN_EXIT.noInput, message: `kinas open: no such file: ${join(root, "missing/new.md")}` });
     expect(at("a.md/child.md")).toMatchObject({ ok: false, exit: OPEN_EXIT.noInput });
     expect(existsSync(join(root, "new.md"))).toBe(false);
   });

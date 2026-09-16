@@ -53,6 +53,10 @@ pub struct SettingsView {
     pub claude_hook: claude_plan::HookStatus,
     /// The command Open in editor runs in a new Herdr pane (reader R36).
     pub reader_editor: String,
+    /// The projects folder the reader and the CLI work from (reader R1b).
+    pub projects_root: String,
+    /// Set when `KINAS_ROOT` overrides the saved folder, so Settings can say the field is not in charge.
+    pub projects_root_from_env: bool,
 }
 
 /// Settings (§3.9): everything the Settings page shows. Never a secret.
@@ -88,6 +92,8 @@ pub fn get_settings(
         ollama_key_saved: keys.0.get(OLLAMA_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
         claude_hook: claude_plan::hook_status(control.data_dir(), now_ms()),
         reader_editor,
+        projects_root: crate::paths::projects_root(&store).display().to_string(),
+        projects_root_from_env: std::env::var("KINAS_ROOT").is_ok_and(|v| !v.trim().is_empty()),
     })
 }
 
@@ -99,6 +105,34 @@ pub fn set_org_name(store: State<'_, Store>, name: String) -> Result<(), String>
     }
     store.conn().execute("UPDATE orgs SET name = ?1 WHERE id = ?2", rusqlite::params![name, store.org_id()]).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The projects folder the reader and the CLI work from (reader R1b): an absolute path that exists, stored
+/// canonicalized. The CLI reads this same setting from the store, so `kinas open` follows it with Kinas quit.
+#[tauri::command]
+pub fn set_projects_root(store: State<'_, Store>, path: String) -> Result<String, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("the projects folder is empty".into());
+    }
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from("/"));
+    let expanded = if trimmed == "~" {
+        home
+    } else if let Some(rest) = trimmed.strip_prefix("~/") {
+        home.join(rest)
+    } else {
+        std::path::PathBuf::from(trimmed)
+    };
+    if !expanded.is_absolute() {
+        return Err(format!("{} is not an absolute path", expanded.display()));
+    }
+    let real = std::fs::canonicalize(&expanded).map_err(|_| format!("{} does not exist", expanded.display()))?;
+    if !real.is_dir() {
+        return Err(format!("{} is not a folder", real.display()));
+    }
+    let value = real.display().to_string();
+    system::put_setting(&store.conn(), store.org_id(), crate::paths::SETTING_KEY, &serde_json::json!(value)).map_err(|e| e.to_string())?;
+    Ok(value)
 }
 
 /// The command Open in editor runs (reader R36): one trimmed line of at most 200 characters.

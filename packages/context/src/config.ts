@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import { dataDir } from "@kinas/store/sqlite-readonly";
+import { dataDir, readSetting } from "@kinas/store/sqlite-readonly";
 
 export interface KinasConfig {
   org: string;
@@ -68,7 +68,11 @@ export function loadConfig(env: Env = process.env): KinasConfig {
     return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
   };
 
-  const root = expand(env.KINAS_ROOT || text("root") || "~/Documents/Projects/SintraLabs");
+  // The projects folder: KINAS_ROOT, then what the app's Settings page saved (read from the store, read-only, so it
+// works with Kinas quit), then this file's `root`, then the default (reader R1, amended 2026-09-16).
+  const saved = readSetting(dataDir(env), "projects_root");
+  const savedRoot = typeof saved === "string" && saved.trim() !== "" ? saved.trim() : undefined;
+  const root = expand(env.KINAS_ROOT || savedRoot || text("root") || "~/Documents/Projects/SintraLabs");
   return {
     org: text("org") ?? "SintraLabs",
     instance: text("instance") ?? "operations",

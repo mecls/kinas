@@ -35,6 +35,9 @@ struct Request {
     path: Option<String>,
     #[serde(default)]
     anywhere: bool,
+    /// `pick`: the matches the CLI found by name (R1b).
+    #[serde(default)]
+    paths: Vec<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -44,6 +47,8 @@ pub struct Response {
     result: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     path: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    paths: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,11 +57,15 @@ pub struct Response {
 
 impl Response {
     fn accepted(result: &'static str, path: &Path) -> Self {
-        Response { ok: true, result: Some(result), path: Some(path.display().to_string()), code: None, error: None }
+        Response { ok: true, result: Some(result), path: Some(path.display().to_string()), paths: Vec::new(), code: None, error: None }
+    }
+
+    fn picking(paths: Vec<String>) -> Self {
+        Response { ok: true, result: Some("pick"), path: None, paths, code: None, error: None }
     }
 
     fn refused(code: &'static str, error: String) -> Self {
-        Response { ok: false, result: None, path: None, code: Some(code), error: Some(error) }
+        Response { ok: false, result: None, path: None, paths: Vec::new(), code: Some(code), error: Some(error) }
     }
 
     fn bad_request() -> Self {
@@ -72,10 +81,24 @@ pub struct ShowEvent {
     pub received_at_ms: i64,
     /// The projects root's real path, which the confirmation card names (R7).
     pub root: String,
+    /// `pick`: the matches to list, newest first; the reader opens none of them until one is clicked (R1b).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub pick: Vec<String>,
 }
 
 fn show(path: &Path, kind: Kind, confirm: bool, received_at_ms: i64, root: &Path) -> Option<ShowEvent> {
-    Some(ShowEvent { path: path.display().to_string(), kind, confirm, received_at_ms, root: root.display().to_string() })
+    Some(ShowEvent { path: path.display().to_string(), kind, confirm, received_at_ms, root: root.display().to_string(), pick: Vec::new() })
+}
+
+fn show_pick(paths: Vec<String>, received_at_ms: i64, root: &Path) -> Option<ShowEvent> {
+    Some(ShowEvent {
+        path: String::new(),
+        kind: Kind::File,
+        confirm: false,
+        received_at_ms,
+        root: root.display().to_string(),
+        pick: paths,
+    })
 }
 
 /// One request against the root and this session's state. Pure apart from canonicalize and stat, so every branch
@@ -106,6 +129,30 @@ pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -
                     (Response::accepted("confirm", &real), show(&real, kind, true, received_at_ms, &real_root))
                 }
                 Ok((real, _)) => refuse(Denied::Outside, &real),
+            }
+        }
+        // Several files carry the name the CLI was given: list the ones the reader may open (R1b). Nothing is opened
+        // and nothing becomes allowed here; a click does that.
+        "pick" => {
+            let matches: Vec<String> = request
+                .paths
+                .iter()
+                .filter_map(|p| {
+                    let path = PathBuf::from(p);
+                    if !path.is_absolute() {
+                        return None;
+                    }
+                    let (real, kind) = access::resolve(&path).ok()?;
+                    (kind == Kind::File && access::permitted(&real, root, &inner.allowed)).then(|| real.display().to_string())
+                })
+                .collect();
+            match matches.len() {
+                0 => (Response::refused("missing", "kinas open: none of those files can be opened".into()), None),
+                1 => {
+                    let real = PathBuf::from(&matches[0]);
+                    (Response::accepted("opened", &real), show(&real, Kind::File, false, received_at_ms, &real_root))
+                }
+                _ => (Response::picking(matches.clone()), show_pick(matches, received_at_ms, &real_root)),
             }
         }
         "reopen" => {
@@ -186,7 +233,8 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
         Some(Ok(line)) => {
             let state = app.state::<ReaderState>();
             let mut inner = state.lock();
-            handle(&line, &crate::paths::projects_root(), &mut inner, received_at_ms)
+            let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+            handle(&line, &root, &mut inner, received_at_ms)
         }
     };
     if let Ok(json) = serde_json::to_string(&response) {
@@ -257,7 +305,14 @@ mod tests {
         assert_eq!(serde_json::to_string(&response).unwrap(), format!(r#"{{"ok":true,"result":"opened","path":"{}"}}"#, t.root.join("a.md").display()));
         assert_eq!(
             event,
-            Some(ShowEvent { path: t.root.join("a.md").display().to_string(), kind: Kind::File, confirm: false, received_at_ms: 7, root: t.root.display().to_string() })
+            Some(ShowEvent {
+                path: t.root.join("a.md").display().to_string(),
+                kind: Kind::File,
+                confirm: false,
+                received_at_ms: 7,
+                root: t.root.display().to_string(),
+                pick: Vec::new(),
+            })
         );
         let (_, folder) = handle(&open(&t.root.join("docs"), false), &t.root, &mut inner, 7);
         assert_eq!(folder.map(|e| e.kind), Some(Kind::Dir));
@@ -291,6 +346,33 @@ mod tests {
         for line in [r#"{"v":1,"op":"open","path":"relative.md"}"#, r#"{"v":2,"op":"reopen"}"#, r#"{"v":1,"op":"delete"}"#, "not json"] {
             assert_eq!(handle(line, &t.root, &mut inner, 0), (Response::bad_request(), None), "{line}");
         }
+    }
+
+    // R1b: the CLI found several files with that name; the reader lists the ones it may open and opens none.
+    #[test]
+    fn pick_lists_what_may_be_opened_without_allowing_anything() {
+        let t = tree();
+        let mut inner = Inner::default();
+        let pick = |paths: &[&Path]| {
+            serde_json::json!({ "v": 1, "op": "pick", "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>() }).to_string()
+        };
+
+        let (response, event) = handle(&pick(&[&t.root.join("a.md"), &t.root.join("docs")]), &t.root, &mut inner, 5);
+        // The folder is not a file, so only the markdown is offered, and one match opens straight away.
+        assert_eq!(response, Response::accepted("opened", &t.root.join("a.md")));
+        assert!(event.is_some_and(|e| e.pick.is_empty()));
+
+        let second = t.root.join("docs/README.md");
+        std::fs::write(&second, "# r\n").unwrap();
+        let (response, event) = handle(&pick(&[&t.root.join("a.md"), &second]), &t.root, &mut inner, 5);
+        assert_eq!(response, Response::picking(vec![t.root.join("a.md").display().to_string(), second.display().to_string()]));
+        assert_eq!(event.map(|e| e.pick.len()), Some(2));
+        assert!(inner.allowed.is_empty(), "listing never widens access");
+
+        // Outside the root, or missing: nothing to offer.
+        let outside = t.base.join("outside/b.md");
+        assert_eq!(handle(&pick(&[&outside]), &t.root, &mut inner, 5).0.code, Some("missing"));
+        assert_eq!(handle(&pick(&[Path::new("relative.md")]), &t.root, &mut inner, 5).0.code, Some("missing"));
     }
 
     #[test]

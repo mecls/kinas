@@ -229,8 +229,13 @@ async function open(args: string[]): Promise<number> {
       printError(target.message);
       return target.exit;
     }
-    path = target.path;
-    request = { v: 1, op: "open", path, anywhere };
+    if ("pick" in target) {
+      // Several files carry that name: the reader lists them and opens nothing until Miguel chooses (R1b).
+      request = { v: 1, op: "pick", paths: target.pick };
+    } else {
+      path = target.path;
+      request = { v: 1, op: "open", path, anywhere };
+    }
   }
 
   let exit: number = EXIT.ok;

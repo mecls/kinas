@@ -21,16 +21,41 @@ const DEFAULT_ROOT: &str = "~/Documents/Projects/SintraLabs";
 /// `packages/context/src/config.ts` reads it: `KINAS_ROOT`, else the `root` string in `KINAS_CONFIG` or
 /// `~/.config/kinas/config.json`, else `~/Documents/Projects/SintraLabs`. Read on every call, so a config change
 /// applies without a restart. An app started by launchd does not see a `KINAS_ROOT` exported in a shell.
-pub fn projects_root() -> PathBuf {
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"));
-    let config = std::env::var_os("KINAS_CONFIG")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".config/kinas/config.json"));
-    projects_root_from(std::env::var("KINAS_ROOT").ok().as_deref(), &config, &home)
+/// The projects folder, with the Settings page's value ahead of the config file (reader R1, amended 2026-09-16).
+pub fn projects_root(store: &crate::store::Store) -> PathBuf {
+    let saved = crate::system::get_setting(&store.conn(), store.org_id(), SETTING_KEY).and_then(|v| v.as_str().map(str::to_string));
+    projects_root_with(std::env::var("KINAS_ROOT").ok().as_deref(), saved.as_deref(), &config_path(), &home())
 }
 
-/// `projects_root` with its inputs passed in, so tests never touch the process environment.
+/// The key Settings writes: `set_projects_root` stores an absolute path here.
+pub const SETTING_KEY: &str = "projects_root";
+
+fn home() -> PathBuf {
+    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+}
+
+fn config_path() -> PathBuf {
+    std::env::var_os("KINAS_CONFIG")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home().join(".config/kinas/config.json"))
+}
+
+/// `projects_root` with its inputs passed in, so tests never touch the process environment or the store.
+///
+/// `KINAS_ROOT` first (so an e2e run or a one-off shell wins), then the Settings page's value, then the config file's
+/// `root`, then `~/Documents/Projects/SintraLabs`.
+pub fn projects_root_with(env_root: Option<&str>, saved: Option<&str>, config: &Path, home: &Path) -> PathBuf {
+    if let Some(root) = env_root.filter(|r| !r.trim().is_empty()) {
+        return expand(root.trim(), home);
+    }
+    if let Some(root) = saved.filter(|r| !r.trim().is_empty()) {
+        return expand(root.trim(), home);
+    }
+    projects_root_from(None, config, home)
+}
+
+/// The config file and default only, kept for the tests that pin that table.
 pub fn projects_root_from(env_root: Option<&str>, config: &Path, home: &Path) -> PathBuf {
     if let Some(root) = env_root.filter(|r| !r.is_empty()) {
         return expand(root, home);
@@ -82,5 +107,20 @@ mod tests {
         assert_eq!(projects_root_from(None, &file("bad.json", Some("{nope")), home), fallback);
         assert_eq!(projects_root_from(None, &file("absent.json", None), home), fallback);
         assert_eq!(projects_root_from(Some(""), &file("absent2.json", None), home), fallback);
+    }
+
+    // Reader R1, amended: Settings sits between the environment and the config file.
+    #[test]
+    fn a_folder_saved_in_settings_beats_the_config_file_but_not_the_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = Path::new("/Users/someone");
+        let config = dir.path().join("config.json");
+        std::fs::write(&config, r#"{"root":"/from/file"}"#).unwrap();
+
+        assert_eq!(projects_root_with(Some("/from/env"), Some("/from/settings"), &config, home), PathBuf::from("/from/env"));
+        assert_eq!(projects_root_with(None, Some("/from/settings"), &config, home), PathBuf::from("/from/settings"));
+        assert_eq!(projects_root_with(None, Some("~/docs"), &config, home), home.join("docs"));
+        assert_eq!(projects_root_with(None, Some("   "), &config, home), PathBuf::from("/from/file"));
+        assert_eq!(projects_root_with(None, None, &config, home), PathBuf::from("/from/file"));
     }
 }

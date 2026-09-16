@@ -7,6 +7,7 @@ import {
   setLaunchAtLogin,
   setMenuBarQuota,
   setOrgName,
+  setProjectsRoot,
   setReaderEditor,
   type LinkStatus,
   type SettingsView,
@@ -266,6 +267,26 @@ export function SettingsPage({
               }}
             />
             {note("org")}
+          </section>
+
+          <section className="settings-section" data-section="projects">
+            <h2>Projects folder</h2>
+            <p className="muted">
+              Where `kinas open` looks: a bare name is searched for under this folder, and anything inside it opens without a flag. The CLI reads this too.
+            </p>
+            <input
+              className="field"
+              aria-label="Projects folder"
+              defaultValue={settings.projects_root}
+              spellCheck={false}
+              disabled={settings.projects_root_from_env}
+              onBlur={(e) => {
+                const value = e.currentTarget.value.trim();
+                if (value && value !== settings.projects_root) void act("projects", () => setProjectsRoot(value).then(() => {}));
+              }}
+            />
+            {settings.projects_root_from_env && <p className="problem">KINAS_ROOT is set in the environment, so it wins over this field.</p>}
+            {note("projects")}
           </section>
 
           <section className="settings-section" data-section="reader">

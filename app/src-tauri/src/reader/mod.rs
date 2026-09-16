@@ -146,7 +146,7 @@ async fn off_main<T: Send + 'static>(work: impl FnOnce() -> Result<T, ReaderErro
 pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDoc, ReaderError> {
     off_main(move || {
         let state = app.state::<ReaderState>();
-        let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+        let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
         // Each step is timed on its own, so a repeat of the freeze says in the log which one blocked.
         let started = std::time::Instant::now();
@@ -184,7 +184,7 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
 pub async fn reader_read_text(app: tauri::AppHandle, path: String) -> Result<Text, ReaderError> {
     off_main(move || {
         let state = app.state::<ReaderState>();
-        let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+        let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
         if kind != Kind::File {
             return Err(ReaderError::denied(&Denied::NotMarkdown, &real));
@@ -198,7 +198,7 @@ pub async fn reader_read_text(app: tauri::AppHandle, path: String) -> Result<Tex
 pub async fn reader_list_dir(app: tauri::AppHandle, path: String) -> Result<DirListing, ReaderError> {
     off_main(move || {
         let state = app.state::<ReaderState>();
-        let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+        let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
         if kind != Kind::Dir {
             return Err(ReaderError::new("not_dir", format!("Not a folder: {}", real.display())));
@@ -236,7 +236,7 @@ pub fn list_dir(dir: &Path, permitted: &dyn Fn(&Path) -> bool, cap: usize) -> st
 pub async fn reader_read_image(app: tauri::AppHandle, path: String) -> Result<tauri::ipc::Response, ReaderError> {
     off_main(move || {
         let state = app.state::<ReaderState>();
-        let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+        let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let path = absolute(&path)?;
         let allowed = state.lock().allowed.clone();
         image_bytes(&path, &|p| access::permitted(p, &root, &allowed)).map(tauri::ipc::Response::new)
@@ -344,7 +344,7 @@ pub fn reader_rendered(lines: u32, diagrams: u32, ms: u64) {
 pub async fn reader_open_in_editor(app: tauri::AppHandle, path: String) -> Result<(), ReaderError> {
     let (real, editor_command) = {
         let state = app.state::<ReaderState>();
-        let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+        let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
         if kind != Kind::File {
             return Err(ReaderError::new("not_file", "Choose a file to open in the editor"));

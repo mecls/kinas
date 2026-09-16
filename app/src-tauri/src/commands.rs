@@ -68,7 +68,8 @@ pub fn get_settings(
     control: State<'_, ReaderControl>,
     system: State<'_, SystemState>,
 ) -> Result<SettingsView, String> {
-    let (org_name, menu_bar_quota, global_hotkey, launch_at_login, reader_editor) = {
+    // Everything that needs the connection is read under one guard: taking it twice on this thread would deadlock.
+    let (org_name, menu_bar_quota, global_hotkey, launch_at_login, reader_editor, projects_root) = {
         let conn = store.conn();
         let org = store.org_id();
         let name: String = conn.query_row("SELECT name FROM orgs WHERE id = ?1", [org], |r| r.get(0)).map_err(|e| e.to_string())?;
@@ -79,6 +80,7 @@ pub fn get_settings(
             text("global_hotkey", system::DEFAULT_HOTKEY),
             system::get_setting(&conn, org, "launch_at_login").and_then(|v| v.as_bool()).unwrap_or(true),
             text("reader_editor", crate::reader::editor::DEFAULT_EDITOR),
+            crate::paths::projects_root(&conn, org),
         )
     };
     Ok(SettingsView {
@@ -92,7 +94,7 @@ pub fn get_settings(
         ollama_key_saved: keys.0.get(OLLAMA_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
         claude_hook: claude_plan::hook_status(control.data_dir(), now_ms()),
         reader_editor,
-        projects_root: crate::paths::projects_root(&store).display().to_string(),
+        projects_root: projects_root.display().to_string(),
         projects_root_from_env: std::env::var("KINAS_ROOT").is_ok_and(|v| !v.trim().is_empty()),
     })
 }

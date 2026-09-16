@@ -22,9 +22,19 @@ const DEFAULT_ROOT: &str = "~/Documents/Projects/SintraLabs";
 /// `~/.config/kinas/config.json`, else `~/Documents/Projects/SintraLabs`. Read on every call, so a config change
 /// applies without a restart. An app started by launchd does not see a `KINAS_ROOT` exported in a shell.
 /// The projects folder, with the Settings page's value ahead of the config file (reader R1, amended 2026-09-16).
-pub fn projects_root(store: &crate::store::Store) -> PathBuf {
-    let saved = crate::system::get_setting(&store.conn(), store.org_id(), SETTING_KEY).and_then(|v| v.as_str().map(str::to_string));
+///
+/// Takes the store's connection, not the store: `Store::conn()` locks a plain mutex, which is not reentrant, so a
+/// caller that already holds the guard would deadlock its own thread. That froze the app's first `get_settings` and
+/// with it the whole window (found on the install, 2026-09-16).
+pub fn projects_root(conn: &rusqlite::Connection, org_id: &str) -> PathBuf {
+    let saved = crate::system::get_setting(conn, org_id, SETTING_KEY).and_then(|v| v.as_str().map(str::to_string));
     projects_root_with(std::env::var("KINAS_ROOT").ok().as_deref(), saved.as_deref(), &config_path(), &home())
+}
+
+/// `projects_root` for a caller that holds no connection.
+pub fn projects_root_of(store: &crate::store::Store) -> PathBuf {
+    let conn = store.conn();
+    projects_root(&conn, store.org_id())
 }
 
 /// The key Settings writes: `set_projects_root` stores an absolute path here.

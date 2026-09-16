@@ -233,7 +233,7 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
         Some(Ok(line)) => {
             let state = app.state::<ReaderState>();
             let mut inner = state.lock();
-            let root = crate::paths::projects_root(&app.state::<crate::store::Store>());
+            let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
             handle(&line, &root, &mut inner, received_at_ms)
         }
     };

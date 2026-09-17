@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ProviderMetricView } from "../api.ts";
-import { DETAIL, forWindow, GAUGED, metricLabel, metricValue, windowLabel } from "./convex.ts";
+import { BILLING_WINDOW, DETAIL, forWindow, GAUGED, metricLabel, metricValue, windowLabel } from "./convex.ts";
 
 const row = (metric: string, window: string, used: number, unit: string | null = "calls"): ProviderMetricView => ({
   provider: "convex",
@@ -48,7 +48,17 @@ describe("labels", () => {
   test("a day window says UTC, because it is not Lisbon", () => {
     // R4: the windows are calendar-aligned UTC. Left unlabelled, "today" would read as the chart's Lisbon day.
     expect(windowLabel("day")).toBe("today (UTC)");
-    expect(windowLabel("month")).toBe("this month (UTC)");
+  });
+
+  test("the month label never reads as the billing period, because it is not one", () => {
+    // Convex bills on a signup-anchored period (e.g. 16 Sep – 16 Oct) and this API reports calendar months
+    // only, so the gauge divides one window by another's allowance. "calendar month to date" is what keeps
+    // that an upper bound rather than a wrong number (R4, R6, amended).
+    expect(windowLabel("month")).toBe("calendar month to date (UTC)");
+    expect(windowLabel("month")).not.toContain("billing");
+    // And the reason is on screen, not only in a comment.
+    expect(BILLING_WINDOW).toContain("upper bound");
+    expect(BILLING_WINDOW).toContain("not the 1st");
   });
 
   test("an unknown metric reads oddly rather than crashing", () => {

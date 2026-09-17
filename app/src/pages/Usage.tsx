@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { dispatchAppAction } from "../actions.ts";
 import { getUsageSnapshot, onBackfillProgress, onReadingsChanged, setUsageVisible, type ReaderId, type UsageSnapshot } from "../api.ts";
-import { DETAIL, forWindow, GAUGED, NOT_AVAILABLE } from "../usage/convex.ts";
+import { BILLING_WINDOW, DETAIL, forWindow, GAUGED, NOT_AVAILABLE } from "../usage/convex.ts";
 import { Gauge, ProviderEmpty } from "../usage/Gauge.tsx";
 import { MacTiles } from "../usage/MacTiles.tsx";
 import { ConvexEmpty, MetricFigures, MetricGauge } from "../usage/MetricGauge.tsx";
@@ -105,6 +105,11 @@ export function UsagePage({ active }: { active: boolean }) {
         <section className="panel" aria-label="Convex detail" data-section="convex-detail">
           <MetricFigures metrics={convexToday} label="Convex today (UTC)" />
           <MetricFigures metrics={convexMonthFigures} label="Convex metrics without a plan allowance" />
+          {/* The gauges above divide a calendar-month total by a billing-period allowance, because the API
+              offers nothing else. Saying so is the difference between an upper bound and a wrong number. */}
+          <p className="muted" data-testid="convex-billing-window">
+            {BILLING_WINDOW}
+          </p>
           {/* R15: said once, plainly, instead of placeholder gauges with nothing behind them. */}
           <p className="muted">{NOT_AVAILABLE}</p>
         </section>

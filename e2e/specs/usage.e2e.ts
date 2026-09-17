@@ -111,8 +111,10 @@ describe("Convex usage", () => {
     await expect(convexMetric("actionCompute")).toHaveText(expect.stringContaining("30% used"));
     await expect(convexMetric("actionCompute")).toHaveText(expect.stringContaining("6 GB-hours of 20 GB-hours"));
     await expect(convexMetric("functionCalls")).toHaveAttribute("data-state", "fresh");
-    // The window is UTC and says so, rather than reading as the chart's Lisbon day (R4).
-    await expect(convexMetric("functionCalls")).toHaveText(expect.stringContaining("this month (UTC)"));
+    // The window names itself as the *calendar* month, not the billing period: Convex bills on a
+    // signup-anchored period (e.g. 16 Sep – 16 Oct) and this API reports calendar months only, so the
+    // percentage is an upper bound and must not read as "of this billing period" (R4, R6, amended).
+    await expect(convexMetric("functionCalls")).toHaveText(expect.stringContaining("calendar month to date (UTC)"));
 
     // R11: one request per poll window, not one per render.
     expect(await convexRequests()).toBe(1);
@@ -126,6 +128,8 @@ describe("Convex usage", () => {
     // R8: a cost has no denominator, so it is a figure and never a gauge.
     await expect(detail).toHaveText(expect.stringContaining("$4.20"));
     expect(await $$('.gauge[data-provider="convex"][data-metric="aiGatewayCostDollars"]')).toHaveLength(0);
+    // The reason the month percentage is an upper bound is on screen, not buried in a comment.
+    await expect($('[data-testid="convex-billing-window"]')).toHaveText(expect.stringContaining("upper bound"));
     // R15: said plainly, once, instead of placeholder gauges.
     await expect(detail).toHaveText(expect.stringContaining("not in this API"));
   });

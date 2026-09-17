@@ -59,8 +59,23 @@ export function metricValue(used: number, unit: string | null): string {
  * letting Miguel read it as lining up with the chart's Lisbon days (R4).
  */
 export function windowLabel(window: string): string {
-  return window === "day" ? "today (UTC)" : window === "month" ? "this month (UTC)" : window;
+  return window === "day" ? "today (UTC)" : window === "month" ? "calendar month to date (UTC)" : window;
 }
+
+/**
+ * Why the month figure is an upper bound, said on screen (R4 and R6, both amended 2026-09-17).
+ *
+ * Convex bills on a period anchored to the account's signup date — the dashboard shows it, e.g. 16 Sep to 16 Oct
+ * — while `get_current_usage` reports only `current_day` and `current_month`, both UTC **calendar** windows,
+ * with no period boundaries and no date-ranged query. The daily figure covers today alone, so the period total
+ * cannot be reconstructed by summing either. There is simply no way to show billing-period usage from this API.
+ *
+ * The gauge still ships, because early in a period a calendar total *overstates* usage against the allowance
+ * rather than understating it — the safe direction for a usage gauge. But it must say so, or it reads as
+ * "of this billing period", which is the one thing it is not.
+ */
+export const BILLING_WINDOW =
+  "Your plan's allowance resets on your billing date, not the 1st — and this API reports calendar months (UTC) only. Early in a period the figure still includes the previous one, so the percentage is an upper bound.";
 
 /** The Convex rows for one window, in the page's order; anything unknown is appended rather than dropped. */
 export function forWindow(metrics: ProviderMetricView[], window: string, order: readonly string[]): ProviderMetricView[] {

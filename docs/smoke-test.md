@@ -123,6 +123,19 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
       builds, so the spread is the machine's; AC-7's median warm open on the signed build is the number that gates
       a release. Vite emits **one chunk per grammar**: core 20,403 B plus 586 B (`json`) to 7,608 B
       (`typescript`), so a first highlight pulls **~26 KB**, not the 5.50 MB whole-package figure
+- [x] An `.html` file opens as the page it is, in an `<iframe sandbox="allow-scripts">` with an injected
+      `default-src 'none'` policy; its inline script runs (reported by `postMessage` to a debug-only listener),
+      the **Source** toggle shows the markup escaped and back, and a save reassigns `srcdoc` on the **same**
+      element — proven by marking the node, since a replacement would restart the page *and* jump the layout —
+      `automated (reader.e2e.ts)`
+- [x] **Nothing in a previewed page reaches the network or the app**, observed on a real socket rather than
+      inferred: `fixtures/reader/hostile.html` aims 14 URLs at a local listener (`fetch`, `XHR`, `WebSocket`,
+      `sendBeacon`, `<img>`, `<link>`, `<script src>`, `<iframe>`, `<object>`, `new Worker`, an auto-submitting
+      form, a `<base href>`-retargeted relative fetch) and carries its own `default-src *` CSP — the log records
+      **0 requests**, `window.__pwned` is undefined, the URL and title are unchanged, and the app still answers
+      after the fixture's `alert` loop. Checked on both the probe's frame and the reader's own UI path —
+      `automated (reader.e2e.ts)`. The benign `preview.html` is what stops this passing against a preview that
+      renders nothing
 - [x] The file tree lists every openable file plus images and omits binaries; an empty folder reads `Nothing to
       open in <folder>` — `automated (reader.e2e.ts; mod.rs list_dir tests)`
 - [x] `--anywhere` shows the card, Enter in the terminal does not accept it, Open does —

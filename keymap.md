@@ -81,7 +81,10 @@ The one key the app takes without ⌘:
 
 ## Reader (Work page, left of the terminal)
 
-The reader adds no key bindings of its own.
+The reader adds no key bindings of its own. The **Source** / **Preview** toggle that appears on an `.html`
+file is **click-only**, and deliberately so: a binding would have to be unique against the palette and every
+⌘ shortcut above, for a two-state control that lives in one header beside the mouse. If it starts being
+missed, that is the moment to add one — this file stays the gate.
 
 | Key | Action |
 |---|---|

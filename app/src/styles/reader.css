@@ -433,6 +433,16 @@
   color-scheme: light;
 }
 
+/*
+ * An honest line under the frame when the policy blocked a page's own files. Quiet on purpose: it explains a
+ * half-rendered page rather than complaining about one, and the count is cosmetic, never a gate.
+ */
+.reader-preview-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
 .reader-frontmatter {
   margin: 0 0 20px;
   padding: 12px 14px;

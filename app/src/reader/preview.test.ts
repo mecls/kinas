@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { injectCsp, PREVIEW_CSP, PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
+import { countBlockedAssets, injectCsp, PREVIEW_CSP, PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 
 // The preview is the one place in Kinas that renders a document an agent may have written, in a process whose
 // webview can type into the terminal. These cases are the parts of that isolation a unit test can reach: the
@@ -155,6 +155,41 @@ describe("a file rendered as a page", () => {
 
   test("an empty file previews as an empty document, not an error", () => {
     expect(renderPreview("").preview).toBe(META_TAG);
+  });
+});
+
+describe("the blocked-asset note", () => {
+  test("counts a page's local stylesheet, script and image", () => {
+    expect(countBlockedAssets('<link rel="stylesheet" href="style.css"><script src="app.js"></script><img src="logo.png">')).toBe(3);
+  });
+
+  test("does not count what was never a local file", () => {
+    // Remote is blocked too, but a page pulling a CDN font is not a broken page — saying so would be noise.
+    expect(countBlockedAssets('<script src="https://cdn.example.com/x.js"></script>')).toBe(0);
+    expect(countBlockedAssets('<link href="//cdn.example.com/x.css">')).toBe(0);
+    expect(countBlockedAssets('<img src="data:image/png;base64,AAA=">')).toBe(0);
+    expect(countBlockedAssets('<img src="#frag">')).toBe(0);
+    // An inline script asks for nothing.
+    expect(countBlockedAssets("<script>window.x = 1</script>")).toBe(0);
+    expect(countBlockedAssets("<p>no assets here</p>")).toBe(0);
+  });
+
+  test("the note says it once, and agrees with itself on number", () => {
+    expect(renderPreview('<img src="a.png">').html).toContain("1 local file was not loaded");
+    expect(renderPreview('<img src="a.png"><img src="b.png">').html).toContain("2 local files were not loaded");
+  });
+
+  test("a page needing nothing gets no note at all", () => {
+    // Also what keeps the e2e's structural R13 check (`.reader-body *` is exactly `div,iframe`) true.
+    const html = renderPreview("<style>p{color:red}</style><p>x</p>").html;
+    expect(html).toBe('<div class="reader-preview"></div>');
+    expect(html).not.toContain("reader-preview-note");
+  });
+
+  test("nothing from the file reaches the note — only a number and fixed words", () => {
+    const html = renderPreview('<img src="secret-name.png" alt="a caption">').html;
+    expect(html).not.toContain("secret-name");
+    expect(html).not.toContain("a caption");
   });
 });
 

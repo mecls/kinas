@@ -97,6 +97,32 @@ export function injectCsp(html: string): string {
 }
 
 /**
+ * How many **local** subresources this page asks for and will not get.
+ *
+ * The injected policy blocks every fetch (R14) and asset inlining is parked, so a page's `./style.css` and
+ * `./app.js` simply do not load. Counting them is what keeps a half-rendered page honest: without the note, a
+ * page whose stylesheet was blocked just looks broken, with nothing on screen saying why.
+ *
+ * The scan is a deliberately conservative regex, **not a parser**, and that is acceptable only because the count
+ * is cosmetic and **never a gate**: if it misses a reference, that reference is still blocked, and nothing about
+ * the isolation depends on this number. Do not grow it into something load-bearing.
+ *
+ * Remote URLs are not counted. They are blocked too, but "local files were not loaded" is the part Miguel can act
+ * on — a page pulling a CDN font is not a broken page, and saying so would make the note noise.
+ */
+export function countBlockedAssets(html: string): number {
+  let blocked = 0;
+  for (const match of html.matchAll(/<(?:link|script|img|source|iframe|object|embed|audio|video)\b[^>]*?\b(?:href|src|data)\s*=\s*(["'])(.*?)\1/gis)) {
+    const target = (match[2] ?? "").trim();
+    if (target === "") continue;
+    // Anything with a scheme, protocol-relative, or a bare fragment is not a local file of Miguel's.
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(target)) continue;
+    blocked += 1;
+  }
+  return blocked;
+}
+
+/**
  * A file shown as the page it is, rather than as its markup (R13).
  *
  * `html` is an **empty placeholder**: the document itself travels in `preview`, because `swapBody` assigns `html`
@@ -110,8 +136,11 @@ export function injectCsp(html: string): string {
  * silently lose its head — and it reports no headings, so the Contents rail hides itself.
  */
 export function renderPreview(text: string): Rendered {
+  const blocked = countBlockedAssets(text);
+  // Only the count reaches the page — a number and fixed words, never anything out of the file.
+  const note = blocked === 0 ? "" : `<p class="reader-preview-note">${blocked === 1 ? "1 local file was" : `${blocked} local files were`} not loaded</p>`;
   return {
-    html: '<div class="reader-preview"></div>',
+    html: `<div class="reader-preview"></div>${note}`,
     headings: [],
     frontmatter: null,
     diagrams: [],

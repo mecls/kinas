@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  The benign half of the preview probe (reader PRD R18, build spec AC-4).
+
+  Without this file the suite could pass against a preview that renders nothing at all: an empty frame makes no
+  requests either. Its inline script must demonstrably run, and it reports that the only way an opaque-origin
+  frame can — postMessage, read by the debug-only listener (R19).
+-->
+<meta charset="utf-8">
+<title>preview</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 16px; }
+  #box { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
+</style>
+
+<h1>A generated page</h1>
+<p id="box">the inline script did not run</p>
+
+<script>
+  document.getElementById("box").textContent = "the inline script ran";
+  parent.postMessage("ran", "*");
+</script>

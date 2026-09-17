@@ -3,6 +3,9 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hook, waitForShell } from "../helpers.ts";
+// The real policy and the real attribute, imported rather than retyped: a copy here could drift from the shipped
+// one and the probe would then prove nothing about what Miguel actually runs.
+import { injectCsp, PREVIEW_SANDBOX } from "../../app/src/reader/preview.ts";
 
 // `kinas open` and the reader (tasks/kinas-open-build-spec.md AC-1 to AC-6): the built CLI talks to the test app over
 // the run's own socket, against fixtures/reader as the projects root.
@@ -33,6 +36,17 @@ const scrollTop = () => browser.execute(() => document.querySelector<HTMLElement
  */
 async function waitInPage(condition: () => boolean, timeoutMsg: string, timeout = 30000) {
   await browser.waitUntil(() => browser.execute(condition), { timeout, interval: 250, timeoutMsg });
+}
+
+/**
+ * `waitInPage` for a condition that needs one value from the spec, the way `hookWith` is `hook` with an argument.
+ *
+ * The condition is serialised and evaluated in the page, so a closure variable is simply not there: it fails at
+ * runtime with `Can't find variable`, and nothing catches it earlier, because `bun run check` typechecks
+ * `packages/*`, `cli` and `app` but **not** `e2e`. Pass what the condition needs.
+ */
+async function waitInPageWith(condition: (arg: string) => boolean, arg: string, timeoutMsg: string, timeout = 30000) {
+  await browser.waitUntil(() => browser.execute(condition, arg), { timeout, interval: 250, timeoutMsg });
 }
 
 describe("kinas open and the reader", () => {
@@ -391,6 +405,70 @@ describe("kinas open and the reader", () => {
     await waitInPage(() => document.querySelector('.reader-source code[data-highlight="skipped"]') !== null, "the minified file was not skipped");
     expect(await browser.execute(() => document.querySelector(".reader-source code[data-highlighted]") === null)).toBe(true);
     rmSync(big);
+  });
+
+  it("R18 probe: a sandboxed, policy-injected frame reaches neither the network nor the app", async () => {
+    // The one thing about this work that reading could not settle: whether WebKit enforces a meta-delivered CSP
+    // inside a sandboxed srcdoc frame that is allowed to run scripts (R18). No preview UI exists yet by design —
+    // the frame is built here, exactly as task 7.0 will build it, and the answer decides whether 7.0 ships
+    // scripts at all. The listener in reader.setup.ts is a real socket: "no requests" inferred from a missing
+    // <script> element is the assertion a breached reader would still pass.
+    const probeUrl = process.env.KINAS_E2E_PROBE_URL!;
+    const before = await browser.execute(() => ({ url: location.href, title: document.title }));
+
+    const openFrame = async (id: string, file: string) => {
+      const html = injectCsp(readFileSync(join(root, file), "utf8"));
+      await browser.execute(
+        (frameId: string, doc: string, sandbox: string) => {
+          const frame = document.createElement("iframe");
+          frame.id = frameId;
+          frame.setAttribute("sandbox", sandbox);
+          // Assigned as a property. The file's bytes must never pass through the parent document's innerHTML,
+          // which fires inline handlers and loads remote resources even though it does not run <script> (R13).
+          frame.srcdoc = doc;
+          frame.addEventListener("load", () => frame.setAttribute("data-loaded", ""));
+          document.body.appendChild(frame);
+        },
+        id,
+        html,
+        PREVIEW_SANDBOX,
+      );
+      await waitInPageWith((frameId: string) => document.querySelector(`#${frameId}[data-loaded]`) !== null, id, `${file} never loaded in its frame`);
+    };
+
+    await openFrame("kinas-probe", "hostile.html");
+    // The benign page is what stops this suite passing against a preview that renders nothing at all: an empty
+    // frame makes no requests either.
+    await openFrame("kinas-benign", "preview.html");
+    await browser.waitUntil(async () => (await hook<number>("readerPreviewMessages")) > 0, {
+      timeout: 15000,
+      interval: 250,
+      timeoutMsg: "the benign preview's inline script never ran",
+    });
+
+    // Observed on the socket, not inferred.
+    const log = (await (await fetch(`${probeUrl}/__log`)).json()) as { requests: number; hits: { method: string; path: string }[] };
+    expect(log.hits).toEqual([]);
+    expect(log.requests).toBe(0);
+
+    const after = await browser.execute(() => ({
+      url: location.href,
+      title: document.title,
+      pwned: typeof (window as unknown as { __pwned?: unknown }).__pwned,
+      sandbox: document.querySelector("#kinas-probe")?.getAttribute("sandbox") ?? "",
+    }));
+    expect(after.pwned).toBe("undefined");
+    expect(after.url).toBe(before.url);
+    expect(after.title).toBe(before.title);
+    // The attribute that actually carries the isolation, read back off the live element.
+    expect(after.sandbox).toBe("allow-scripts");
+    expect(after.sandbox).not.toContain("allow-same-origin");
+    // The app still answers after the fixture's modal loop: no allow-modals means alert() never blocked it.
+    expect(await hook<boolean>("isVisible")).toBe(true);
+
+    await browser.execute(() => {
+      for (const id of ["kinas-probe", "kinas-benign"]) document.querySelector(`#${id}`)?.remove();
+    });
   });
 
   it("AC-6: nothing in a file runs, navigates or fetches", async () => {

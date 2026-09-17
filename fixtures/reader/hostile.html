@@ -1,0 +1,52 @@
+<!doctype html>
+<!--
+  The preview probe's adversary (reader PRD R12-R14, R18; build spec AC-4).
+
+  Every URL below points at __PROBE_URL__, which reader.setup.ts rewrites to a real local listener that records
+  every request it receives. The test asserts that log is EMPTY. Inferring "no network" from the absence of a
+  <script> element is exactly the mistake that would let a breached reader pass, so this file is written to
+  actually try, and the socket is what answers.
+
+  The alert loop is deliberate: the sandbox omits allow-modals, so the modal is blocked rather than shown, and
+  that blocking is what AC-4 checks. This file must only ever be loaded inside the sandboxed frame.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src *">
+<base href="__PROBE_URL__/base/">
+<title>hostile</title>
+
+<link rel="stylesheet" href="__PROBE_URL__/style.css">
+<script src="__PROBE_URL__/remote.js"></script>
+<img src="__PROBE_URL__/img.png" onerror="window.__inlineHandlerRan = 1">
+<iframe src="__PROBE_URL__/frame.html"></iframe>
+<object data="__PROBE_URL__/object.swf"></object>
+<form id="f" method="post" action="__PROBE_URL__/form"><input name="a" value="1"></form>
+
+<script>
+  // Each attempt is wrapped: a throw is a pass, not a reason to stop trying the next one.
+  const tries = [
+    () => fetch("__PROBE_URL__/fetch"),
+    () => { const x = new XMLHttpRequest(); x.open("GET", "__PROBE_URL__/xhr"); x.send(); },
+    () => new WebSocket("__PROBE_WS__/ws"),
+    () => navigator.sendBeacon("__PROBE_URL__/beacon", "x"),
+    () => document.getElementById("f").submit(),
+    // A bare relative URL: if base-uri were left to fall back to default-src, <base> above would retarget this
+    // at the listener. It is named 'none' in the policy precisely so this stays inside the frame.
+    () => fetch("relative-probe"),
+    () => new Worker("__PROBE_URL__/worker.js"),
+    // Reaching the app. Without allow-same-origin none of these can see the parent at all.
+    () => { parent.__pwned = 1; },
+    () => { top.location = "__PROBE_URL__/nav"; },
+    () => { window.__parentTitle = parent.document.title; },
+    () => { window.__tauri = typeof parent.__TAURI_INTERNALS__; },
+    () => { window.__invoke = typeof parent.__TAURI_INTERNALS__.invoke; },
+  ];
+  for (const attempt of tries) {
+    try { attempt(); } catch (e) { /* expected */ }
+  }
+  // The app must still answer a hook call after this.
+  for (let i = 0; i < 3; i++) {
+    try { alert("blocked"); } catch (e) { /* expected: no allow-modals */ }
+  }
+  // Proof the script itself ran at all, read from inside the frame only.
+  window.__hostileRan = 1;
+</script>

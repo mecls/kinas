@@ -584,10 +584,27 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
     };
     for (const type of ["focusin", "focusout"]) document.addEventListener(type, record, true);
     for (const type of ["focus", "blur"]) window.addEventListener(type, (e) => e.target === window && record(e));
+
+    // R19, and debug builds only. The probe's proof that a preview's inline script ran arrives by postMessage,
+    // the only channel an opaque-origin frame has. A release build that listens has handed the preview a channel
+    // into the app, which is why this lives inside the gate above and nowhere else.
+    //
+    // The payload is never read. A count is all the probe needs — it only has to distinguish "the page ran" from
+    // "the frame rendered nothing" — and interpreting a message from a sandboxed document is the exact thing the
+    // isolation exists to prevent. The source must also be a frame in this document: any other window's message
+    // is ignored rather than counted.
+    let previewMessages = 0;
+    const onPreviewMessage = (event: MessageEvent) => {
+      const source = event.source as unknown;
+      if ([...document.querySelectorAll("iframe")].some((f) => (f.contentWindow as unknown) === source)) previewMessages += 1;
+    };
+    window.addEventListener("message", onPreviewMessage);
+
     void import("../testHooks.ts").then(({ registerTestHooks }) =>
       registerTestHooks({
         readerFocusLog: () => focusLog.join("\n"),
         readerStatusLog: () => statusLog.join("\n"),
+        readerPreviewMessages: () => previewMessages,
         readerMarkDiagram: () => {
           const svg = body.current?.querySelector(".mermaid-block svg") as (Element & { __kinasMark?: number }) | null;
           if (!svg) return false;
@@ -597,6 +614,7 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
         readerDiagramMarked: () => Boolean((body.current?.querySelector(".mermaid-block svg") as (Element & { __kinasMark?: number }) | null)?.__kinasMark),
       }),
     );
+    return () => window.removeEventListener("message", onPreviewMessage);
   }, []);
 
   const headings = doc?.rendered.headings ?? [];

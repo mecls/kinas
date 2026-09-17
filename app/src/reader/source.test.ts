@@ -21,7 +21,31 @@ describe("source is escaped, never markup", () => {
   });
 
   test("no language renders a plain block", () => {
-    expect(renderSource("plain\n", null).html).toBe("<pre class=\"reader-source\"><code>plain\n</code></pre>");
+    // Asserted by property rather than as one exact string: the markup gained a gutter when line numbers landed,
+    // and an equality assertion over the whole thing breaks on every future change to the wrapper.
+    const html = renderSource("plain\n", null).html;
+    expect(html).toContain('<pre class="reader-source"><code>plain\n</code></pre>');
+    expect(html).not.toContain("language-");
+  });
+});
+
+describe("the line-number gutter", () => {
+  test("one number per line, in a sibling element the screen reader skips", () => {
+    // A sibling, not a wrapper per line: highlight.js returns one HTML string whose spans can cross line
+    // boundaries, so per-line elements would mean splitting that string and unbalancing its markup.
+    const html = renderSource("a\nb\nc\n", "sql").html;
+    expect(html).toContain('<pre class="reader-gutter" aria-hidden="true">1\n2\n3</pre>');
+    expect(html).toContain('<code class="language-sql">a\nb\nc\n</code>');
+  });
+
+  test("a trailing newline does not invent a line", () => {
+    const numbers = (text: string) => /reader-gutter" aria-hidden="true">([^<]*)</.exec(renderSource(text, null).html)?.[1];
+    expect(numbers("one line\n")).toBe("1");
+    expect(numbers("one line")).toBe("1");
+    expect(numbers("")).toBe("1");
+    expect(numbers("a\nb")).toBe("1\n2");
+    // Two trailing newlines mean the file really does end with a blank line.
+    expect(numbers("a\n\n")).toBe("1\n2");
   });
 });
 

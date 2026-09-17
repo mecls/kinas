@@ -304,6 +304,107 @@
   height: auto;
 }
 
+/*
+ * highlight.js tokens, mapped onto the terminal's own ANSI palette rather than shipping the library's CSS theme.
+ * Two reasons: a theme file is a second thing to pin and maintain (R22), and code in the reader then matches code
+ * in the Herdr pane beside it, which is the point of reading it here instead of in Cursor.
+ */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-meta,
+.hljs-doctag {
+  color: var(--ansi-magenta);
+}
+
+.hljs-string,
+.hljs-addition,
+.hljs-template-tag {
+  color: var(--ansi-green);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--ansi-yellow);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-function .hljs-title,
+.hljs-built_in {
+  color: var(--ansi-bright-blue);
+}
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-attr,
+.hljs-attribute {
+  color: var(--ansi-cyan);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--ansi-bright-cyan);
+}
+
+.hljs-deletion,
+.hljs-strong {
+  color: var(--ansi-red);
+}
+
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--ansi-blue);
+}
+
+.hljs-regexp,
+.hljs-link {
+  color: var(--ansi-bright-magenta);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+/*
+ * Line numbers in a gutter beside the code, not on each line.
+ *
+ * A per-line counter would need every line wrapped in its own element, and highlight.js returns one HTML string
+ * whose spans can cross line boundaries — splitting it on newlines would produce unbalanced markup. So the
+ * numbers live in a sibling element, written as real text by `renderSource`, and `user-select: none` on that
+ * sibling means selecting the file and copying yields code without digits. That is the whole reason for reading
+ * source here, and a test pins it.
+ */
+.reader-source-wrap {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0 1.5ch;
+  overflow-x: auto;
+}
+
+.reader-gutter {
+  margin: 0;
+  color: var(--line);
+  font: 12.5px/1.5 var(--mono);
+  text-align: right;
+  user-select: none;
+  white-space: pre;
+}
+
+.reader-source-wrap .reader-source {
+  overflow-x: visible;
+}
+
 .reader-frontmatter {
   margin: 0 0 20px;
   padding: 12px 14px;

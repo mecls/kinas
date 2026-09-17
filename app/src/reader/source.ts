@@ -20,8 +20,14 @@ import { escape, type Rendered } from "./render.ts";
  */
 export function renderSource(text: string, language: string | null): Rendered {
   const klass = language === null ? "" : ` class="language-${escape(language)}"`;
+  // A trailing newline would otherwise count as one more line than the file has.
+  const lines = text.replace(/\n$/, "").split("\n").length;
+  // The numbers sit in a sibling element rather than on each line: highlight.js returns one HTML string whose
+  // spans can cross line boundaries, so per-line wrapping would produce unbalanced markup. Generated-looking
+  // content in an unselectable gutter is also what keeps digits out of a copied selection (R20).
+  const gutter = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
   return {
-    html: `<pre class="reader-source"><code${klass}>${escape(text)}</code></pre>`,
+    html: `<div class="reader-source-wrap"><pre class="reader-gutter" aria-hidden="true">${gutter}</pre><pre class="reader-source"><code${klass}>${escape(text)}</code></pre></div>`,
     headings: [],
     frontmatter: null,
     diagrams: [],

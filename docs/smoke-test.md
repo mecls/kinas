@@ -115,6 +115,14 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
       code element carries `language-sql`, and no Contents rail appears because source has no headings. A plain
       `.txt` opens the same way with no language class — `automated (reader.e2e.ts)`, and both confirmed on the
       installed build 2026-09-16 (`.sql` exit 0, `binary.bin` exit 65)
+- [x] Code is highlighted, lines are numbered, and neither reaches a copy: the `.sql` fixture shows
+      `.hljs-keyword`, the gutter holds exactly one number per line of code, and selecting the whole source block
+      copies the code with **no digits**; a fence-free markdown file loads **no** highlighter chunk —
+      `automated (reader.e2e.ts)`. The first highlighted open (`kinas open` → socket → read → render → highlight,
+      including the grammar's chunk) took **65 ms** on 2026-09-17, and 338 ms on the run before it — debug e2e
+      builds, so the spread is the machine's; AC-7's median warm open on the signed build is the number that gates
+      a release. Vite emits **one chunk per grammar**: core 20,403 B plus 586 B (`json`) to 7,608 B
+      (`typescript`), so a first highlight pulls **~26 KB**, not the 5.50 MB whole-package figure
 - [x] The file tree lists every openable file plus images and omits binaries; an empty folder reads `Nothing to
       open in <folder>` — `automated (reader.e2e.ts; mod.rs list_dir tests)`
 - [x] `--anywhere` shows the card, Enter in the terminal does not accept it, Open does —
@@ -199,3 +207,14 @@ Write annoyances here as they happen (task 3.9).
 - WebDriver's key actions in the embedded WKWebView driver double printable characters and send Control as a
   separate keydown without `ctrlKey`, so the suite types text through xterm's own `input()` and sends ⌃-chords
   as real keydown events on xterm's textarea. Tab, Enter and ⌘-chords go through WebDriver unchanged.
+- **Only element lookups are slow, not every command.** `@wdio/tauri-service` runs `ensureActiveWindowFocus` in
+  `beforeCommand`, and it returns immediately unless the command is `getTitle`, `findElement`, `findElements`,
+  `$`, `$$` or `elementClick`; only those wait up to 5 s for the app's invoke bridge. `browser.execute` never pays
+  it, which is why conditions are polled **in the page** (`waitInPage`) rather than with a selector.
+- **Run the reader spec alone, and re-run before believing a regression.** On 2026-09-17 the same commit gave
+  11 passing with AC-3 hitting mocha's 120 s timeout in **15m 54.8s** when run straight after `bun run check`
+  (cargo build + clippy), then **12 passing in 3m 37s** run alone. The invoke-timeout warnings are a red herring:
+  35 on the fast run, 4 on the slow one.
+- **`bun e2e/run.ts` needs `bun` and `cargo` on PATH and says nothing when they are missing.** `run.ts:30–34`
+  spawns bare `bun`, takes `build.status ?? 1` and exits before printing, so an ENOENT looks like an instant
+  total failure with zero output. Run it as `PATH="$HOME/.bun/bin:$HOME/.cargo/bin:$PATH" bun e2e/run.ts reader`.

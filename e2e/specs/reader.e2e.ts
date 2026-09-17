@@ -335,6 +335,64 @@ describe("kinas open and the reader", () => {
     expect(txt.text).toContain("A plain text file, opened as source.");
   });
 
+  it("highlights code, numbers lines without polluting a copy, and loads nothing for prose", async () => {
+    // A fence-free markdown file first: the highlighter's chunk must not load for prose (R10).
+    expect(kinas("other.md").code).toBe(0);
+    await waitForHeader("other.md");
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered]") !== null, "other.md never rendered");
+    const prose = await browser.execute(() => ({
+      chunks: performance.getEntriesByType("resource").filter((r) => /highlight/i.test(r.name)).length,
+      highlighted: document.querySelectorAll("[data-highlighted]").length,
+    }));
+    expect(prose.chunks).toBe(0);
+    expect(prose.highlighted).toBe(0);
+
+    // Then the .sql, which must highlight and time its first load, the way Mermaid's 27 ms was measured (5.10).
+    const started = await browser.execute(() => performance.now());
+    expect(kinas("0008_funnel_stage.sql").code).toBe(0);
+    await waitForHeader("0008_funnel_stage.sql");
+    await waitInPage(() => document.querySelector(".reader-source code[data-highlighted]") !== null, "the .sql was never highlighted");
+    const sql = await browser.execute((from: number) => ({
+      ms: Math.round(performance.now() - from),
+      keywords: document.querySelectorAll(".reader-source .hljs-keyword").length,
+      gutter: document.querySelector(".reader-gutter")?.textContent?.split("\n").length ?? 0,
+      codeLines: document.querySelector(".reader-source code")?.textContent?.replace(/\n$/, "").split("\n").length ?? 0,
+      // The library ships a CSS theme we deliberately do not use: the colours come from tokens.css.
+      themeLinks: [...document.querySelectorAll("link[rel=stylesheet]")].filter((l) => /highlight/i.test((l as HTMLLinkElement).href)).length,
+    }), started);
+    console.log(`reader e2e: the first highlighted open took ${sql.ms} ms including the grammar's chunk`);
+    expect(sql.keywords).toBeGreaterThan(0);
+    expect(sql.themeLinks).toBe(0);
+    // One number per line of code, no more: the gutter is generated from the same text.
+    expect(sql.gutter).toBe(sql.codeLines);
+
+    // R20: selecting the file and copying must yield code and no line numbers. The gutter is a sibling element
+    // marked user-select: none, which is the only arrangement compatible with one highlighted HTML string.
+    const copied = await browser.execute(() => {
+      const wrap = document.querySelector(".reader-source-wrap")!;
+      const range = document.createRange();
+      range.selectNodeContents(wrap);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const text = selection.toString();
+      selection.removeAllRanges();
+      return text;
+    });
+    expect(copied).toContain("alter table leads");
+    // No line number survives: every line of a numbered copy would start with its digits.
+    expect(copied.split("\n").filter((line) => /^\s*\d+\s/.test(line)).length).toBe(0);
+
+    // A minified file is one enormous line: skipped, and marked so, rather than highlighted slowly (R10).
+    const big = join(root, "minified.js");
+    writeFileSync(big, `const x=[${"1,".repeat(300000)}0];\n`);
+    expect(kinas("minified.js").code).toBe(0);
+    await waitForHeader("minified.js");
+    await waitInPage(() => document.querySelector('.reader-source code[data-highlight="skipped"]') !== null, "the minified file was not skipped");
+    expect(await browser.execute(() => document.querySelector(".reader-source code[data-highlighted]") === null)).toBe(true);
+    rmSync(big);
+  });
+
   it("AC-6: nothing in a file runs, navigates or fetches", async () => {
     expect(kinas("hostile.md").code).toBe(0);
     await waitForHeader("hostile.md");

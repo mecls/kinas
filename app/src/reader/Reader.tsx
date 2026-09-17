@@ -16,6 +16,7 @@ import {
   readerRendered,
 } from "../api.ts";
 import type { FrontmatterView } from "./frontmatter.ts";
+import { highlightCode, shouldHighlight } from "./highlight.ts";
 import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
 import { cachedSvg, renderDiagram } from "./mermaid.ts";
@@ -346,6 +347,9 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
       const gen = generation.current;
       const blocks = [...el.querySelectorAll<HTMLElement>(".mermaid-block")].filter((b) => b.dataset.drawn !== b.dataset.hash);
       const images = [...el.querySelectorAll<HTMLImageElement>("img[data-src]:not([data-loaded]):not([data-failed])")];
+      // Source blocks and markdown fences alike (R10). Highlighted here, after the swap, never in the pure
+      // renderer, so render.ts and source.ts stay DOM-free and bun-testable.
+      const code = [...el.querySelectorAll<HTMLElement>('pre > code[class^="language-"]:not([data-highlighted]):not([data-highlight])')];
       await Promise.all([
         ...blocks.map(async (block) => {
           const diagram = current.rendered.diagrams[Number(block.dataset.index)];
@@ -365,6 +369,20 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           block.dataset.drawn = diagram.hash;
         }),
         ...images.map((img) => loadImage(img, current)),
+        ...code.map(async (el) => {
+          const text = el.textContent ?? "";
+          const id = /language-([\w-]+)/.exec(el.className)?.[1] ?? "";
+          if (!shouldHighlight(text)) {
+            // A minified bundle is one enormous line: plain monospace is the honest rendering of it.
+            el.dataset.highlight = "skipped";
+            return;
+          }
+          const html = await highlightCode(text, id);
+          // A reload can swap the body while the grammar's chunk is still loading.
+          if (html === null || !el.isConnected) return;
+          el.innerHTML = html;
+          el.dataset.highlighted = "";
+        }),
       ]);
       if (gen !== generation.current || docRef.current !== current) return;
       article.current?.setAttribute("data-rendered", "");

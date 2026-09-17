@@ -471,6 +471,117 @@ describe("kinas open and the reader", () => {
     });
   });
 
+  it("an .html file opens as the page it is, toggles to its markup and back, and a save re-renders the same frame", async () => {
+    // The hook counts every message this session, and the R18 probe above already pushed it past zero — so the
+    // assertion below must be an *increase*. `> 0` would pass even if this page's script never ran at all.
+    const messagesBefore = await hook<number>("readerPreviewMessages");
+    expect(kinas("preview.html").code).toBe(0);
+    await waitForHeader("preview.html");
+    // `data-rendered` lands only after hydrate has awaited the frame's own load event.
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered] .reader-preview-frame") !== null, "preview.html never rendered a frame");
+
+    const shown = await browser.execute(() => ({
+      sandbox: document.querySelector("iframe.reader-preview-frame")?.getAttribute("sandbox") ?? "",
+      render: document.querySelector(".reader-doc")?.getAttribute("data-render") ?? "",
+      contents: document.querySelectorAll(".reader-contents").length,
+      // Every element the parent document actually holds for this file. This, not a substring, is what tells a
+      // parsed document apart from one carried in an attribute.
+      tags: [...document.querySelectorAll(".reader-body *")].map((e) => e.tagName.toLowerCase()).join(","),
+      bodyHtml: document.querySelector(".reader-body")?.innerHTML ?? "",
+    }));
+    expect(shown.sandbox).toBe("allow-scripts");
+    expect(shown.sandbox).not.toContain("allow-same-origin");
+    expect(shown.render).toBe("html");
+    // A preview reports no headings, so the Contents rail hides itself.
+    expect(shown.contents).toBe(0);
+    // R13: the page's bytes are assigned to the frame's `srcdoc` as a *property*, and are never parsed as markup
+    // in the parent document. Proved structurally — the parent holds only the placeholder and the frame.
+    //
+    // Do not assert this with a substring of the file's text. Reading `innerHTML` back **serialises** the
+    // `srcdoc` attribute, so the whole document unavoidably appears in that string, HTML-escaped; its presence is
+    // a read-back artefact and proves nothing either way. An *element* from the file is what would prove a
+    // breach, and an unescaped tag is what would show the parser had run.
+    expect(shown.tags).toBe("div,iframe");
+    expect(shown.bodyHtml).toContain("reader-preview");
+    expect(shown.bodyHtml).not.toContain("<h1>");
+    expect(shown.bodyHtml).not.toContain("<script>");
+
+    // The inline script ran, reported the only way an opaque-origin frame can (R19).
+    await browser.waitUntil(async () => (await hook<number>("readerPreviewMessages")) > messagesBefore, {
+      timeout: 15000,
+      interval: 250,
+      timeoutMsg: "the preview's inline script never ran",
+    });
+
+    // The label names the view it switches *to*, so it is read before the click.
+    const clickToggle = () =>
+      browser.execute(() => {
+        const button = [...document.querySelectorAll<HTMLButtonElement>(".reader-head button")].find((b) => b.textContent === "Source" || b.textContent === "Preview");
+        const label = button?.textContent ?? "";
+        button?.click();
+        return label;
+      });
+
+    expect(await clickToggle()).toBe("Source");
+    await waitInPage(() => document.querySelector(".reader-source") !== null, "the toggle never showed the markup");
+    const asSource = await browser.execute(() => ({
+      frames: document.querySelectorAll("iframe.reader-preview-frame").length,
+      text: document.querySelector(".reader-source")?.textContent ?? "",
+      // Found by its own label, not by `[aria-pressed]`: the narrow-mode Files and Contents buttons carry that
+      // attribute too, and a first-match selector would silently read one of those instead.
+      pressed:
+        [...document.querySelectorAll<HTMLButtonElement>(".reader-head button")]
+          .find((b) => b.textContent === "Source" || b.textContent === "Preview")
+          ?.getAttribute("aria-pressed") ?? "",
+    }));
+    expect(asSource.frames).toBe(0);
+    // Escaped, not executed: the markup is visible as text.
+    expect(asSource.text).toContain("<script>");
+    expect(asSource.pressed).toBe("false");
+
+    expect(await clickToggle()).toBe("Preview");
+    await waitInPage(() => document.querySelector(".reader-preview-frame") !== null, "the toggle never rendered the page again");
+
+    // R17: a save re-renders by reassigning srcdoc on the **same element**, so the layout does not jump. Marking
+    // the node is the only way to tell that apart from a convincing replacement.
+    const was = await browser.execute(() => {
+      const f = document.querySelector<HTMLIFrameElement>("iframe.reader-preview-frame")!;
+      (f as unknown as { __kinasMark?: number }).__kinasMark = 7;
+      return f.dataset.hash ?? "";
+    });
+    appendFileSync(join(root, "preview.html"), "\n<p>appended</p>\n");
+    await waitInPageWith(
+      (hash: string) => document.querySelector<HTMLIFrameElement>("iframe.reader-preview-frame")?.dataset.hash !== hash,
+      was,
+      "the save never re-rendered the preview",
+    );
+    expect(await browser.execute(() => (document.querySelector("iframe.reader-preview-frame") as unknown as { __kinasMark?: number } | null)?.__kinasMark ?? 0)).toBe(7);
+  });
+
+  it("AC-4 through the reader's own path: a hostile page rendered by the UI still reaches nothing", async () => {
+    // The probe built its frame by hand. This opens the same fixture the way Miguel would, so the guarantee is
+    // proved on the path that actually ships, not only on the one the probe assembled.
+    const probeUrl = process.env.KINAS_E2E_PROBE_URL!;
+    const before = await browser.execute(() => ({ url: location.href, title: document.title }));
+    expect(kinas("hostile.html").code).toBe(0);
+    await waitForHeader("hostile.html");
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered] .reader-preview-frame") !== null, "hostile.html never finished rendering");
+
+    const log = (await (await fetch(`${probeUrl}/__log`)).json()) as { requests: number; hits: { method: string; path: string }[] };
+    expect(log.hits).toEqual([]);
+    expect(log.requests).toBe(0);
+
+    const after = await browser.execute(() => ({
+      url: location.href,
+      title: document.title,
+      pwned: typeof (window as unknown as { __pwned?: unknown }).__pwned,
+    }));
+    expect(after.pwned).toBe("undefined");
+    expect(after.url).toBe(before.url);
+    expect(after.title).toBe(before.title);
+    expect(await hook<boolean>("isVisible")).toBe(true);
+  });
+
   it("AC-6: nothing in a file runs, navigates or fetches", async () => {
     expect(kinas("hostile.md").code).toBe(0);
     await waitForHeader("hostile.md");

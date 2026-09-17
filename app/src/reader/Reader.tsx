@@ -20,6 +20,7 @@ import { highlightCode, shouldHighlight } from "./highlight.ts";
 import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
 import { cachedSvg, renderDiagram } from "./mermaid.ts";
+import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
@@ -42,6 +43,8 @@ interface Doc {
   render: ReaderRender;
   /** The lowercased extension, for the highlighter's language. */
   ext: string;
+  /** The file's text, kept so the Preview/Source toggle re-renders it without reading the file again. */
+  text: string;
   rendered: Rendered;
 }
 
@@ -52,14 +55,15 @@ interface Doc {
  * dispatches on the answer. Every branch returns the same `Rendered` shape, which is why `swapBody`, `hydrate`,
  * the layout effect and the Contents gate need no knowledge of modes at all.
  */
-function renderDoc(text: string, render: ReaderRender, ext: string, path: string): Rendered {
+function renderDoc(text: string, render: ReaderRender, ext: string, path: string, view: HtmlView): Rendered {
   switch (render) {
     case "markdown":
       return renderMarkdown(text);
     case "image":
       return renderImage(path);
-    // The preview lands in task 7.0; until then HTML is read as what it is, which is also its Source view.
+    // Rust decides *that* a file is HTML (R3); the toggle only chooses which of its two views this session shows.
     case "html":
+      return view === "preview" ? renderPreview(text) : renderSource(text, languageFor(ext));
     case "source":
       return renderSource(text, languageFor(ext));
   }
@@ -83,6 +87,18 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path
 /** Every status line this session, for the debug-only `readerStatusLog` hook. */
 const statusLog: string[] = [];
 
+type HtmlView = "preview" | "source";
+
+/**
+ * Whether an HTML file shows as the page it is, or as its markup. Session state, never a setting (R21).
+ *
+ * Module-level on purpose: "the choice sticks for the session" (Miguel, 2026-09-16) explicitly does not mean
+ * surviving relaunch, and `reader_width_pct`'s path through `get_ui_prefs`/`set_reader_width` already exists for
+ * things that do. A module variable dies with the process, which is exactly the requirement — and it keeps this
+ * work's promise of adding no new `Store::conn()` access, whose non-reentrant mutex froze the whole window once.
+ */
+let htmlView: HtmlView = "preview";
+
 const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
 const mimeOf = (path: string) => MIME[path.slice(path.lastIndexOf(".") + 1).toLowerCase()] ?? "application/octet-stream";
 
@@ -100,6 +116,9 @@ function swapBody(body: HTMLElement, scroller: HTMLElement, rendered: Rendered, 
 
   const oldBlocks = new Map<string, HTMLElement>();
   const oldImages = new Map<string, HTMLImageElement>();
+  // The preview frame is kept, not rebuilt: a fresh iframe would restart the page's scripts *and* jump the
+  // layout, and R17 only accepts the first of those.
+  const oldFrame = reload ? body.querySelector<HTMLIFrameElement>("iframe.reader-preview-frame") : null;
   if (reload) {
     for (const block of body.querySelectorAll<HTMLElement>(".mermaid-block")) oldBlocks.set(block.dataset.index ?? "", block);
     for (const img of body.querySelectorAll<HTMLImageElement>("img[data-src][data-loaded]")) oldImages.set(img.dataset.src ?? "", img);
@@ -128,6 +147,10 @@ function swapBody(body: HTMLElement, scroller: HTMLElement, rendered: Rendered, 
       oldImages.delete(img.dataset.src ?? "");
     }
   }
+  // Moved into the new placeholder rather than replaced, so `hydrate` finds the same element and only has to
+  // reassign `srcdoc`. Switching to Source has no placeholder, so the frame is simply dropped.
+  const slot = fresh.querySelector(".reader-preview");
+  if (oldFrame && slot) slot.append(oldFrame);
   body.replaceChildren(fresh);
   if (reload) scroller.scrollTop = atBottom ? scroller.scrollHeight : top;
 }
@@ -221,7 +244,8 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
             lines: 0,
             render: "image",
             ext: opened.ext,
-            rendered: renderDoc("", "image", opened.ext, opened.path),
+            text: "",
+            rendered: renderDoc("", "image", opened.ext, opened.path, htmlView),
           };
           docRef.current = next;
           setDoc(next);
@@ -250,7 +274,8 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           lines: opened.text.text.split("\n").length,
           render,
           ext: opened.ext,
-          rendered: renderDoc(opened.text.text, render, opened.ext, opened.path),
+          text: opened.text.text,
+          rendered: renderDoc(opened.text.text, render, opened.ext, opened.path, htmlView),
         };
         docRef.current = next;
         setDoc(next);
@@ -350,7 +375,37 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
       // Source blocks and markdown fences alike (R10). Highlighted here, after the swap, never in the pure
       // renderer, so render.ts and source.ts stay DOM-free and bun-testable.
       const code = [...el.querySelectorAll<HTMLElement>('pre > code[class^="language-"]:not([data-highlighted]):not([data-highlight])')];
+      // The HTML preview (R12, R13). Built here rather than in the pure renderer, and never through `innerHTML`:
+      // the document is assigned to `srcdoc` as a *property*, on an element made with `createElement`.
+      const slot = el.querySelector(".reader-preview");
+      const previewDoc = current.rendered.preview;
       await Promise.all([
+        ...(slot && previewDoc !== undefined
+          ? [
+              (async () => {
+                const existing = slot.querySelector<HTMLIFrameElement>("iframe.reader-preview-frame");
+                // An unchanged document on the same element: nothing to do, so the page is not restarted.
+                if (existing && existing.dataset.hash === current.hash) return;
+                const frame = existing ?? document.createElement("iframe");
+                if (!existing) {
+                  frame.className = "reader-preview-frame";
+                  // `allow-scripts` and nothing else: with `allow-same-origin` beside it the framed document could
+                  // remove its own sandbox attribute, and the isolation would be worth nothing (R12).
+                  frame.setAttribute("sandbox", PREVIEW_SANDBOX);
+                  frame.setAttribute("title", "Preview");
+                }
+                const loaded = new Promise<void>((resolve) => {
+                  frame.addEventListener("load", () => resolve(), { once: true });
+                  // A page that never fires `load` must not hang the open's measurement.
+                  window.setTimeout(resolve, 3000);
+                });
+                frame.srcdoc = previewDoc;
+                frame.dataset.hash = current.hash;
+                if (!existing) slot.append(frame);
+                await loaded;
+              })(),
+            ]
+          : []),
         ...blocks.map(async (block) => {
           const diagram = current.rendered.diagrams[Number(block.dataset.index)];
           if (!diagram || diagram.hash !== block.dataset.hash) return;
@@ -458,7 +513,8 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           ...latest,
           hash: text.hash,
           lines: text.text.split("\n").length,
-          rendered: renderDoc(text.text, latest.render, latest.ext, latest.path),
+          text: text.text,
+          rendered: renderDoc(text.text, latest.render, latest.ext, latest.path, htmlView),
         };
         docRef.current = next;
         setDoc(next);
@@ -572,6 +628,23 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
     if (!docRef.current && !folder && !problem) onClose();
   };
 
+  /**
+   * Preview ⇄ Source for the open HTML file (R21).
+   *
+   * Flips the module-level session variable and re-renders from the text already in hand: no new Tauri command,
+   * no stored setting, and no second read of the file. The label names the view you would switch *to*, as
+   * Journey C describes it, while `aria-pressed` reports whether the page is currently rendered.
+   */
+  const toggleHtmlView = () => {
+    htmlView = htmlView === "preview" ? "source" : "preview";
+    const current = docRef.current;
+    if (!current || current.render !== "html") return;
+    pending.current = { mode: "new", fragment: null, scrollTop: 0 };
+    const next: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path, htmlView) };
+    docRef.current = next;
+    setDoc(next);
+  };
+
   // Debug builds only: e2e proves a reload keeps the diagram's node (R30), and can see where focus went (R34).
   useEffect(() => {
     if (import.meta.env.TAURI_ENV_DEBUG !== "true") return;
@@ -638,6 +711,17 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
         {narrow && contents && (
           <button type="button" className="reader-button" aria-pressed={overlay === "contents"} onClick={() => setOverlay((o) => (o === "contents" ? null : "contents"))}>
             Contents
+          </button>
+        )}
+        {doc?.render === "html" && (
+          <button
+            type="button"
+            className="reader-button"
+            aria-pressed={htmlView === "preview"}
+            title={htmlView === "preview" ? "Show this page's markup" : "Render this page"}
+            onClick={toggleHtmlView}
+          >
+            {htmlView === "preview" ? "Source" : "Preview"}
           </button>
         )}
         <button type="button" className="reader-button" disabled={!doc} title="Open this file in an editor pane in Herdr" onClick={() => void openInEditor()}>

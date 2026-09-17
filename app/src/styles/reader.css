@@ -405,6 +405,34 @@
   overflow-x: visible;
 }
 
+/*
+ * The HTML preview's frame (reader PRD R13, R14, §4).
+ *
+ * The frame owns its own scrolling. The document inside is opaque-origin — that is the whole point of R12 — so the
+ * parent cannot read its height and cannot size itself to the content. It is given the reader's height instead,
+ * and the page scrolls inside it.
+ *
+ * White, and deliberately not themed: a generated page assumes a light background, and painting it on the app's
+ * dark ground would make most previews unreadable. `color-scheme: light` keeps the frame's own scrollbars and form
+ * controls light to match.
+ */
+.reader-preview {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+}
+
+.reader-preview-frame {
+  flex: 1;
+  width: 100%;
+  /* A floor, so the frame is usable even where the flex height does not resolve. */
+  min-height: 70vh;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color-scheme: light;
+}
+
 .reader-frontmatter {
   margin: 0 0 20px;
   padding: 12px 14px;

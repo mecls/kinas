@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { injectCsp, PREVIEW_CSP, PREVIEW_SANDBOX } from "./preview.ts";
+import { injectCsp, PREVIEW_CSP, PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 
 // The preview is the one place in Kinas that renders a document an agent may have written, in a process whose
 // webview can type into the terminal. These cases are the parts of that isolation a unit test can reach: the
@@ -122,5 +122,41 @@ describe("where the policy is injected", () => {
   });
 });
 
-/** The exact tag `injectCsp` inserts, rebuilt here so the test above can subtract it. */
+describe("a file rendered as a page", () => {
+  test("the document travels in `preview`, and never in `html`", () => {
+    // The whole point of the split: `swapBody` assigns `html` with innerHTML, which does not run <script> but does
+    // fire inline handlers and load remote resources. A page's bytes there would breach the guarantee while the
+    // current AC-6 assertion still passed (R13).
+    const rendered = renderPreview('<!doctype html><script>window.__pwned = 1</script><img src=x onerror="alert(1)">');
+    expect(rendered.html).toBe('<div class="reader-preview"></div>');
+    expect(rendered.html).not.toContain("script");
+    expect(rendered.html).not.toContain("onerror");
+    expect(rendered.preview).toContain("window.__pwned = 1");
+  });
+
+  test("the frame's document carries the policy", () => {
+    expect(renderPreview("<p>x</p>").preview).toContain(PREVIEW_CSP);
+  });
+
+  test("no headings, frontmatter or diagrams, so Contents hides itself", () => {
+    const rendered = renderPreview("<h1>A heading</h1>");
+    expect(rendered.headings).toEqual([]);
+    expect(rendered.frontmatter).toBeNull();
+    expect(rendered.diagrams).toEqual([]);
+  });
+
+  test("a --- leading page keeps its head: preview never runs the frontmatter split", () => {
+    // A Jekyll page opens with `---`. renderMarkdown calls splitFrontmatter unconditionally, so reusing that path
+    // would silently eat the first lines — the same bug renderSource avoids.
+    const rendered = renderPreview("---\nlayout: post\n---\n<p>body</p>");
+    expect(rendered.preview).toContain("layout: post");
+    expect(rendered.preview).toContain("<p>body</p>");
+  });
+
+  test("an empty file previews as an empty document, not an error", () => {
+    expect(renderPreview("").preview).toBe(META_TAG);
+  });
+});
+
+/** The exact tag `injectCsp` inserts, rebuilt here so the tests above can subtract it. */
 const META_TAG = `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">`;

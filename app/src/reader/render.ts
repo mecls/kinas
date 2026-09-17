@@ -25,6 +25,16 @@ export interface Rendered {
   headings: Heading[];
   frontmatter: FrontmatterView | null;
   diagrams: Diagram[];
+  /**
+   * The document for an HTML preview's frame, already carrying its injected policy.
+   *
+   * Optional, so `renderMarkdown` and `renderSource` are untouched and every existing case still passes. It
+   * travels beside `html` rather than inside it because `swapBody` puts `html` through `innerHTML`: that does not
+   * run `<script>`, but it *does* fire inline handlers and *does* load remote resources, so a page's own bytes
+   * there would breach the reader's guarantee while the current AC-6 assertion still passed (R13). `hydrate`
+   * assigns this to `iframe.srcdoc` as a property instead.
+   */
+  preview?: string;
 }
 
 /** What one render collects; markdown-it hands it to every rule as `env`. */

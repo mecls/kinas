@@ -6,6 +6,8 @@
 // the injected policy denies it the network; and `hydrate` assigns the document to `iframe.srcdoc` as a *property*
 // so the file's bytes never pass through the parent document's `innerHTML` (R13).
 
+import type { Rendered } from "./render.ts";
+
 /**
  * The frame's sandbox attribute — `allow-scripts` and **nothing else** (R12).
  *
@@ -92,4 +94,27 @@ function insertionPoint(html: string): number {
 export function injectCsp(html: string): string {
   const at = insertionPoint(html);
   return html.slice(0, at) + META + html.slice(at);
+}
+
+/**
+ * A file shown as the page it is, rather than as its markup (R13).
+ *
+ * `html` is an **empty placeholder**: the document itself travels in `preview`, because `swapBody` assigns `html`
+ * with `innerHTML` and a page's bytes must never be parsed as markup in the parent document. `hydrate` builds the
+ * frame with `createElement`, sets `sandbox` with `setAttribute`, and assigns this to `srcdoc` as a property.
+ *
+ * `srcdoc` rather than a Blob URL: a `blob:` document inherits its creator's origin, so any slip in R12 would be
+ * strictly worse there, and there is no URL lifetime to reap beside the image Blobs `Reader.tsx` already tracks.
+ *
+ * Like `renderSource`, this never calls `splitFrontmatter` — a Jekyll page opening with `---` would otherwise
+ * silently lose its head — and it reports no headings, so the Contents rail hides itself.
+ */
+export function renderPreview(text: string): Rendered {
+  return {
+    html: '<div class="reader-preview"></div>',
+    headings: [],
+    frontmatter: null,
+    diagrams: [],
+    preview: injectCsp(text),
+  };
 }

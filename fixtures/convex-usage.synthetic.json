@@ -1,0 +1,41 @@
+{
+  "metrics": {
+    "functionCalls": {
+      "unit": "calls",
+      "usage": { "current_day": 12000, "current_month": 250000 }
+    },
+    "databaseIoGb": {
+      "unit": "GB",
+      "usage": { "current_day": 0.01, "current_month": 0.25 }
+    },
+    "dataEgressGb": {
+      "unit": "GB",
+      "usage": { "current_day": 0.02, "current_month": 0.5 }
+    },
+    "searchQueryGb": {
+      "unit": "query-GB",
+      "usage": { "current_day": 6, "current_month": 150 }
+    },
+    "queryMutationComputeGbHours": {
+      "unit": "GB-hours",
+      "usage": { "current_day": 0.4, "current_month": 10 }
+    },
+    "actionComputeConvexGbHours": {
+      "unit": "GB-hours",
+      "usage": { "current_day": 0.5, "current_month": 1 }
+    },
+    "actionComputeNodeJsGbHours": {
+      "unit": "GB-hours",
+      "usage": { "current_day": 1.0, "current_month": 2 }
+    },
+    "actionComputeCpuGbHours": {
+      "unit": "GB-hours",
+      "usage": { "current_day": 1.5, "current_month": 3 }
+    },
+    "aiGatewayCostDollars": {
+      "unit": "USD",
+      "usage": { "current_day": 0.3, "current_month": 4.2 }
+    }
+  },
+  "seedStatus": "complete"
+}

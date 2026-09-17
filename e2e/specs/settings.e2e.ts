@@ -147,4 +147,51 @@ describe("Settings from the sidebar, and its shortcuts", () => {
     await blur();
     await browser.waitUntil(async () => (await stored()) === "nvim -R", { timeout: 10000, timeoutMsg: "the editor was not stored" });
   });
+
+  // Convex (prd-convex-usage.md §3 Configure, R2, R3).
+  it("saves a Convex deploy key without ever reading it back, and refuses a deployment URL with a path", async () => {
+    const keyField = 'input[aria-label="Convex deploy key"]';
+    const urlField = 'input[aria-label="Convex deployment URL"]';
+    const settings = () =>
+      browser.execute(() =>
+        (
+          window as unknown as {
+            __TAURI_INTERNALS__: { invoke: (c: string) => Promise<{ convex_key_saved: boolean; convex_deployment_url: string; convex_plan: string }> };
+          }
+        ).__TAURI_INTERNALS__.invoke("get_settings"),
+      );
+    const blurUrl = () =>
+      browser.execute((sel: string) => {
+        const input = document.querySelector<HTMLInputElement>(sel)!;
+        input.focus();
+        input.blur();
+      }, urlField);
+
+    // R2: the field says whether a key is saved; it never holds one.
+    await expect($(keyField)).toHaveAttribute("placeholder", "No key saved");
+    await fill(keyField, "convex-FAKE-typed-deploy-key");
+    // By label, not by text: there are two "Save" buttons on this page and `button=Save` matches Ollama's.
+    await $('button[aria-label="Save Convex deploy key"]').click();
+    await expect($('[data-section="convex"] .settings-message')).toHaveText("Saved");
+    await browser.waitUntil(async () => (await settings()).convex_key_saved, { timeout: 10000, timeoutMsg: "the deploy key was not saved" });
+    await expect($(keyField)).toHaveAttribute("placeholder", "A key is saved");
+    // Cleared on submit, and `get_settings` answers with a boolean — the key itself has no way back out.
+    await expect($(keyField)).toHaveValue("");
+
+    // R3: a URL carrying a path is refused. The reader appends `/api/v1/get_current_usage`, so storing one
+    // would make every request 404 for ever with nothing on screen to say why.
+    const before = (await settings()).convex_deployment_url;
+    await fill(urlField, "https://happy-otter-123.convex.cloud/api/v1");
+    await blurUrl();
+    await expect($('[data-section="convex"] .settings-message')).toHaveText(expect.stringContaining("no path"));
+    expect((await settings()).convex_deployment_url).toBe(before);
+
+    await fill(urlField, "http://happy-otter-123.convex.cloud");
+    await blurUrl();
+    await expect($('[data-section="convex"] .settings-message')).toHaveText(expect.stringContaining("https://"));
+    expect((await settings()).convex_deployment_url).toBe(before);
+
+    // The plan only chooses which allowances the gauges divide by (R6).
+    await expect($('select[aria-label="Convex plan"]')).toHaveValue("starter");
+  });
 });

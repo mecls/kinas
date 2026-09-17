@@ -30,6 +30,8 @@ export interface StatusResult {
 const DEFAULT_LIMITS: Record<string, [number, number]> = {
   "claude-plan": [1_800_000, 43_200_000],
   "ollama-cloud": [600_000, 43_200_000],
+  // Twice the 5-minute cadence, matching Ollama's (convex R13).
+  convex: [600_000, 43_200_000],
   host: [120_000, 43_200_000],
 };
 

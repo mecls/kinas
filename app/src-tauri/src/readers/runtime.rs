@@ -2,7 +2,7 @@
 //! connection only for its own writes, never across a network request or a sample, so the window's reads
 //! are never blocked for long.
 
-use super::{claude_plan, host, logs, ollama_cloud, poller};
+use super::{claude_plan, convex, host, logs, ollama_cloud, poller};
 use crate::keychain::{self, KeyStore};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use crate::store::{now_ms, Store};
@@ -37,6 +37,7 @@ pub struct ReaderControl {
     logs: Mutex<Sender<()>>,
     handoff: Mutex<Sender<()>>,
     ollama: Mutex<Sender<poller::Trigger>>,
+    convex: Mutex<Sender<poller::Trigger>>,
     backfill: Mutex<Backfill>,
     data_dir: PathBuf,
 }
@@ -70,6 +71,7 @@ impl ReaderControl {
         let _ = self.logs.lock().unwrap_or_else(|p| p.into_inner()).send(());
         let _ = self.handoff.lock().unwrap_or_else(|p| p.into_inner()).send(());
         let _ = self.ollama.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
+        let _ = self.convex.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
     }
 }
 
@@ -97,6 +99,9 @@ fn key_store() -> Arc<dyn KeyStore> {
         if let Ok(key) = std::env::var("KINAS_E2E_OLLAMA_KEY") {
             let _ = store.set(keychain::OLLAMA_ACCOUNT, &key);
         }
+        if let Ok(key) = std::env::var("KINAS_E2E_CONVEX_KEY") {
+            let _ = store.set(keychain::CONVEX_ACCOUNT, &key);
+        }
         return Arc::new(store);
     }
     Arc::new(keychain::MacKeychain)
@@ -107,6 +112,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
     let (logs_tx, logs_rx) = channel();
     let (handoff_tx, handoff_rx) = channel();
     let (ollama_tx, ollama_rx) = channel();
+    let (convex_tx, convex_rx) = channel();
     let keys = key_store();
     app.manage(ReaderControl {
         usage_visible: AtomicBool::new(false),
@@ -114,6 +120,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
         logs: Mutex::new(logs_tx.clone()),
         handoff: Mutex::new(handoff_tx.clone()),
         ollama: Mutex::new(ollama_tx),
+        convex: Mutex::new(convex_tx),
         backfill: Mutex::new(Backfill::default()),
         data_dir: data_dir.clone(),
     });
@@ -137,6 +144,11 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
         let app = app.clone();
         let keys = Arc::clone(&keys);
         move || ollama_loop(app, keys, ollama_rx)
+    });
+    spawn("kinas-convex", {
+        let app = app.clone();
+        let keys = Arc::clone(&keys);
+        move || convex_loop(app, keys, convex_rx)
     });
     keys
 }
@@ -347,6 +359,79 @@ fn ollama_loop(app: AppHandle, keys: Arc<dyn KeyStore>, rx: Receiver<poller::Tri
         match result {
             ollama_cloud::PollResult::RateLimited { retry_after_s } => schedule.record(poller::Result::RateLimited { retry_after_s }, now),
             _ if requested => schedule.record(poller::Result::Done, now),
+            _ => schedule.skip(now),
+        }
+        changed(&app);
+    }
+}
+
+/// The Convex reader's thread (prd-convex-usage.md R11), the same shape as `ollama_loop`.
+///
+/// Two things it must not do, both of which have bitten this app before: hold the store's lock across the
+/// network request, and take `Store::conn()` twice on this thread — the second froze the whole window on
+/// 2026-09-16. So the deployment URL and the tier are read under **one** guard that is released before the
+/// request, and the write takes a fresh guard afterwards.
+fn convex_loop(app: AppHandle, keys: Arc<dyn KeyStore>, rx: Receiver<poller::Trigger>) {
+    let client = match convex::ReqwestClient::new() {
+        Ok(c) => c,
+        Err(e) => {
+            with_conn(&app, |conn, org| {
+                let _ = write_reader_status(conn, org, Reader::Convex, Outcome::Error(&format!("HTTP client: {e}")), now_ms());
+            });
+            return;
+        }
+    };
+    let mut schedule = poller::Poller::new(now_ms());
+    loop {
+        let now = now_ms();
+        let trigger = match rx.recv_timeout(Duration::from_millis(schedule.sleep_ms(now) as u64)) {
+            Ok(t) => t,
+            Err(RecvTimeoutError::Timeout) => poller::Trigger::Tick,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
+        let now = now_ms();
+        if !schedule.should_request(trigger, now) {
+            continue;
+        }
+        let (stored_url, url, tier) = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            let org = store.org_id();
+            let text = |key: &str| crate::system::get_setting(&conn, org, key).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+            let stored = text("convex_deployment_url");
+            (stored.clone(), convex::base_url(&stored), convex::limits::Tier::parse(&text("convex_plan")))
+        };
+        let key = match keys.get(keychain::CONVEX_ACCOUNT) {
+            Ok(k) => k,
+            Err(e) => {
+                with_conn(&app, |conn, org| {
+                    let _ = write_reader_status(conn, org, Reader::Convex, Outcome::Error(&e), now);
+                });
+                schedule.skip(now);
+                changed(&app);
+                continue;
+            }
+        };
+        // "Configured" is judged on the **stored** setting, never on the resolved URL. The debug override decides
+        // only *where* a request goes; if it also decided *whether* one happens, a build with the override set
+        // would poll with no deployment saved — which is R3's "blank URL means zero requests" quietly broken,
+        // and it made the e2e's "makes no request until a deployment is saved" case impossible to satisfy.
+        let configured = !stored_url.trim().is_empty();
+        // The request happens outside the store's lock.
+        let fetched = key.as_deref().filter(|k| !k.is_empty()).filter(|_| configured).map(|k| convex::fetch(&client, &url, k));
+        let requested = fetched.is_some();
+        let result = {
+            let store = app.state::<Store>();
+            let mut conn = store.conn();
+            convex::record_poll(&mut conn, store.org_id(), fetched, configured, tier, now)
+        };
+        match result {
+            convex::PollResult::RateLimited { retry_after_s } => schedule.record(poller::Result::RateLimited { retry_after_s }, now),
+            // A seeding deployment lands here too, and rightly: a request *was* made, so it counts against the
+            // cadence even though nothing was written.
+            _ if requested => schedule.record(poller::Result::Done, now),
+            // Nothing was requested — no key, or no deployment. `skip` moves the next tick on without counting a
+            // request, so saving a key polls immediately (R11).
             _ => schedule.skip(now),
         }
         changed(&app);

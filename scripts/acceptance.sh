@@ -61,6 +61,33 @@ if want ac10; then
   leaks=0
   for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c 'sk-ant-' "$f" || true); [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }; done
   [ $leaks -eq 0 ] && pass "no sk-ant- in the store or the logs" || fail "sk-ant- found (above)"
+
+  # No credential header ever reaches the store or the logs, whichever provider it belongs to. `Convex ` keeps
+  # its trailing space on purpose: without it this matches the word in every log line that names the reader.
+  leaks=0
+  for f in "$DB"* "$LOGS"/*; do
+    [ -f "$f" ] || continue
+    c=$(grep -a -c -E 'Bearer |Convex [A-Za-z0-9_|-]{8}' "$f" || true)
+    [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }
+  done
+  [ $leaks -eq 0 ] && pass "no Bearer or Convex credential header in the store or the logs" || fail "a credential header was found (above)"
+
+  # The Convex deploy key itself (prd-convex-usage.md §5). Its first 12 characters cannot be written here — a
+  # real key prefix in a committed script would be the very leak this is looking for — so they are read from the
+  # Keychain, or supplied as KINAS_CONVEX_KEY_PREFIX.
+  prefix=${KINAS_CONVEX_KEY_PREFIX:-$(security find-generic-password -s ai.sintralabs.kinas -a convex-deploy-key -w 2>/dev/null | cut -c1-12)}
+  if [ -z "$prefix" ]; then
+    # Deliberately not a PASS: an empty store proves nothing, and a green tick here would be a lie of omission.
+    echo "SKIP  no Convex deploy key saved yet, so there is nothing to look for (save one in Settings first)"
+  else
+    leaks=0
+    for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c -F "$prefix" "$f" || true); [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }; done
+    if [ -x "$KINAS" ]; then
+      c=$("$KINAS" status --json 2>/dev/null | grep -c -F "$prefix" || true)
+      [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
+    fi
+    [ $leaks -eq 0 ] && pass "the Convex deploy key is not in the store, the logs or kinas status --json" || fail "the Convex deploy key leaked (above)"
+  fi
 fi
 
 if want ac9; then

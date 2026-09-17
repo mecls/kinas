@@ -10,6 +10,10 @@ use std::process::{Command, Stdio};
 
 pub const SERVICE: &str = "ai.sintralabs.kinas";
 pub const OLLAMA_ACCOUNT: &str = "ollama-cloud-api-key";
+/// The Convex deploy key, scoped `deployment:usage:view` (prd-convex-usage.md R2). Stored through the same
+/// `KeyStore`, which writes via `/usr/bin/security -i` on **stdin**: argv would expose it to `ps`, and
+/// `add-generic-password -w` silently truncates at 128 characters — Convex keys are long enough to hit that.
+pub const CONVEX_ACCOUNT: &str = "convex-deploy-key";
 const SECURITY: &str = "/usr/bin/security";
 /// `security` exits 44 when the item does not exist.
 const NOT_FOUND: i32 = 44;

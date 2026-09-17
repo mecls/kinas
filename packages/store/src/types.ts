@@ -5,7 +5,7 @@
 import type { QuotaWindow, Subscription } from "./quota-line.ts";
 
 export type { QuotaWindow, Subscription };
-export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host";
+export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host" | "convex";
 
 export interface ModelRequests {
   name: string;

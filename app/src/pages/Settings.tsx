@@ -13,6 +13,7 @@ import {
   type SettingsView,
 } from "../api.ts";
 import { chordFromEvent } from "../settings/chord.ts";
+import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 
 // Settings (PRD §3.9, amended 2026-09-15): a page, opened from the gear at the foot of the sidebar or ⌘,. It stays
@@ -203,6 +204,8 @@ export function SettingsPage({
             </form>
             {note("ollama")}
           </section>
+
+          <ConvexSection settings={settings} act={act} note={note} />
 
           <section className="settings-section" data-section="shortcuts">
             <h2>Keyboard shortcuts</h2>

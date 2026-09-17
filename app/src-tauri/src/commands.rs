@@ -1,6 +1,6 @@
 //! Tauri commands the webview calls. Reads only; every write happens in the Rust core.
 
-use crate::keychain::{Keys, OLLAMA_ACCOUNT};
+use crate::keychain::{Keys, CONVEX_ACCOUNT, OLLAMA_ACCOUNT};
 use crate::pty::{self, PtyState};
 use crate::redact::redact;
 use crate::readers::claude_plan;
@@ -50,6 +50,12 @@ pub struct SettingsView {
     pub autostart_error: Option<String>,
     pub cli_link: crate::cli_link::LinkStatus,
     pub ollama_key_saved: bool,
+    /// Whether a Convex deploy key is in the Keychain. Never the key itself (convex R2).
+    pub convex_key_saved: bool,
+    /// The watched deployment, or empty for "no deployment" (convex R3, R14: one deployment in v0).
+    pub convex_deployment_url: String,
+    /// `starter` or `professional`; only changes R6's denominators.
+    pub convex_plan: String,
     pub claude_hook: claude_plan::HookStatus,
     /// The command Open in editor runs in a new Herdr pane (reader R36).
     pub reader_editor: String,
@@ -69,7 +75,7 @@ pub fn get_settings(
     system: State<'_, SystemState>,
 ) -> Result<SettingsView, String> {
     // Everything that needs the connection is read under one guard: taking it twice on this thread would deadlock.
-    let (org_name, menu_bar_quota, global_hotkey, launch_at_login, reader_editor, projects_root) = {
+    let (org_name, menu_bar_quota, global_hotkey, launch_at_login, reader_editor, projects_root, convex_deployment_url, convex_plan) = {
         let conn = store.conn();
         let org = store.org_id();
         let name: String = conn.query_row("SELECT name FROM orgs WHERE id = ?1", [org], |r| r.get(0)).map_err(|e| e.to_string())?;
@@ -81,6 +87,8 @@ pub fn get_settings(
             system::get_setting(&conn, org, "launch_at_login").and_then(|v| v.as_bool()).unwrap_or(true),
             text("reader_editor", crate::reader::editor::DEFAULT_EDITOR),
             crate::paths::projects_root(&conn, org),
+            text("convex_deployment_url", ""),
+            text("convex_plan", "starter"),
         )
     };
     Ok(SettingsView {
@@ -92,6 +100,9 @@ pub fn get_settings(
         autostart_error: system.autostart_error.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         cli_link: link.0.clone(),
         ollama_key_saved: keys.0.get(OLLAMA_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
+        convex_key_saved: keys.0.get(CONVEX_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
+        convex_deployment_url,
+        convex_plan,
         claude_hook: claude_plan::hook_status(control.data_dir(), now_ms()),
         reader_editor,
         projects_root: projects_root.display().to_string(),
@@ -269,6 +280,54 @@ pub fn save_ollama_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>,
 #[tauri::command]
 pub fn remove_ollama_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
     keys.0.remove(OLLAMA_ACCOUNT)?;
+    control.refresh();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn convex_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
+    Ok(KeyStatus { saved: keys.0.get(CONVEX_ACCOUNT)?.is_some() })
+}
+
+/// Settings: saves the Convex deploy key in the Keychain and asks the reader to poll now (convex R2).
+///
+/// The key should be minted with **only** `deployment:usage:view` — so scoped, it cannot deploy, read or write
+/// data, run functions, or read environment variables. Nothing here can check that, which is exactly why the
+/// GET-only guard test exists on the reader.
+#[tauri::command]
+pub fn save_convex_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>, key: String) -> Result<(), String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("the key is empty".into());
+    }
+    keys.0.set(CONVEX_ACCOUNT, key).map_err(|e| redact(&e))?;
+    control.refresh();
+    Ok(())
+}
+
+/// Settings: removes the key. The Convex gauges go back to "Add deploy key" on the next poll.
+#[tauri::command]
+pub fn remove_convex_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
+    keys.0.remove(CONVEX_ACCOUNT)?;
+    control.refresh();
+    Ok(())
+}
+
+/// Settings: the deployment to watch (convex R3). Empty disconnects it, and then no request is made at all.
+#[tauri::command]
+pub fn set_convex_deployment(store: State<'_, Store>, control: State<'_, ReaderControl>, url: String) -> Result<(), String> {
+    let url = crate::readers::convex::check_deployment_url(&url)?;
+    system::put_setting(&store.conn(), store.org_id(), "convex_deployment_url", &serde_json::json!(url)).map_err(|e| e.to_string())?;
+    control.refresh();
+    Ok(())
+}
+
+/// Settings: the plan tier, which only changes R6's denominators.
+#[tauri::command]
+pub fn set_convex_plan(store: State<'_, Store>, control: State<'_, ReaderControl>, plan: String) -> Result<(), String> {
+    let plan = crate::readers::convex::check_plan(&plan)?;
+    system::put_setting(&store.conn(), store.org_id(), "convex_plan", &serde_json::json!(plan)).map_err(|e| e.to_string())?;
+    // The stored percentages were computed against the old tier, so a fresh poll replaces them.
     control.refresh();
     Ok(())
 }

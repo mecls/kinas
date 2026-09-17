@@ -7,10 +7,13 @@ import { join } from "node:path";
 // - a stub Ollama /api/usage serving the legacy fixture to the fake key only
 
 const FAKE_KEY = "ollama-FAKE-e2e-key";
+const CONVEX_KEY = "convex-FAKE-e2e-deploy-key";
 const SESSION = "22222222-2222-2222-2222-222222222222";
 const DAY = 86_400_000;
 
 let server: ReturnType<typeof Bun.serve> | undefined;
+/** Convex requests served, so the spec can assert exactly one per poll window (convex R§5, R11's 60 s floor). */
+let convexRequests = 0;
 
 const claudeLine = (id: string, at: number, model: string, input: number, output: number) =>
   JSON.stringify({
@@ -56,20 +59,40 @@ export function setup(dataDir: string): Record<string, string> {
   );
 
   const body = readFileSync(join(import.meta.dir, "../../fixtures/ollama-usage-legacy.synthetic.json"), "utf8");
+  const convexBody = readFileSync(join(import.meta.dir, "../../fixtures/convex-usage.synthetic.json"), "utf8");
+  convexRequests = 0;
   server = Bun.serve({
+    hostname: "127.0.0.1",
     port: 0,
     fetch(req) {
-      if (new URL(req.url).pathname !== "/api/usage") return new Response("not found", { status: 404 });
+      const path = new URL(req.url).pathname;
+      // Reading the count must not change it.
+      if (path === "/__convex_count") return Response.json({ requests: convexRequests });
+      if (path === "/api/v1/get_current_usage") {
+        convexRequests += 1;
+        // `Convex`, not `Bearer`. The stub checks the scheme on purpose: R1 calls this the single most likely
+        // thing to get wrong, and a stub that accepted either would pass a reader sending the wrong one.
+        if (req.headers.get("authorization") !== `Convex ${CONVEX_KEY}`) return new Response("", { status: 401 });
+        return new Response(convexBody, { headers: { "content-type": "application/json" } });
+      }
+      if (path !== "/api/usage") return new Response("not found", { status: 404 });
       if (req.headers.get("authorization") !== `Bearer ${FAKE_KEY}`) return new Response("", { status: 401 });
       return new Response(body, { headers: { "content-type": "application/json" } });
     },
   });
 
+  const base = `http://127.0.0.1:${server.port}`;
   return {
     KINAS_CLAUDE_PROJECTS_DIR: claude,
     KINAS_PI_SESSIONS_DIR: pi,
-    KINAS_OLLAMA_BASE_URL: `http://127.0.0.1:${server.port}`,
+    KINAS_OLLAMA_BASE_URL: base,
     KINAS_E2E_OLLAMA_KEY: FAKE_KEY,
+    // One server, two providers: fewer ports and one teardown.
+    KINAS_CONVEX_BASE_URL: base,
+    KINAS_E2E_CONVEX_KEY: CONVEX_KEY,
+    // The spec needs both to assert the request count and to save a deployment URL — the reader refuses to
+    // request at all until a non-empty URL is stored, whatever the base-URL override says.
+    KINAS_E2E_CONVEX_STUB: base,
   };
 }
 

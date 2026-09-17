@@ -9,6 +9,7 @@ use std::time::Duration;
 pub const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../../../migrations/0001_init.sql")),
     (2, include_str!("../../../migrations/0002_usage_details.sql")),
+    (3, include_str!("../../../migrations/0003_provider_metrics.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";

@@ -2,6 +2,7 @@
 //! `reader_status`; the runtime in `runtime.rs` decides when they run.
 
 pub mod claude_plan;
+pub mod convex;
 pub mod host;
 pub mod logs;
 pub mod ollama_cloud;

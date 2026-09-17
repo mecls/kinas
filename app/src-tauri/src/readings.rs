@@ -54,6 +54,29 @@ pub struct HostView {
     pub state: ReadingState,
 }
 
+/// One metric of one provider for one window, from `provider_metrics` (convex R9).
+///
+/// Deliberately not a `QuotaView`: a quota is one percentage per window, while a provider metric carries a raw
+/// `used` with an *optional* limit. `used_pct` and `left_pct` are both `Option`, because a figure with no plan
+/// allowance — R8's AI-gateway cost — has no percentage and no "remaining"; inventing one is how a gauge starts
+/// lying. The percentage is unrounded and **not clamped**: over 100 % is real and billed (R6).
+#[derive(Debug, Serialize, PartialEq)]
+pub struct ProviderMetricView {
+    pub provider: String,
+    pub metric: String,
+    /// `day` is calendar-aligned **UTC**, which is not Europe/Lisbon — so every surface labels it "today (UTC)"
+    /// rather than quietly implying it lines up with the chart's Lisbon days (R4).
+    pub window: String,
+    pub used: f64,
+    pub limit_value: Option<f64>,
+    pub unit: Option<String>,
+    pub used_pct: Option<f64>,
+    pub left_pct: Option<f64>,
+    pub source: String,
+    pub updated_at: i64,
+    pub state: ReadingState,
+}
+
 #[derive(Debug, Serialize, PartialEq)]
 pub struct UsageDay {
     pub date: String,
@@ -70,6 +93,7 @@ pub struct UsageDay {
 pub struct UsageSnapshot {
     pub now: i64,
     pub quotas: Vec<QuotaView>,
+    pub provider_metrics: Vec<ProviderMetricView>,
     pub readers: Vec<ReaderView>,
     pub host: Option<HostView>,
     pub usage: Vec<UsageDay>,
@@ -85,6 +109,9 @@ fn default_limits(reader: &str) -> (i64, i64) {
         "ollama-cloud" => Reader::OllamaCloud,
         "claude-code-logs" => Reader::ClaudeCodeLogs,
         "pi-logs" => Reader::PiLogs,
+        "convex" => Reader::Convex,
+        // Anything unrecognised falls through to Host's 120 s window, which is the *shortest* — so a reader
+        // missing from this match goes stale in two minutes and nobody is told why. Add new readers here.
         _ => Reader::Host,
     };
     (r.stale_after_ms(), DEAD_AFTER_MS)
@@ -154,6 +181,37 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
         })?
         .collect::<Result<_, _>>()?;
 
+    // Read in the same single pass as everything else, so the page never mixes readings from two moments.
+    let provider_metrics = conn
+        .prepare(
+            "SELECT provider, metric, \"window\", used, limit_value, unit, used_pct, source, updated_at
+             FROM provider_metrics WHERE org_id = ?1
+             ORDER BY provider, metric, CASE \"window\" WHEN 'day' THEN 0 ELSE 1 END",
+        )?
+        .query_map(params![org_id], |r| {
+            let provider: String = r.get(0)?;
+            let used_pct: Option<f64> = r.get(6)?;
+            let updated_at: i64 = r.get(8)?;
+            // This works because a provider's name equals its reader id (`convex`). A provider whose two names
+            // diverged would fall through `default_limits` to Host's 120 s window and go stale in two minutes
+            // with nothing to explain it — so keep them equal, or map them here.
+            let (stale, dead) = limits_for(&provider);
+            Ok(ProviderMetricView {
+                metric: r.get(1)?,
+                window: r.get(2)?,
+                used: r.get(3)?,
+                limit_value: r.get(4)?,
+                unit: r.get(5)?,
+                used_pct,
+                left_pct: used_pct.map(|pct| 100.0 - pct),
+                source: r.get(7)?,
+                updated_at,
+                state: reading_state(Some(updated_at), stale, dead, None, now),
+                provider,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+
     let host = conn
         .prepare(
             "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, updated_at FROM hosts
@@ -199,7 +257,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
         .collect::<Result<_, _>>()?;
     let first_usage_date: Option<String> = conn.query_row("SELECT min(date) FROM usage_daily WHERE org_id = ?1", params![org_id], |r| r.get(0))?;
 
-    Ok(UsageSnapshot { now, quotas, readers, host, usage, first_usage_date, days, backfill, claude_hook })
+    Ok(UsageSnapshot { now, quotas, provider_metrics, readers, host, usage, first_usage_date, days, backfill, claude_hook })
 }
 
 #[cfg(test)]

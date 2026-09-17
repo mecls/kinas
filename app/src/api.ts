@@ -7,7 +7,16 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export type ReadingState = "fresh" | "stale" | "dead" | "reset";
 export type Subscription = "claude-plan" | "ollama-cloud";
 export type QuotaWindow = "session" | "week" | "month_credits";
-export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host";
+export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host" | "convex";
+
+/**
+ * A provider whose metrics live in `provider_metrics`, not `quotas`.
+ *
+ * Deliberately separate from `Subscription`: Convex writes no `quotas` row, because nine metrics across two
+ * windows do not fit that table's one-`used_pct`-per-row shape (convex R9). Widening `Subscription` instead
+ * would put Convex into every gauge that reads `quotas` and find nothing there.
+ */
+export type MetricProvider = "convex";
 
 export interface QuotaView {
   subscription: Subscription;
@@ -21,6 +30,31 @@ export interface QuotaView {
   state: ReadingState;
   /** Per-model request counts the provider reports for this window (Ollama); empty otherwise. */
   models: { name: string; request_count: number }[];
+}
+
+/**
+ * One metric of one provider for one window, from `provider_metrics` (convex R9).
+ *
+ * Not a `QuotaView`: a quota is one percentage per window, while a provider metric carries a raw `used` with an
+ * *optional* limit. `used_pct` and `left_pct` are both nullable on purpose, mirroring the Rust `Option` — a
+ * figure with no plan allowance (R8's AI-gateway cost) has no percentage and no "remaining", and a non-null
+ * type here would force the UI to invent a zero.
+ */
+export interface ProviderMetricView {
+  provider: MetricProvider;
+  /** As stored: the API's own key, or `actionCompute` for the R7 sum. */
+  metric: string;
+  /** `day` and `month` are calendar-aligned **UTC**, which is not Europe/Lisbon (convex R4). */
+  window: string;
+  used: number;
+  limit_value: number | null;
+  unit: string | null;
+  /** Unrounded and **not clamped**: over 100 % is real and billed (convex R6). */
+  used_pct: number | null;
+  left_pct: number | null;
+  source: string;
+  updated_at: number;
+  state: ReadingState;
 }
 
 export interface ReaderView {
@@ -72,6 +106,8 @@ export interface HookStatus {
 export interface UsageSnapshot {
   now: number;
   quotas: QuotaView[];
+  /** Read in the same pass as `quotas`, so the page never mixes readings from two moments (convex R§3). */
+  provider_metrics: ProviderMetricView[];
   readers: ReaderView[];
   host: HostView | null;
   /** The last 30 Europe/Lisbon days, oldest first; days with no rows are absent. */
@@ -106,6 +142,12 @@ export interface SettingsView {
   autostart_error: string | null;
   cli_link: LinkStatus;
   ollama_key_saved: boolean;
+  /** Whether a Convex deploy key is in the Keychain. Never the key itself (convex R2). */
+  convex_key_saved: boolean;
+  /** The watched deployment, or empty for "no deployment" — then no request is made at all (convex R3, R14). */
+  convex_deployment_url: string;
+  /** "starter" or "professional"; only changes which denominators the gauges use (convex R6). */
+  convex_plan: string;
   claude_hook: HookStatus;
   /** The command Open in editor runs in a new Herdr pane (reader R36). */
   reader_editor: string;
@@ -127,6 +169,16 @@ export const setGlobalHotkey = (chord: string) => invoke<void>("set_global_hotke
 export const setLaunchAtLogin = (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled });
 export const saveOllamaKey = (key: string) => invoke<void>("save_ollama_key", { key });
 export const removeOllamaKey = () => invoke<void>("remove_ollama_key");
+/**
+ * The Convex deploy key — mint it with **only** `deployment:usage:view`, which cannot deploy, read or write
+ * data, run functions, or read environment variables (convex R2). Saving polls immediately.
+ */
+export const saveConvexKey = (key: string) => invoke<void>("save_convex_key", { key });
+export const removeConvexKey = () => invoke<void>("remove_convex_key");
+/** `https://` and a host, with no path — the reader appends its own. Empty disconnects the deployment. */
+export const setConvexDeployment = (url: string) => invoke<void>("set_convex_deployment", { url });
+/** "starter" or "professional"; anything else is refused rather than silently read back as starter. */
+export const setConvexPlan = (plan: string) => invoke<void>("set_convex_plan", { plan });
 
 export interface UiPrefs {
   /** The in-window shortcuts Settings saved, by action; missing actions use settings/shortcuts.ts's defaults. */

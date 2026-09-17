@@ -143,9 +143,12 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
 - [x] Script, `onerror`, `javascript:` links and remote images in a file do nothing — `automated (reader.e2e.ts, AC-6)`
 - [x] Open in editor splits the focused Herdr pane with the editor on the file; with no Herdr it says so —
       `automated (reader-editor.e2e.ts, AC-7)`, in the throwaway session `kinas-e2e-editor`
-- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 30 ms**
-      over 5 opens (41, 35, 30, 28, 29) on the build from `96892b0`, with `read in 0 ms, watch in 0–1 ms`
-      throughout — `passed by agent` 2026-09-16. **The installed bundle must be ad-hoc signed**
+- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 27 ms**
+      over 5 warm opens (60, 28, 26, 26, 27) on the build from `6fc9bbe`, the cold first read 483 ms and excluded,
+      with `other.md` steady at 20–21 ms and `read in 0 ms, watch in 0 ms` throughout — `passed by agent`
+      2026-09-17, with the highlighter and the HTML preview in the build. (Previously **median 30 ms** over
+      (41, 35, 30, 28, 29) on `96892b0`, 2026-09-16 — so highlighting and the preview cost nothing measurable.)
+      **The installed bundle must be ad-hoc signed**
       (`codesign --force --deep --sign - /Applications/Kinas.app`): unsigned, a freshly copied bundle's first file
       read is held by macOS for minutes. **Wait the cold read out and measure only warm opens.** It has run 1 s,
       19 s, 21 s and 82 s across installs, growing when the same bundle is re-copied and re-signed, because macOS

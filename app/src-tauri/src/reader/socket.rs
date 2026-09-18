@@ -400,7 +400,9 @@ mod tests {
         drop(first);
         // Dropping a listener leaves its file behind, as a crash would.
         assert!(path.exists());
-        assert!(bind(&path).is_ok());
+        // Compared, not `is_ok()`: this failed once in about fifty runs on 2026-09-18 and `is_ok()` said nothing about
+        // which step refused — the probe still connecting, the remove, or the bind. Next time the message will.
+        assert_eq!(bind(&path).map(|_| ()), Ok(()), "a stale socket should be replaced");
         let long = t.base.join("x".repeat(120)).join(SOCKET_FILE);
         assert!(bind(&long).unwrap_err().contains("longer than"));
     }

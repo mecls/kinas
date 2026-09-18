@@ -24,4 +24,9 @@ describe("the divider's position (reader R32, amended; the panel is on the right
   test("a stage with no width keeps the default", () => {
     expect(panelPctAt(100, 0, 0)).toBe(DEFAULT_PANEL_PCT);
   });
+
+  test("the default is 45 — the same number commands.rs falls back to", () => {
+    // READER_WIDTH_DEFAULT in app/src-tauri/src/commands.rs pins the same value from its side.
+    expect(DEFAULT_PANEL_PCT).toBe(45);
+  });
 });

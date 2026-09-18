@@ -1,8 +1,12 @@
 // Where the divider between the page and the right-hand panel sits (reader R32, amended 2026-09-15; the panel moved
 // to the right of the whole window on 2026-09-18). Pure, so bun tests cover it without the terminal or the DOM.
 
-/** The panel's share of the stage until the divider is dragged. */
-export const DEFAULT_PANEL_PCT = 55;
+/**
+ * The panel's share of the stage until the divider is dragged. 45, not the 55 it was beside the 72 px rail: the sidebar
+ * is 220 px now, and at the default window the page keeps a little more than half of what is left — 583 px for a
+ * terminal, 477 for the reader. Must equal READER_WIDTH_DEFAULT in commands.rs.
+ */
+export const DEFAULT_PANEL_PCT = 45;
 export const MIN_PANEL_PCT = 20;
 export const MAX_PANEL_PCT = 80;
 /** Neither side may be dragged narrower than this. Must equal `--pane-min` in styles/shell.css. */

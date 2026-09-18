@@ -64,7 +64,9 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
       `automated (keyboard.e2e.ts)`
 - [x] A shortcut rebound in Settings (⌘B for the sidebar) works, its old chord does nothing, and a chord that is
       already taken is refused with whose it is — `automated (settings.e2e.ts)`
-- [ ] The sidebar, the gear and the Settings page look right — `outstanding — needs Miguel`
+- [ ] The sidebar (220 px since 2026-09-18: an icon and a name for Usage and Work, Settings at the foot), the gear
+      and the Settings page look right; at the window's minimum width, 820 px, the page and the reader each still
+      have their 280 px — `outstanding — needs Miguel`
 - [ ] The same with a physical keyboard — `outstanding — needs Miguel`
 
 ## Selection and clipboard
@@ -105,7 +107,8 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
 - [x] Run from the **Usage** page, `kinas open` opens the panel beside it and **does not switch to Work**; the
       panel ends at the stage's right edge and the PTY is the same process — `automated (reader.e2e.ts)`
 - [ ] Dragging the divider resizes the reader against the terminal, the terminal refits, the width survives a
-      relaunch, and double-click restores 55 % — `automated (reader.e2e.ts)`; the drag by hand with a real mouse is
+      relaunch, and double-click restores 45 % (55 % until the sidebar grew to 220 px, 2026-09-18) —
+      `automated (reader.e2e.ts)`; the drag by hand with a real mouse is
       `outstanding — needs Miguel`
 - [x] A relative link lands on its fragment and Back returns to the same scroll position —
       `automated (reader.e2e.ts, AC-3)`
@@ -198,8 +201,13 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
       no blank frame and no diagram flash — `outstanding — needs Miguel`
 - [ ] Open in editor from a plan in your own `default` session opens vim in a new pane beside the focused one —
       `outstanding — needs Miguel`
-- [ ] Narrow the window until the reader is under 640 px: Files and Contents move into the header and open over
-      the page — `outstanding — needs Miguel`
+- [x] The file tree lives in the **left sidebar** while it is showing: `kinas open docs` lists the folder there with
+      README.md selected, a click on another file opens it and **keeps the folder** (and adds no line to the log the
+      200 ms gate counts), and with the sidebar hidden (⌘S) the tree comes back to the reader behind its Files
+      button — `automated (reader.e2e.ts, three-column shell AC-11)`
+- [ ] Docked beside the sidebar the reader is under 640 px, so **Contents** is a header button that opens over the
+      page; **Expand** it and Contents becomes a column beside the document. With the sidebar hidden, Files does
+      the same — `outstanding — needs Miguel` (the button and its list are `automated (reader.e2e.ts, AC-1)`)
 - [ ] Cursor not opened to read markdown since ____ (the plan's first "done when", after a week) —
       `outstanding — needs Miguel`
 

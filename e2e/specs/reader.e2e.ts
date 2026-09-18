@@ -1,6 +1,7 @@
 import { $, $$, browser, expect } from "@wdio/globals";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { hook, waitForShell } from "../helpers.ts";
 // The real policy and the real attribute, imported rather than retyped: a copy here could drift from the shipped
@@ -40,6 +41,10 @@ const clickView = (label: "Rendered" | "Source") =>
   browser.execute((l: string) => document.querySelector<HTMLButtonElement>(`.reader-view button[aria-label="${l}"]`)!.click(), label);
 
 const statusLog = () => hook<string>("readerStatusLog");
+
+/** How many opens the app has timed: the lines the 200 ms gate counts. A sidebar click must never add one. */
+const APP_LOG = join(homedir(), "Library/Logs/ai.sintralabs.kinas/kinas.log");
+const renderedLines = () => (existsSync(APP_LOG) ? readFileSync(APP_LOG, "utf8").split("\n").filter((line) => line.includes("reader: rendered")).length : 0);
 
 /**
  * Waits on a condition read inside the page. Each WebDriver element lookup costs about 5 s under this driver, and a
@@ -85,12 +90,17 @@ describe("kinas open and the reader", () => {
       frontmatter: document.querySelector(".reader-frontmatter")?.textContent ?? "",
       diagram: document.querySelector(".mermaid-block svg") !== null,
       image: document.querySelector<HTMLImageElement>('img[alt="diagram"]')?.getAttribute("src") ?? "",
-      contents: document.querySelector(".reader-contents") !== null,
+      contentsOffered: document.querySelector('.reader-head button[aria-label="Contents"]') !== null || document.querySelector(".reader-contents") !== null,
     }));
     expect(page.frontmatter).toContain("Reader fixture plan");
     expect(page.diagram).toBe(true);
     expect(page.image).toMatch(/^blob:/);
-    expect(page.contents).toBe(true);
+    // Docked beside the sidebar the reader is narrower than 640 px, so Contents is a header button, not a rail
+    // (three-column shell, 2026-09-18). Offered for this document either way — and the button leads to the list.
+    expect(page.contentsOffered).toBe(true);
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('.reader-head button[aria-label="Contents"]')?.click());
+    await waitInPage(() => document.querySelectorAll(".reader-contents li").length >= 2, "Contents never listed the plan's headings");
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('.reader-head button[aria-label="Contents"]')?.click());
     const focusedAfterChecks = await hook<boolean>("terminalFocused");
     if (!focusedAfterOpen || !focusedAfterChecks) {
       const active = await browser.execute(() => document.activeElement?.outerHTML.slice(0, 160) ?? "none");
@@ -229,7 +239,8 @@ describe("kinas open and the reader", () => {
     await browser.waitUntil(async () => (await hook<{ cols: number }>("terminalSize")).cols > cols.cols, { timeout: 10000, timeoutMsg: "the terminal did not refit" });
 
     await browser.execute(() => document.querySelector<HTMLElement>(".stage-divider")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
-    await browser.waitUntil(async () => (await stored()) === 55, { timeout: 10000, timeoutMsg: "double-click did not restore 55 %" });
+    // 45 since the sidebar grew to 220 px; 55 beside the old 72 px rail.
+    await browser.waitUntil(async () => (await stored()) === 45, { timeout: 10000, timeoutMsg: "double-click did not restore 45 %" });
   });
 
   it("AC-2: follows the file on disk, keeps an unchanged diagram, and survives rename and removal", async () => {
@@ -327,19 +338,67 @@ describe("kinas open and the reader", () => {
   it("opens a folder in the file tree with its README selected", async () => {
     expect(kinas("docs").code).toBe(0);
     await waitForHeader("docs/README.md");
-    // Read in the page, with the layout facts that would explain a missing tree (a narrow reader hides it).
+    // Read in the page, with the layout facts that would explain a missing tree. The tree lives in the sidebar
+    // since 2026-09-18 (the section kept its `reader-files` class), and only comes back to the reader while the
+    // sidebar is hidden.
     const tree = () =>
       browser.execute(() => ({
         selected: document.querySelector('.reader-files .tree-item[aria-current="true"]')?.textContent ?? null,
         files: document.querySelector(".reader-files")?.textContent ?? null,
-        narrow: document.querySelector(".reader-main")?.hasAttribute("data-narrow") ?? null,
-        readerWidth: Math.round(document.querySelector<HTMLElement>("aside.reader")?.getBoundingClientRect().width ?? 0),
+        inSidebar: document.querySelector(".sidebar .reader-files") !== null,
+        inReader: document.querySelector("aside.reader .reader-files") !== null,
+        sidebarShown: document.querySelector<HTMLElement>(".sidebar")?.hidden === false,
         dragging: document.querySelector(".stage")?.hasAttribute("data-dragging") ?? null,
       }));
     await browser.waitUntil(async () => (await tree()).selected === "README.md", { timeout: 15000, interval: 250 }).catch(async () => {
       throw new Error(`README.md is not selected in the tree: ${JSON.stringify(await tree())}`);
     });
     expect((await tree()).files).toContain("guide.md");
+    expect(await tree()).toMatchObject({ inSidebar: true, inReader: false, sidebarShown: true });
+  });
+
+  it("a click in the sidebar's tree opens the file and keeps the folder; with the sidebar hidden the tree is the reader's (three-column shell AC-11)", async () => {
+    // Continues from the case above: docs/ is open, README.md selected.
+    const pid = await hook<number>("ptyPid");
+    const rendersBefore = renderedLines();
+    await browser.execute(() => [...document.querySelectorAll<HTMLButtonElement>(".sidebar .reader-files .tree-item")].find((b) => b.textContent?.trim() === "guide.md")!.click());
+    await waitForHeader("docs/guide.md");
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered]") !== null, "guide.md never finished rendering");
+    const afterClick = await browser.execute(() => ({
+      selected: document.querySelector('.sidebar .reader-files .tree-item[aria-current="true"]')?.textContent?.trim() ?? null,
+      // Still there: a click dressed up as a `kinas open` would have cleared the open folder, and the section with it.
+      sidebarTree: document.querySelector(".sidebar .reader-files") !== null,
+      readerTree: document.querySelector("aside.reader .reader-files") !== null,
+      filesButton: document.querySelector('.reader-head button[aria-label="Files"]') !== null,
+    }));
+    expect(afterClick).toEqual({ selected: "guide.md", sidebarTree: true, readerTree: false, filesButton: false });
+    expect(await hook<number>("ptyPid")).toBe(pid);
+    // A click is not a `kinas open`: it must add nothing to the log the 200 ms gate counts.
+    await browser.pause(750);
+    expect(renderedLines()).toBe(rendersBefore);
+
+    // ⌘S hides the sidebar. The tree must not go with it, or a folder would show "Choose a file" and nothing to choose.
+    await browser.keys(["Meta", "s"]);
+    await waitInPage(() => document.querySelector<HTMLElement>(".sidebar")!.hidden, "⌘S did not hide the sidebar");
+    await waitInPage(
+      () => document.querySelector('.reader-head button[aria-label="Files"]') !== null || document.querySelector("aside.reader .reader-files") !== null,
+      "the tree did not come back to the reader",
+    );
+    // Narrow, so it is behind the header's Files button; wide enough, it would already be a column.
+    await browser.execute(() => {
+      if (document.querySelector("aside.reader .reader-files") === null) document.querySelector<HTMLButtonElement>('.reader-head button[aria-label="Files"]')!.click();
+    });
+    await waitInPage(() => document.querySelector('aside.reader .reader-files .tree-item[aria-current="true"]')?.textContent?.trim() === "guide.md", "the reader's own tree never showed the open file");
+
+    await browser.keys(["Meta", "s"]);
+    await waitInPage(() => !document.querySelector<HTMLElement>(".sidebar")!.hidden, "⌘S did not bring the sidebar back");
+    const back = await browser.execute(() => ({
+      sidebarTree: document.querySelector(".sidebar .reader-files") !== null,
+      readerTree: document.querySelector("aside.reader .reader-files") !== null,
+      filesButton: document.querySelector('.reader-head button[aria-label="Files"]') !== null,
+    }));
+    expect(back).toEqual({ sidebarTree: true, readerTree: false, filesButton: false });
+    expect(await hook<number>("ptyPid")).toBe(pid);
   });
 
   it("R1b: opens by bare name from an unrelated folder, and lists several matches without opening one", async () => {
@@ -390,7 +449,7 @@ describe("kinas open and the reader", () => {
       text: document.querySelector(".reader-source")?.textContent ?? "",
       // A source file has no headings, so the rail must not appear (R28). This is what would catch source
       // accidentally routing through renderMarkdown.
-      contents: document.querySelector(".reader-contents") !== null,
+      contents: document.querySelector(".reader-contents") !== null || document.querySelector('.reader-head button[aria-label="Contents"]') !== null,
       frontmatter: document.querySelector(".reader-frontmatter") !== null,
     }));
     expect(sql.render).toBe("source");
@@ -549,7 +608,8 @@ describe("kinas open and the reader", () => {
     const shown = await browser.execute(() => ({
       sandbox: document.querySelector("iframe.reader-preview-frame")?.getAttribute("sandbox") ?? "",
       render: document.querySelector(".reader-doc")?.getAttribute("data-render") ?? "",
-      contents: document.querySelectorAll(".reader-contents").length,
+      // Neither the rail nor, docked and narrow, the header button that stands in for it.
+      contents: document.querySelectorAll('.reader-contents, .reader-head button[aria-label="Contents"]').length,
       // Every element the parent document actually holds for this file. This, not a substring, is what tells a
       // parsed document apart from one carried in an attribute.
       tags: [...document.querySelectorAll(".reader-body *")].map((e) => e.tagName.toLowerCase()).join(","),

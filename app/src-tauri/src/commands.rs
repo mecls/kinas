@@ -216,7 +216,9 @@ pub struct UiPrefs {
     pub reader_width_pct: f64,
 }
 
-pub const READER_WIDTH_DEFAULT: f64 = 55.0;
+/// 45 since the sidebar grew to 220 px (2026-09-18); 55 beside the old 72 px rail. Must equal DEFAULT_PANEL_PCT in
+/// the webview's shell/split.ts. A width Miguel has dragged is stored and wins over this.
+pub const READER_WIDTH_DEFAULT: f64 = 45.0;
 const READER_WIDTH_MIN: f64 = 20.0;
 const READER_WIDTH_MAX: f64 = 80.0;
 
@@ -251,13 +253,15 @@ mod reader_width_tests {
     use super::*;
 
     #[test]
-    fn a_stored_width_outside_20_to_80_percent_falls_back_to_55() {
+    fn a_stored_width_outside_20_to_80_percent_falls_back_to_the_default() {
         assert_eq!(reader_width(Some(serde_json::json!(35.5))), 35.5);
         assert_eq!(reader_width(Some(serde_json::json!(80))), 80.0);
         for bad in [serde_json::json!(5), serde_json::json!(95.0), serde_json::json!("40"), serde_json::Value::Null] {
             assert_eq!(reader_width(Some(bad)), READER_WIDTH_DEFAULT);
         }
         assert_eq!(reader_width(None), READER_WIDTH_DEFAULT);
+        // The webview's shell/split.ts says the same number; a change to one without the other is a change to neither.
+        assert_eq!(READER_WIDTH_DEFAULT, 45.0);
     }
 }
 

@@ -199,21 +199,42 @@ function FrontmatterCard({ view }: { view: FrontmatterView }) {
   );
 }
 
+/** What the reader is showing, for the shell's sidebar: the open file, and the folder opened with `kinas open <dir>`. */
+export interface ReaderNav {
+  doc: { path: string; displayPath: string } | null;
+  folder: string | null;
+}
+
 export function Reader({
   request,
   onClose,
   expanded,
   onExpand,
+  onNav,
+  treeInSidebar,
 }: {
   request: ReaderRequest | null;
   onClose: () => void;
   /** Whether the panel has the whole stage. The shell owns it: expanding is a layout matter, not a reading one. */
   expanded: boolean;
   onExpand: (expanded: boolean) => void;
+  /**
+   * Told whenever the open file or folder changes. The reader stays the single owner of what is open — the back
+   * stack, the generation counter, the folder — and the sidebar only mirrors it. Must be referentially stable.
+   */
+  onNav: (nav: ReaderNav) => void;
+  /**
+   * The sidebar is showing, so the file tree lives there and the reader draws neither it nor a Files button. With
+   * the sidebar hidden (⌘S) the tree comes back here, or a folder with no README would show "Choose a file" and
+   * nothing to choose from.
+   */
+  treeInSidebar: boolean;
 }) {
   const [doc, setDoc] = useState<Doc | null>(null);
   const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
+  const folderRef = useRef<string | null>(null);
+  folderRef.current = folder;
   const [confirm, setConfirm] = useState<{ path: string; root: string } | null>(null);
   /** Several files matched a name: listed newest first, none opened until one is clicked (R1b). */
   const [picks, setPicks] = useState<{ paths: string[]; root: string } | null>(null);
@@ -360,7 +381,12 @@ export function Reader({
         if (target.kind === "dir") await openFolder(target.path);
         else await show(target.path, { push: true, fragment });
       } catch (e) {
-        say(readerErrorOf(e).message);
+        const message = readerErrorOf(e).message;
+        // A click in the sidebar can open the panel with nothing in it yet — a pin whose file has since gone, say.
+        // A status line that fades after six seconds would leave an open, empty panel with no explanation, so the
+        // reason takes the page instead. With something already showing, it stays and the status line says why.
+        if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message });
+        else say(message);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -559,6 +585,18 @@ export function Reader({
     });
     return () => void stop.then((u) => u());
   }, [say]);
+
+  // The shell's sidebar mirrors what is open. One effect, keyed on what it reports, so a reload tells it nothing.
+  const docPath = doc?.path ?? null;
+  const docDisplayPath = doc?.displayPath ?? null;
+  useEffect(() => {
+    onNav({ doc: docPath !== null && docDisplayPath !== null ? { path: docPath, displayPath: docDisplayPath } : null, folder });
+  }, [onNav, docPath, docDisplayPath, folder]);
+
+  // The Files overlay belongs to the reader's own tree; when the tree moves to the sidebar it has nothing to show.
+  useEffect(() => {
+    if (treeInSidebar) setOverlay((o) => (o === "files" ? null : o));
+  }, [treeInSidebar]);
 
   // Contents only for a page taller than the reader (R28); the side column folds away when the reader is narrow (R33).
   useEffect(() => {
@@ -759,7 +797,9 @@ export function Reader({
 
   const headings = doc?.rendered.headings ?? [];
   const contents = Boolean(doc) && tall && headings.length >= 2;
-  const sideShown = (folder !== null || contents) && (!narrow || overlay !== null);
+  /** The tree is the reader's to draw only while the sidebar is not there to draw it. */
+  const ownTree = folder !== null && !treeInSidebar;
+  const sideShown = (ownTree || contents) && (!narrow || overlay !== null);
 
   const viewKind = doc ? viewKindOf(doc.render) : null;
   const noFile = doc ? null : "Open a file first";
@@ -783,7 +823,7 @@ export function Reader({
         onBack={goBack}
         view={viewKind ? views[viewKind] : null}
         onView={changeView}
-        files={narrow && folder ? { pressed: overlay === "files", onToggle: () => setOverlay((o) => (o === "files" ? null : "files")) } : null}
+        files={narrow && ownTree ? { pressed: overlay === "files", onToggle: () => setOverlay((o) => (o === "files" ? null : "files")) } : null}
         contents={narrow && contents ? { pressed: overlay === "contents", onToggle: () => setOverlay((o) => (o === "contents" ? null : "contents")) } : null}
         copyDisabledReason={!doc ? noFile : doc.render === "image" ? "Images can't be copied as text" : null}
         onCopy={() => void copy()}
@@ -801,7 +841,7 @@ export function Reader({
       <div className="reader-main" data-narrow={narrow ? "" : undefined}>
         {sideShown && (
           <div className="reader-side" data-overlay={narrow ? "" : undefined}>
-            {folder && (!narrow || overlay === "files") && (
+            {folder && ownTree && (!narrow || overlay === "files") && (
               <section className="reader-files" aria-label="Files">
                 <h2 className="reader-label">Files</h2>
                 <FileTree root={folder} selected={doc?.path ?? null} onOpen={(path) => void follow(path, null)} />

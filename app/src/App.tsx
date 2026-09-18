@@ -5,10 +5,10 @@ import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { WorkPage } from "./pages/Work.tsx";
 import { Palette } from "./palette/Palette.tsx";
-import { Reader, type ReaderRequest } from "./reader/Reader.tsx";
-import { GearIcon } from "./icons.tsx";
-import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
+import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
+import { actionForEvent, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
+import { Sidebar } from "./shell/Sidebar.tsx";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useSplit } from "./shell/useSplit.ts";
 
@@ -26,8 +26,8 @@ interface PanelState {
 // the palette, ⌘, opens Settings). Every page stays mounted and only its visibility changes, so the terminal on the
 // Work page is never unmounted and its PTY never restarts (R33).
 //
-// The tree below is static (tasks/three-column-shell-build-spec.md §6.1): the rail, the stage, the page, the divider
-// and the panel are always there, and only `hidden` and the data attributes change. Anything that wrapped, re-keyed
+// The tree below is static (tasks/three-column-shell-build-spec.md §6.1): the sidebar, the stage, the page, the
+// divider and the panel are always there, and only `hidden` and the data attributes change. Anything that wrapped, re-keyed
 // or conditionally rendered an ancestor of <Terminal> would remount it and restart the PTY.
 export function App() {
   const [page, setPage] = useState<Page>("usage");
@@ -37,6 +37,8 @@ export function App() {
   const [reader, setReader] = useState<PanelState>({ open: false, expanded: false, request: null });
   const readerSeq = useRef(0);
   const [readerWidth, setReaderWidth] = useState(DEFAULT_PANEL_PCT);
+  /** What the reader has open, mirrored for the sidebar. The reader owns it; this is only what it last reported. */
+  const [nav, setNav] = useState<ReaderNav>({ doc: null, folder: null });
   const shortcutsRef = useRef(shortcuts);
   const sidebarShown = useRef(true);
   /** Where Esc on Settings goes back to. */
@@ -191,6 +193,16 @@ export function App() {
 
   const split = useSplit(readerWidth, changeReaderWidth);
 
+  // Stable, because the reader's reporting effect is keyed on it.
+  const onNav = useCallback((next: ReaderNav) => setNav(next), []);
+
+  // A click on a file in the sidebar. It goes to the reader as a `follow` — the path a click on the reader's own
+  // tree takes — and never as a made-up `kinas open`, which would clear the open folder, skip the human-click door
+  // and add a line to the log the 200 ms gate counts (three-column shell §6.14). It opens the panel if it is closed.
+  const openFromSidebar = useCallback((path: string) => {
+    setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current } }));
+  }, []);
+
   const changeShortcuts = useCallback(async (next: Shortcuts) => {
     await saveShortcuts(next);
     setShortcuts(next);
@@ -198,36 +210,19 @@ export function App() {
 
   return (
     <div className="shell" data-sidebar={sidebar ? "shown" : "hidden"} data-panel={!reader.open ? "closed" : reader.expanded ? "expanded" : "open"}>
-      <nav className="rail" aria-label="Pages" hidden={!sidebar}>
-        <button
-          type="button"
-          className="rail-item"
-          aria-current={page === "usage" ? "page" : undefined}
-          onClick={() => goTo("usage")}
-          title={`Usage (${chordLabel(shortcuts["go.usage"])})`}
-        >
-          Usage
-        </button>
-        <button
-          type="button"
-          className="rail-item"
-          aria-current={page === "work" ? "page" : undefined}
-          onClick={() => goTo("work")}
-          title={`Work (${chordLabel(shortcuts["go.work"])})`}
-        >
-          Work
-        </button>
-        <button
-          type="button"
-          className="rail-item rail-settings"
-          aria-label="Settings"
-          aria-current={page === "settings" ? "page" : undefined}
-          onClick={() => goTo("settings")}
-          title={`Settings (${chordLabel(shortcuts.settings)})`}
-        >
-          <GearIcon />
-        </button>
-      </nav>
+      <Sidebar
+        hidden={!sidebar}
+        page={page}
+        shortcuts={shortcuts}
+        onGo={goTo}
+        pins={[]}
+        folder={nav.folder}
+        folderPinned={false}
+        selected={nav.doc?.path ?? null}
+        recent={[]}
+        onOpen={openFromSidebar}
+        onUnpin={() => {}}
+      />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
           <section className="page" data-page="usage" hidden={page !== "usage"}>
@@ -244,7 +239,7 @@ export function App() {
         {/* `reader` is kept beside `shell-panel`: reader.css styles it, and the e2e finds the panel as `aside.reader`. */}
         {/* Expanded, the width is shell.css's: an inline flex-basis would out-rank it. */}
         <aside className="shell-panel reader" aria-label="Reader" hidden={!reader.open} style={reader.expanded ? undefined : { flexBasis: `${split.pct}%` }}>
-          <Reader request={reader.request} onClose={closeReader} expanded={reader.expanded} onExpand={setExpanded} />
+          <Reader request={reader.request} onClose={closeReader} expanded={reader.expanded} onExpand={setExpanded} onNav={onNav} treeInSidebar={sidebar} />
         </aside>
       </div>
       {palette && <Palette onClose={() => setPalette(false)} />}

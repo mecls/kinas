@@ -68,9 +68,9 @@ describe("Settings from the sidebar, and its shortcuts", () => {
   it("the gear at the foot of the sidebar opens Settings", async () => {
     await browser.keys(["Escape"]);
     await expect($('section[data-page="usage"]')).toBeDisplayed();
-    await $('.rail button[aria-label="Settings"]').click();
+    await $('.sidebar button[aria-label="Settings"]').click();
     await expect($('section[data-page="settings"]')).toBeDisplayed();
-    await expect($('.rail button[aria-label="Settings"]')).toHaveAttribute("aria-current", "page");
+    await expect($('.sidebar button[aria-label="Settings"]')).toHaveAttribute("aria-current", "page");
   });
 
   it("refuses another action's chord and says whose it is", async () => {
@@ -88,12 +88,12 @@ describe("Settings from the sidebar, and its shortcuts", () => {
     await browser.keys(["Meta", "b"]);
     await expect($('[data-shortcut="sidebar"] .shortcut-chord')).toHaveText("⌘B");
     await browser.keys(["Meta", "b"]);
-    await expect($(".rail")).not.toBeDisplayed();
+    await expect($(".sidebar")).not.toBeDisplayed();
     await browser.keys(["Meta", "s"]);
     await browser.pause(500);
-    expect(await $(".rail").isDisplayed()).toBe(false);
+    expect(await $(".sidebar").isDisplayed()).toBe(false);
     await browser.keys(["Meta", "b"]);
-    await expect($(".rail")).toBeDisplayed();
+    await expect($(".sidebar")).toBeDisplayed();
   });
 
   it("R1b: refuses a projects folder that does not exist, and stores one that does", async () => {

@@ -3,7 +3,7 @@
  * opened in a panel on the right. tokens.css variables only.
  *
  *   div.shell[data-sidebar][data-panel]
- *     nav.rail                  the pages
+ *     nav.sidebar               the pages, then Pinned, the open folder's Files, and Recent
  *     div.stage                 a flex row — the row the divider measures
  *       main.content            the three stacked pages
  *       div.stage-divider
@@ -13,7 +13,9 @@
  * the terminal would remount it, restart its PTY and drop Herdr's client (Build 1 R33, reader R31).
  */
 :root {
-  --sidebar-w: 72px;
+  /* Fixed: the sidebar is this wide or hidden (⌘S), nothing between. 220 + 280 + 280 is why the window's minimum
+     width is 820 (tauri.conf.json). */
+  --sidebar-w: 220px;
   /* Neither side of the divider may be narrower than this. Must equal MIN_PANE_PX in shell/split.ts. */
   --pane-min: 280px;
 }
@@ -24,47 +26,183 @@
   height: 100%;
 }
 
-/* ⌘S (keymap.md): the rail goes, and the stage takes the whole width. */
+/* ⌘S (keymap.md): the sidebar goes, and the stage takes the whole width. */
 .shell[data-sidebar="hidden"] {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.rail {
+/* The left sidebar: the pages, what can be opened, and Settings at the foot. */
+.sidebar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 8px;
   border-right: 1px solid var(--line);
   background: var(--panel);
 }
 
-.rail-item {
+.sidebar-nav {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A page, or Settings: an icon and its name. */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
   appearance: none;
   border: 0;
   border-radius: 6px;
-  padding: 8px 4px;
+  padding: 7px 8px;
   background: transparent;
   color: var(--muted);
-  font: 500 11px/1 var(--mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font: 500 13px/1 var(--sans);
+  text-align: left;
   cursor: default;
 }
 
-.rail-item:hover {
+.sidebar-item:hover {
   color: var(--white);
 }
 
-/* Settings sits at the foot of the rail, apart from the pages. */
-.rail-settings {
-  display: grid;
-  place-items: center;
-  margin-top: auto;
-}
-
-.rail-item[aria-current="page"] {
+.sidebar-item[aria-current="page"] {
   background: var(--line);
   color: var(--white);
+}
+
+.sidebar-settings {
+  flex: none;
+  margin-top: 6px;
+}
+
+/* Pinned, Files and Recent scroll together between the pages and Settings; an empty one is not here at all. */
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 6px;
+  overflow: hidden auto;
+}
+
+.sidebar-section {
+  padding: 12px 0 2px;
+}
+
+.sidebar-section-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-label {
+  flex: 1;
+  min-width: 0;
+  margin: 0 0 6px 8px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sidebar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebar-pin {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--muted);
+  font: 12.5px/1.35 var(--sans);
+  text-align: left;
+  cursor: default;
+}
+
+.sidebar-row svg {
+  flex: none;
+}
+
+.sidebar-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-row:hover:not([aria-disabled="true"]) {
+  color: var(--white);
+}
+
+.sidebar-row[aria-current="true"] {
+  background: var(--line);
+  color: var(--white);
+}
+
+/* A pin whose file is gone: still listed, plainly not usable. Only its Unpin does anything. */
+.sidebar-pin[data-missing] .sidebar-row {
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+/* Pin, Unpin: quiet until the row is pointed at, always there for the keyboard. */
+.sidebar-row-action {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+  opacity: 0;
+}
+
+.sidebar-pin:hover .sidebar-row-action,
+.sidebar-section-head:hover .sidebar-row-action,
+.sidebar-row-action:focus-visible,
+.sidebar-pin[data-missing] .sidebar-row-action {
+  opacity: 1;
+}
+
+.sidebar-row-action:hover {
+  background: var(--line);
+  color: var(--white);
+}
+
+.sidebar-pin-tree {
+  padding-left: 14px;
+}
+
+/* The tree kept the class it had inside the reader, where it filled a column; here it is one section of three. */
+.sidebar .reader-files {
+  flex: none;
+  overflow: visible;
+  padding: 12px 0 2px;
 }
 
 .stage {
@@ -105,7 +243,7 @@
    global. The first build used `.panel`, put the cards' 16 px padding round the reader, and leaked this rule's
    min-width onto every card; the divider's e2e caught it as a reader 34 px wider than its share. */
 .shell-panel {
-  flex: 0 0 55%;
+  flex: 0 0 45%;
   min-width: var(--pane-min);
   min-height: 0;
   border-left: 1px solid var(--line);

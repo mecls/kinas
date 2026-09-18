@@ -302,6 +302,14 @@ export const openExternal = (url: string) => invoke<void>("open_external", { url
 export const readerRendered = (lines: number, diagrams: number, ms: number) => invoke<void>("reader_rendered", { lines, diagrams, ms });
 export const readerOpenInEditor = (path: string) => invoke<void>("reader_open_in_editor", { path });
 
+/** A pinned file or folder, as the sidebar shows it. `exists` is false when nothing is at the path right now. */
+export interface PinView {
+  path: string;
+  display_path: string;
+  kind: ReaderKind;
+  exists: boolean;
+}
+
 /** A download's answer. The file's **name** only: where Miguel put the copy never comes back across this line. */
 export type ReaderExported = { status: "saved"; name: string; bytes: number } | { status: "cancelled" };
 /**

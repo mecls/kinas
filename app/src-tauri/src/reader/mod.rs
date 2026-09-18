@@ -1,9 +1,11 @@
 //! The reader (`kinas open`, reader PRD): what it keeps for this session, the door the CLI uses, and the commands the
 //! webview calls. Everything here lives in memory and is gone when Kinas quits; the only thing stored is the
-//! `reader_editor` setting. Every command re-checks its path (R9): nothing is trusted because someone checked it before.
+//! `reader_editor` setting. It only reads — with one exception, `export.rs`, which writes a copy of the open file
+//! to a place Miguel chooses in a save sheet. Every command re-checks its path (R9): nothing is trusted because someone checked it before.
 
 pub mod access;
 pub mod editor;
+pub mod export;
 pub mod socket;
 pub mod watch;
 
@@ -35,6 +37,8 @@ pub struct Inner {
     pub watcher: Option<notify::RecommendedWatcher>,
     /// The socket this instance bound, so quitting removes only its own (R16).
     pub socket: Option<PathBuf>,
+    /// A download is under way: its save sheet is up, or its copy is being written. One at a time (export.rs).
+    pub exporting: bool,
 }
 
 impl Inner {
@@ -382,6 +386,26 @@ pub fn open_external(url: String) -> Result<(), ReaderError> {
 #[tauri::command]
 pub fn reader_rendered(lines: u32, diagrams: u32, ms: u64) {
     log::info!("reader: rendered {lines} lines, {diagrams} diagrams in {ms} ms");
+}
+
+/// Print as PDF (three-column shell §9): raises the macOS print sheet on the window, where "Save as PDF" lives.
+///
+/// `print()` only posts a message to the event loop, which runs the sheet on the main thread (wry 0.55.1,
+/// wkwebview/mod.rs:858-898), so there is nothing here to move off it. The sheet gives no signal when it closes and
+/// the whole webview is what gets printed — so nothing is prepared here and nothing is undone afterwards: what reaches
+/// the paper is decided by `styles/print.css` alone, and `scripts/print-probe.ts` proves that stylesheet on the engine.
+///
+/// Called from Rust rather than by granting the webview `core:webview:allow-print`: the capability file stays as it
+/// was, and the page can ask for the sheet only through this one command.
+#[tauri::command]
+pub async fn reader_print(window: tauri::WebviewWindow) -> Result<(), ReaderError> {
+    // Debug builds only: a native sheet would hang an e2e run, and no agent can click it away.
+    #[cfg(debug_assertions)]
+    if std::env::var("KINAS_E2E_NO_PRINT").as_deref() == Ok("1") {
+        log::info!("reader: print skipped because KINAS_E2E_NO_PRINT is set");
+        return Ok(());
+    }
+    window.print().map_err(|_| ReaderError::new("print_failed", "Could not open the print sheet"))
 }
 
 /// Open in editor (R37): re-check the file, read the editor setting, then split Herdr's focused pane off the UI

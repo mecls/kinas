@@ -120,6 +120,8 @@ Keychain (service `ai.sintralabs.kinas`, account `ollama-cloud-api-key`), never 
 | `KINAS_E2E_MEMORY_KEYCHAIN=1`, `KINAS_E2E_OLLAMA_KEY` | debug | An in-memory key store, optionally pre-filled |
 | `KINAS_E2E_NO_SYSTEM_HOOKS=1` | debug | Do not register the global hotkey or the login item |
 | `KINAS_E2E_NO_OPEN=1` | debug | The reader logs an external link click instead of opening the browser |
+| `KINAS_E2E_EXPORT_TO=<path>` | debug | The reader's Download writes its copy there instead of raising the macOS save sheet; every rule about where a copy may go still runs |
+| `KINAS_E2E_NO_PRINT=1` | debug | Print as PDF logs a line instead of raising the macOS print sheet |
 
 The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug builds with the `e2e` feature and
 `TAURI_ENV_DEBUG`; release builds contain neither.

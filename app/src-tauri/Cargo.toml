@@ -35,6 +35,10 @@ sysinfo = "=0.39.6"
 reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "json", "http2", "charset", "system-proxy", "blocking"] }
 tauri-plugin-global-shortcut = "=2.3.2"
 tauri-plugin-autostart = "=2.5.1"
+# The macOS save sheet behind the reader's Download. Used from Rust only: no capability grants a `dialog:*`
+# permission, so the webview cannot call it. Adds three crates to the lock file (itself, rfd, tauri-plugin-fs) and
+# moves no existing pin — measured before it was chosen over a hand-written NSSavePanel (2026-09-18).
+tauri-plugin-dialog = "=2.7.3"
 # Finder's "available" disk space (NSURL resource values); both are already in the tree through Tauri.
 objc2 = "=0.6.4"
 objc2-foundation = "=0.3.2"

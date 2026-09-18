@@ -42,6 +42,10 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(system::on_hotkey).build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        // The save sheet behind the reader's Download, opened from Rust only (reader/export.rs). No capability
+        // grants a `dialog:*` permission, so the webview cannot raise a dialog of its own: Tauri checks the ACL
+        // on every `plugin:` command, and registering a plugin grants nothing.
+        .plugin(tauri_plugin_dialog::init())
         .manage(system::SystemState::default());
     #[cfg(feature = "e2e")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
@@ -130,6 +134,8 @@ pub fn run() {
             reader::open_external,
             reader::reader_rendered,
             reader::reader_open_in_editor,
+            reader::export::reader_export,
+            reader::reader_print,
         ])
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).

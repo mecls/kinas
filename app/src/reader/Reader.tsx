@@ -8,9 +8,11 @@ import {
   readerClose,
   readerConfirm,
   readerErrorOf,
+  readerExport,
   readerListDir,
   readerOpen,
   readerOpenInEditor,
+  readerPrint,
   readerReadImage,
   readerReadText,
   readerRendered,
@@ -25,6 +27,7 @@ import { classifyLink } from "./links.ts";
 import type { MenuItem } from "./Menu.tsx";
 import { cachedSvg, renderDiagram } from "./mermaid.ts";
 import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
+import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
@@ -676,6 +679,30 @@ export function Reader({
     setDoc(rerendered);
   };
 
+  // A copy of the file, wherever Miguel says in the macOS save sheet. The page names the file and nothing else; the
+  // sheet, the read and the write are all Rust's (reader/export.rs). Cancelling the sheet is not an event: it says
+  // nothing. A refusal is shown in Rust's own words.
+  const download = async () => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      const result = await readerExport(current.path);
+      if (result.status === "saved") say(`Saved ${result.name}`);
+    } catch (e) {
+      say(readerErrorOf(e).message);
+    }
+  };
+
+  // The macOS print sheet, where "Save as PDF" lives. Nothing is set up here and nothing is undone afterwards: the
+  // sheet gives no signal when it closes, so the print stylesheet alone decides what prints.
+  const print = async () => {
+    try {
+      await readerPrint();
+    } catch (e) {
+      say(readerErrorOf(e).message);
+    }
+  };
+
   // The file's text as Rust read it (UTF-8, a leading BOM removed), whichever view is showing.
   const copy = async () => {
     const current = docRef.current;
@@ -736,8 +763,15 @@ export function Reader({
 
   const viewKind = doc ? viewKindOf(doc.render) : null;
   const noFile = doc ? null : "Open a file first";
+  // What the print sheet gets is this document laid out for paper (styles/print.css). An image is not text to lay
+  // out, and a rendered HTML page is a sandboxed frame, which prints as the clipped box it is — its source prints.
+  const cannotPrint = noFile ?? (doc?.render === "image" ? "Images can't be printed from here" : doc?.render === "html" && views.html === "rendered" ? "Switch to Source to print" : null);
   // An item is listed once it exists: nothing here is a placeholder for a later phase.
-  const menu: MenuItem[] = [{ id: "editor", label: "Open in editor", disabledReason: noFile, onSelect: () => void openInEditor() }];
+  const menu: MenuItem[] = [
+    { id: "download", label: downloadLabel(doc ? baseName(doc.path) : ""), disabledReason: noFile, onSelect: () => void download() },
+    { id: "print", label: "Print as PDF", disabledReason: cannotPrint, onSelect: () => void print() },
+    { id: "editor", label: "Open in editor", disabledReason: noFile, onSelect: () => void openInEditor() },
+  ];
 
   return (
     <div className="reader-frame" ref={frame}>

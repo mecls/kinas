@@ -301,6 +301,16 @@ export const readerClose = () => invoke<void>("reader_close");
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
 export const readerRendered = (lines: number, diagrams: number, ms: number) => invoke<void>("reader_rendered", { lines, diagrams, ms });
 export const readerOpenInEditor = (path: string) => invoke<void>("reader_open_in_editor", { path });
+
+/** A download's answer. The file's **name** only: where Miguel put the copy never comes back across this line. */
+export type ReaderExported = { status: "saved"; name: string; bytes: number } | { status: "cancelled" };
+/**
+ * Download a copy of the open file. The page names the file and nothing else: Rust re-checks the path, opens the
+ * macOS save sheet itself, reads the file itself and writes the copy itself (reader/export.rs).
+ */
+export const readerExport = (path: string) => invoke<ReaderExported>("reader_export", { path });
+/** Opens the macOS print sheet on the window. What prints is decided by styles/print.css alone. */
+export const readerPrint = () => invoke<void>("reader_print");
 export const onReaderShow = (handler: (e: ReaderShow) => void): Promise<UnlistenFn> => listen<ReaderShow>("reader_show", (e) => handler(e.payload));
 export const onReaderChanged = (handler: (e: { path: string }) => void): Promise<UnlistenFn> =>
   listen<{ path: string }>("reader_changed", (e) => handler(e.payload));

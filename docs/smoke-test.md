@@ -164,6 +164,36 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
       the count could not grow past it and the gate read that as "never rendered", while the same bundle run in
       place rendered in 1332 ms. Keep the CLI's exit code and stderr too: discarding them cost a whole diagnosis
       cycle, because nothing distinguished "the request never arrived" from "it arrived and hung"
+- [x] **Download** writes a byte-for-byte copy where the save sheet said, through a temp file that is gone
+      afterwards; the log gains `reader: exported <N> bytes in <M> ms` and never the name or the folder; a name
+      taken by a folder is refused in Rust's own words and the folder is left as it was —
+      `automated (reader-export.e2e.ts, through the debug-only KINAS_E2E_EXPORT_TO seam)`. The refusals — the file
+      itself by path, through a symlinked folder, as a symlink, as a hard link; a symlink, a dangling symlink or a
+      folder at the name; Kinas' own data, logs and app, however reached; a source past the limit; an unwritable
+      folder — each leave the source's bytes and mtime alone and no temp file behind —
+      `automated (reader/export.rs, 12 tests over real files)`
+- [x] **The webview cannot raise a dialog of its own**: `plugin:dialog|save`, `|open`, `|message`, `|ask` and
+      `|confirm` invoked from the page are all rejected, because no capability grants a `dialog:*` permission —
+      `automated (reader-export.e2e.ts)`
+- [ ] **The save sheet itself**, on the installed app — no agent can click it: it slides from the Kinas title bar
+      (not a free-floating panel); the name field holds the file's name and the folder is Downloads; Save → the
+      file is there, `cmp` says identical, the status line says `Saved <name>`; Cancel → no file and no message;
+      choosing the open file itself → `That is this file — choose another place`, original intact; the terminal
+      keeps updating behind the sheet — `outstanding — needs Miguel`
+- [x] **Print as PDF prints the document, only the document, across pages** — proved on WebKit through the same
+      `printOperation(with:)` call the app's print button reaches, with the panel suppressed
+      (`bun scripts/print-probe.ts`): without `print.css` **1 page** and the chrome leaks, so the probe sees the
+      failure; with it markdown **6 pages**, source **17**, last line present, nothing leaked, and `@page` margins
+      hold with the print-info margins at 0 — `passed by agent` 2026-09-18. In the app, Print reaches Rust, and is
+      off with a reason for an image and for an `.html` page in its rendered view —
+      `automated (reader-export.e2e.ts, KINAS_E2E_NO_PRINT seam)`; the palette holds 4.5:1 on white —
+      `automated (styles/print.test.ts)`
+- [ ] **The print sheet itself**, on the installed app: it attaches to the window and `yes | head -n 200000` keeps
+      scrolling behind it; ≥ 5 pages with the last heading; no sidebar, terminal or header, dark text on white;
+      margins on page 2 onward; the default PDF name (probably "Kinas" — wry sets no job title); after Cancel
+      **and** after Save the terminal's size, the reader's scroll position and focus are unchanged; a Mermaid
+      diagram and a code block are legible on white; images print; a second print works —
+      `outstanding — needs Miguel`
 - [ ] Edit a plan in vim in a Herdr pane beside the reader and save three times: the page updates each time with
       no blank frame and no diagram flash — `outstanding — needs Miguel`
 - [ ] Open in editor from a plan in your own `default` session opens vim in a new pane beside the focused one —

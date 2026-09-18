@@ -16,7 +16,8 @@ use super::access::{self, Denied, Kind};
 use super::{Inner, ReaderState};
 
 pub const SOCKET_FILE: &str = "kinas.sock";
-/// Emitted to the webview for an accepted request: open the reader on the Work page (R18).
+/// Emitted to the webview for an accepted request: open the reader, in the panel on the right of the window, beside
+/// whichever page is showing (R18, amended 2026-09-18 — it no longer switches to the Work page).
 pub const READER_SHOW: &str = "reader_show";
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 const IO_TIMEOUT: Duration = Duration::from_secs(2);

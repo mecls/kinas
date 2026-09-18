@@ -15,23 +15,34 @@ import {
   readerReadText,
   readerRendered,
 } from "../api.ts";
+import { focusTerminal } from "../shell/focus.ts";
+import { CLIPBOARD_MAX_BYTES, writeClipboard } from "../terminal/clipboard.ts";
 import type { FrontmatterView } from "./frontmatter.ts";
+import { Header, type View } from "./Header.tsx";
 import { highlightCode, shouldHighlight } from "./highlight.ts";
 import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
+import type { MenuItem } from "./Menu.tsx";
 import { cachedSvg, renderDiagram } from "./mermaid.ts";
 import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
 
-// The reader (tasks/prd-kinas-open.md): the file `kinas open` named, beside the terminal. It only reads. Opening,
-// reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one step, keeping every
-// diagram and image that did not change (R30).
+// The reader (tasks/prd-kinas-open.md): the file `kinas open` named, in the panel on the right of the window. It only
+// reads. Opening, reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one
+// step, keeping every diagram and image that did not change (R30).
 
-export interface ReaderRequest extends ReaderShow {
-  seq: number;
-}
+/**
+ * What the shell asks the reader to do. `seq` makes two identical requests distinct.
+ *
+ * - `show`: an accepted `kinas open`, exactly as Rust sent it.
+ * - `follow`: a click on a file outside the reader — the sidebar's tree, a pin, a recent file. It takes the same
+ *   path as a click on the reader's own tree: `follow()`, the human-click door (`reader_allow_click`), which keeps
+ *   the open folder and carries no `received_at_ms`, so it adds no line to the log the 200 ms gate counts. A click
+ *   must never be dressed up as a `show` (three-column shell §6.14).
+ */
+export type ReaderRequest = ({ type: "show" } & ReaderShow & { seq: number }) | { type: "follow"; path: string; seq: number };
 
 interface Doc {
   path: string;
@@ -55,15 +66,17 @@ interface Doc {
  * dispatches on the answer. Every branch returns the same `Rendered` shape, which is why `swapBody`, `hydrate`,
  * the layout effect and the Contents gate need no knowledge of modes at all.
  */
-function renderDoc(text: string, render: ReaderRender, ext: string, path: string, view: HtmlView): Rendered {
+function renderDoc(text: string, render: ReaderRender, ext: string, path: string): Rendered {
   switch (render) {
+    // Markdown as its own text is the source view with the markdown grammar: the text is already in hand, so the
+    // toggle reads nothing. It never goes through `splitFrontmatter`, so the `---` block shows as the text it is.
     case "markdown":
-      return renderMarkdown(text);
+      return views.markdown === "rendered" ? renderMarkdown(text) : renderSource(text, "markdown");
     case "image":
       return renderImage(path);
     // Rust decides *that* a file is HTML (R3); the toggle only chooses which of its two views this session shows.
     case "html":
-      return view === "preview" ? renderPreview(text) : renderSource(text, languageFor(ext));
+      return views.html === "rendered" ? renderPreview(text) : renderSource(text, languageFor(ext));
     case "source":
       return renderSource(text, languageFor(ext));
   }
@@ -87,24 +100,26 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path
 /** Every status line this session, for the debug-only `readerStatusLog` hook. */
 const statusLog: string[] = [];
 
-type HtmlView = "preview" | "source";
+/** The kinds of file with two ways to be shown. Everything else has one, and no toggle. */
+type ViewKind = "markdown" | "html";
+
+const viewKindOf = (render: ReaderRender): ViewKind | null => (render === "markdown" || render === "html" ? render : null);
 
 /**
- * Whether an HTML file shows as the page it is, or as its markup. Session state, never a setting (R21).
+ * Whether a markdown or an HTML file shows rendered, or as its own text. Session state, never a setting (R21).
  *
  * Module-level on purpose: "the choice sticks for the session" (Miguel, 2026-09-16) explicitly does not mean
  * surviving relaunch, and `reader_width_pct`'s path through `get_ui_prefs`/`set_reader_width` already exists for
  * things that do. A module variable dies with the process, which is exactly the requirement — and it keeps this
  * work's promise of adding no new `Store::conn()` access, whose non-reentrant mutex froze the whole window once.
+ *
+ * One choice **per kind**, not one for both (three-column shell §6.6): with a single variable, looking at an HTML
+ * page's markup would make the next `kinas open plan.md` arrive as raw markdown.
  */
-let htmlView: HtmlView = "preview";
+const views: Record<ViewKind, View> = { markdown: "rendered", html: "rendered" };
 
 const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
 const mimeOf = (path: string) => MIME[path.slice(path.lastIndexOf(".") + 1).toLowerCase()] ?? "application/octet-stream";
-
-function focusTerminal() {
-  document.querySelector<HTMLTextAreaElement>(".work-terminal .xterm-helper-textarea")?.focus({ preventScroll: true });
-}
 
 /** Builds the new page off-screen and swaps it in one step, keeping unchanged diagrams and images (R30). */
 function swapBody(body: HTMLElement, scroller: HTMLElement, rendered: Rendered, reload: boolean) {
@@ -181,7 +196,18 @@ function FrontmatterCard({ view }: { view: FrontmatterView }) {
   );
 }
 
-export function Reader({ request, onClose }: { request: ReaderRequest | null; onClose: () => void }) {
+export function Reader({
+  request,
+  onClose,
+  expanded,
+  onExpand,
+}: {
+  request: ReaderRequest | null;
+  onClose: () => void;
+  /** Whether the panel has the whole stage. The shell owns it: expanding is a layout matter, not a reading one. */
+  expanded: boolean;
+  onExpand: (expanded: boolean) => void;
+}) {
   const [doc, setDoc] = useState<Doc | null>(null);
   const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
@@ -245,7 +271,7 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
             render: "image",
             ext: opened.ext,
             text: "",
-            rendered: renderDoc("", "image", opened.ext, opened.path, htmlView),
+            rendered: renderDoc("", "image", opened.ext, opened.path),
           };
           docRef.current = next;
           setDoc(next);
@@ -275,7 +301,7 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           render,
           ext: opened.ext,
           text: opened.text.text,
-          rendered: renderDoc(opened.text.text, render, opened.ext, opened.path, htmlView),
+          rendered: renderDoc(opened.text.text, render, opened.ext, opened.path),
         };
         docRef.current = next;
         setDoc(next);
@@ -475,9 +501,13 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
     void hydrate(doc, p.receivedAt);
   }, [doc, hydrate, scrollToId]);
 
-  // A `kinas open` request.
+  // A request from the shell: a `kinas open`, or a click on a file outside the reader.
   useEffect(() => {
     if (!request) return;
+    if (request.type === "follow") {
+      void follow(request.path, null);
+      return;
+    }
     if (request.pick && request.pick.length > 0) {
       setPicks({ paths: request.pick, root: request.root });
       return;
@@ -514,7 +544,7 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
           hash: text.hash,
           lines: text.text.split("\n").length,
           text: text.text,
-          rendered: renderDoc(text.text, latest.render, latest.ext, latest.path, htmlView),
+          rendered: renderDoc(text.text, latest.render, latest.ext, latest.path),
         };
         docRef.current = next;
         setDoc(next);
@@ -605,8 +635,8 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
     setProblem(null);
     setStatus(null);
     setOverlay(null);
+    // The shell gives the terminal the keys afterwards, when the Work page is showing (App.tsx, closeReader).
     onClose();
-    focusTerminal();
   };
 
   const openConfirmed = async () => {
@@ -629,20 +659,30 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
   };
 
   /**
-   * Preview ⇄ Source for the open HTML file (R21).
+   * Rendered ⇄ Source for the open markdown or HTML file (R21, amended 2026-09-18 to cover markdown).
    *
-   * Flips the module-level session variable and re-renders from the text already in hand: no new Tauri command,
-   * no stored setting, and no second read of the file. The label names the view you would switch *to*, as
-   * Journey C describes it, while `aria-pressed` reports whether the page is currently rendered.
+   * Sets the module-level session choice for this file's kind and re-renders from the text already in hand: no new
+   * Tauri command, no stored setting, and no second read of the file. Two buttons with `aria-pressed` say which
+   * view is showing; the old single button, whose label named the view it would switch *to*, is gone.
    */
-  const toggleHtmlView = () => {
-    htmlView = htmlView === "preview" ? "source" : "preview";
+  const changeView = (next: View) => {
     const current = docRef.current;
-    if (!current || current.render !== "html") return;
+    const kind = current ? viewKindOf(current.render) : null;
+    if (!current || !kind || views[kind] === next) return;
+    views[kind] = next;
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };
-    const next: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path, htmlView) };
-    docRef.current = next;
-    setDoc(next);
+    const rerendered: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path) };
+    docRef.current = rerendered;
+    setDoc(rerendered);
+  };
+
+  // The file's text as Rust read it (UTF-8, a leading BOM removed), whichever view is showing.
+  const copy = async () => {
+    const current = docRef.current;
+    if (!current) return;
+    if (current.text === "") return say("Nothing to copy");
+    if (new TextEncoder().encode(current.text).length > CLIPBOARD_MAX_BYTES) return say("Too large to copy (over 1 MiB)");
+    say((await writeClipboard(current.text)) ? "Copied" : "Could not copy");
   };
 
   // Debug builds only: e2e proves a reload keeps the diagram's node (R30), and can see where focus went (R34).
@@ -694,43 +734,31 @@ export function Reader({ request, onClose }: { request: ReaderRequest | null; on
   const contents = Boolean(doc) && tall && headings.length >= 2;
   const sideShown = (folder !== null || contents) && (!narrow || overlay !== null);
 
+  const viewKind = doc ? viewKindOf(doc.render) : null;
+  const noFile = doc ? null : "Open a file first";
+  // An item is listed once it exists: nothing here is a placeholder for a later phase.
+  const menu: MenuItem[] = [{ id: "editor", label: "Open in editor", disabledReason: noFile, onSelect: () => void openInEditor() }];
+
   return (
     <div className="reader-frame" ref={frame}>
-      <header className="reader-head">
-        <button type="button" className="reader-button" onClick={goBack} disabled={back.length === 0} aria-label="Back" title="Back">
-          ←
-        </button>
-        <span className="reader-path" title={doc?.path ?? folder ?? ""}>
-          {doc?.displayPath ?? problem?.displayPath ?? (folder ? baseName(folder) : "")}
-        </span>
-        {narrow && folder && (
-          <button type="button" className="reader-button" aria-pressed={overlay === "files"} onClick={() => setOverlay((o) => (o === "files" ? null : "files"))}>
-            Files
-          </button>
-        )}
-        {narrow && contents && (
-          <button type="button" className="reader-button" aria-pressed={overlay === "contents"} onClick={() => setOverlay((o) => (o === "contents" ? null : "contents"))}>
-            Contents
-          </button>
-        )}
-        {doc?.render === "html" && (
-          <button
-            type="button"
-            className="reader-button"
-            aria-pressed={htmlView === "preview"}
-            title={htmlView === "preview" ? "Show this page's markup" : "Render this page"}
-            onClick={toggleHtmlView}
-          >
-            {htmlView === "preview" ? "Source" : "Preview"}
-          </button>
-        )}
-        <button type="button" className="reader-button" disabled={!doc} title="Open this file in an editor pane in Herdr" onClick={() => void openInEditor()}>
-          Open in editor
-        </button>
-        <button type="button" className="reader-button reader-close" onClick={close} aria-label="Close the reader" title="Close">
-          ×
-        </button>
-      </header>
+      <Header
+        displayPath={doc?.displayPath ?? problem?.displayPath ?? (folder ? baseName(folder) : "")}
+        title={doc?.path ?? folder ?? ""}
+        showBadge={Boolean(doc)}
+        canGoBack={back.length > 0}
+        onBack={goBack}
+        view={viewKind ? views[viewKind] : null}
+        onView={changeView}
+        files={narrow && folder ? { pressed: overlay === "files", onToggle: () => setOverlay((o) => (o === "files" ? null : "files")) } : null}
+        contents={narrow && contents ? { pressed: overlay === "contents", onToggle: () => setOverlay((o) => (o === "contents" ? null : "contents")) } : null}
+        copyDisabledReason={!doc ? noFile : doc.render === "image" ? "Images can't be copied as text" : null}
+        onCopy={() => void copy()}
+        menu={menu}
+        menuResetKey={doc?.path ?? folder ?? ""}
+        expanded={expanded}
+        onExpand={onExpand}
+        onClose={close}
+      />
       {status && (
         <p className="reader-status" role="status">
           {status.text}

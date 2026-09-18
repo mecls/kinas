@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import { App } from "./App.tsx";
 import "./styles/tokens.css";
+import "./styles/shell.css";
 import "./styles/usage.css";
 import "./styles/settings.css";
 import "./styles/overlay.css";

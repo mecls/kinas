@@ -79,12 +79,27 @@ The one key the app takes without ⌘:
 | Esc | Back to the page Settings was opened from |
 | Change, then a chord with ⌘ | Bind that chord. Esc cancels; while recording, no shortcut runs |
 
-## Reader (Work page, left of the terminal)
+## Reader (the panel on the right, beside whichever page is showing)
 
-The reader adds no key bindings of its own. The **Source** / **Preview** toggle that appears on an `.html`
-file is **click-only**, and deliberately so: a binding would have to be unique against the palette and every
-⌘ shortcut above, for a two-state control that lives in one header beside the mouse. If it starts being
-missed, that is the moment to add one — this file stays the gate.
+Amended 2026-09-18 (three-column shell): the reader left the Work page for a panel on the right of the whole
+window, and `kinas open` no longer switches pages.
+
+The reader adds no key bindings of its own. The **Rendered** / **Source** toggle that appears on a markdown or
+an `.html` file is **click-only**, and deliberately so: a binding would have to be unique against the palette
+and every ⌘ shortcut above, for a two-state control that lives in one header beside the mouse. **Copy**,
+**Expand** and **Close** are click-only for the same reason. If one starts being missed, that is the moment to
+add it — this file stays the gate.
+
+The header's **▾** menu is the one place the reader handles keys, and only while it is open: it takes focus when
+it opens and gives it back when it closes, so that nothing typed at an open menu reaches the terminal.
+
+| Key, in the open ▾ menu | Action |
+|---|---|
+| ↑ / ↓ | Move to the previous or next item, wrapping, skipping items that cannot be used |
+| Home / End | First or last usable item |
+| Enter, Space | Run the item |
+| Esc, Tab | Close the menu; focus goes back where it was |
+| The ⌘ shortcuts above | Unchanged |
 
 | Key | Action |
 |---|---|
@@ -93,7 +108,8 @@ missed, that is the moment to add one — this file stays the gate.
 
 Opening a file (`kinas open`, a link, the file tree), a live reload and the confirmation card for a file outside
 the projects root never move keyboard focus. If the terminal had it, it keeps it, so Enter goes to the PTY and can
-never accept the card; Open and Dismiss take a click. Closing the reader with × gives the terminal focus.
+never accept the card; Open and Dismiss take a click. Closing the reader with × gives the terminal focus while the
+Work page is showing; on any other page the terminal is hidden, and focus is left where it was.
 
 ## Launch screen (the Work pane at start, and `kinas` in any terminal)
 

@@ -97,10 +97,13 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
 
 ## Reader
 
-`kinas open` and the reader beside the terminal (`tasks/prd-kinas-open.md`, build spec AC-1 to AC-8).
+`kinas open` and the reader (`tasks/prd-kinas-open.md`, build spec AC-1 to AC-8). Since 2026-09-18 the reader is the
+panel on the **right** of the window, beside whichever page is showing (`tasks/three-column-shell-build-spec.md`).
 
-- [x] `kinas open plan-300.md` opens the reader on the left with the frontmatter card, the diagram, the image and
+- [x] `kinas open plan-300.md` opens the reader on the right with the frontmatter card, the diagram, the image and
       Contents, the terminal keeps focus and its PTY — `automated (reader.e2e.ts, AC-1)`
+- [x] Run from the **Usage** page, `kinas open` opens the panel beside it and **does not switch to Work**; the
+      panel ends at the stage's right edge and the PTY is the same process — `automated (reader.e2e.ts)`
 - [ ] Dragging the divider resizes the reader against the terminal, the terminal refits, the width survives a
       relaunch, and double-click restores 55 % — `automated (reader.e2e.ts)`; the drag by hand with a real mouse is
       `outstanding — needs Miguel`
@@ -125,7 +128,7 @@ Copies reach the macOS clipboard inside and outside Herdr, and ⌫ removes a sel
       (`typescript`), so a first highlight pulls **~26 KB**, not the 5.50 MB whole-package figure
 - [x] An `.html` file opens as the page it is, in an `<iframe sandbox="allow-scripts">` with an injected
       `default-src 'none'` policy; its inline script runs (reported by `postMessage` to a debug-only listener),
-      the **Source** toggle shows the markup escaped and back, and a save reassigns `srcdoc` on the **same**
+      the **Rendered / Source** toggle shows the markup escaped and back, and a save reassigns `srcdoc` on the **same**
       element — proven by marking the node, since a replacement would restart the page *and* jump the layout —
       `automated (reader.e2e.ts)`
 - [x] **Nothing in a previewed page reaches the network or the app**, observed on a real socket rather than

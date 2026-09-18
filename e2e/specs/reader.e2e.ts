@@ -29,6 +29,18 @@ async function waitForHeader(suffix: string, timeout = 20000) {
 
 const scrollTop = () => browser.execute(() => document.querySelector<HTMLElement>(".reader-scroll")!.scrollTop);
 
+/** Which of the header's two view buttons is pressed. Both empty when the file has one view and no toggle. */
+const viewState = () =>
+  browser.execute(() => ({
+    rendered: document.querySelector('.reader-view button[aria-label="Rendered"]')?.getAttribute("aria-pressed") ?? "",
+    source: document.querySelector('.reader-view button[aria-label="Source"]')?.getAttribute("aria-pressed") ?? "",
+  }));
+
+const clickView = (label: "Rendered" | "Source") =>
+  browser.execute((l: string) => document.querySelector<HTMLButtonElement>(`.reader-view button[aria-label="${l}"]`)!.click(), label);
+
+const statusLog = () => hook<string>("readerStatusLog");
+
 /**
  * Waits on a condition read inside the page. Each WebDriver element lookup costs about 5 s under this driver, and a
  * handful of them runs past mocha's 120 s per-test timeout. `condition` runs in the page, so it must be
@@ -97,6 +109,40 @@ describe("kinas open and the reader", () => {
     expect(await hook("terminalFocused")).toBe(true);
   });
 
+  it("opens on the right of whichever page is showing, without switching to Work (three-column shell AC-1)", async () => {
+    await browser.keys(["Meta", "1"]);
+    await waitInPage(() => !document.querySelector<HTMLElement>('section[data-page="usage"]')!.hidden, "the Usage page never showed");
+    const pid = await hook<number>("ptyPid");
+
+    expect(kinas("plan-300.md").code).toBe(0);
+    await waitInPage(() => document.querySelector(".reader-doc[data-rendered]") !== null, "the plan never finished rendering");
+    const layout = await browser.execute(() => {
+      const panel = document.querySelector<HTMLElement>("aside.reader")!;
+      const content = document.querySelector<HTMLElement>(".content")!;
+      return {
+        usageShowing: !document.querySelector<HTMLElement>('section[data-page="usage"]')!.hidden,
+        workShowing: !document.querySelector<HTMLElement>('section[data-page="work"]')!.hidden,
+        panelHidden: panel.hidden,
+        shell: document.querySelector<HTMLElement>(".shell")!.dataset.panel,
+        panelLeft: Math.round(panel.getBoundingClientRect().left),
+        panelRight: Math.round(panel.getBoundingClientRect().right),
+        contentRight: Math.round(content.getBoundingClientRect().right),
+        stageRight: Math.round(document.querySelector<HTMLElement>(".stage")!.getBoundingClientRect().right),
+      };
+    });
+    // Still on Usage: `kinas open` used to force the Work page, because the reader lived inside it.
+    expect(layout).toMatchObject({ usageShowing: true, workShowing: false, panelHidden: false, shell: "open" });
+    // On the right: the panel starts where the page ends (the divider overlaps each by 3 px) and ends at the stage's edge.
+    expect(layout.panelLeft).toBeGreaterThanOrEqual(layout.contentRight - 3);
+    expect(layout.panelRight).toBe(layout.stageRight);
+    expect(await hook<number>("ptyPid")).toBe(pid);
+
+    // The cases below measure the terminal beside the reader, so they run on the Work page.
+    await browser.keys(["Meta", "2"]);
+    await waitInPage(() => !document.querySelector<HTMLElement>('section[data-page="work"]')!.hidden, "the Work page never showed");
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
   it("AC-3: follows a relative link to its fragment, and Back returns to the same place", async () => {
     expect(kinas("plan-300.md").code).toBe(0);
     await waitForHeader("plan-300.md");
@@ -140,8 +186,10 @@ describe("kinas open and the reader", () => {
   });
 
   it("the divider resizes the reader against the terminal, and the width is remembered", async () => {
+    // The reader is the panel on the right of the stage (three-column shell, 2026-09-18), so its share is measured
+    // from the stage's right edge: a pointer released 65 % of the way across leaves the reader 35 %.
     const share = () =>
-      browser.execute(() => document.querySelector<HTMLElement>("aside.reader")!.getBoundingClientRect().width / document.querySelector<HTMLElement>(".work")!.getBoundingClientRect().width);
+      browser.execute(() => document.querySelector<HTMLElement>("aside.reader")!.getBoundingClientRect().width / document.querySelector<HTMLElement>(".stage")!.getBoundingClientRect().width);
     const stored = () =>
       browser.execute(() =>
         (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<{ reader_width_pct: number }> } }).__TAURI_INTERNALS__.invoke("get_ui_prefs").then((p) => p.reader_width_pct),
@@ -149,20 +197,38 @@ describe("kinas open and the reader", () => {
     const cols = await hook<{ cols: number }>("terminalSize");
 
     await browser.execute(() => {
-      const divider = document.querySelector<HTMLElement>(".work-divider")!;
-      const row = document.querySelector<HTMLElement>(".work")!.getBoundingClientRect();
+      const divider = document.querySelector<HTMLElement>(".stage-divider")!;
+      const row = document.querySelector<HTMLElement>(".stage")!.getBoundingClientRect();
       const send = (type: string, x: number) =>
         divider.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 200, pointerId: 1, button: 0, isPrimary: true }));
       send("pointerdown", divider.getBoundingClientRect().left + 3);
       send("pointermove", row.left + row.width * 0.5);
-      send("pointerup", row.left + row.width * 0.35);
+      send("pointerup", row.left + row.width * 0.65);
     });
-    await browser.waitUntil(async () => Math.abs((await share()) - 0.35) < 0.02, { timeout: 10000, timeoutMsg: "the reader did not take 35 % of the row" });
+    // The layout facts that would explain a wrong share, read in the page like everything else here.
+    const layout = () =>
+      browser.execute(() => {
+        const width = (selector: string) => Math.round(document.querySelector<HTMLElement>(selector)?.getBoundingClientRect().width ?? -1);
+        const panel = document.querySelector<HTMLElement>("aside.reader")!;
+        return {
+          window: window.innerWidth,
+          stage: width(".stage"),
+          content: width(".content"),
+          reader: width("aside.reader"),
+          flexBasis: panel.style.flexBasis,
+          panel: document.querySelector<HTMLElement>(".shell")!.dataset.panel,
+          sidebar: document.querySelector<HTMLElement>(".shell")!.dataset.sidebar,
+          dragging: document.querySelector(".stage")!.hasAttribute("data-dragging"),
+        };
+      });
+    await browser.waitUntil(async () => Math.abs((await share()) - 0.35) < 0.02, { timeout: 10000 }).catch(async () => {
+      throw new Error(`the reader did not take 35 % of the row: share ${await share()}, ${JSON.stringify(await layout())}`);
+    });
     await browser.waitUntil(async () => (await stored()) === 35, { timeout: 10000, timeoutMsg: "the width was not remembered" });
     // The terminal refits to its wider box.
     await browser.waitUntil(async () => (await hook<{ cols: number }>("terminalSize")).cols > cols.cols, { timeout: 10000, timeoutMsg: "the terminal did not refit" });
 
-    await browser.execute(() => document.querySelector<HTMLElement>(".work-divider")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    await browser.execute(() => document.querySelector<HTMLElement>(".stage-divider")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
     await browser.waitUntil(async () => (await stored()) === 55, { timeout: 10000, timeoutMsg: "double-click did not restore 55 %" });
   });
 
@@ -268,7 +334,7 @@ describe("kinas open and the reader", () => {
         files: document.querySelector(".reader-files")?.textContent ?? null,
         narrow: document.querySelector(".reader-main")?.hasAttribute("data-narrow") ?? null,
         readerWidth: Math.round(document.querySelector<HTMLElement>("aside.reader")?.getBoundingClientRect().width ?? 0),
-        dragging: document.querySelector(".work")?.hasAttribute("data-dragging") ?? null,
+        dragging: document.querySelector(".stage")?.hasAttribute("data-dragging") ?? null,
       }));
     await browser.waitUntil(async () => (await tree()).selected === "README.md", { timeout: 15000, interval: 250 }).catch(async () => {
       throw new Error(`README.md is not selected in the tree: ${JSON.stringify(await tree())}`);
@@ -513,34 +579,24 @@ describe("kinas open and the reader", () => {
       timeoutMsg: "the preview's inline script never ran",
     });
 
-    // The label names the view it switches *to*, so it is read before the click.
-    const clickToggle = () =>
-      browser.execute(() => {
-        const button = [...document.querySelectorAll<HTMLButtonElement>(".reader-head button")].find((b) => b.textContent === "Source" || b.textContent === "Preview");
-        const label = button?.textContent ?? "";
-        button?.click();
-        return label;
-      });
-
-    expect(await clickToggle()).toBe("Source");
+    // Two buttons since 2026-09-18, Rendered and Source, and `aria-pressed` on each says which view is showing.
+    // Found by their own labels inside `.reader-view`, never by `[aria-pressed]` alone: the narrow-mode Files and
+    // Contents buttons carry that attribute too, and a first-match selector would silently read one of those.
+    expect(await viewState()).toEqual({ rendered: "true", source: "false" });
+    await clickView("Source");
     await waitInPage(() => document.querySelector(".reader-source") !== null, "the toggle never showed the markup");
     const asSource = await browser.execute(() => ({
       frames: document.querySelectorAll("iframe.reader-preview-frame").length,
       text: document.querySelector(".reader-source")?.textContent ?? "",
-      // Found by its own label, not by `[aria-pressed]`: the narrow-mode Files and Contents buttons carry that
-      // attribute too, and a first-match selector would silently read one of those instead.
-      pressed:
-        [...document.querySelectorAll<HTMLButtonElement>(".reader-head button")]
-          .find((b) => b.textContent === "Source" || b.textContent === "Preview")
-          ?.getAttribute("aria-pressed") ?? "",
     }));
     expect(asSource.frames).toBe(0);
     // Escaped, not executed: the markup is visible as text.
     expect(asSource.text).toContain("<script>");
-    expect(asSource.pressed).toBe("false");
+    expect(await viewState()).toEqual({ rendered: "false", source: "true" });
 
-    expect(await clickToggle()).toBe("Preview");
+    await clickView("Rendered");
     await waitInPage(() => document.querySelector(".reader-preview-frame") !== null, "the toggle never rendered the page again");
+    expect(await viewState()).toEqual({ rendered: "true", source: "false" });
 
     // R17: a save re-renders by reassigning srcdoc on the **same element**, so the layout does not jump. Marking
     // the node is the only way to tell that apart from a convincing replacement.

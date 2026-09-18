@@ -33,6 +33,34 @@ export async function hookWith<T = unknown>(name: string, arg: unknown): Promise
   )) as T;
 }
 
+/**
+ * Opens the reader header's ▾ menu and waits for its items. Clicked in the page, like everything else here — and
+ * the wait is a second script on purpose: React has not rendered the menu within the script that clicked ▾.
+ */
+export async function openReaderMenu(): Promise<void> {
+  await browser.execute(() => {
+    if (document.querySelector(".reader-menu") === null) document.querySelector<HTMLButtonElement>('.reader-head [aria-haspopup="menu"]')!.click();
+  });
+  await browser.waitUntil(() => browser.execute(() => document.querySelector('.reader-menu [role="menuitem"]') !== null), {
+    timeout: 10000,
+    interval: 250,
+    timeoutMsg: "the reader's menu never opened",
+  });
+}
+
+/** Runs one item of the reader's ▾ menu by its label. Throws when the item is missing or cannot be used. */
+export async function runReaderMenuItem(label: string): Promise<void> {
+  await openReaderMenu();
+  const state = await browser.execute((wanted: string) => {
+    const item = [...document.querySelectorAll<HTMLButtonElement>('.reader-menu [role="menuitem"]')].find((b) => b.textContent?.trim() === wanted);
+    if (!item) return `missing; the menu holds: ${[...document.querySelectorAll('.reader-menu [role="menuitem"]')].map((b) => b.textContent?.trim()).join(", ")}`;
+    if (item.getAttribute("aria-disabled") === "true") return `disabled: ${item.getAttribute("title") ?? ""}`;
+    item.click();
+    return "clicked";
+  }, label);
+  if (state !== "clicked") throw new Error(`reader menu item "${label}" is ${state}`);
+}
+
 export async function waitForHook(name: string, timeout = 30000): Promise<void> {
   await browser.waitUntil(
     async () => {

@@ -1,10 +1,9 @@
-/* The reader (tasks/prd-kinas-open.md): markdown in the house style beside the terminal. tokens.css variables only. */
+/* The reader (tasks/prd-kinas-open.md): markdown in the house style, in the panel on the right of the window.
+   tokens.css variables only. */
 
-/* The width comes from the divider (Work.tsx sets flex-basis); 55 % until it is dragged. */
+/* The panel's width and place in the row are the shell's business (`.panel`, shell.css); this is the inside. */
 .reader {
   display: flex;
-  flex: 0 0 55%;
-  min-width: 280px;
   min-height: 0;
   background: var(--ground);
 }
@@ -59,9 +58,144 @@
   background: var(--line);
 }
 
-.reader-close {
-  font-size: 15px;
-  line-height: 0.8;
+/* A header button that is only an icon: square, and the icon centred. */
+.reader-icon-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+/* The folder part of the path steps back so the name reads first; together they are still the whole path. */
+.reader-path-dir {
+  color: var(--muted);
+}
+
+/* The file's kind, beside its name. */
+.reader-ext {
+  flex: none;
+  color: var(--muted);
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.08em;
+}
+
+/* Rendered | Source: two halves of one control, the pressed half filled. */
+.reader-view {
+  display: flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.reader-view-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 22px;
+  appearance: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+}
+
+.reader-view-button:hover {
+  color: var(--white);
+}
+
+.reader-view-button[aria-pressed="true"] {
+  background: var(--line);
+  color: var(--white);
+}
+
+/* Copy, and the ▾ that opens the rest. The menu hangs from this box, so it is the positioning parent. */
+.reader-copy {
+  position: relative;
+  display: flex;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.reader-copy-main,
+.reader-copy-more {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--white);
+  font: 500 12px/1 var(--sans);
+  cursor: default;
+}
+
+.reader-copy-main {
+  padding: 0 9px;
+  height: 26px;
+  border-radius: 5px 0 0 5px;
+}
+
+.reader-copy-more {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 26px;
+  border-left: 1px solid var(--line);
+  border-radius: 0 5px 5px 0;
+}
+
+.reader-copy-main:hover:not([aria-disabled="true"]),
+.reader-copy-more:hover,
+.reader-copy-more[aria-expanded="true"] {
+  background: var(--line);
+}
+
+.reader-copy-main[aria-disabled="true"] {
+  color: var(--muted);
+}
+
+/* Above the divider (4) and the reader's overlay column (3), below the palette (20). Right-aligned: the window's
+   root clips anything that runs past its edge. */
+.reader-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  min-width: 188px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  outline: 0;
+}
+
+.reader-menu-item {
+  display: block;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--white);
+  font: 13px/1.2 var(--sans);
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  outline: 0;
+}
+
+.reader-menu-item:hover:not([aria-disabled="true"]),
+.reader-menu-item:focus:not([aria-disabled="true"]) {
+  background: var(--line);
+}
+
+.reader-menu-item[aria-disabled="true"] {
+  color: var(--muted);
 }
 
 .reader-status {

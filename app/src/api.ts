@@ -212,7 +212,11 @@ export interface UiPrefs {
   /** The in-window shortcuts Settings saved, by action; missing actions use settings/shortcuts.ts's defaults. */
   shortcuts: Record<string, string>;
   sidebar_visible: boolean;
-  /** The reader's share of the Work page, 20–80 percent (default 55). */
+  /**
+   * The reader's share of the row it sits in, 20–80 percent (default 55). That row was the Work page until
+   * 2026-09-18 and is the whole stage since (the reader is the panel on its right); the key kept its name, so a
+   * width saved before the move still applies.
+   */
   reader_width_pct: number;
 }
 

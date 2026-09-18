@@ -65,8 +65,8 @@ export const commands: readonly Command[] = [
   },
   {
     // Hands a file or folder to the running app's reader over its socket, and prints the resolved path
-    // (tasks/prd-kinas-open.md, tasks/prd-reader-any-file.md). The reader itself lives on the Work page, so there
-    // is no palette door (5A).
+    // (tasks/prd-kinas-open.md, tasks/prd-reader-any-file.md). The reader is a panel of the window, opened by naming
+    // a file rather than by going somewhere, so there is no palette door (5A).
     id: "open",
     title: "Open a file",
     cliName: "open",

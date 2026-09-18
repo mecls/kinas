@@ -210,7 +210,9 @@ pub struct UiPrefs {
     /// The in-window shortcuts Settings saved, by action; the webview fills in the rest from its defaults.
     pub shortcuts: BTreeMap<String, String>,
     pub sidebar_visible: bool,
-    /// The reader's share of the Work page in percent, set by dragging the divider (reader R32, amended 2026-09-15).
+    /// The reader's share of the row it sits in, in percent, set by dragging the divider (reader R32, amended
+    /// 2026-09-15). That row was the Work page; since 2026-09-18 the reader is the panel on the right of the whole
+    /// window and the row is the stage. The key kept its name so a width saved before the move still applies.
     pub reader_width_pct: f64,
 }
 

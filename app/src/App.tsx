@@ -3,28 +3,50 @@ import { onAppAction, type AppAction } from "./actions.ts";
 import { getUiPrefs, onOpenPalette, onReaderShow, setReaderWidth as saveReaderWidth, setShortcuts as saveShortcuts, setSidebarVisible } from "./api.ts";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
-import { DEFAULT_READER_PCT, type ReaderPane, WorkPage } from "./pages/Work.tsx";
+import { WorkPage } from "./pages/Work.tsx";
 import { Palette } from "./palette/Palette.tsx";
+import { Reader, type ReaderRequest } from "./reader/Reader.tsx";
+import { GearIcon } from "./icons.tsx";
 import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
+import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
+import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
+import { useSplit } from "./shell/useSplit.ts";
 
 export type Page = "usage" | "work" | "settings";
+
+/** The panel on the right of the window. Its one occupant is the reader; it stays mounted while closed. */
+interface PanelState {
+  open: boolean;
+  /** The panel has the whole stage; the page and the divider are out of the layout (shell.css). Session state only. */
+  expanded: boolean;
+  request: ReaderRequest | null;
+}
 
 // Shortcuts come from Settings (keymap.md; by default ⌘1 / ⌘2 switch pages, ⌘S hides or shows the sidebar, ⌘K opens
 // the palette, ⌘, opens Settings). Every page stays mounted and only its visibility changes, so the terminal on the
 // Work page is never unmounted and its PTY never restarts (R33).
+//
+// The tree below is static (tasks/three-column-shell-build-spec.md §6.1): the rail, the stage, the page, the divider
+// and the panel are always there, and only `hidden` and the data attributes change. Anything that wrapped, re-keyed
+// or conditionally rendered an ancestor of <Terminal> would remount it and restart the PTY.
 export function App() {
   const [page, setPage] = useState<Page>("usage");
   const [palette, setPalette] = useState(false);
   const [sidebar, setSidebar] = useState(true);
   const [shortcuts, setShortcuts] = useState<Shortcuts>(DEFAULT_SHORTCUTS);
-  const [reader, setReader] = useState<ReaderPane>({ open: false, request: null });
+  const [reader, setReader] = useState<PanelState>({ open: false, expanded: false, request: null });
   const readerSeq = useRef(0);
-  const [readerWidth, setReaderWidth] = useState(DEFAULT_READER_PCT);
+  const [readerWidth, setReaderWidth] = useState(DEFAULT_PANEL_PCT);
   const shortcutsRef = useRef(shortcuts);
   const sidebarShown = useRef(true);
   /** Where Esc on Settings goes back to. */
   const lastPage = useRef<Exclude<Page, "settings">>("usage");
   const pageRef = useRef(page);
+  const expandedRef = useRef(false);
+  /** Whether the keys were the terminal's when the panel expanded over it, so collapsing can give them back. */
+  const terminalHadFocus = useRef(false);
+  /** Set when the terminal should get the keys once the layout that hides it has gone. */
+  const wantTerminalFocus = useRef(false);
 
   useEffect(() => {
     shortcutsRef.current = shortcuts;
@@ -40,20 +62,40 @@ export function App() {
     setSidebar(shown);
   }, []);
 
+  // Expanded, the panel has the whole stage and the page is out of the layout — not covered, gone, so the terminal's
+  // ResizeObserver sees no box and the PTY keeps its size (three-column shell §6.2). The hidden terminal drops its
+  // focus, so whether it had the keys is remembered here and they are given back on the way out.
+  const setExpanded = useCallback((next: boolean) => {
+    if (expandedRef.current === next) return;
+    if (next) terminalHadFocus.current = terminalHasFocus();
+    else if (terminalHadFocus.current) wantTerminalFocus.current = true;
+    expandedRef.current = next;
+    setReader((r) => ({ ...r, expanded: next }));
+  }, []);
+
+  // Going to a page means wanting to see it: an expanded panel goes back to the side.
+  const goTo = useCallback(
+    (next: Page) => {
+      setExpanded(false);
+      setPage(next);
+    },
+    [setExpanded],
+  );
+
   const run = useCallback(
     (action: AppAction) => {
-      if (action === "go.usage") setPage("usage");
-      else if (action === "go.work") setPage("work");
+      if (action === "go.usage") goTo("usage");
+      else if (action === "go.work") goTo("work");
       else if (action === "palette") setPalette(true);
       else if (action === "settings") {
         setPalette(false);
-        setPage("settings");
+        goTo("settings");
       } else if (action === "sidebar") {
         showSidebar(!sidebarShown.current);
         void setSidebarVisible(sidebarShown.current).catch(() => {});
       }
     },
-    [showSidebar],
+    [goTo, showSidebar],
   );
 
   // The saved shortcuts and sidebar; the defaults apply until they arrive.
@@ -73,9 +115,9 @@ export function App() {
       // The terminal decides its own ⌘ chords (keyContract.ts) and raises them as app actions, so acting here too
       // would run a toggle twice. A chord being recorded in Settings runs nothing.
       if (e.target instanceof Element && e.target.closest(".terminal, [data-recording]")) return;
-      // Esc on Settings goes back wherever focus is (WebKit drops it when a button is clicked); the palette keeps
-      // its own Esc.
-      if (e.key === "Escape" && pageRef.current === "settings" && !(e.target instanceof Element && e.target.closest(".overlay"))) {
+      // Esc on Settings goes back wherever focus is (WebKit drops it when a button is clicked); the palette and the
+      // reader's menu keep their own Esc, and an expanded reader has taken Settings' place, so Esc is not about it.
+      if (e.key === "Escape" && pageRef.current === "settings" && !expandedRef.current && !(e.target instanceof Element && e.target.closest(".overlay, [role=menu]"))) {
         e.preventDefault();
         setPage(lastPage.current);
         return;
@@ -98,14 +140,14 @@ export function App() {
     return () => void stop.then((u) => u());
   }, []);
 
-  // An accepted `kinas open`: Rust has brought the window forward; show the reader on the Work page (reader R18).
+  // An accepted `kinas open`: Rust has brought the window forward; show the reader in the panel, beside whichever
+  // page is showing (reader R18, amended 2026-09-18 — it no longer switches to the Work page).
   // Keyboard focus stays where it was (R34): an agent opens its plan while Miguel is typing to it in the pane.
   useEffect(() => {
     const stop = onReaderShow((event) => {
       const had = document.activeElement;
-      const inTerminal = had instanceof HTMLElement && had.closest(".terminal") !== null;
-      setPage("work");
-      setReader({ open: true, request: { ...event, seq: ++readerSeq.current } });
+      const inTerminal = had instanceof HTMLElement && terminalHasFocus();
+      setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "show", ...event, seq: ++readerSeq.current } }));
       if (inTerminal) {
         // Bringing the window forward can move focus when the app activates, after this frame; put it back then too.
         const restore = () => {
@@ -119,13 +161,35 @@ export function App() {
     return () => void stop.then((u) => u());
   }, []);
 
-  const closeReader = useCallback(() => setReader((r) => ({ ...r, open: false })), []);
+  // Closing the reader with × gives the terminal the keys (keymap.md) — while the Work page is showing. Anywhere
+  // else the terminal is hidden and cannot take focus, so focus is left where it was.
+  const closeReader = useCallback(() => {
+    expandedRef.current = false;
+    terminalHadFocus.current = false;
+    setReader((r) => {
+      // Only a close that closes something: a flag left set by a no-op would hand the terminal the keys the next
+      // time the page changed, long after anyone asked. (Idempotent, so safe inside an updater.)
+      if (r.open) wantTerminalFocus.current = true;
+      return { ...r, open: false, expanded: false };
+    });
+  }, []);
 
-  // The divider between the reader and the terminal; remembered across launches like the sidebar.
+  // After the commit, not in the handler: closing or collapsing an expanded panel is what puts the terminal back in
+  // the layout, and an element with no box cannot take focus.
+  useEffect(() => {
+    if (!wantTerminalFocus.current || reader.expanded) return;
+    wantTerminalFocus.current = false;
+    if (page === "work") focusTerminal();
+  }, [reader.open, reader.expanded, page]);
+
+  // The divider between the page and the panel; remembered across launches like the sidebar. The stored key keeps
+  // its name from when the reader split the Work page: it is still the reader's share of the row it sits in.
   const changeReaderWidth = useCallback((pct: number) => {
     setReaderWidth(pct);
     void saveReaderWidth(pct).catch(() => {});
   }, []);
+
+  const split = useSplit(readerWidth, changeReaderWidth);
 
   const changeShortcuts = useCallback(async (next: Shortcuts) => {
     await saveShortcuts(next);
@@ -133,13 +197,13 @@ export function App() {
   }, []);
 
   return (
-    <div className="shell" data-sidebar={sidebar ? "shown" : "hidden"}>
+    <div className="shell" data-sidebar={sidebar ? "shown" : "hidden"} data-panel={!reader.open ? "closed" : reader.expanded ? "expanded" : "open"}>
       <nav className="rail" aria-label="Pages" hidden={!sidebar}>
         <button
           type="button"
           className="rail-item"
           aria-current={page === "usage" ? "page" : undefined}
-          onClick={() => setPage("usage")}
+          onClick={() => goTo("usage")}
           title={`Usage (${chordLabel(shortcuts["go.usage"])})`}
         >
           Usage
@@ -148,7 +212,7 @@ export function App() {
           type="button"
           className="rail-item"
           aria-current={page === "work" ? "page" : undefined}
-          onClick={() => setPage("work")}
+          onClick={() => goTo("work")}
           title={`Work (${chordLabel(shortcuts["go.work"])})`}
         >
           Work
@@ -158,41 +222,32 @@ export function App() {
           className="rail-item rail-settings"
           aria-label="Settings"
           aria-current={page === "settings" ? "page" : undefined}
-          onClick={() => setPage("settings")}
+          onClick={() => goTo("settings")}
           title={`Settings (${chordLabel(shortcuts.settings)})`}
         >
           <GearIcon />
         </button>
       </nav>
-      <main className="content">
-        <section className="page" data-page="usage" hidden={page !== "usage"}>
-          <UsagePage active={page === "usage"} />
-        </section>
-        <section className="page" data-page="work" hidden={page !== "work"}>
-          <WorkPage
-            active={page === "work"}
-            shortcuts={shortcuts}
-            reader={reader}
-            onReaderClose={closeReader}
-            readerWidth={readerWidth}
-            onReaderWidth={changeReaderWidth}
-          />
-        </section>
-        <section className="page" data-page="settings" hidden={page !== "settings"}>
-          <SettingsPage active={page === "settings"} shortcuts={shortcuts} onShortcutsChange={changeShortcuts} />
-        </section>
-      </main>
+      <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
+        <main className="content">
+          <section className="page" data-page="usage" hidden={page !== "usage"}>
+            <UsagePage active={page === "usage"} />
+          </section>
+          <section className="page" data-page="work" hidden={page !== "work"}>
+            <WorkPage active={page === "work"} shortcuts={shortcuts} />
+          </section>
+          <section className="page" data-page="settings" hidden={page !== "settings"}>
+            <SettingsPage active={page === "settings"} shortcuts={shortcuts} onShortcutsChange={changeShortcuts} />
+          </section>
+        </main>
+        <div className="stage-divider" hidden={!reader.open} {...split.divider} />
+        {/* `reader` is kept beside `shell-panel`: reader.css styles it, and the e2e finds the panel as `aside.reader`. */}
+        {/* Expanded, the width is shell.css's: an inline flex-basis would out-rank it. */}
+        <aside className="shell-panel reader" aria-label="Reader" hidden={!reader.open} style={reader.expanded ? undefined : { flexBasis: `${split.pct}%` }}>
+          <Reader request={reader.request} onClose={closeReader} expanded={reader.expanded} onExpand={setExpanded} />
+        </aside>
+      </div>
       {palette && <Palette onClose={() => setPalette(false)} />}
     </div>
-  );
-}
-
-/** Lucide's "settings" gear (ISC licence), in the rail's thin-line weight. */
-function GearIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
   );
 }

@@ -1,0 +1,240 @@
+/*
+ * The shell (tasks/three-column-shell-build-spec.md §9): navigation on the left, the page in the middle, and what was
+ * opened in a panel on the right. tokens.css variables only.
+ *
+ *   div.shell[data-sidebar][data-panel]
+ *     nav.rail                  the pages
+ *     div.stage                 a flex row — the row the divider measures
+ *       main.content            the three stacked pages
+ *       div.stage-divider
+ *       aside.shell-panel.reader  the reader
+ *
+ * This tree never changes shape at runtime: only `hidden` and the two data attributes do. A wrapper appearing above
+ * the terminal would remount it, restart its PTY and drop Herdr's client (Build 1 R33, reader R31).
+ */
+:root {
+  --sidebar-w: 72px;
+  /* Neither side of the divider may be narrower than this. Must equal MIN_PANE_PX in shell/split.ts. */
+  --pane-min: 280px;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100%;
+}
+
+/* ⌘S (keymap.md): the rail goes, and the stage takes the whole width. */
+.shell[data-sidebar="hidden"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.rail-item {
+  appearance: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 4px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+.rail-item:hover {
+  color: var(--white);
+}
+
+/* Settings sits at the foot of the rail, apart from the pages. */
+.rail-settings {
+  display: grid;
+  place-items: center;
+  margin-top: auto;
+}
+
+.rail-item[aria-current="page"] {
+  background: var(--line);
+  color: var(--white);
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The page's box: the whole stage with the panel closed, the rest of it beside the panel. */
+.content {
+  position: relative;
+  flex: 1 1 0;
+  min-width: var(--pane-min);
+  min-height: 0;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.page-header {
+  padding: 20px 28px 8px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The panel's width comes from the divider (App.tsx sets flex-basis); this is its share until that arrives.
+   Named `shell-panel`, not `panel`: usage.css already has a `.panel` — the Usage page's cards — and these sheets are
+   global. The first build used `.panel`, put the cards' 16 px padding round the reader, and leaked this rule's
+   min-width onto every card; the divider's e2e caught it as a reader 34 px wider than its share. */
+.shell-panel {
+  flex: 0 0 55%;
+  min-width: var(--pane-min);
+  min-height: 0;
+  border-left: 1px solid var(--line);
+}
+
+/*
+ * Expanded: the page and the divider leave the layout and the panel takes the row. They are not covered, they are
+ * gone — `display: none` is the path ⌘1 and ⌘2 already take, where the terminal's ResizeObserver sees no box and
+ * leaves the PTY's size alone. Covering the page instead would take the panel out of the row, the page would grow to
+ * fill it, and Herdr would redraw on the way in and again on the way out.
+ */
+.shell[data-panel="expanded"] .content,
+.shell[data-panel="expanded"] .stage-divider {
+  display: none;
+}
+
+.shell[data-panel="expanded"] .shell-panel {
+  flex: 1 1 auto;
+  border-left: 0;
+}
+
+/* The divider between the page and the panel: a thin line with a wider grip. Its margins net it no width. */
+.stage-divider {
+  position: relative;
+  flex: 0 0 6px;
+  margin: 0 -3px;
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.stage-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: transparent;
+}
+
+.stage-divider:hover::after,
+.stage[data-dragging] .stage-divider::after {
+  left: 1px;
+  width: 3px;
+  background: var(--blue);
+}
+
+/* While dragging, nothing selects text and the cursor stays a resize cursor over the terminal too. */
+.stage[data-dragging] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.stage[data-dragging] .content,
+.stage[data-dragging] .shell-panel {
+  pointer-events: none;
+}
+
+.work {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--ground);
+}
+
+/* The terminal's box. The reader's close button finds the terminal through this class (Reader.tsx, focusTerminal). */
+.work-terminal {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.terminal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+}
+
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0 0 8px;
+}
+
+.terminal-notice {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--gold);
+  font: 11px/1.4 var(--mono);
+}
+
+/* "copied to clipboard": a moment in the pane's bottom right corner, clear of a prompt typed from the left. It never
+   takes a click from the terminal. */
+.terminal-toast {
+  position: absolute;
+  bottom: 12px;
+  right: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--gold);
+  background: var(--ground);
+  color: var(--white);
+  font: 12px/1.3 var(--mono);
+  pointer-events: none;
+  animation: terminal-toast-in 120ms ease-out;
+}
+
+.terminal-toast-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+@keyframes terminal-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-toast {
+    animation: none;
+  }
+}

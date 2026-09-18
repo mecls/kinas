@@ -392,25 +392,41 @@ pub fn remove_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderCo
 /// This is the one place a request is made outside the reader thread, and it is still a GET through the same
 /// GET-only module (R1, R2). It stores nothing: the list is shown, Miguel chooses, and only the chosen id is
 /// written by `set_hostinger_vm`.
+/// `async` **and** `spawn_blocking`, and both halves are needed — getting either one alone wrong breaks it in a
+/// different way, which this command has now demonstrated twice.
+///
+/// - Synchronous, it runs on the **main thread**, so a 10-second HTTP timeout freezes the window. That is the
+///   same reason the reader commands are async.
+/// - Naively `async`, the body runs inside Tauri's async runtime, and `reqwest::blocking` starts a runtime of
+///   its own — which cannot nest. The app logged `Failed to communicate successful startup` and the command
+///   never returned, so the e2e case that had been passing died on a bare timeout with nothing to explain it.
+///
+/// So: async, with every blocking part — the Keychain read included, since that shells out to `security` — on a
+/// blocking thread. The `Arc` is cloned because `State<'_, Keys>` cannot outlive the call.
 #[tauri::command]
-pub fn hostinger_list_vms(keys: State<'_, Keys>) -> Result<Vec<VpsChoice>, String> {
-    let token = keys.0.get(HOSTINGER_ACCOUNT).map_err(|e| redact(&e))?.unwrap_or_default();
-    if token.trim().is_empty() {
-        return Err("no API token — add one first".into());
-    }
-    let client = hostinger::ReqwestClient::new().map_err(|e| redact(&e))?;
-    let response = client.list_vms(&hostinger::base_url(), &token).map_err(|e| redact(&e))?;
-    match response.status {
-        200 => {}
-        401 => return Err("api token rejected".into()),
-        429 => return Err("rate limited (HTTP 429) — try again in a minute".into()),
-        status => return Err(format!("HTTP {status}")),
-    }
-    let vms = hostinger::parse_vms(&response.body).map_err(|e| redact(&e))?;
-    Ok(vms
-        .into_iter()
-        .map(|v| VpsChoice { id: v.id, hostname: v.hostname, plan: v.plan, state: v.state })
-        .collect())
+pub async fn hostinger_list_vms(keys: State<'_, Keys>) -> Result<Vec<VpsChoice>, String> {
+    let keystore = std::sync::Arc::clone(&keys.0);
+    tauri::async_runtime::spawn_blocking(move || {
+        let token = keystore.get(HOSTINGER_ACCOUNT).map_err(|e| redact(&e))?.unwrap_or_default();
+        if token.trim().is_empty() {
+            return Err("no API token — add one first".into());
+        }
+        let client = hostinger::ReqwestClient::new().map_err(|e| redact(&e))?;
+        let response = client.list_vms(&hostinger::base_url(), &token).map_err(|e| redact(&e))?;
+        match response.status {
+            200 => {}
+            401 => return Err("api token rejected".into()),
+            429 => return Err("rate limited (HTTP 429) — try again in a minute".into()),
+            status => return Err(format!("HTTP {status}")),
+        }
+        let vms = hostinger::parse_vms(&response.body).map_err(|e| redact(&e))?;
+        Ok(vms
+            .into_iter()
+            .map(|v| VpsChoice { id: v.id, hostname: v.hostname, plan: v.plan, state: v.state })
+            .collect())
+    })
+    .await
+    .map_err(|e| format!("listing failed: {e}"))?
 }
 
 /// Choose the watched VPS, or pass `None` to watch none — which is how Miguel disconnects it (R4).

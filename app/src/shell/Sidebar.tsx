@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { PinView } from "../api.ts";
+import { type PinView, readerAllowClick } from "../api.ts";
 import { ChevronDownIcon, ChevronRightIcon, FileIcon, FolderIcon, GaugeIcon, GearIcon, PinIcon, PinOffIcon, TerminalIcon } from "../icons.tsx";
 import { FileTree } from "../reader/tree.tsx";
 import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
@@ -147,8 +147,15 @@ function PinRow({ pin, selected, onOpen, onUnpin }: { pin: PinView; selected: st
 
   const activate = () => {
     if (missing) return;
-    if (isDir) setExpanded((e) => !e);
-    else onOpen(pin.path);
+    if (!isDir) return onOpen(pin.path);
+    if (expanded) return setExpanded(false);
+    // The click is what allows a folder outside the projects folder (reader R8), exactly as a click on a link
+    // does — so it happens before the tree mounts and asks Rust to list it. A pin alone opens no door: after a
+    // relaunch the session's allowed list is empty again, and this is what refills it. If Rust refuses, the tree
+    // says so itself ("Could not read this folder").
+    void readerAllowClick(pin.path)
+      .catch(() => {})
+      .then(() => setExpanded(true));
   };
 
   return (
@@ -176,7 +183,7 @@ function PinRow({ pin, selected, onOpen, onUnpin }: { pin: PinView; selected: st
   );
 }
 
-/** A pinned folder's tree. Going through `onOpen` for the folder first is what allows a folder outside the root. */
+/** A pinned folder's tree, mounted only once the click that expanded it has been allowed (see `activate`). */
 function PinnedFolder({ path, selected, onOpen }: { path: string; selected: string | null; onOpen: (path: string) => void }) {
   return (
     <div className="sidebar-pin-tree">

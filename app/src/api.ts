@@ -310,6 +310,16 @@ export interface PinView {
   exists: boolean;
 }
 
+/**
+ * Pinned files and folders: the one thing about what Miguel reads that survives a relaunch, and only by an explicit
+ * click. Each call answers with the whole list, so the sidebar redraws from one answer. A pin opens no door —
+ * opening one still goes through `follow()` and `reader_allow_click` (reader/pins.rs).
+ */
+export const readerPins = () => invoke<PinView[]>("reader_pins");
+/** Rejected unless the reader may already read the path, and past 50 pins. */
+export const readerPin = (path: string) => invoke<PinView[]>("reader_pin", { path });
+export const readerUnpin = (path: string) => invoke<PinView[]>("reader_unpin", { path });
+
 /** A download's answer. The file's **name** only: where Miguel put the copy never comes back across this line. */
 export type ReaderExported = { status: "saved"; name: string; bytes: number } | { status: "cancelled" };
 /**

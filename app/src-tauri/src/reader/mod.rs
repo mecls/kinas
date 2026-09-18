@@ -1,11 +1,12 @@
 //! The reader (`kinas open`, reader PRD): what it keeps for this session, the door the CLI uses, and the commands the
 //! webview calls. Everything here lives in memory and is gone when Kinas quits; the only thing stored is the
-//! `reader_editor` setting. It only reads — with one exception, `export.rs`, which writes a copy of the open file
+//! `reader_editor` setting — and, since 2026-09-18, the paths Miguel explicitly pins (`pins.rs`). It only reads — with one exception, `export.rs`, which writes a copy of the open file
 //! to a place Miguel chooses in a save sheet. Every command re-checks its path (R9): nothing is trusted because someone checked it before.
 
 pub mod access;
 pub mod editor;
 pub mod export;
+pub mod pins;
 pub mod socket;
 pub mod watch;
 

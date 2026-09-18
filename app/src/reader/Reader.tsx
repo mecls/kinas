@@ -212,6 +212,10 @@ export function Reader({
   onExpand,
   onNav,
   treeInSidebar,
+  pinned,
+  onPin,
+  onUnpin,
+  notice,
 }: {
   request: ReaderRequest | null;
   onClose: () => void;
@@ -229,6 +233,12 @@ export function Reader({
    * nothing to choose from.
    */
   treeInSidebar: boolean;
+  /** Whether the open file is pinned. The shell owns the pins; the reader only offers the menu item. */
+  pinned: boolean;
+  onPin: (path: string) => void;
+  onUnpin: (path: string) => void;
+  /** Something the shell wants said here, where the reader says things. `seq` makes a repeat a new notice. */
+  notice: { text: string; seq: number } | null;
 }) {
   const [doc, setDoc] = useState<Doc | null>(null);
   const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
@@ -586,6 +596,12 @@ export function Reader({
     return () => void stop.then((u) => u());
   }, [say]);
 
+  // The shell speaks through the reader's status line: a pin's result, or Rust's reason for refusing one.
+  useEffect(() => {
+    if (notice) say(notice.text);
+    // Keyed on the notice alone: `say` is stable, and a new `seq` is a new thing to say.
+  }, [notice, say]);
+
   // The shell's sidebar mirrors what is open. One effect, keyed on what it reports, so a reload tells it nothing.
   const docPath = doc?.path ?? null;
   const docDisplayPath = doc?.displayPath ?? null;
@@ -811,6 +827,8 @@ export function Reader({
     { id: "download", label: downloadLabel(doc ? baseName(doc.path) : ""), disabledReason: noFile, onSelect: () => void download() },
     { id: "print", label: "Print as PDF", disabledReason: cannotPrint, onSelect: () => void print() },
     { id: "editor", label: "Open in editor", disabledReason: noFile, onSelect: () => void openInEditor() },
+    // The open file. A folder is pinned from its header in the sidebar, where the folder is.
+    { id: "pin", label: pinned ? "Unpin" : "Pin", disabledReason: noFile, onSelect: () => doc && (pinned ? onUnpin(doc.path) : onPin(doc.path)) },
   ];
 
   return (

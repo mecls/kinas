@@ -136,6 +136,9 @@ pub fn run() {
             reader::reader_open_in_editor,
             reader::export::reader_export,
             reader::reader_print,
+            reader::pins::reader_pins,
+            reader::pins::reader_pin,
+            reader::pins::reader_unpin,
         ])
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).

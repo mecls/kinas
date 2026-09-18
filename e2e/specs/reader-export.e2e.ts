@@ -124,7 +124,7 @@ describe("Download and Print", () => {
   it("AC-10: Print asks Rust for the sheet, and each kind of file offers what it can do", async () => {
     // Still plan-300.md, rendered: everything is on.
     const markdown = await menuItems();
-    expect(markdown.map((item) => item.label)).toEqual(["Download as .md", "Print as PDF", "Open in editor"]);
+    expect(markdown.map((item) => item.label)).toEqual(["Download as .md", "Print as PDF", "Open in editor", "Pin"]);
     expect(markdown.every((item) => !item.disabled)).toBe(true);
 
     const skippedBefore = logLines("print skipped because KINAS_E2E_NO_PRINT is set").length;

@@ -205,6 +205,18 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
       README.md selected, a click on another file opens it and **keeps the folder** (and adds no line to the log the
       200 ms gate counts), and with the sidebar hidden (⌘S) the tree comes back to the reader behind its Files
       button — `automated (reader.e2e.ts, three-column shell AC-11)`
+- [x] **Pinned** survives a relaunch and **Recent** does not — proved across two real launches over one data folder:
+      a file pinned from the ▾ menu and a folder pinned from its Files header are listed in order, stored as
+      `{path, kind}` under the one settings key `reader_pins`, and absent from `kinas status --json` and from the
+      log; a pinned folder opens as a tree; a pin whose file was deleted **stays**, greyed, titled `… is missing`,
+      does nothing when clicked, and only its Unpin removes it; the 51st pin is refused in Rust's words and
+      `/etc/hosts` cannot be pinned at all; after the relaunch both pins are back, the sixteen files that were
+      merely opened are not, and with nothing in it the Recent section is not drawn —
+      `automated (reader-pins-a.e2e.ts then reader-pins-b.e2e.ts; reader/pins.rs, 9 tests incl. a store reopen)`
+- [x] **Recent** holds 15, newest first, lists a file once, and a row opens its file —
+      `automated (reader-pins-a.e2e.ts; shell/recent.test.ts)`
+- [ ] The sidebar's sections look right: nothing but the pages and Settings on a fresh launch; Pinned appears with
+      the first pin; the pin and unpin buttons show when a row is pointed at — `outstanding — needs Miguel`
 - [ ] Docked beside the sidebar the reader is under 640 px, so **Contents** is a header button that opens over the
       page; **Expand** it and Contents becomes a column beside the document. With the sidebar hidden, Files does
       the same — `outstanding — needs Miguel` (the button and its list are `automated (reader.e2e.ts, AC-1)`)

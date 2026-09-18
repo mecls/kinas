@@ -15,7 +15,8 @@ pub const MAX_TEXT_BYTES: u64 = 4 * 1024 * 1024;
 pub const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 pub const IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+// Deserialize as well as Serialize: a pin is stored with its kind (pins.rs), so a missing folder still draws as one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     File,

@@ -1,0 +1,62 @@
+[
+  {
+    "id": 17923,
+    "firewall_group_id": null,
+    "subscription_id": "SYNTHETIC-SUB-0001",
+    "data_center_id": 521,
+    "plan": "KVM 4",
+    "hostname": "srv17923.hstgr.cloud",
+    "state": "running",
+    "actions_lock": "unlocked",
+    "cpus": 4,
+    "memory": 8192,
+    "disk": 51200,
+    "bandwidth": 16777216,
+    "ns1": "192.0.2.1",
+    "ns2": "192.0.2.2",
+    "ipv4": [
+      {
+        "id": 1,
+        "address": "192.0.2.10",
+        "ptr": "srv17923.hstgr.cloud"
+      }
+    ],
+    "ipv6": [],
+    "template": {
+      "id": 1002,
+      "name": "Ubuntu 24.04 LTS",
+      "description": "Ubuntu 24.04 LTS"
+    },
+    "created_at": "2026-01-15T10:00:00.00000Z"
+  },
+  {
+    "id": 18044,
+    "firewall_group_id": null,
+    "subscription_id": "SYNTHETIC-SUB-0002",
+    "data_center_id": 508,
+    "plan": "KVM 2",
+    "hostname": "srv18044.hstgr.cloud",
+    "state": "stopped",
+    "actions_lock": "unlocked",
+    "cpus": 2,
+    "memory": 8192,
+    "disk": 102400,
+    "bandwidth": 8388608,
+    "ns1": "192.0.2.1",
+    "ns2": "192.0.2.2",
+    "ipv4": [
+      {
+        "id": 2,
+        "address": "192.0.2.11",
+        "ptr": "srv18044.hstgr.cloud"
+      }
+    ],
+    "ipv6": [],
+    "template": {
+      "id": 1003,
+      "name": "Debian 12",
+      "description": "Debian 12"
+    },
+    "created_at": "2026-02-02T09:30:00.00000Z"
+  }
+]

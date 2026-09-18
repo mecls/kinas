@@ -7,7 +7,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export type ReadingState = "fresh" | "stale" | "dead" | "reset";
 export type Subscription = "claude-plan" | "ollama-cloud";
 export type QuotaWindow = "session" | "week" | "month_credits";
-export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host" | "convex";
+export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host" | "convex" | "hostinger";
 
 /**
  * A provider whose metrics live in `provider_metrics`, not `quotas`.
@@ -16,7 +16,7 @@ export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi
  * windows do not fit that table's one-`used_pct`-per-row shape (convex R9). Widening `Subscription` instead
  * would put Convex into every gauge that reads `quotas` and find nothing there.
  */
-export type MetricProvider = "convex";
+export type MetricProvider = "convex" | "hostinger";
 
 export interface QuotaView {
   subscription: Subscription;
@@ -52,6 +52,8 @@ export interface ProviderMetricView {
   /** Unrounded and **not clamped**: over 100 % is real and billed (convex R6). */
   used_pct: number | null;
   left_pct: number | null;
+  /** Whatever the reader wanted said about the row's subject; Hostinger puts `hostname · plan · state` here. */
+  detail: string | null;
   source: string;
   updated_at: number;
   state: ReadingState;
@@ -148,6 +150,12 @@ export interface SettingsView {
   convex_deployment_url: string;
   /** "starter" or "professional"; only changes which denominators the gauges use (convex R6). */
   convex_plan: string;
+  /** Whether a Hostinger API token is in the Keychain. Never the token itself (hostinger R3). */
+  hostinger_key_saved: boolean;
+  /** The watched VPS, or null for "none chosen" — then no request is made at all (hostinger R4). */
+  hostinger_vm_id: number | null;
+  /** `hostname · plan`, so the picker can name the selection without re-listing the account. */
+  hostinger_vm_label: string;
   claude_hook: HookStatus;
   /** The command Open in editor runs in a new Herdr pane (reader R36). */
   reader_editor: string;
@@ -179,6 +187,26 @@ export const removeConvexKey = () => invoke<void>("remove_convex_key");
 export const setConvexDeployment = (url: string) => invoke<void>("set_convex_deployment", { url });
 /** "starter" or "professional"; anything else is refused rather than silently read back as starter. */
 export const setConvexPlan = (plan: string) => invoke<void>("set_convex_plan", { plan });
+
+/** One machine on the Hostinger account, for the picker (hostinger R4). */
+export interface VpsChoice {
+  id: number;
+  hostname: string;
+  plan: string;
+  state: string;
+}
+
+/**
+ * Hostinger's token has no read-only scope — its docs say a token has the same permissions as the owning user —
+ * so "watch-only" is enforced in `readers/hostinger/`, which is GET-only and holds two tests proving it
+ * (hostinger R1). Saving polls immediately.
+ */
+export const saveHostingerToken = (token: string) => invoke<void>("save_hostinger_token", { token });
+export const removeHostingerToken = () => invoke<void>("remove_hostinger_token");
+/** Lists the account's machines for the picker; stores nothing. */
+export const hostingerListVms = () => invoke<VpsChoice[]>("hostinger_list_vms");
+/** `null` watches none, which is how the VPS is disconnected. */
+export const setHostingerVm = (vmId: number | null, label: string) => invoke<void>("set_hostinger_vm", { vmId, label });
 
 export interface UiPrefs {
   /** The in-window shortcuts Settings saved, by action; missing actions use settings/shortcuts.ts's defaults. */

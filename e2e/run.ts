@@ -62,6 +62,8 @@ for (const spec of specs) {
   env.KINAS_OLLAMA_BASE_URL = "http://127.0.0.1:9";
   // Unreachable by default, so no spec but the one that sets up a stub can reach a real Convex deployment.
   env.KINAS_CONVEX_BASE_URL = "http://127.0.0.1:9";
+  // Same for Hostinger, and it matters more here: that token can restart or recreate a real machine.
+  env.KINAS_HOSTINGER_BASE_URL = "http://127.0.0.1:9";
   env.KINAS_E2E_MEMORY_KEYCHAIN = "1";
   // Test launches never register the real global hotkey or a login item.
   env.KINAS_E2E_NO_SYSTEM_HOOKS = "1";

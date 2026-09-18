@@ -72,6 +72,9 @@ pub struct ProviderMetricView {
     pub unit: Option<String>,
     pub used_pct: Option<f64>,
     pub left_pct: Option<f64>,
+    /// Whatever the reader wanted the surface to say about the row's subject — Hostinger puts the machine's
+    /// hostname, plan and power state here so the tile can label itself without a second query.
+    pub detail: Option<String>,
     pub source: String,
     pub updated_at: i64,
     pub state: ReadingState,
@@ -110,6 +113,7 @@ fn default_limits(reader: &str) -> (i64, i64) {
         "claude-code-logs" => Reader::ClaudeCodeLogs,
         "pi-logs" => Reader::PiLogs,
         "convex" => Reader::Convex,
+        "hostinger" => Reader::Hostinger,
         // Anything unrecognised falls through to Host's 120 s window, which is the *shortest* — so a reader
         // missing from this match goes stale in two minutes and nobody is told why. Add new readers here.
         _ => Reader::Host,
@@ -184,7 +188,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
     // Read in the same single pass as everything else, so the page never mixes readings from two moments.
     let provider_metrics = conn
         .prepare(
-            "SELECT provider, metric, \"window\", used, limit_value, unit, used_pct, source, updated_at
+            "SELECT provider, metric, \"window\", used, limit_value, unit, used_pct, source, updated_at, detail
              FROM provider_metrics WHERE org_id = ?1
              ORDER BY provider, metric, CASE \"window\" WHEN 'day' THEN 0 ELSE 1 END",
         )?
@@ -204,6 +208,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
                 unit: r.get(5)?,
                 used_pct,
                 left_pct: used_pct.map(|pct| 100.0 - pct),
+                detail: r.get(9)?,
                 source: r.get(7)?,
                 updated_at,
                 state: reading_state(Some(updated_at), stale, dead, None, now),

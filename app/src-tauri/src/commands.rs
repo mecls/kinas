@@ -1,6 +1,7 @@
 //! Tauri commands the webview calls. Reads only; every write happens in the Rust core.
 
-use crate::keychain::{Keys, CONVEX_ACCOUNT, OLLAMA_ACCOUNT};
+use crate::keychain::{Keys, CONVEX_ACCOUNT, HOSTINGER_ACCOUNT, OLLAMA_ACCOUNT};
+use crate::readers::hostinger::{self, MetricsClient};
 use crate::pty::{self, PtyState};
 use crate::redact::redact;
 use crate::readers::claude_plan;
@@ -56,6 +57,12 @@ pub struct SettingsView {
     pub convex_deployment_url: String,
     /// `starter` or `professional`; only changes R6's denominators.
     pub convex_plan: String,
+    /// Whether a Hostinger API token is in the Keychain. Never the token itself (hostinger R3).
+    pub hostinger_key_saved: bool,
+    /// The watched VPS, or `None` for "no VPS selected" — which means zero requests (hostinger R4).
+    pub hostinger_vm_id: Option<i64>,
+    /// `hostname · plan`, so Settings can name the selection without re-listing the account.
+    pub hostinger_vm_label: String,
     pub claude_hook: claude_plan::HookStatus,
     /// The command Open in editor runs in a new Herdr pane (reader R36).
     pub reader_editor: String,
@@ -75,7 +82,18 @@ pub fn get_settings(
     system: State<'_, SystemState>,
 ) -> Result<SettingsView, String> {
     // Everything that needs the connection is read under one guard: taking it twice on this thread would deadlock.
-    let (org_name, menu_bar_quota, global_hotkey, launch_at_login, reader_editor, projects_root, convex_deployment_url, convex_plan) = {
+    let (
+        org_name,
+        menu_bar_quota,
+        global_hotkey,
+        launch_at_login,
+        reader_editor,
+        projects_root,
+        convex_deployment_url,
+        convex_plan,
+        hostinger_vm_id,
+        hostinger_vm_label,
+    ) = {
         let conn = store.conn();
         let org = store.org_id();
         let name: String = conn.query_row("SELECT name FROM orgs WHERE id = ?1", [org], |r| r.get(0)).map_err(|e| e.to_string())?;
@@ -89,6 +107,8 @@ pub fn get_settings(
             crate::paths::projects_root(&conn, org),
             text("convex_deployment_url", ""),
             text("convex_plan", "starter"),
+            system::get_setting(&conn, org, "hostinger_vm_id").and_then(|v| v.as_i64()),
+            text("hostinger_vm_label", ""),
         )
     };
     Ok(SettingsView {
@@ -103,6 +123,9 @@ pub fn get_settings(
         convex_key_saved: keys.0.get(CONVEX_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
         convex_deployment_url,
         convex_plan,
+        hostinger_key_saved: keys.0.get(HOSTINGER_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
+        hostinger_vm_id,
+        hostinger_vm_label,
         claude_hook: claude_plan::hook_status(control.data_dir(), now_ms()),
         reader_editor,
         projects_root: projects_root.display().to_string(),
@@ -328,6 +351,76 @@ pub fn set_convex_plan(store: State<'_, Store>, control: State<'_, ReaderControl
     let plan = crate::readers::convex::check_plan(&plan)?;
     system::put_setting(&store.conn(), store.org_id(), "convex_plan", &serde_json::json!(plan)).map_err(|e| e.to_string())?;
     // The stored percentages were computed against the old tier, so a fresh poll replaces them.
+    control.refresh();
+    Ok(())
+}
+
+/// One row of the VPS picker (hostinger R4). Nothing here is a secret; the token never leaves the Keychain.
+#[derive(serde::Serialize)]
+pub struct VpsChoice {
+    pub id: i64,
+    pub hostname: String,
+    pub plan: String,
+    pub state: String,
+}
+
+#[tauri::command]
+pub fn hostinger_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
+    Ok(KeyStatus { saved: keys.0.get(HOSTINGER_ACCOUNT)?.is_some() })
+}
+
+#[tauri::command]
+pub fn save_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderControl>, token: String) -> Result<(), String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("the token is empty".into());
+    }
+    keys.0.set(HOSTINGER_ACCOUNT, token).map_err(|e| redact(&e))?;
+    control.refresh();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
+    keys.0.remove(HOSTINGER_ACCOUNT).map_err(|e| redact(&e))?;
+    control.refresh();
+    Ok(())
+}
+
+/// The machines on the account, for the picker.
+///
+/// This is the one place a request is made outside the reader thread, and it is still a GET through the same
+/// GET-only module (R1, R2). It stores nothing: the list is shown, Miguel chooses, and only the chosen id is
+/// written by `set_hostinger_vm`.
+#[tauri::command]
+pub fn hostinger_list_vms(keys: State<'_, Keys>) -> Result<Vec<VpsChoice>, String> {
+    let token = keys.0.get(HOSTINGER_ACCOUNT).map_err(|e| redact(&e))?.unwrap_or_default();
+    if token.trim().is_empty() {
+        return Err("no API token — add one first".into());
+    }
+    let client = hostinger::ReqwestClient::new().map_err(|e| redact(&e))?;
+    let response = client.list_vms(&hostinger::base_url(), &token).map_err(|e| redact(&e))?;
+    match response.status {
+        200 => {}
+        401 => return Err("api token rejected".into()),
+        429 => return Err("rate limited (HTTP 429) — try again in a minute".into()),
+        status => return Err(format!("HTTP {status}")),
+    }
+    let vms = hostinger::parse_vms(&response.body).map_err(|e| redact(&e))?;
+    Ok(vms
+        .into_iter()
+        .map(|v| VpsChoice { id: v.id, hostname: v.hostname, plan: v.plan, state: v.state })
+        .collect())
+}
+
+/// Choose the watched VPS, or pass `None` to watch none — which is how Miguel disconnects it (R4).
+#[tauri::command]
+pub fn set_hostinger_vm(store: State<'_, Store>, control: State<'_, ReaderControl>, vm_id: Option<i64>, label: String) -> Result<(), String> {
+    let conn = store.conn();
+    let org = store.org_id();
+    system::put_setting(&conn, org, "hostinger_vm_id", &serde_json::json!(vm_id)).map_err(|e| e.to_string())?;
+    system::put_setting(&conn, org, "hostinger_vm_label", &serde_json::json!(label.trim())).map_err(|e| e.to_string())?;
+    drop(conn);
     control.refresh();
     Ok(())
 }

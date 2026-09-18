@@ -102,6 +102,20 @@ const call = (cmd: string, args: Record<string, unknown>) =>
     args,
   );
 
+/**
+ * Like `call`, but returns what the command resolved with.
+ *
+ * `call` deliberately throws the value away so a caller can assert "no error"; a command that answers with data
+ * needs the data. A rejection surfaces as a WebDriver failure, which is the right shape for a test.
+ */
+const callValue = <T,>(cmd: string, args: Record<string, unknown>) =>
+  browser.execute(
+    (c: string, a: Record<string, unknown>) =>
+      (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke(c, a),
+    cmd,
+    args,
+  ) as Promise<T>;
+
 describe("Convex usage", () => {
   it("offers Add deploy key and makes no request until a deployment is saved", async () => {
     await $('.gauge-empty[data-provider="convex"]').waitForExist({ timeout: 60000 });
@@ -209,5 +223,69 @@ describe("Convex usage", () => {
 
     // Put the real key back, so a later spec in this file is not left broken.
     expect(await call("save_convex_key", { key: convexKey })).toBeFalsy();
+  });
+});
+
+// Hostinger (prd-hostinger-usage.md §5). The token is seeded from the Keychain at launch, but no VPS is
+// selected — and the reader refuses to request anything without one, whatever the base-URL override says. So
+// "no requests yet" is asserted first, then a machine is chosen and the tile appears.
+
+const vpsStub = process.env.KINAS_E2E_HOSTINGER_STUB!;
+const vpsRequests = async () => ((await (await fetch(`${vpsStub}/__hostinger_count`)).json()) as { requests: number }).requests;
+
+describe("Hostinger VPS", () => {
+  it("makes no request until a VPS is chosen, then shows the machine as a tile", async function () {
+    // The poll lands within seconds — this reader has never requested, so `MIN_GAP_MS` cannot refuse its first
+    // Manual trigger — but the budget covers a slow machine and the driver's per-lookup cost.
+    this.timeout(180_000);
+
+    // R4: a saved token is not enough. With no VPS selected, `configured` is false and nothing is requested —
+    // which is also what proves the debug base-URL override decides only *where* a request goes, not whether.
+    await browser.pause(3000);
+    expect(await vpsRequests()).toBe(0);
+
+    // The picker's own command, exercised against the stub: it lists both machines and stores nothing.
+    const choices = await callValue<{ id: number; hostname: string; state: string }[]>("hostinger_list_vms", {});
+    expect(choices.map((c) => c.id)).toEqual([17923, 18044]);
+    expect(choices[1]!.state).toBe("stopped");
+
+    expect(await call("set_hostinger_vm", { vmId: 17923, label: "srv17923.hstgr.cloud · KVM 4" })).toBeFalsy();
+    await $('[data-section="hostinger-tile"] .tile[data-metric="ram"]').waitForExist({ timeout: 90000 });
+
+    // One in-page read for every assertion below, for the reason given on `convexMonth`.
+    const vps = await browser.execute(() => {
+      const tile = (metric: string) => document.querySelector(`.tile[data-metric="${metric}"]`)?.textContent ?? "";
+      return {
+        cpu: tile("cpu"),
+        ram: tile("ram"),
+        disk: tile("disk"),
+        uptime: tile("uptime"),
+        bandwidth: document.querySelector('.gauge[data-provider="hostinger"][data-metric="bandwidth"]')?.textContent ?? "",
+        bars: document.querySelectorAll('.gauge[data-provider="hostinger"] .gauge-fill').length,
+        caveat: document.querySelector('[data-testid="hostinger-billing-window"]')?.textContent ?? "",
+      };
+    });
+
+    // The fixture's numbers, in binary units against binary denominators (R7). 529 MiB and not 554 176 512,
+    // and "of 8.0 GiB" and not "of 8192" — the pair has to add up on screen.
+    expect(vps.ram).toContain("529 MiB");
+    expect(vps.ram).toContain("of 8.0 GiB");
+    expect(vps.disk).toContain("2.4 GiB");
+    expect(vps.disk).toContain("of 50.0 GiB");
+    expect(vps.cpu).toContain("13%");
+    expect(vps.uptime).toContain("14 d 0 h");
+    // The tile names its machine, including a power state, from the row's own detail — no second lookup.
+    expect(vps.ram).toContain("srv17923.hstgr.cloud · KVM 4 · running");
+
+    // R10: the month's traffic is a **figure**, not a bar, until the delta-versus-counter question is settled.
+    // Both directions summed is 4 TiB of the fixture's traffic; the absent bar is the point of the assertion.
+    expect(vps.bandwidth).toContain("4.00 TiB");
+    expect(vps.bars).toBe(0);
+    expect(vps.caveat).toContain("does not report when the monthly allowance resets");
+
+    // Three requests in total, and each one is accounted for: the picker's own list call above, then R2's two
+    // per poll — the list for the denominators and the metrics for the usage. Not four: there is no
+    // per-machine details call, because that endpoint returns the same fields the list already gave.
+    expect(await vpsRequests()).toBe(3);
   });
 });

@@ -10,6 +10,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../../../migrations/0001_init.sql")),
     (2, include_str!("../../../migrations/0002_usage_details.sql")),
     (3, include_str!("../../../migrations/0003_provider_metrics.sql")),
+    (4, include_str!("../../../migrations/0004_hostinger.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -235,5 +236,63 @@ mod tests {
         files.sort();
         let listed: Vec<i64> = MIGRATIONS.iter().map(|(v, _)| *v).collect();
         assert_eq!(files, listed);
+    }
+
+    /// hostinger R15: a store written by the previous build upgrades in place, keeps its rows, and only then
+    /// accepts the new reader id.
+    ///
+    /// Both halves are load-bearing. An upgrade that dropped `reader_status` and recreated it empty would still
+    /// let the final insert succeed, so the *surviving row* is what proves the rebuild copied rather than
+    /// recreated — which is the one thing a create/INSERT…SELECT/drop/rename can get wrong silently.
+    #[test]
+    fn upgrading_from_v3_keeps_reader_status_rows_and_admits_hostinger() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_FILE);
+        {
+            let mut conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)")
+                .unwrap();
+            for (version, sql) in MIGRATIONS.iter().filter(|(v, _)| *v <= 3) {
+                let tx = conn.transaction().unwrap();
+                tx.execute_batch(sql).unwrap();
+                tx.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)", params![version]).unwrap();
+                tx.commit().unwrap();
+            }
+            conn.execute("INSERT INTO orgs (id, name, created_at) VALUES ('org-1', 'test', 0)", []).unwrap();
+            conn.execute(
+                "INSERT INTO reader_status (org_id, reader, state, last_attempt_at, last_success_at, last_error, stale_after_ms, dead_after_ms)
+                 VALUES ('org-1', 'convex', 'ok', 11, 22, NULL, 600000, 43200000)",
+                [],
+            )
+            .unwrap();
+            // The CHECK is precisely what 0004 widens: at v3 this id must be refused, or the migration is pointless.
+            let refused = conn.execute(
+                "INSERT INTO reader_status (org_id, reader, state, stale_after_ms, dead_after_ms)
+                 VALUES ('org-1', 'hostinger', 'ok', 600000, 43200000)",
+                [],
+            );
+            assert!(refused.is_err(), "v3 accepted 'hostinger' — then 0004 is not testing what it claims");
+        }
+
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), 4);
+        assert_eq!(count(&store, "SELECT count(*) FROM orgs"), 1, "the upgrade must not mint a second org");
+
+        let (state, last_success): (String, i64) = store
+            .conn()
+            .query_row("SELECT state, last_success_at FROM reader_status WHERE reader = 'convex'", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((state.as_str(), last_success), ("ok", 22), "the rebuild lost or altered the existing row");
+
+        store
+            .conn()
+            .execute(
+                "INSERT INTO reader_status (org_id, reader, state, stale_after_ms, dead_after_ms)
+                 VALUES ('org-1', 'hostinger', 'ok', 600000, 43200000)",
+                [],
+            )
+            .expect("v4 must accept the reader id 'hostinger'");
     }
 }

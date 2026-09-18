@@ -8,12 +8,15 @@ import { join } from "node:path";
 
 const FAKE_KEY = "ollama-FAKE-e2e-key";
 const CONVEX_KEY = "convex-FAKE-e2e-deploy-key";
+const HOSTINGER_TOKEN = "hostinger-FAKE-e2e-token";
 const SESSION = "22222222-2222-2222-2222-222222222222";
 const DAY = 86_400_000;
 
 let server: ReturnType<typeof Bun.serve> | undefined;
 /** Convex requests served, so the spec can assert exactly one per poll window (convex R§5, R11's 60 s floor). */
 let convexRequests = 0;
+/** Hostinger requests served, so the spec can assert **zero** while no VPS is selected (hostinger R4). */
+let hostingerRequests = 0;
 
 const claudeLine = (id: string, at: number, model: string, input: number, output: number) =>
   JSON.stringify({
@@ -60,7 +63,10 @@ export function setup(dataDir: string): Record<string, string> {
 
   const body = readFileSync(join(import.meta.dir, "../../fixtures/ollama-usage-legacy.synthetic.json"), "utf8");
   const convexBody = readFileSync(join(import.meta.dir, "../../fixtures/convex-usage.synthetic.json"), "utf8");
+  const vpsBody = readFileSync(join(import.meta.dir, "../../fixtures/hostinger-vms.synthetic.json"), "utf8");
+  const vpsMetricsBody = readFileSync(join(import.meta.dir, "../../fixtures/hostinger-metrics.synthetic.json"), "utf8");
   convexRequests = 0;
+  hostingerRequests = 0;
   server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -74,6 +80,20 @@ export function setup(dataDir: string): Record<string, string> {
         // thing to get wrong, and a stub that accepted either would pass a reader sending the wrong one.
         if (req.headers.get("authorization") !== `Convex ${CONVEX_KEY}`) return new Response("", { status: 401 });
         return new Response(convexBody, { headers: { "content-type": "application/json" } });
+      }
+      if (path === "/__hostinger_count") return Response.json({ requests: hostingerRequests });
+      if (path.startsWith("/api/vps/v1/virtual-machines")) {
+        hostingerRequests += 1;
+        // Bearer here, unlike Convex's scheme. Checked, so a reader sending the wrong one fails loudly.
+        if (req.headers.get("authorization") !== `Bearer ${HOSTINGER_TOKEN}`) return new Response("", { status: 401 });
+        if (path.endsWith("/metrics")) {
+          // Both window parameters are required by the real API (R5), so the stub refuses without them —
+          // otherwise a reader that forgot to send them would pass here and 422 against Hostinger.
+          const q = new URL(req.url).searchParams;
+          if (!q.get("date_from") || !q.get("date_to")) return new Response("", { status: 422 });
+          return new Response(vpsMetricsBody, { headers: { "content-type": "application/json" } });
+        }
+        return new Response(vpsBody, { headers: { "content-type": "application/json" } });
       }
       if (path !== "/api/usage") return new Response("not found", { status: 404 });
       if (req.headers.get("authorization") !== `Bearer ${FAKE_KEY}`) return new Response("", { status: 401 });
@@ -93,6 +113,10 @@ export function setup(dataDir: string): Record<string, string> {
     // The spec needs both to assert the request count and to save a deployment URL — the reader refuses to
     // request at all until a non-empty URL is stored, whatever the base-URL override says.
     KINAS_E2E_CONVEX_STUB: base,
+    // Hostinger on the same server, for the same reason.
+    KINAS_HOSTINGER_BASE_URL: base,
+    KINAS_E2E_HOSTINGER_KEY: HOSTINGER_TOKEN,
+    KINAS_E2E_HOSTINGER_STUB: base,
   };
 }
 

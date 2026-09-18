@@ -32,6 +32,8 @@ const DEFAULT_LIMITS: Record<string, [number, number]> = {
   "ollama-cloud": [600_000, 43_200_000],
   // Twice the 5-minute cadence, matching Ollama's (convex R13).
   convex: [600_000, 43_200_000],
+  // Same cadence, same doubling (hostinger R16).
+  hostinger: [600_000, 43_200_000],
   host: [120_000, 43_200_000],
 };
 

@@ -88,6 +88,31 @@ if want ac10; then
     fi
     [ $leaks -eq 0 ] && pass "the Convex deploy key is not in the store, the logs or kinas status --json" || fail "the Convex deploy key leaked (above)"
   fi
+
+  # The Hostinger API token (prd-hostinger-usage.md §5). Read from the Keychain for the same reason as Convex's:
+  # a real prefix committed here would be the leak this looks for. This one matters more than most — Hostinger
+  # has no read-only scope, so a leaked token can restart or recreate the machine, not merely read its metrics.
+  prefix=${KINAS_HOSTINGER_TOKEN_PREFIX:-$(security find-generic-password -s ai.sintralabs.kinas -a hostinger-api-token -w 2>/dev/null | cut -c1-12)}
+  if [ -z "$prefix" ]; then
+    # Deliberately not a PASS, for the same reason: an empty store proves nothing.
+    echo "SKIP  no Hostinger API token saved yet, so there is nothing to look for (save one in Settings first)"
+  else
+    leaks=0
+    for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c -F "$prefix" "$f" || true); [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }; done
+    if [ -x "$KINAS" ]; then
+      c=$("$KINAS" status --json 2>/dev/null | grep -c -F "$prefix" || true)
+      [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
+    fi
+    [ $leaks -eq 0 ] && pass "the Hostinger API token is not in the store, the logs or kinas status --json" || fail "the Hostinger API token leaked (above)"
+  fi
+
+  # Watch-only is a property of the code here, not of the token, so it is checked like any other invariant:
+  # no verb but GET, and no destructive path, anywhere in the reader. The same two tests run under `cargo test`;
+  # this repeats them against the shipped tree so a release cannot quietly disagree with the test suite.
+  # `[[:space:]]`, not `\s`: BSD grep does not support the escape, and a filter that silently matches nothing
+  # would turn this check into one that cannot fail.
+  hits=$(grep -n -E '\.(post|put|patch|delete|head)\(' app/src-tauri/src/readers/hostinger/mod.rs | grep -v '^[0-9]*:[[:space:]]*//' || true)
+  [ -z "$hits" ] && pass "the Hostinger reader sends no verb but GET" || fail "a non-GET verb is in the Hostinger reader: $hits"
 fi
 
 if want ac9; then

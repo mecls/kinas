@@ -3,6 +3,7 @@
 
 pub mod claude_plan;
 pub mod convex;
+pub mod hostinger;
 pub mod host;
 pub mod logs;
 pub mod ollama_cloud;

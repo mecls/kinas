@@ -14,6 +14,11 @@ pub const OLLAMA_ACCOUNT: &str = "ollama-cloud-api-key";
 /// `KeyStore`, which writes via `/usr/bin/security -i` on **stdin**: argv would expose it to `ps`, and
 /// `add-generic-password -w` silently truncates at 128 characters — Convex keys are long enough to hit that.
 pub const CONVEX_ACCOUNT: &str = "convex-deploy-key";
+/// The Hostinger API token (prd-hostinger-usage.md R3). Hostinger offers no read-only scope — its docs say a
+/// token "will have same permissions as the owning user" — so this one can restart or recreate the machine.
+/// That is contained in `readers/hostinger/`, which is GET-only and holds two tests proving it; here it only
+/// means the token deserves the same stdin-not-argv handling as the others, and an expiry when it is created.
+pub const HOSTINGER_ACCOUNT: &str = "hostinger-api-token";
 const SECURITY: &str = "/usr/bin/security";
 /// `security` exits 44 when the item does not exist.
 const NOT_FOUND: i32 = 44;

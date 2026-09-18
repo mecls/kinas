@@ -9,7 +9,33 @@ import { asOf, leftPct, tone, usedPct } from "./format.ts";
 // percentage, because a figure with no plan allowance has no denominator — so this renders a bar when there is
 // one and a plain number when there is not, rather than fabricating a zero (R8).
 
-export function MetricGauge({ metric, reader, now }: { metric: ProviderMetricView; reader: ReaderView | undefined; now: number }) {
+/**
+ * How a provider writes its own names, values and window labels.
+ *
+ * Convex's are the default because it was here first. Hostinger needs its own: its figures are **bytes**, and
+ * Convex's formatter would render a month of traffic as "4,398,046,511,104 bytes" — true, unreadable, and
+ * inconsistent with the MiB denominators beside it. Injecting the three functions keeps one gauge component
+ * rather than forking it, and keeps each provider's wording in that provider's own module.
+ */
+export type MetricFormat = {
+  label: (metric: string) => string;
+  value: (used: number, unit: string | null) => string;
+  window: (window: string) => string;
+};
+
+const CONVEX_FORMAT: MetricFormat = { label: metricLabel, value: metricValue, window: windowLabel };
+
+export function MetricGauge({
+  metric,
+  reader,
+  now,
+  format = CONVEX_FORMAT,
+}: {
+  metric: ProviderMetricView;
+  reader: ReaderView | undefined;
+  now: number;
+  format?: MetricFormat;
+}) {
   const gauged = metric.used_pct !== null && metric.limit_value !== null;
   const hidden = metric.state === "dead";
   const left = metric.used_pct === null ? 100 : leftPct(metric.used_pct);
@@ -24,7 +50,7 @@ export function MetricGauge({ metric, reader, now }: { metric: ProviderMetricVie
       title={`Source: ${metric.source}`}
     >
       <header className="gauge-head">
-        <span className="gauge-label">{metricLabel(metric.metric)}</span>
+        <span className="gauge-label">{format.label(metric.metric)}</span>
         <span className={`dot dot-${metric.state}`} aria-label={metric.state} />
       </header>
       <div className="gauge-number">
@@ -36,7 +62,7 @@ export function MetricGauge({ metric, reader, now }: { metric: ProviderMetricVie
             <span className="gauge-unit">% used</span>
           </>
         ) : (
-          metricValue(metric.used, metric.unit)
+          format.value(metric.used, metric.unit)
         )}
       </div>
       <div className="gauge-bar" aria-hidden="true">
@@ -47,8 +73,8 @@ export function MetricGauge({ metric, reader, now }: { metric: ProviderMetricVie
         {hidden
           ? (reader?.last_error ?? "no recent reading")
           : gauged
-            ? `${metricValue(metric.used, metric.unit)} of ${metricValue(metric.limit_value!, metric.unit)} · ${windowLabel(metric.window)}`
-            : windowLabel(metric.window)}
+            ? `${format.value(metric.used, metric.unit)} of ${format.value(metric.limit_value!, metric.unit)} · ${format.window(metric.window)}`
+            : format.window(metric.window)}
       </p>
       <p className={`gauge-asof${metric.state === "stale" ? " is-stale" : ""}`}>
         {asOf(metric.updated_at, now)}

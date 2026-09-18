@@ -2,7 +2,7 @@
 //! connection only for its own writes, never across a network request or a sample, so the window's reads
 //! are never blocked for long.
 
-use super::{claude_plan, convex, host, logs, ollama_cloud, poller};
+use super::{claude_plan, convex, host, hostinger, logs, ollama_cloud, poller};
 use crate::keychain::{self, KeyStore};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use crate::store::{now_ms, Store};
@@ -38,6 +38,7 @@ pub struct ReaderControl {
     handoff: Mutex<Sender<()>>,
     ollama: Mutex<Sender<poller::Trigger>>,
     convex: Mutex<Sender<poller::Trigger>>,
+    hostinger: Mutex<Sender<poller::Trigger>>,
     backfill: Mutex<Backfill>,
     data_dir: PathBuf,
 }
@@ -72,6 +73,7 @@ impl ReaderControl {
         let _ = self.handoff.lock().unwrap_or_else(|p| p.into_inner()).send(());
         let _ = self.ollama.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
         let _ = self.convex.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
+        let _ = self.hostinger.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
     }
 }
 
@@ -102,6 +104,9 @@ fn key_store() -> Arc<dyn KeyStore> {
         if let Ok(key) = std::env::var("KINAS_E2E_CONVEX_KEY") {
             let _ = store.set(keychain::CONVEX_ACCOUNT, &key);
         }
+        if let Ok(key) = std::env::var("KINAS_E2E_HOSTINGER_KEY") {
+            let _ = store.set(keychain::HOSTINGER_ACCOUNT, &key);
+        }
         return Arc::new(store);
     }
     Arc::new(keychain::MacKeychain)
@@ -113,6 +118,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
     let (handoff_tx, handoff_rx) = channel();
     let (ollama_tx, ollama_rx) = channel();
     let (convex_tx, convex_rx) = channel();
+    let (hostinger_tx, hostinger_rx) = channel();
     let keys = key_store();
     app.manage(ReaderControl {
         usage_visible: AtomicBool::new(false),
@@ -121,6 +127,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
         handoff: Mutex::new(handoff_tx.clone()),
         ollama: Mutex::new(ollama_tx),
         convex: Mutex::new(convex_tx),
+        hostinger: Mutex::new(hostinger_tx),
         backfill: Mutex::new(Backfill::default()),
         data_dir: data_dir.clone(),
     });
@@ -149,6 +156,11 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
         let app = app.clone();
         let keys = Arc::clone(&keys);
         move || convex_loop(app, keys, convex_rx)
+    });
+    spawn("kinas-hostinger", {
+        let app = app.clone();
+        let keys = Arc::clone(&keys);
+        move || hostinger_loop(app, keys, hostinger_rx)
     });
     keys
 }
@@ -432,6 +444,80 @@ fn convex_loop(app: AppHandle, keys: Arc<dyn KeyStore>, rx: Receiver<poller::Tri
             _ if requested => schedule.record(poller::Result::Done, now),
             // Nothing was requested — no key, or no deployment. `skip` moves the next tick on without counting a
             // request, so saving a key polls immediately (R11).
+            _ => schedule.skip(now),
+        }
+        changed(&app);
+    }
+}
+
+/// The Hostinger reader's thread (prd-hostinger-usage.md §3), the same shape as `convex_loop`.
+///
+/// Same two prohibitions: never hold the store's lock across a request, and never take `Store::conn()` twice on
+/// this thread. The selected VPS id is read under **one** guard that is released before the two GETs, and the
+/// write takes a fresh guard afterwards.
+fn hostinger_loop(app: AppHandle, keys: Arc<dyn KeyStore>, rx: Receiver<poller::Trigger>) {
+    let client = match hostinger::ReqwestClient::new() {
+        Ok(c) => c,
+        Err(e) => {
+            with_conn(&app, |conn, org| {
+                let _ = write_reader_status(conn, org, Reader::Hostinger, Outcome::Error(&format!("HTTP client: {e}")), now_ms());
+            });
+            return;
+        }
+    };
+    let mut schedule = poller::Poller::new(now_ms());
+    loop {
+        let now = now_ms();
+        let trigger = match rx.recv_timeout(Duration::from_millis(schedule.sleep_ms(now) as u64)) {
+            Ok(t) => t,
+            Err(RecvTimeoutError::Timeout) => poller::Trigger::Tick,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
+        let now = now_ms();
+        if !schedule.should_request(trigger, now) {
+            continue;
+        }
+        let vm_id: Option<i64> = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            let org = store.org_id();
+            // Stored as a JSON number, but a string is accepted too rather than silently reading as "no VPS".
+            crate::system::get_setting(&conn, org, "hostinger_vm_id")
+                .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())))
+        };
+        let token = match keys.get(keychain::HOSTINGER_ACCOUNT) {
+            Ok(t) => t,
+            Err(e) => {
+                with_conn(&app, |conn, org| {
+                    let _ = write_reader_status(conn, org, Reader::Hostinger, Outcome::Error(&e), now);
+                });
+                schedule.skip(now);
+                changed(&app);
+                continue;
+            }
+        };
+        // "Configured" is judged on the **stored** VPS id, never on the base URL. `hostinger::base_url()`'s debug
+        // override decides only *where* a request goes; letting it decide *whether* one happens is the bug the
+        // Convex reader shipped once, and it breaks R4's "no VPS selected means zero requests".
+        let configured = vm_id.is_some();
+        let base = hostinger::base_url();
+        // Both requests happen outside the store's lock.
+        let fetched = token
+            .as_deref()
+            .filter(|t| !t.is_empty())
+            .zip(vm_id)
+            .map(|(t, id)| hostinger::fetch(&client, &base, t, id, now));
+        let requested = fetched.is_some();
+        let result = {
+            let store = app.state::<Store>();
+            let mut conn = store.conn();
+            hostinger::record_poll(&mut conn, store.org_id(), fetched, vm_id, configured, now)
+        };
+        match result {
+            hostinger::PollResult::RateLimited { retry_after_s } => schedule.record(poller::Result::RateLimited { retry_after_s }, now),
+            _ if requested => schedule.record(poller::Result::Done, now),
+            // Nothing was requested — no token, or no VPS chosen. `skip` moves the next tick on without counting
+            // a request, so saving a token polls immediately.
             _ => schedule.skip(now),
         }
         changed(&app);

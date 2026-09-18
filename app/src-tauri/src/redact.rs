@@ -40,6 +40,7 @@ pub enum Reader {
     PiLogs,
     Host,
     Convex,
+    Hostinger,
 }
 
 /// Every reader's limit for turning dead (R12).
@@ -54,6 +55,7 @@ impl Reader {
             Reader::PiLogs => "pi-logs",
             Reader::Host => "host",
             Reader::Convex => "convex",
+            Reader::Hostinger => "hostinger",
         }
     }
 
@@ -62,7 +64,7 @@ impl Reader {
         match self {
             Reader::ClaudePlan => 1_800_000,
             // Twice the 5-minute cadence, matching Ollama's (R13).
-            Reader::OllamaCloud | Reader::Convex => 600_000,
+            Reader::OllamaCloud | Reader::Convex | Reader::Hostinger => 600_000,
             Reader::ClaudeCodeLogs | Reader::PiLogs | Reader::Host => 120_000,
         }
     }
@@ -166,6 +168,7 @@ mod tests {
             (Reader::ClaudePlan, 1_800_000),
             (Reader::OllamaCloud, 600_000),
             (Reader::Convex, 600_000),
+            (Reader::Hostinger, 600_000),
             (Reader::Host, 120_000),
             (Reader::ClaudeCodeLogs, 120_000),
             (Reader::PiLogs, 120_000),

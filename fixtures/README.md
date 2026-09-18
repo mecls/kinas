@@ -15,6 +15,22 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
     **25.0 %** of Starter's 1M allowance, and the three action-compute keys are 1, 2 and 3 GB-hours while
     `queryMutationComputeGbHours` is 10 — so the R7 sum must come out as **6, not 16**. Replace with a real
     capture once a live response has been seen.
+  - `hostinger-vms.synthetic.json` and `hostinger-metrics.synthetic.json` — the shapes of
+    `GET /api/vps/v1/virtual-machines` and `.../{id}/metrics`, taken from Hostinger's OpenAPI spec
+    (`https://developers.hostinger.com/openapi/openapi.json`, read 2026-09-18). Every value is made up, IPs
+    use TEST-NET-1 (192.0.2.0/24), and the numbers are chosen to carry assertions:
+    - `ram_usage` 554 176 512 B against `memory` 8192 **MiB** is **6.4515 %**, and `disk_space`
+      2 620 018 688 B against `disk` 51 200 MiB is **4.8802 %**. Reading the spec's "megabytes" as 10⁶
+      instead of 2²⁰ gives 6.7649 % — close enough to look right, which is why the tests assert the exact
+      figure rather than a range (hostinger R7).
+    - traffic sums to 3 TiB outgoing and 1 TiB incoming against a 16 TiB `bandwidth`, so the two candidate
+      rules give **25.0000 %** (both directions) and **18.7500 %** (outgoing only). They are deliberately
+      far apart: a wrong aggregation rule must fail the test rather than pass it by luck (§7 Q1, Q2).
+    - the newest sample differs from earlier ones in every metric, so "take the latest point" is tested
+      rather than assumed; `srv18044` is `stopped`, so a non-running machine is exercised too.
+    - `bandwidth` is written as MiB for consistency with `memory` and `disk`, but the spec's own example
+      (2³⁰) is implausible either way and the real unit is **unconfirmed** — see §7 Q4. Replace with a real
+      capture once a live response has been seen.
   - `handoff/*.json` — status line hand-off files built from the documented status line schema
     (code.claude.com/docs/en/statusline): `used_percentage` 0–100, `resets_at` in epoch seconds.
 - Secrets in fixtures are obviously fake (`ollama-FAKE…`, `sk-ant-FAKE…`) so the repo greps in the

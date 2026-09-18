@@ -3,11 +3,24 @@ import { dispatchAppAction } from "../actions.ts";
 import { getUsageSnapshot, onBackfillProgress, onReadingsChanged, setUsageVisible, type ReaderId, type UsageSnapshot } from "../api.ts";
 import { BILLING_WINDOW, DETAIL, forWindow, GAUGED, NOT_AVAILABLE } from "../usage/convex.ts";
 import { Gauge, ProviderEmpty } from "../usage/Gauge.tsx";
+import {
+  BILLING_WINDOW as VPS_BILLING_WINDOW,
+  forWindow as vpsForWindow,
+  GAUGED as VPS_GAUGED,
+  metricLabel as vpsLabel,
+  metricValue as vpsValue,
+  NOT_AVAILABLE as VPS_NOT_AVAILABLE,
+  TILE as VPS_TILE,
+  windowLabel as vpsWindow,
+} from "../usage/hostinger.ts";
 import { MacTiles } from "../usage/MacTiles.tsx";
 import { ConvexEmpty, MetricFigures, MetricGauge } from "../usage/MetricGauge.tsx";
 import { UsageChart } from "../usage/UsageChart.tsx";
+import { VpsTile } from "../usage/VpsTile.tsx";
 
 const PROVIDERS = ["claude-plan", "ollama-cloud"] as const;
+/** Hostinger's figures are bytes and milliseconds; Convex's formatter would render them as raw counts. */
+const VPS_FORMAT = { label: vpsLabel, value: vpsValue, window: vpsWindow };
 /** Staleness ages without new data, so the page re-reads even when nothing changed (R12). */
 const RERENDER_MS = 30_000;
 
@@ -64,6 +77,9 @@ export function UsagePage({ active }: { active: boolean }) {
   const convexGauges = forWindow(snapshot.provider_metrics, "month", GAUGED);
   const convexMonthFigures = forWindow(snapshot.provider_metrics, "month", DETAIL);
   const convexToday = forWindow(snapshot.provider_metrics, "day", GAUGED);
+  // Hostinger: the machine's live state is a tile, and only monthly bandwidth could ever be a gauge (R11).
+  const vpsTile = vpsForWindow(snapshot.provider_metrics, "now", VPS_TILE);
+  const vpsBandwidth = vpsForWindow(snapshot.provider_metrics, "month", VPS_GAUGED);
 
   return (
     <div className="usage">
@@ -112,6 +128,34 @@ export function UsagePage({ active }: { active: boolean }) {
           </p>
           {/* R15: said once, plainly, instead of placeholder gauges with nothing behind them. */}
           <p className="muted">{NOT_AVAILABLE}</p>
+        </section>
+      )}
+
+      {(vpsTile.length > 0 || vpsBandwidth.length > 0 || reader("hostinger")?.state === "error") && (
+        <section className="panel" aria-label="Hostinger VPS" data-section="hostinger">
+          {/* Bandwidth first: it is the only quota here, and the only thing that can carry a bar. While its
+              aggregation rule is unsettled the reader stores a NULL limit, so `MetricGauge` renders it as a
+              plain figure — no branch needed here, and no bar that would be guessing. */}
+          {vpsBandwidth.map((m) => (
+            <MetricGauge key={m.metric} metric={m} reader={reader("hostinger")} now={snapshot.now} format={VPS_FORMAT} />
+          ))}
+
+          <VpsTile metrics={vpsTile} reader={reader("hostinger")} now={snapshot.now} />
+
+          {/* A failing poll keeps the last numbers, so without this line it would be invisible: the tile looks
+              fine and only `reader_status` changed. */}
+          {reader("hostinger")?.state === "error" && reader("hostinger")?.last_error && (
+            <p className="muted" data-testid="hostinger-error">
+              Hostinger: {reader("hostinger")!.last_error} · showing the last reading
+            </p>
+          )}
+
+          {vpsBandwidth.length > 0 && (
+            <p className="muted" data-testid="hostinger-billing-window">
+              {VPS_BILLING_WINDOW}
+            </p>
+          )}
+          <p className="muted">{VPS_NOT_AVAILABLE}</p>
         </section>
       )}
 

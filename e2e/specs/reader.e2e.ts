@@ -447,7 +447,7 @@ describe("kinas open and the reader", () => {
       source: document.querySelector(".reader-source") !== null,
       language: document.querySelector(".reader-source code")?.className ?? "",
       text: document.querySelector(".reader-source")?.textContent ?? "",
-      // A source file has no headings, so the rail must not appear (R28). This is what would catch source
+      // A source file has no headings, so Contents must not be offered (R28). This is what would catch source
       // accidentally routing through renderMarkdown.
       contents: document.querySelector(".reader-contents") !== null || document.querySelector('.reader-head button[aria-label="Contents"]') !== null,
       frontmatter: document.querySelector(".reader-frontmatter") !== null,

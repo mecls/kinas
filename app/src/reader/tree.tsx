@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { type DirEntry, type DirListing, readerListDir } from "../api.ts";
 
 // The folder tree (reader R35): one folder at a time from Rust, children loaded when a folder is expanded. It starts at
@@ -8,15 +8,25 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path
 
 type Listing = "loading" | { error: true } | DirListing;
 
-export function FileTree({ root, selected, onOpen }: { root: string; selected: string | null; onOpen: (path: string) => void }) {
+/** What to draw beside a folder's row — the sidebar's pin and terminal buttons. The tree itself knows nothing of them. */
+export type FolderActions = (path: string, name: string) => ReactNode;
+
+interface TreeProps {
+  selected: string | null;
+  onOpen: (path: string) => void;
+  folderActions?: FolderActions;
+}
+
+export function FileTree({ root, ...rest }: TreeProps & { root: string }) {
   return (
     <ul className="tree">
-      <Folder path={root} selected={selected} onOpen={onOpen} top />
+      <Folder path={root} {...rest} top />
     </ul>
   );
 }
 
-function Folder({ path, selected, onOpen, top = false }: { path: string; selected: string | null; onOpen: (path: string) => void; top?: boolean }) {
+function Folder({ path, top = false, ...rest }: TreeProps & { path: string; top?: boolean }) {
+  const { selected, onOpen } = rest;
   const [listing, setListing] = useState<Listing>("loading");
 
   useEffect(() => {
@@ -38,7 +48,7 @@ function Folder({ path, selected, onOpen, top = false }: { path: string; selecte
     <>
       {listing.entries.map((entry) =>
         entry.kind === "dir" ? (
-          <FolderNode key={entry.path} entry={entry} selected={selected} onOpen={onOpen} />
+          <FolderNode key={entry.path} entry={entry} {...rest} />
         ) : (
           <li key={entry.path}>
             <button type="button" className="tree-item tree-file" aria-current={entry.path === selected ? "true" : undefined} title={entry.path} onClick={() => onOpen(entry.path)}>
@@ -52,19 +62,24 @@ function Folder({ path, selected, onOpen, top = false }: { path: string; selecte
   );
 }
 
-function FolderNode({ entry, selected, onOpen }: { entry: DirEntry; selected: string | null; onOpen: (path: string) => void }) {
+function FolderNode({ entry, ...rest }: TreeProps & { entry: DirEntry }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <li>
-      <button type="button" className="tree-item tree-dir" aria-expanded={expanded} title={entry.path} onClick={() => setExpanded((e) => !e)}>
-        <span className="tree-caret" aria-hidden="true">
-          {expanded ? "▾" : "▸"}
-        </span>
-        {entry.name}
-      </button>
+      {/* The row is always there, actions or not, so the tree has one shape wherever it is mounted. The nested list
+          stays the row's sibling: `.tree .tree` indents it, and a list inside the row would sit beside the name. */}
+      <div className="tree-row">
+        <button type="button" className="tree-item tree-dir" aria-expanded={expanded} title={entry.path} onClick={() => setExpanded((e) => !e)}>
+          <span className="tree-caret" aria-hidden="true">
+            {expanded ? "▾" : "▸"}
+          </span>
+          {entry.name}
+        </button>
+        {rest.folderActions?.(entry.path, entry.name)}
+      </div>
       {expanded && (
         <ul className="tree">
-          <Folder path={entry.path} selected={selected} onOpen={onOpen} />
+          <Folder path={entry.path} {...rest} />
         </ul>
       )}
     </li>

@@ -301,6 +301,20 @@
   color: var(--white);
 }
 
+/* A folder's row: its name, and whatever the sidebar puts beside it (pin, terminal). With nothing beside it the one
+   child takes the whole row, which is what a bare .tree-item looked like. */
+.tree-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.tree-row > .tree-item {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
 .tree-caret {
   display: inline-block;
   width: 12px;

@@ -5,7 +5,9 @@ import {
   onOpenPalette,
   onReaderShow,
   type PinView,
+  readerAllowClick,
   readerErrorOf,
+  readerOpenInTerminal,
   readerPin,
   readerPins,
   readerUnpin,
@@ -20,7 +22,8 @@ import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
 import { actionForEvent, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
-import { pushRecent, type RecentEntry } from "./shell/recent.ts";
+import type { Notice } from "./shell/notice.ts";
+import { NAV_NOTHING, navSeenOf, pushRecent, recentAfterNav, recentFolder, type RecentEntry } from "./shell/recent.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useSplit } from "./shell/useSplit.ts";
@@ -58,9 +61,15 @@ export function App() {
   const [pins, setPins] = useState<PinView[]>([]);
   /** In memory only, by design: what was merely opened is forgotten when Kinas quits (shell/recent.ts). */
   const [recent, setRecent] = useState<readonly RecentEntry[]>([]);
-  /** Something the shell wants said where the reader says things: its status line. */
-  const [notice, setNotice] = useState<{ text: string; seq: number } | null>(null);
+  /** What the reader last reported, so Recent can tell a change from a repeat (shell/recent.ts). */
+  const navSeen = useRef(NAV_NOTHING);
+  /** Something the shell wants said: in the reader's status line, and at the sidebar's foot while the panel is closed. */
+  const [notice, setNotice] = useState<Notice | null>(null);
   const noticeSeq = useRef(0);
+  /** A folder is on its way to the terminal: Herdr can take seconds, and a second click would only queue behind it. */
+  const openingTerminal = useRef(false);
+  /** Bumped to run the focus effect below when nothing else it watches has changed. */
+  const [focusTick, setFocusTick] = useState(0);
   const shortcutsRef = useRef(shortcuts);
   const sidebarShown = useRef(true);
   /** Where Esc on Settings goes back to. */
@@ -199,12 +208,14 @@ export function App() {
   }, []);
 
   // After the commit, not in the handler: closing or collapsing an expanded panel is what puts the terminal back in
-  // the layout, and an element with no box cannot take focus.
+  // the layout, and an element with no box cannot take focus. `focusTick` is for a request made when the Work page
+  // is already showing and nothing else here changes: without it the flag would sit set until the next page change
+  // and hand the terminal the keys long after anyone asked.
   useEffect(() => {
     if (!wantTerminalFocus.current || reader.expanded) return;
     wantTerminalFocus.current = false;
     if (page === "work") focusTerminal();
-  }, [reader.open, reader.expanded, page]);
+  }, [reader.open, reader.expanded, page, focusTick]);
 
   // The divider between the page and the panel; remembered across launches like the sidebar. The stored key keeps
   // its name from when the reader split the Work page: it is still the reader's share of the row it sits in.
@@ -215,11 +226,14 @@ export function App() {
 
   const split = useSplit(readerWidth, changeReaderWidth);
 
-  // Stable, because the reader's reporting effect is keyed on it. Every file that opens goes to the front of Recent.
+  // Stable, because the reader's reporting effect is keyed on it. A file or a folder goes to the front of Recent when
+  // it is what changed (shell/recent.ts says why both are gated). The ref is read and written out here, not in the
+  // updater, which stays a pure function of the list.
   const onNav = useCallback((next: ReaderNav) => {
     setNav(next);
-    const opened = next.doc;
-    if (opened) setRecent((list) => pushRecent(list, opened));
+    const seen = navSeen.current;
+    navSeen.current = navSeenOf(next);
+    setRecent((list) => recentAfterNav(list, seen, next));
   }, []);
 
   // The pins, at launch — and again whenever the window comes forward, because a pinned file can vanish or come
@@ -269,6 +283,34 @@ export function App() {
     setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current } }));
   }, []);
 
+  // Open in the terminal (keymap.md, Sidebar): Rust asks Herdr for the folder's workspace — nothing is typed into the
+  // pane — and only when that worked does anything move: the folder goes to the front of Recent, the Work page shows
+  // and the terminal gets the keys. The click is first put through the human-click door, as a pinned folder's is
+  // before its tree mounts: after a relaunch that is what lets a pinned folder outside the projects folder through.
+  // If the door refuses (the folder has gone), Rust's own refusal below is what gets said.
+  const openInTerminal = useCallback(
+    async (path: string) => {
+      if (openingTerminal.current) return;
+      openingTerminal.current = true;
+      try {
+        const real = await readerAllowClick(path).then(
+          (target) => target.path,
+          () => path,
+        );
+        await readerOpenInTerminal(real);
+        setRecent((list) => pushRecent(list, recentFolder(real)));
+        wantTerminalFocus.current = true;
+        goTo("work");
+        setFocusTick((n) => n + 1);
+      } catch (e) {
+        say(readerErrorOf(e).message);
+      } finally {
+        openingTerminal.current = false;
+      }
+    },
+    [goTo, say],
+  );
+
   const changeShortcuts = useCallback(async (next: Shortcuts) => {
     await saveShortcuts(next);
     setShortcuts(next);
@@ -289,6 +331,9 @@ export function App() {
         onOpen={openFromSidebar}
         onPin={pin}
         onUnpin={unpin}
+        onTerminal={openInTerminal}
+        notice={notice}
+        panelOpen={reader.open}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">

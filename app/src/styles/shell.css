@@ -194,6 +194,45 @@
   color: var(--white);
 }
 
+/* A folder's row in Recent: the row, and what can be done to the folder beside it. The shape of a pin's row. */
+.sidebar-entry {
+  display: flex;
+  align-items: center;
+}
+
+/* What can be done to a folder from its row (terminal, pin). Out of the layout — not merely unseen — until the row is
+   pointed at or holds the focus, so a folder's name has the whole row the rest of the time; two reserved buttons
+   would take 44 px of a 220 px sidebar from every folder. Tab reaches them: focus on the row brings them in. */
+.sidebar-actions {
+  display: none;
+  flex: none;
+  align-items: center;
+}
+
+.sidebar-pin:hover .sidebar-actions,
+.sidebar-pin:focus-within .sidebar-actions,
+.sidebar-entry:hover .sidebar-actions,
+.sidebar-entry:focus-within .sidebar-actions,
+.tree-row:hover .sidebar-actions,
+.tree-row:focus-within .sidebar-actions {
+  display: flex;
+}
+
+.sidebar-actions .sidebar-row-action {
+  opacity: 1;
+}
+
+/* The shell's last notice while the panel is closed (Sidebar.tsx): the reader's status line, in the sidebar's width. */
+.sidebar-notice {
+  flex: none;
+  margin: 6px 0 0;
+  padding: 5px 8px;
+  border-top: 1px solid var(--line);
+  color: var(--gold);
+  font: 12px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+
 .sidebar-pin-tree {
   padding-left: 14px;
 }

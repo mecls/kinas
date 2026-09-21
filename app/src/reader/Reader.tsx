@@ -18,6 +18,7 @@ import {
   readerRendered,
 } from "../api.ts";
 import { focusTerminal } from "../shell/focus.ts";
+import { NOTICE_MS } from "../shell/notice.ts";
 import { CLIPBOARD_MAX_BYTES, writeClipboard } from "../terminal/clipboard.ts";
 import type { FrontmatterView } from "./frontmatter.ts";
 import { Header, type View } from "./Header.tsx";
@@ -40,7 +41,7 @@ import { FileTree } from "./tree.tsx";
  * What the shell asks the reader to do. `seq` makes two identical requests distinct.
  *
  * - `show`: an accepted `kinas open`, exactly as Rust sent it.
- * - `follow`: a click on a file outside the reader — the sidebar's tree, a pin, a recent file. It takes the same
+ * - `follow`: a click on a file or a folder outside the reader — the sidebar's tree, a pin, a recent row. It takes the same
  *   path as a click on the reader's own tree: `follow()`, the human-click door (`reader_allow_click`), which keeps
  *   the open folder and carries no `received_at_ms`, so it adds no line to the log the 200 ms gate counts. A click
  *   must never be dressed up as a `show` (three-column shell §6.14).
@@ -92,7 +93,7 @@ interface Pending {
   receivedAt?: number;
 }
 
-const STATUS_MS = 6000;
+const STATUS_MS = NOTICE_MS;
 const OPENING_AFTER_MS = 150;
 const BACK_CAP = 50;
 const NARROW_PX = 640;

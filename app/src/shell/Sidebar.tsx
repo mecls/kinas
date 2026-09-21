@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type PinView, readerAllowClick } from "../api.ts";
 import { ChevronDownIcon, ChevronRightIcon, FileIcon, FolderIcon, GaugeIcon, GearIcon, PinIcon, PinOffIcon, TerminalIcon } from "../icons.tsx";
-import { FileTree } from "../reader/tree.tsx";
+import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
 import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
+import { type Notice, NOTICE_MS } from "./notice.ts";
 import type { RecentEntry } from "./recent.ts";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
@@ -19,6 +20,10 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path
  *
  * It owns no reader state. Clicks go up as paths; the shell turns them into `follow` requests for the reader, which
  * stays the single owner of what is open.
+ *
+ * **A folder is a thing in its own right here** (2026-09-21): wherever one shows — a row in a file tree, a row in
+ * Recent, a pin, the Files header — pointing at it offers a terminal button and a pin button. The terminal button
+ * asks Herdr for the folder's workspace (App's `onTerminal`); nothing is typed into the pane.
  */
 export function Sidebar({
   hidden,
@@ -33,6 +38,9 @@ export function Sidebar({
   onOpen,
   onPin,
   onUnpin,
+  onTerminal,
+  notice,
+  panelOpen,
 }: {
   hidden: boolean;
   page: "usage" | "work" | "settings";
@@ -46,10 +54,20 @@ export function Sidebar({
   selected: string | null;
   recent: readonly RecentEntry[];
   onOpen: (path: string) => void;
-  /** Absent until pins exist: then neither the folder's pin button nor anything else about pinning is drawn. */
-  onPin?: (path: string) => void;
+  onPin: (path: string) => void;
   onUnpin: (path: string) => void;
+  /** Open this folder in the terminal: its Herdr workspace, focused or made. */
+  onTerminal: (path: string) => void;
+  /** What the shell last said. Shown here only while the panel is closed — open, the reader's status line has it. */
+  notice: Notice | null;
+  panelOpen: boolean;
 }) {
+  const isPinned = (path: string) => pins.some((p) => p.path === path);
+  // Called, not mounted: a function made on every render is harmless as a function and would remount as a component.
+  const folderActions: TreeFolderActions = (path, name) => (
+    <FolderActions path={path} name={name} pinned={isPinned(path)} onTerminal={onTerminal} onPin={onPin} onUnpin={onUnpin} />
+  );
+
   return (
     <nav className="sidebar" aria-label="Sidebar" hidden={hidden}>
       <div className="sidebar-nav">
@@ -69,7 +87,7 @@ export function Sidebar({
             <h2 className="sidebar-label">Pinned</h2>
             <ul className="sidebar-list">
               {pins.map((pin) => (
-                <PinRow key={pin.path} pin={pin} selected={selected} onOpen={onOpen} onUnpin={onUnpin} />
+                <PinRow key={pin.path} pin={pin} selected={selected} onOpen={onOpen} onUnpin={onUnpin} onTerminal={onTerminal} folderActions={folderActions} />
               ))}
             </ul>
           </section>
@@ -82,19 +100,20 @@ export function Sidebar({
               <h2 className="sidebar-label" title={folder}>
                 {baseName(folder)}
               </h2>
-              {onPin && (
-                <button
-                  type="button"
-                  className="sidebar-row-action"
-                  aria-label={folderPinned ? "Unpin this folder" : "Pin this folder"}
-                  title={folderPinned ? "Unpin this folder" : "Pin this folder"}
-                  onClick={() => (folderPinned ? onUnpin(folder) : onPin(folder))}
-                >
-                  {folderPinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />}
-                </button>
-              )}
+              <button type="button" className="sidebar-row-action" aria-label="Open this folder in the terminal" title="Open this folder in the terminal" onClick={() => onTerminal(folder)}>
+                <TerminalIcon size={14} />
+              </button>
+              <button
+                type="button"
+                className="sidebar-row-action"
+                aria-label={folderPinned ? "Unpin this folder" : "Pin this folder"}
+                title={folderPinned ? "Unpin this folder" : "Pin this folder"}
+                onClick={() => (folderPinned ? onUnpin(folder) : onPin(folder))}
+              >
+                {folderPinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />}
+              </button>
             </div>
-            <FileTree root={folder} selected={selected} onOpen={onOpen} />
+            <FileTree root={folder} selected={selected} onOpen={onOpen} folderActions={folderActions} />
           </section>
         )}
 
@@ -102,18 +121,33 @@ export function Sidebar({
           <section className="sidebar-section sidebar-recent" aria-label="Recent">
             <h2 className="sidebar-label">Recent</h2>
             <ul className="sidebar-list">
-              {recent.map((entry) => (
-                <li key={entry.path}>
-                  <button type="button" className="sidebar-row" aria-current={entry.path === selected ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
-                    <FileIcon size={14} />
-                    <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
-                  </button>
-                </li>
-              ))}
+              {recent.map((entry) =>
+                entry.kind === "dir" ? (
+                  // A folder: its click reopens it in Files (the reader's `follow` takes a folder as it takes a file).
+                  <li key={entry.path} data-kind="dir">
+                    <div className="sidebar-entry">
+                      <button type="button" className="sidebar-row" aria-current={entry.path === folder ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
+                        <FolderIcon size={14} />
+                        <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
+                      </button>
+                      {folderActions(entry.path, baseName(entry.displayPath))}
+                    </div>
+                  </li>
+                ) : (
+                  <li key={entry.path} data-kind="file">
+                    <button type="button" className="sidebar-row" aria-current={entry.path === selected ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
+                      <FileIcon size={14} />
+                      <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
+                    </button>
+                  </li>
+                ),
+              )}
             </ul>
           </section>
         )}
       </div>
+
+      <SidebarNotice notice={notice} panelOpen={panelOpen} />
 
       <button
         type="button"
@@ -133,12 +167,27 @@ export function Sidebar({
 /**
  * One pin. A file opens; a folder is a disclosure whose tree is mounted **only while it is expanded** — otherwise
  * every pinned folder would list itself at launch, and one outside the projects folder would read as "Could not read
- * this folder" before Miguel had clicked anything (the click is what allows it).
+ * this folder" before Miguel had clicked anything (the click is what allows it). A pinned folder's click stays that
+ * disclosure (Miguel's choice): the terminal is a button beside Unpin, so a stray click makes nothing in Herdr.
  *
  * A pin whose file is gone stays, greyed: it does nothing when clicked, its Unpin still works, and Kinas never
  * removes it for him (§6.13).
  */
-function PinRow({ pin, selected, onOpen, onUnpin }: { pin: PinView; selected: string | null; onOpen: (path: string) => void; onUnpin: (path: string) => void }) {
+function PinRow({
+  pin,
+  selected,
+  onOpen,
+  onUnpin,
+  onTerminal,
+  folderActions,
+}: {
+  pin: PinView;
+  selected: string | null;
+  onOpen: (path: string) => void;
+  onUnpin: (path: string) => void;
+  onTerminal: (path: string) => void;
+  folderActions: TreeFolderActions;
+}) {
   const [expanded, setExpanded] = useState(false);
   const missing = !pin.exists;
   const name = baseName(pin.display_path);
@@ -174,20 +223,88 @@ function PinRow({ pin, selected, onOpen, onUnpin }: { pin: PinView; selected: st
           {isDir && <FolderIcon size={14} />}
           <span className="sidebar-row-name">{name}</span>
         </button>
+        {isDir && !missing && (
+          <span className="sidebar-actions">
+            <TerminalButton path={pin.path} name={name} onTerminal={onTerminal} />
+          </span>
+        )}
         <button type="button" className="sidebar-row-action" aria-label="Unpin" title={`Unpin ${name}`} onClick={() => onUnpin(pin.path)}>
           <PinOffIcon size={14} />
         </button>
       </div>
-      {isDir && expanded && !missing && <PinnedFolder path={pin.path} selected={selected} onOpen={onOpen} />}
+      {isDir && expanded && !missing && <PinnedFolder path={pin.path} selected={selected} onOpen={onOpen} folderActions={folderActions} />}
     </li>
   );
 }
 
 /** A pinned folder's tree, mounted only once the click that expanded it has been allowed (see `activate`). */
-function PinnedFolder({ path, selected, onOpen }: { path: string; selected: string | null; onOpen: (path: string) => void }) {
+function PinnedFolder({ path, selected, onOpen, folderActions }: { path: string; selected: string | null; onOpen: (path: string) => void; folderActions: TreeFolderActions }) {
   return (
     <div className="sidebar-pin-tree">
-      <FileTree root={path} selected={selected} onOpen={onOpen} />
+      <FileTree root={path} selected={selected} onOpen={onOpen} folderActions={folderActions} />
     </div>
+  );
+}
+
+function TerminalButton({ path, name, onTerminal }: { path: string; name: string; onTerminal: (path: string) => void }) {
+  return (
+    <button type="button" className="sidebar-row-action" aria-label={`Open ${name} in the terminal`} title={`Open ${name} in the terminal`} onClick={() => onTerminal(path)}>
+      <TerminalIcon size={14} />
+    </button>
+  );
+}
+
+/**
+ * What can be done to a folder from its row: open it in the terminal, pin it or unpin it. Out of the layout until the
+ * row is pointed at or holds the focus (shell.css), so a folder's name keeps the row's width the rest of the time.
+ */
+function FolderActions({
+  path,
+  name,
+  pinned,
+  onTerminal,
+  onPin,
+  onUnpin,
+}: {
+  path: string;
+  name: string;
+  pinned: boolean;
+  onTerminal: (path: string) => void;
+  onPin: (path: string) => void;
+  onUnpin: (path: string) => void;
+}) {
+  return (
+    <span className="sidebar-actions">
+      <TerminalButton path={path} name={name} onTerminal={onTerminal} />
+      <button type="button" className="sidebar-row-action" aria-label={pinned ? `Unpin ${name}` : `Pin ${name}`} title={pinned ? `Unpin ${name}` : `Pin ${name}`} onClick={() => (pinned ? onUnpin(path) : onPin(path))}>
+        {pinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />}
+      </button>
+    </span>
+  );
+}
+
+/**
+ * The shell's last notice, at the foot of the sidebar — **only while the panel is closed**. Open, the reader's status
+ * line says it, and one place at a time is enough; closed, that line is hidden, and a refusal (a folder that has gone,
+ * Herdr not running) would otherwise be a button that does nothing.
+ *
+ * Always mounted: it keeps its own clock from the moment the notice arrives, so a panel that closes four seconds into
+ * a notice shows the two that are left, and one that opens and closes again does not replay it.
+ */
+function SidebarNotice({ notice, panelOpen }: { notice: Notice | null; panelOpen: boolean }) {
+  const [shown, setShown] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+    setShown(notice);
+    const timer = window.setTimeout(() => setShown(null), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  if (!shown || panelOpen) return null;
+  return (
+    <p className="sidebar-notice" role="status">
+      {shown.text}
+    </p>
   );
 }

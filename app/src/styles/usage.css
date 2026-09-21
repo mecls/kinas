@@ -1,4 +1,5 @@
-/* The Usage page (R38): instrument panel — dark ground, monospace labels, big numbers, thin lines. */
+/* The Usage page (R38): instrument panel — monospace labels, big numbers, thin lines, on either ground. Its own
+   colours are variables on .usage with two values, like tokens.css and held to it by the same test. */
 
 .usage {
   --surface-1: var(--panel);
@@ -20,6 +21,24 @@
   --series-8: #e66767;
 
   padding: 0 28px 28px;
+}
+
+/* The light ground (tokens.css). --surface-1 follows --panel by itself, and the fresh dot's green reads on both. The
+   series take the reference palette's light steps, except 3, 4, 5 and 6: their light steps fall under 3:1 on white,
+   and the steps above already clear it, so those four are the same on both grounds. */
+@media screen and (prefers-color-scheme: light) {
+  .usage {
+    --grid: #e4e9ee;
+    --axis: #c0cad4;
+    --nodata: #dde3ea;
+    --dot-dead: #a3adb8;
+    --tooltip-bg: #faf9f5;
+    --hover-wash: rgba(0, 84, 158, 0.06);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+  }
 }
 
 .usage .page-header {

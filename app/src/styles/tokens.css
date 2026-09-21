@@ -1,5 +1,8 @@
-/* Sintra Labs palette (reference design §3.4) inside the instrument-panel character: dark ground,
-   monospace labels, big numbers, thin lines. Colours are defined once, here. */
+/* Sintra Labs palette (reference design §3.4) inside the instrument-panel character: monospace labels, big numbers,
+   thin lines. Colours are defined once, here, under one set of names with two values: the dark ground below, and
+   after it the flag's two fields the other way round — warm white, with royal blue for structure. Which one draws
+   is the window's appearance (Settings → Appearance; Rust sets it, so the title bar agrees). tokens.test.ts holds
+   the two sets to the same names and the light one to 4.5:1. */
 :root {
   --blue: #00549e;
   --white: #f4f2ec;
@@ -12,7 +15,9 @@
   --muted: #8a8f98;
 
   /* The terminal pane draws on --ground in --white. Its 16 ANSI colours are steps of the palette light enough to
-     read on --ground, so Herdr (theme "terminal") and every program in the pane use the app's colours. */
+     read on --ground, so Herdr (theme "terminal") and every program in the pane use the app's colours. Four slots
+     are tokens by another name — black is --line, bright black is --muted, yellow is --gold, bright white is
+     --white — and the kinas CLI leans on that: it paints its secondary text and its gold in those slots. */
   --ansi-black: #232830;
   --ansi-red: #e0444b;
   --ansi-green: #4fb286;
@@ -45,6 +50,52 @@
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 
   color-scheme: dark;
+}
+
+/* The light ground. `screen and`, so a print from either scheme is exactly what print.css says. --blue and --crimson
+   are absent because they read on both grounds. --white stays the name of the primary text colour, as it does in
+   print.css: here it is the logo's navy. */
+@media screen and (prefers-color-scheme: light) {
+  :root {
+    --white: #0a1420;
+    --gold: #855c00;
+
+    --ground: #f4f2ec;
+    --panel: #ffffff;
+    --line: #c3d2dc;
+    --muted: #566273;
+
+    /* Dark enough to read on --ground. Black and white swap roles with the ground, as they do above: black is a
+       surface and white is ink, so a program that prints "white" text is still read. */
+    --ansi-black: #c3d2dc;
+    --ansi-red: #a61b23;
+    --ansi-green: #1f6b47;
+    --ansi-yellow: #855c00;
+    --ansi-blue: #1d5f9e;
+    --ansi-magenta: #8a2a80;
+    --ansi-cyan: #0f6674;
+    --ansi-white: #3a4553;
+    --ansi-bright-black: #566273;
+    --ansi-bright-red: #c4262e;
+    --ansi-bright-green: #1d7a4f;
+    --ansi-bright-yellow: #6f4e00;
+    --ansi-bright-blue: #00549e;
+    --ansi-bright-magenta: #7b2f73;
+    --ansi-bright-cyan: #0b5561;
+    --ansi-bright-white: #0a1420;
+    --selection: #ccddec;
+
+    --heading: var(--blue);
+    --label: var(--blue);
+    --active-bg: #e0eaf3;
+    --active-fg: var(--blue);
+    --button-hover: #b3c6d3;
+    --shadow-strong: rgba(10, 20, 32, 0.18);
+    --shadow-soft: rgba(10, 20, 32, 0.12);
+    --scrim: rgba(10, 20, 32, 0.3);
+
+    color-scheme: light;
+  }
 }
 
 html,

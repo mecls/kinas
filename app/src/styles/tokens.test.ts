@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { contrast, declarations, isHex, mediaBlock, ruleBlock, stripComments } from "./testing/palette.ts";
 
-// Kinas has two grounds: the dark one, and warm white with the Quinas blue. Both live in tokens.css (and the Usage
+// Kinas has two grounds: the dark one, and warm white with royal blue. Both live in tokens.css (and the Usage
 // page's own block in usage.css) under one set of names, so every rule in the app is written once. That only works
 // if the two sets stay the same set, and if the light one is readable — which is a number, not an opinion: every
 // colour that draws text must reach WCAG's 4.5:1 on the ground AND on the raised panels.

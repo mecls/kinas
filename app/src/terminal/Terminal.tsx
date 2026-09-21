@@ -6,6 +6,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 import { dispatchAppAction } from "../actions.ts";
 import type { Shortcuts } from "../settings/shortcuts.ts";
+import { onThemeChange } from "../theme.ts";
 import { writeClipboard } from "./clipboard.ts";
 import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
@@ -17,7 +18,8 @@ const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
 /** How long "copied to clipboard" stays up after a copy. */
 const COPIED_TOAST_MS = 1500;
 
-/** The pane's colours come from tokens.css like every other colour in the app, read once when the terminal starts. */
+/** The pane's colours come from tokens.css like every other colour in the app: read when the terminal starts, and
+ * again whenever the ground turns. xterm repaints what is already on screen, except cells a program painted in 24-bit. */
 function terminalTheme(): ITheme {
   const css = getComputedStyle(document.documentElement);
   const token = (name: string) => css.getPropertyValue(`--${name}`).trim();
@@ -244,6 +246,11 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
     fitAddon.fit();
     void start();
 
+    // The terminal is never remounted, so a change of ground is a new theme on the one that is running.
+    const offThemeChange = onThemeChange(() => {
+      xterm.options.theme = terminalTheme();
+    });
+
     if (import.meta.env.TAURI_ENV_DEBUG === "true") {
       void import("../testHooks.ts").then(({ registerTestHooks }) =>
         registerTestHooks({
@@ -255,6 +262,7 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
           },
           terminalFocused: () => document.activeElement === xterm.textarea,
           terminalRenderer: () => renderer,
+          terminalBackground: () => xterm.options.theme?.background ?? null,
           terminalFallBackToDom: () => fallBackToDom("forced by test"),
           ptyPid: () => invoke("pty_pid"),
           keyLog: () => keyLog.join("\n"),
@@ -290,6 +298,7 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
 
     return () => {
       disposed = true;
+      offThemeChange();
       observer.disconnect();
       window.clearTimeout(timer);
       osc52.dispose();

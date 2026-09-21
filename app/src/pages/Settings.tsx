@@ -3,6 +3,7 @@ import {
   getSettings,
   removeOllamaKey,
   saveOllamaKey,
+  setAppearance,
   setGlobalHotkey,
   setLaunchAtLogin,
   setMenuBarQuota,
@@ -26,6 +27,12 @@ export const CLAUDE_HOOK_LINES = [
   "# Kinas: hand Claude's plan limits to the Kinas app — nothing else from this input",
   'kinas_f="$HOME/Library/Application Support/ai.sintralabs.kinas/inbox/claude-rate-limits.json"',
   `{ mkdir -p "\${kinas_f%/*}" && echo "$input" | jq -c '{rate_limits, session_id, captured_at: (now * 1000 | floor)}' > "$kinas_f.$$" && mv -f "$kinas_f.$$" "$kinas_f" || rm -f "$kinas_f.$$"; } 2>/dev/null`,
+];
+
+const APPEARANCE_CHOICES: [SettingsView["appearance"], string][] = [
+  ["system", "Follow macOS"],
+  ["light", "Light"],
+  ["dark", "Dark"],
 ];
 
 const MENU_BAR_CHOICES: [string, string][] = [
@@ -237,6 +244,19 @@ export function SettingsPage({
             </ul>
             {settings.hotkey_error && <p className="problem">hotkey unavailable: {settings.hotkey_error}</p>}
             {note("hotkey")}
+          </section>
+
+          <section className="settings-section" data-section="appearance">
+            <h2>Appearance</h2>
+            <p className="muted">Warm white with royal blue, or the dark ground. The title bar follows.</p>
+            <select className="field" aria-label="Appearance" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
+              {APPEARANCE_CHOICES.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            {note("appearance")}
           </section>
 
           <section className="settings-section" data-section="menu-bar">

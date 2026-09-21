@@ -61,6 +61,12 @@ pub fn run() {
             match store::Store::open(&dir) {
                 Ok(store) => {
                     log::info!("store open at {}", store.path().display());
+                    // Settings → Appearance, before the page draws: a launch on the light ground never shows the
+                    // dark one first. Here rather than in system::setup, which e2e launches partly skip.
+                    let (_, theme) = system::stored_appearance(system::get_setting(&store.conn(), store.org_id(), "appearance"));
+                    if let Some(window) = app.get_webview_window("main") {
+                        system::apply_appearance(&window, theme);
+                    }
                     app.manage(store);
                     // Reader R15: `kinas open` reaches this instance through <data dir>/kinas.sock.
                     reader::socket::start(app.handle().clone(), &dir);
@@ -117,6 +123,7 @@ pub fn run() {
             commands::set_org_name,
             commands::set_reader_editor,
             commands::set_projects_root,
+            commands::set_appearance,
             commands::set_menu_bar_quota,
             commands::set_global_hotkey,
             commands::set_launch_at_login,

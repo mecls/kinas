@@ -135,6 +135,8 @@ export type LinkStatus =
 
 export interface SettingsView {
   org_name: string;
+  /** Which ground the window draws on: "system" follows macOS. */
+  appearance: "system" | "light" | "dark";
   /** "subscription/window", e.g. "claude-plan/session". */
   menu_bar_quota: string;
   /** Tauri accelerator syntax, e.g. "Cmd+Shift+Space". */
@@ -171,6 +173,8 @@ export const setOrgName = (name: string) => invoke<void>("set_org_name", { name 
 export const setReaderEditor = (value: string) => invoke<void>("set_reader_editor", { value });
 /** The projects folder (reader R1b): an absolute path that exists. Answers with the canonical path it stored. */
 export const setProjectsRoot = (path: string) => invoke<string>("set_projects_root", { path });
+/** The app applies it to the window itself, title bar included; the page follows through prefers-color-scheme. */
+export const setAppearance = (value: string) => invoke<void>("set_appearance", { value });
 export const setMenuBarQuota = (value: string) => invoke<void>("set_menu_bar_quota", { value });
 /** Rejected by the app unless the chord includes ⌘ (R30). */
 export const setGlobalHotkey = (chord: string) => invoke<void>("set_global_hotkey", { chord });

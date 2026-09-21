@@ -20,13 +20,14 @@ import {
 import { focusTerminal } from "../shell/focus.ts";
 import { NOTICE_MS } from "../shell/notice.ts";
 import { CLIPBOARD_MAX_BYTES, writeClipboard } from "../terminal/clipboard.ts";
+import { onThemeChange } from "../theme.ts";
 import type { FrontmatterView } from "./frontmatter.ts";
 import { Header, type View } from "./Header.tsx";
 import { highlightCode, shouldHighlight } from "./highlight.ts";
 import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
 import type { MenuItem } from "./Menu.tsx";
-import { cachedSvg, renderDiagram } from "./mermaid.ts";
+import { cachedSvg, diagramsNeedRedrawing, renderDiagram } from "./mermaid.ts";
 import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
@@ -510,6 +511,21 @@ export function Reader({
       if (receivedAt !== undefined) void readerRendered(current.lines, current.rendered.diagrams.length, Math.max(0, Date.now() - receivedAt)).catch(() => {});
     },
     [loadImage],
+  );
+
+  // The ground turned (Settings → Appearance, or macOS): everything else follows the tokens by itself, but a diagram's
+  // colours are baked into its SVG. Each one is redrawn where it stands, the old drawing staying up until the new one
+  // is ready, so the page does not jump.
+  useEffect(
+    () =>
+      onThemeChange(() => {
+        diagramsNeedRedrawing();
+        const current = docRef.current;
+        if (!body.current || !current) return;
+        for (const block of body.current.querySelectorAll<HTMLElement>(".mermaid-block")) delete block.dataset.drawn;
+        void hydrate(current, undefined);
+      }),
+    [hydrate],
   );
 
   // The DOM swap happens before paint, in the same frame as the header and frontmatter card.

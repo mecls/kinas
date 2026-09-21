@@ -46,13 +46,14 @@ impl Profile {
     }
 }
 
-/// The profile Kinas starts at launch.
-pub fn default_profile() -> Profile {
+/// The profile Kinas starts at launch. `light` is the ground the window is drawing on right now, for the launch
+/// screen's logo (`launch_then_herdr`).
+pub fn default_profile(light: bool) -> Profile {
     let home = home_dir();
     let projects = home.join("Documents/Projects/SintraLabs/apps");
     let cwd = if projects.is_dir() { projects } else { home };
     #[cfg_attr(not(debug_assertions), allow(unused_mut))]
-    let mut profile = Profile::login_shell_then(&login_shell(), first_command().as_deref(), cwd, locale_lang());
+    let mut profile = Profile::login_shell_then(&login_shell(), first_command(light).as_deref(), cwd, locale_lang());
     #[cfg(debug_assertions)]
     if let Some(path) = std::env::var_os("KINAS_E2E_HERDR_CONFIG_PATH") {
         // Applied after the HERDR* strip, so the e2e session can carry a ⌃Tab binding.
@@ -65,7 +66,7 @@ pub fn default_profile() -> Profile {
 /// Debug builds accept two test switches, which skip the launch screen: `KINAS_PANE_SHELL_ONLY` (no Herdr) and
 /// `KINAS_HERDR_SESSION=<name>` (a throwaway session, so automated input never reaches `default` — build spec
 /// invariant 20).
-fn first_command() -> Option<String> {
+fn first_command(light: bool) -> Option<String> {
     #[cfg(debug_assertions)]
     {
         if std::env::var("KINAS_PANE_SHELL_ONLY").as_deref() == Ok("1") {
@@ -78,19 +79,25 @@ fn first_command() -> Option<String> {
         }
     }
     let cli = std::env::current_exe().ok().and_then(|exe| crate::cli_link::bundled_cli(&exe));
-    Some(launch_then_herdr(cli.as_deref()))
+    Some(launch_then_herdr(cli.as_deref(), light))
 }
 
 /// The launch screen's exit code when q or Ctrl+C asks to stay in the shell (cli/src/main.ts).
 const STAY_IN_SHELL: u8 = 10;
 
-/// `KINAS_ENTER=herdr '<cli>'; [ $? -eq 10 ] || herdr`: the launch screen, then Herdr unless it was asked to stay in
-/// the shell. The bundled CLI is run by path, because the pane can start before `~/.local/bin/kinas` is linked. A
-/// launch screen that fails for any other reason still attaches Herdr, and outside a bundle (development) there is
-/// no CLI to run, so the pane attaches Herdr directly, as before.
-pub fn launch_then_herdr(cli: Option<&Path>) -> String {
+/// `KINAS_ENTER=herdr COLORFGBG='15;0' '<cli>'; [ $? -eq 10 ] || herdr`: the launch screen, then Herdr unless it was
+/// asked to stay in the shell. The bundled CLI is run by path, because the pane can start before
+/// `~/.local/bin/kinas` is linked. A launch screen that fails for any other reason still attaches Herdr, and outside
+/// a bundle (development) there is no CLI to run, so the pane attaches Herdr directly, as before.
+///
+/// `COLORFGBG` ("fg;bg": `0;15` is a light ground) tells the launch screen which disc to draw its logo on
+/// (packages/commands/src/theme.ts); its text reads on either. It rides on the CLI's own command line and is never
+/// in the profile's environment: `herdr` here can start the server, which outlives the app, and a ground it
+/// inherited would go stale in every pane.
+pub fn launch_then_herdr(cli: Option<&Path>, light: bool) -> String {
+    let ground = if light { "0;15" } else { "15;0" };
     match cli {
-        Some(path) => format!("KINAS_ENTER=herdr {}; [ $? -eq {STAY_IN_SHELL} ] || herdr", sh_quote(&path.to_string_lossy())),
+        Some(path) => format!("KINAS_ENTER=herdr COLORFGBG='{ground}' {}; [ $? -eq {STAY_IN_SHELL} ] || herdr", sh_quote(&path.to_string_lossy())),
         None => "herdr".into(),
     }
 }
@@ -177,6 +184,8 @@ impl Session {
         for key in herdr_vars(std::env::vars_os()) {
             cmd.env_remove(key);
         }
+        // The ground of whatever terminal started Kinas is not the pane's, and Herdr's server would keep it.
+        cmd.env_remove("COLORFGBG");
         for (key, value) in &profile.set_env {
             cmd.env(key, value);
         }
@@ -339,11 +348,37 @@ mod tests {
 
     #[test]
     fn the_pane_opens_on_the_launch_screen_then_herdr() {
-        assert_eq!(
-            launch_then_herdr(Some(Path::new("/Applications/Kinas.app/Contents/MacOS/kinas-cli"))),
-            "KINAS_ENTER=herdr '/Applications/Kinas.app/Contents/MacOS/kinas-cli'; [ $? -eq 10 ] || herdr"
-        );
-        assert_eq!(launch_then_herdr(None), "herdr");
+        let cli = Path::new("/Applications/Kinas.app/Contents/MacOS/kinas-cli");
+        // The ground rides on the launch screen's own command line, like KINAS_ENTER: "fg;bg", 15 being white.
+        assert_eq!(launch_then_herdr(Some(cli), false), "KINAS_ENTER=herdr COLORFGBG='15;0' '/Applications/Kinas.app/Contents/MacOS/kinas-cli'; [ $? -eq 10 ] || herdr");
+        assert_eq!(launch_then_herdr(Some(cli), true), "KINAS_ENTER=herdr COLORFGBG='0;15' '/Applications/Kinas.app/Contents/MacOS/kinas-cli'; [ $? -eq 10 ] || herdr");
+        assert_eq!(launch_then_herdr(None, true), "herdr");
+    }
+
+    #[test]
+    fn the_launch_screen_is_told_the_ground_and_herdr_is_not() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("kinas-pty-ground-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let write_script = |name: &str, body: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        // Herdr can start its server from this very call, and the server outlives the app: a ground it inherited
+        // would go stale in every pane, where vim reads it. So neither the pane's value nor one Kinas was started
+        // with (a development build, from a terminal that sets it) may reach it.
+        write_script("herdr", r#"printf 'herdr:%s' "${COLORFGBG-unset}""#);
+        let cli = write_script("kinas-cli", r#"printf 'screen:%s|' "$COLORFGBG""#);
+        std::env::set_var("COLORFGBG", "12;8");
+        for (light, expected) in [(true, "screen:0;15|herdr:unset"), (false, "screen:15;0|herdr:unset")] {
+            let script = format!("PATH={}:\"$PATH\"; {}", sh_quote(&dir.to_string_lossy()), launch_then_herdr(Some(&cli), light));
+            let (out, _) = run(&sh(&script), 80, 24);
+            assert_eq!(String::from_utf8(out).unwrap(), expected, "light: {light}");
+        }
+        std::env::remove_var("COLORFGBG");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -361,7 +396,7 @@ mod tests {
         // Enter (0) and a broken launch screen (1) go on to Herdr; q or Ctrl+C (10) stays in the shell.
         for (code, expected) in [(0, "screen:herdr|herdr"), (10, "screen:herdr|"), (1, "screen:herdr|herdr")] {
             let cli = write_script("kinas-cli", &format!("printf 'screen:%s|' \"$KINAS_ENTER\"\nexit {code}"));
-            let script = format!("PATH={}:\"$PATH\"; {}", sh_quote(&dir.to_string_lossy()), launch_then_herdr(Some(&cli)));
+            let script = format!("PATH={}:\"$PATH\"; {}", sh_quote(&dir.to_string_lossy()), launch_then_herdr(Some(&cli), false));
             let (out, _) = run(&sh(&script), 80, 24);
             assert_eq!(String::from_utf8(out).unwrap(), expected, "launch screen exit {code}");
         }

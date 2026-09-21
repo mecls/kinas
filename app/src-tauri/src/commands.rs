@@ -44,6 +44,8 @@ pub fn refresh_readings(control: State<'_, ReaderControl>) {
 #[derive(Serialize)]
 pub struct SettingsView {
     pub org_name: String,
+    /// `system`, `light` or `dark`: which ground the window draws on.
+    pub appearance: String,
     pub menu_bar_quota: String,
     pub global_hotkey: String,
     pub launch_at_login: bool,
@@ -84,6 +86,7 @@ pub fn get_settings(
     // Everything that needs the connection is read under one guard: taking it twice on this thread would deadlock.
     let (
         org_name,
+        appearance,
         menu_bar_quota,
         global_hotkey,
         launch_at_login,
@@ -100,6 +103,7 @@ pub fn get_settings(
         let text = |key: &str, default: &str| system::get_setting(&conn, org, key).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_else(|| default.to_string());
         (
             name,
+            system::stored_appearance(system::get_setting(&conn, org, "appearance")).0.to_string(),
             text("menu_bar_quota", "claude-plan/session"),
             text("global_hotkey", system::DEFAULT_HOTKEY),
             system::get_setting(&conn, org, "launch_at_login").and_then(|v| v.as_bool()).unwrap_or(true),
@@ -113,6 +117,7 @@ pub fn get_settings(
     };
     Ok(SettingsView {
         org_name,
+        appearance,
         menu_bar_quota,
         global_hotkey,
         launch_at_login,
@@ -176,6 +181,16 @@ pub fn set_projects_root(store: State<'_, Store>, path: String) -> Result<String
 pub fn set_reader_editor(store: State<'_, Store>, value: String) -> Result<(), String> {
     let value = crate::reader::editor::check_editor(&value)?;
     system::put_setting(&store.conn(), store.org_id(), "reader_editor", &serde_json::json!(value)).map_err(|e| e.to_string())
+}
+
+/// Settings → Appearance. Stored first, then applied to the window: the title bar and the webview's
+/// `prefers-color-scheme` follow from that one call, so the page needs no capability and no message.
+#[tauri::command]
+pub fn set_appearance(window: tauri::WebviewWindow, store: State<'_, Store>, value: String) -> Result<(), String> {
+    let theme = system::parse_appearance(&value)?;
+    system::put_setting(&store.conn(), store.org_id(), "appearance", &serde_json::json!(value)).map_err(|e| e.to_string())?;
+    system::apply_appearance(&window, theme);
+    Ok(())
 }
 
 #[tauri::command]
@@ -454,13 +469,17 @@ use tauri::State;
 /// the exit code.
 #[tauri::command]
 pub fn pty_start(
+    window: tauri::WebviewWindow,
     state: State<'_, PtyState>,
     on_data: Channel<InvokeResponseBody>,
     on_exit: Channel<Option<u32>>,
     cols: u16,
     rows: u16,
 ) -> Result<Option<u32>, String> {
-    let profile = pty::default_profile();
+    // The ground the window draws on now, whichever of Settings' three choices made it so; asked again at every
+    // start, so a pane restarted after a change opens on the right logo.
+    let light = matches!(window.theme(), Ok(tauri::Theme::Light));
+    let profile = pty::default_profile(light);
     log::info!("terminal: starting {} {:?} in {}", profile.program, profile.args, profile.cwd.display());
     state.start(
         &profile,

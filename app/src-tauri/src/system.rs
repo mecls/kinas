@@ -35,6 +35,38 @@ pub fn put_setting(conn: &Connection, org_id: &str, key: &str, value: &serde_jso
     Ok(())
 }
 
+/// Settings → Appearance: follow macOS, or hold one ground whatever macOS does.
+pub const APPEARANCE_CHOICES: [&str; 3] = ["system", "light", "dark"];
+
+/// The window theme a choice means: `None` follows macOS. Anything but the three choices is refused.
+pub fn parse_appearance(value: &str) -> Result<Option<tauri::Theme>, String> {
+    match value {
+        "system" => Ok(None),
+        "light" => Ok(Some(tauri::Theme::Light)),
+        "dark" => Ok(Some(tauri::Theme::Dark)),
+        other => Err(format!("unknown appearance {other}")),
+    }
+}
+
+/// The stored choice and its theme. It is read with a default and never seeded, so a row that is missing, or that
+/// holds something a hand or an older build wrote, follows macOS rather than failing the launch.
+pub fn stored_appearance(value: Option<serde_json::Value>) -> (&'static str, Option<tauri::Theme>) {
+    let stored = value.as_ref().and_then(|v| v.as_str()).unwrap_or("system");
+    match APPEARANCE_CHOICES.iter().find(|choice| **choice == stored) {
+        Some(choice) => (choice, parse_appearance(choice).unwrap_or(None)),
+        None => ("system", None),
+    }
+}
+
+/// Makes the window, and with it the title bar and the webview's `prefers-color-scheme`, light, dark or macOS's own.
+/// On macOS the theme is the whole app's (tao sets NSApp's appearance), which is what lets tokens.css choose its
+/// ground with a media query and nothing else.
+pub fn apply_appearance(window: &tauri::WebviewWindow, theme: Option<tauri::Theme>) {
+    if let Err(e) = window.set_theme(theme) {
+        log::warn!("appearance not applied: {e}");
+    }
+}
+
 /// R30: the global hotkey must include ⌘, because ⌘ chords never produce terminal input.
 pub fn has_command_modifier(chord: &str) -> bool {
     chord
@@ -171,6 +203,29 @@ mod tests {
         assert!(check_shortcuts(&map(&[("sidebar", "Ctrl+B")])).is_err());
         assert!(check_shortcuts(&map(&[("launch", "Cmd+L")])).is_err());
         assert!(check_shortcuts(&map(&[("go.usage", "Cmd+1"), ("go.work", "Cmd+1")])).is_err());
+    }
+
+    #[test]
+    fn appearance_is_system_light_or_dark_and_nothing_else() {
+        assert_eq!(parse_appearance("system"), Ok(None));
+        assert_eq!(parse_appearance("light"), Ok(Some(tauri::Theme::Light)));
+        assert_eq!(parse_appearance("dark"), Ok(Some(tauri::Theme::Dark)));
+        // Refused, not coerced: a value Settings cannot have sent is not quietly stored as something else.
+        for bad in ["", "Light", "auto", "sepia"] {
+            assert!(parse_appearance(bad).is_err(), "{bad:?} was accepted");
+        }
+    }
+
+    #[test]
+    fn a_stored_appearance_that_is_not_one_of_the_three_follows_the_system() {
+        assert_eq!(stored_appearance(Some(serde_json::json!("light"))), ("light", Some(tauri::Theme::Light)));
+        assert_eq!(stored_appearance(Some(serde_json::json!("dark"))), ("dark", Some(tauri::Theme::Dark)));
+        assert_eq!(stored_appearance(Some(serde_json::json!("system"))), ("system", None));
+        for odd in [serde_json::json!("sepia"), serde_json::json!(1), serde_json::Value::Null] {
+            assert_eq!(stored_appearance(Some(odd)), ("system", None));
+        }
+        // Never seeded (store.rs DEFAULT_SETTINGS): a launch with no row is a launch that follows macOS.
+        assert_eq!(stored_appearance(None), ("system", None));
     }
 
     #[test]

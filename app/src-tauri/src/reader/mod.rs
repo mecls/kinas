@@ -6,6 +6,7 @@
 pub mod access;
 pub mod editor;
 pub mod export;
+mod herdr;
 pub mod pins;
 pub mod socket;
 pub mod watch;

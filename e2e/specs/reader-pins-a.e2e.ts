@@ -37,11 +37,18 @@ interface Row {
   expanded: string;
 }
 
-/** A sidebar section's rows, in order. An array: an object's key order does not survive the WebDriver wire. */
+/**
+ * A sidebar section's rows, in order. An array: an object's key order does not survive the WebDriver wire. A folder's
+ * row in Recent sits in a `.sidebar-entry` (2026-09-21): it is matched too, so that "15 rows" cannot hide a 16th.
+ */
 const rows = (section: "pinned" | "recent") =>
   browser.execute(
     (s: string) =>
-      [...document.querySelectorAll<HTMLButtonElement>(`.sidebar-${s} .sidebar-list > li > .sidebar-row, .sidebar-${s} .sidebar-list > li > .sidebar-pin > .sidebar-row`)].map((b) => ({
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          `.sidebar-${s} .sidebar-list > li > .sidebar-row, .sidebar-${s} .sidebar-list > li > .sidebar-pin > .sidebar-row, .sidebar-${s} .sidebar-list > li > .sidebar-entry > .sidebar-row`,
+        ),
+      ].map((b) => ({
         name: b.querySelector(".sidebar-row-name")?.textContent ?? "",
         disabled: b.getAttribute("aria-disabled") === "true",
         title: b.getAttribute("title") ?? "",

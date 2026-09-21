@@ -149,7 +149,14 @@ export function herdr(session: string, ...args: string[]): string {
   return execFileSync("herdr", ["--session", session, ...args], { encoding: "utf8", env, timeout: 10000 });
 }
 
-export function herdrSnapshot(session: string): { focused_pane_id: string; panes: { pane_id: string }[] } {
+export interface HerdrSnapshot {
+  focused_pane_id: string;
+  focused_workspace_id: string;
+  panes: { pane_id: string; workspace_id: string; cwd: string | null }[];
+  workspaces: { workspace_id: string; label: string; focused: boolean }[];
+}
+
+export function herdrSnapshot(session: string): HerdrSnapshot {
   return JSON.parse(herdr(session, "api", "snapshot")).result.snapshot;
 }
 

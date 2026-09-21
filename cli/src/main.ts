@@ -20,7 +20,7 @@
 import { join } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
 import { cliCommand, statusFromStore, statusJson, statusLines } from "@kinas/commands";
-import { colorEnabled, paint } from "@kinas/commands/theme";
+import { colorEnabled, paint, polarityFromEnv } from "@kinas/commands/theme";
 import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, renderAgentPacket, renderOperator, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
@@ -106,7 +106,7 @@ async function launch(): Promise<number> {
     if (old && cache?.claimRefresh(org, now, REFRESH_LEASE_MS)) spawnRefresh();
 
     const { MAX_COLUMNS, renderLaunch } = await import("./launch.tsx");
-    process.stdout.write(renderLaunch(packet, { columns: process.stdout.columns ?? MAX_COLUMNS, color, now }));
+    process.stdout.write(renderLaunch(packet, { columns: process.stdout.columns ?? MAX_COLUMNS, color, polarity: polarityFromEnv(), now }));
     if (config.problem) printError(`kinas: ${config.problem}`);
   } finally {
     cache?.close();

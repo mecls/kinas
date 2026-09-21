@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { LOGO_GRID } from "./logo-grid.ts";
-import { accentLine, BANNER, BANNER_WIDTH, bannerLines, colorEnabled, LOGO_HEIGHT, LOGO_WIDTH, logoLines, paint, palette, visibleWidth } from "./theme.ts";
+import { accentLine, BANNER, BANNER_WIDTH, bannerLines, colorEnabled, LOGO_HEIGHT, LOGO_WIDTH, logoLines, paint, palette, polarityFromEnv, visibleWidth } from "./theme.ts";
 
 describe("theme", () => {
   test("the banner is six rows of one width that fit any 100-column screen", () => {
@@ -53,8 +53,36 @@ describe("theme", () => {
   test("with colour the logo's dots are warm white on its navy disc, and widths are unchanged", () => {
     const colored = logoLines(true);
     expect(colored.join("")).toContain("\x1b[38;2;244;242;236;48;2;10;20;32m");
+    // The rim, where a character is mostly off the disc: the same warm white, on the terminal's own ground.
+    expect(colored.join("")).toContain("\x1b[38;2;244;242;236m");
     for (const l of colored) expect(visibleWidth(l)).toBe(LOGO_WIDTH);
     expect(logoLines(false).join("")).not.toContain("\x1b[");
+    // Dark is what a terminal is taken for unless it says otherwise.
+    expect(logoLines(true, "dark")).toEqual(colored);
+  });
+
+  test("on a light ground the disc is royal blue, and the rim is drawn in the disc's own dots so the shield stays round", () => {
+    const light = logoLines(true, "light").join("");
+    expect(light).toContain("\x1b[38;2;244;242;236;48;2;0;84;158m");
+    expect(light).not.toContain("48;2;10;20;32");
+    // Warm-white rim dots would vanish on warm white. The rim draws the disc instead, in blue, and the ground shows
+    // through where the dots were.
+    expect(light).toContain("\x1b[38;2;0;84;158m");
+    expect(light).not.toContain("\x1b[38;2;244;242;236m");
+    for (const l of logoLines(true, "light")) expect(visibleWidth(l)).toBe(LOGO_WIDTH);
+    // Without colour there is one logo, whatever the ground.
+    expect(logoLines(false, "light")).toEqual(logoLines(false, "dark"));
+  });
+
+  test("the ground is read from COLORFGBG, by vim's rule, and is dark unless it says light", () => {
+    // The Kinas pane writes "0;15" or "15;0" on the launch screen's command line (app/src-tauri/src/pty.rs).
+    expect(polarityFromEnv({ COLORFGBG: "0;15" })).toBe("light");
+    expect(polarityFromEnv({ COLORFGBG: "15;0" })).toBe("dark");
+    // rxvt's three-field form; 7 is light grey; 8 is dark grey.
+    expect(polarityFromEnv({ COLORFGBG: "0;default;15" })).toBe("light");
+    expect(polarityFromEnv({ COLORFGBG: "0;7" })).toBe("light");
+    expect(polarityFromEnv({ COLORFGBG: "15;8" })).toBe("dark");
+    for (const unknown of [undefined, "", "light", "0;", "0;default", "0;16", "0;1.5"]) expect(polarityFromEnv({ COLORFGBG: unknown })).toBe("dark");
   });
 
   test("colour only on a TTY, never with NO_COLOR, always with FORCE_COLOR", () => {

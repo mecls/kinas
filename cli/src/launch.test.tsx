@@ -65,6 +65,17 @@ describe("the launch screen", () => {
     expect([...exact].sort()).toEqual(["0;84;158", "196;38;46", "244;242;236"]);
   });
 
+  test("the logo's disc is navy unless the terminal says its ground is light, and then it is royal blue", () => {
+    const dark = renderLaunch(packet, { columns: 100, color: true, now: world.now });
+    expect(dark).toContain("48;2;10;20;32");
+    expect(renderLaunch(packet, { columns: 100, color: true, polarity: "dark", now: world.now })).toBe(dark);
+    const light = renderLaunch(packet, { columns: 100, color: true, polarity: "light", now: world.now });
+    expect(light).toContain("48;2;0;84;158");
+    expect(light).not.toContain("48;2;10;20;32");
+    // Nothing but the logo depends on the ground: with the logo gone, the two screens are one.
+    expect(renderLaunch(packet, { columns: 60, color: true, polarity: "light", now: world.now })).toBe(renderLaunch(packet, { columns: 60, color: true, now: world.now }));
+  });
+
   test("without colour there is no escape code at all", () => {
     expect(renderLaunch(packet, { columns: 100, color: false, now: world.now })).not.toContain("\x1b[");
   });

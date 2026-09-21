@@ -96,38 +96,62 @@ export function bannerLines(color: boolean): string[] {
   return BANNER.map((line) => line.replace(/█+|[^█]+/g, (run) => (run.startsWith("█") ? paint("blue", run, true) : paint("muted", run, true))));
 }
 
-/** The logo: warm-white dots, on its navy disc when colour is on. Every line is LOGO_WIDTH wide. */
-export function logoLines(color: boolean): string[] {
+/** The ground a terminal draws on. Only the logo needs to know: everything else reads on both (the header says how). */
+export type Polarity = "dark" | "light";
+
+/** The ground, from `COLORFGBG` ("fg;bg", which rxvt, Konsole and iTerm set, and the Kinas pane writes on the launch
+ *  screen's command line). Read by vim's rule: the last field is the background, and 7 or 9–15 is a light one. Dark
+ *  when it is missing or says anything else, because a wrong "dark" still draws a logo that can be read. */
+export function polarityFromEnv(env: Record<string, string | undefined> = process.env): Polarity {
+  const background = env.COLORFGBG?.split(";").at(-1) ?? "";
+  if (!/^\d+$/.test(background)) return "dark";
+  const slot = Number(background);
+  return slot === 7 || (slot >= 9 && slot <= 15) ? "light" : "dark";
+}
+
+/** The logo: warm-white dots on its disc, navy on a dark ground and royal blue on a light one. Every line is
+ *  LOGO_WIDTH wide, and without colour it is the same logo on either ground. */
+export function logoLines(color: boolean, polarity: Polarity = "dark"): string[] {
   const size = LOGO_GRID.length;
+  const disc = polarity === "light" ? palette.blue : LOGO_NAVY;
   const lines: string[] = [];
   for (let cy = 0; cy < size; cy += 4) {
     let line = "";
     let run = "";
+    // The same characters with the disc's unlit dots raised instead of the lit ones.
+    let inverse = "";
     let runOnDisc = false;
     const flush = () => {
       if (run === "") return;
       if (!color) line += run;
-      else if (runOnDisc) line += `\x1b[38;2;${rgb(palette.white)};48;2;${rgb(LOGO_NAVY)}m${run}\x1b[0m`;
+      else if (runOnDisc) line += `\x1b[38;2;${rgb(palette.white)};48;2;${rgb(disc)}m${run}\x1b[0m`;
+      // The rim has no background to stand on. On a dark ground its warm-white dots show as they are. On a light one
+      // they would vanish, so the rim draws the disc itself in blue and the ground shows through as the dots.
+      else if (polarity === "light") line += `\x1b[38;2;${rgb(disc)}m${inverse}\x1b[0m`;
       else line += `\x1b[38;2;${rgb(palette.white)}m${run}\x1b[0m`;
       run = "";
+      inverse = "";
     };
     for (let cx = 0; cx < size; cx += 2) {
-      let code = 0;
-      let disc = 0;
+      let lit = 0;
+      let unlit = 0;
+      let covered = 0;
       for (let dy = 0; dy < 4; dy++) {
         for (let dx = 0; dx < 2; dx++) {
           const cell = LOGO_GRID[cy + dy]?.[cx + dx] ?? " ";
-          if (cell === "#") code |= BRAILLE_BIT[dy]![dx]!;
-          if (cell !== " ") disc++;
+          if (cell === "#") lit |= BRAILLE_BIT[dy]![dx]!;
+          if (cell === ".") unlit |= BRAILLE_BIT[dy]![dx]!;
+          if (cell !== " ") covered++;
         }
       }
-      // A character mostly on the disc takes the navy background; the edge ones stay on the terminal's own.
-      const onDisc = disc >= 6;
+      // A character mostly on the disc takes the disc's background; the rim's stay on the terminal's own ground.
+      const onDisc = covered >= 6;
       if (onDisc !== runOnDisc) {
         flush();
         runOnDisc = onDisc;
       }
-      run += String.fromCharCode(0x2800 + code);
+      run += String.fromCharCode(0x2800 + lit);
+      inverse += String.fromCharCode(0x2800 + unlit);
     }
     flush();
     lines.push(line);

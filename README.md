@@ -104,6 +104,19 @@ Settings (⌘,) shows the same lines with Copy buttons and whether the hook is b
 **Ollama Cloud.** Create an API key on ollama.com and paste it into Settings. It is stored in the macOS
 Keychain (service `ai.sintralabs.kinas`, account `ollama-cloud-api-key`), never in the store or logs.
 
+## Appearance
+
+Kinas draws on one of two grounds: the dark one, or warm white with royal blue — the two fields of the palette
+the other way round. Settings → Appearance chooses: Follow macOS (the default, and it follows live), Light or
+Dark. It is a Settings control only: there is no ⌘K command and no shortcut. The app sets the window's own
+appearance, so the title bar agrees with the page, and the terminal pane, code highlighting and Mermaid
+diagrams turn with it. Printing is the same from either.
+
+The `kinas` CLI reads on both grounds without being told which it is on: royal blue and crimson are exact,
+and its text uses the terminal's own foreground, bright black and yellow — which in the Kinas pane are the
+app's colours. Only the launch screen's logo depends on the ground (see `COLORFGBG` below). A program in the
+pane that paints its own 24-bit dark theme does not follow; Claude Code, for one, has `/theme`.
+
 ## Environment variables
 
 | Variable | Builds | Purpose |
@@ -112,6 +125,8 @@ Keychain (service `ai.sintralabs.kinas`, account `ollama-cloud-api-key`), never 
 | `KINAS_CONFIG` | all | Read the CLI config from another file |
 | `KINAS_ROOT`, `FM_HOME`, `HERDR_SOCKET_PATH`, `CODEX_HOME` | all | Override the projects root, Firstmate home, Herdr socket and Codex folder from the config |
 | `KINAS_BIN` | all | Which `kinas` the session-start integrations run |
+| `NO_COLOR`, `FORCE_COLOR` | all | The CLI prints no colour with `NO_COLOR`; with `FORCE_COLOR` it prints colour even when piped |
+| `COLORFGBG` | all | The terminal's ground, as rxvt, Konsole and iTerm set it (`0;15` is light). The launch screen draws its logo on royal blue when it says light, on navy otherwise. The Kinas pane sets it for the launch screen alone, never for the shell or Herdr |
 | `KINAS_PANE_SHELL_ONLY=1` | debug | The terminal runs a plain login shell, no Herdr |
 | `KINAS_HERDR_SESSION=<name>` | debug | Attach a named throwaway Herdr session instead of `default` |
 | `KINAS_E2E_HERDR_CONFIG_PATH` | debug | `HERDR_CONFIG_PATH` for that session (applied after `HERDR*` is stripped) |

@@ -241,6 +241,39 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
 - [ ] Cursor not opened to read markdown since ____ (the plan's first "done when", after a week) —
       `outstanding — needs Miguel`
 
+## Light theme
+
+Settings → Appearance: Follow macOS, Light or Dark. One stylesheet, two grounds; the window's appearance chooses.
+
+- [x] The two grounds are the same set of names; on warm white and on a white panel every colour that draws text
+      reaches 4.5:1 and every chart series 3:1; four ANSI slots equal their tokens on both; no rule holds a colour
+      literal; the light block is screen-only, so print is what `print.css` says from either —
+      `automated (styles/tokens.test.ts, styles/print.test.ts)`
+- [x] The CLI paints only royal blue, crimson and the logo in 24-bit; its text is the terminal's foreground,
+      bright black and yellow; gold is never bold; the logo's disc is navy unless `COLORFGBG` says the ground is
+      light, and then royal blue with the rim drawn in the disc's own dots —
+      `automated (commands/theme.test.ts, cli/launch.test.tsx, palette/snapshotAdapter.test.ts)`
+- [x] The launch screen is told the ground on its own command line, and `herdr` — which may start the server that
+      outlives the app — is not, nor does it inherit one from whatever started Kinas — `automated (cargo test, pty.rs)`
+- [x] Choosing Light turns the page to warm white through the **window**, not through the page: Rust sets the
+      app's appearance and WebKit's `prefers-color-scheme` follows, with no attribute on `<html>`; the running
+      terminal takes the new theme without a remount; Dark turns both back; anything but the three choices is
+      refused and the stored one kept — `automated (appearance.e2e.ts)`, 6 passing, 2026-09-21
+- [ ] The title bar, the native select, the checkbox and the scrollbars turn with the setting; relaunching with
+      Light stored under a dark macOS shows no dark flash; with Follow macOS chosen, turning macOS's appearance
+      turns the app while it runs — `outstanding — needs Miguel`
+- [ ] Herdr turns live with the pane. Look at its bars and borders: on the light ground ANSI black is a surface
+      and white is ink, as on the dark one — `outstanding — needs Miguel`
+- [ ] A program that paints its own 24-bit dark theme does not follow the pane. Claude Code is the one that
+      matters: `/theme` — `outstanding — needs Miguel`
+- [ ] A launch screen already on screen keeps its logo's disc after a live switch, and its text turns; the next
+      launch screen is right — `outstanding — needs Miguel`
+- [ ] With a Mermaid document open, a switch redraws each diagram where it stands and the page does not jump;
+      Print as PDF from each ground gives the same sheet — `outstanding — needs Miguel`
+- [ ] By eye, on the light ground: how much blue the labels add; gold as a fill (the stale dot, a gauge at ≤ 25 %);
+      `--line` round the text fields; the Usage chart's series and its no-data hatch — `outstanding — needs Miguel`
+- [ ] The HTML preview stays on white under both — `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —
@@ -288,6 +321,9 @@ Write annoyances here as they happen (task 3.9).
 ## Accepted differences from Ghostty
 
 - Font: Kinas uses SF Mono; Ghostty's default is JetBrains Mono.
+- Since the light theme (2026-09-21), the `kinas` CLI's secondary text and its banner's shadow are ANSI bright
+  black, not a fixed `#8593A6`. In the dark pane that is `#8A8F98` (`--muted`): a shade less blue, 5.99:1 on the
+  ground where it was 6.23:1. In Ghostty it is Ghostty's bright black.
 
 ## Notes from building the e2e suite
 

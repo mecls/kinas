@@ -111,6 +111,18 @@ the projects root never move keyboard focus. If the terminal had it, it keeps it
 never accept the card; Open and Dismiss take a click. Closing the reader with × gives the terminal focus while the
 Work page is showing; on any other page the terminal is hidden, and focus is left where it was.
 
+## Sidebar (Pinned, Files, Recent)
+
+Added 2026-09-21 (sidebar folders). The sidebar adds no key bindings and no palette command. **Pin**, **Unpin** and
+**Open in the terminal** — the buttons that show when a folder's row is pointed at — are click-only, for the reason
+the reader's controls are; this file stays the gate.
+
+**Open in the terminal** is the one sidebar action that moves you. Kinas asks Herdr, through its CLI, for that
+folder's workspace — focusing the one that already carries the folder's label, creating it in that folder if there
+is none — then shows the Work page and gives the terminal the keys. Nothing is typed into the pane, ever: when
+Claude Code or Pi has it, typed text would arrive as a prompt. If Herdr refuses, nothing moves and the reason is
+said in the reader's status line — or at the foot of the sidebar while the panel is closed.
+
 ## Launch screen (the Work pane at start, and `kinas` in any terminal)
 
 The pane opens on the Kinas launch screen. The screen reads these keys itself, as the program running in the PTY;

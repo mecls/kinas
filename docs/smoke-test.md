@@ -217,6 +217,21 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
       `automated (reader-pins-a.e2e.ts; shell/recent.test.ts)`
 - [ ] The sidebar's sections look right: nothing but the pages and Settings on a fresh launch; Pinned appears with
       the first pin; the pin and unpin buttons show when a row is pointed at — `outstanding — needs Miguel`
+- [ ] **Folders in the sidebar** (2026-09-21): a folder is pinned from a folder row inside a file tree; an opened
+      folder joins **Recent** as a folder row, above the files opened before it, and a click on it reopens it in
+      Files — `automated (reader-terminal.e2e.ts; shell/recent.test.ts)`
+- [ ] **Open in the terminal** asks Herdr for the folder's workspace and never types into the pane: the first click
+      creates exactly one workspace labelled with the folder's path under the projects folder, its pane starts in
+      that folder, the Work page shows and the terminal has the keys, the PTY's pid is unchanged and the pane holds
+      no typed `cd`; a second click from another workspace focuses the first and creates nothing; a folder that
+      has gone is refused in Rust's words, shown at the foot of the sidebar while the panel is closed; the log
+      gains `reader: folder opened in the terminal (created|focused) in <N> ms` and never the folder's name —
+      `automated (reader-terminal.e2e.ts)`, in the throwaway session `kinas-e2e-terminal`
+- [ ] Open in the terminal in your own `default` session: point at a pinned folder, click the terminal button → a
+      workspace named after it appears in Herdr and you are in it on the Work page; from another workspace, click
+      again → it comes back, with no duplicate; with the launch screen still showing, the sidebar says to attach
+      Herdr first. The hover buttons take 44 px, so a folder's name truncates earlier than a file's — say if
+      that needs changing — `outstanding — needs Miguel`
 - [ ] Docked beside the sidebar the reader is under 640 px, so **Contents** is a header button that opens over the
       page; **Expand** it and Contents becomes a column beside the document. With the sidebar hidden, Files does
       the same — `outstanding — needs Miguel` (the button and its list are `automated (reader.e2e.ts, AC-1)`)

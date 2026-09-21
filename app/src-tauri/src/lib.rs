@@ -134,6 +134,7 @@ pub fn run() {
             reader::open_external,
             reader::reader_rendered,
             reader::reader_open_in_editor,
+            reader::reader_open_in_terminal,
             reader::export::reader_export,
             reader::reader_print,
             reader::pins::reader_pins,

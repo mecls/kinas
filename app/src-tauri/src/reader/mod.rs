@@ -10,6 +10,7 @@ mod herdr;
 pub mod pins;
 pub mod socket;
 pub mod watch;
+pub mod workspace;
 
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -431,6 +432,31 @@ pub async fn reader_open_in_editor(app: tauri::AppHandle, path: String) -> Resul
         .await
         .map_err(|e| ReaderError::new("editor_failed", e.to_string()))?
         .map_err(|message| ReaderError::new("editor_failed", message))
+}
+
+/// Open in the terminal (R37b): re-check the folder, then ask Herdr for its workspace off the UI thread — focusing
+/// the one that carries the folder's label, creating it in that folder otherwise. Nothing is typed into the Kinas
+/// terminal. The log gets the outcome and the time, never the folder, its label or Herdr's words (which can repeat
+/// `--cwd`).
+#[tauri::command]
+pub async fn reader_open_in_terminal(app: tauri::AppHandle, path: String) -> Result<workspace::Opened, ReaderError> {
+    let (real, label) = {
+        let state = app.state::<ReaderState>();
+        let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
+        let (real, kind) = checked(&state, &root, &path)?;
+        if kind != Kind::Dir {
+            return Err(ReaderError::new("not_dir", "Choose a folder to open in the terminal"));
+        }
+        let label = workspace::label_for(&real, &root, &home());
+        (real, label)
+    };
+    let started = std::time::Instant::now();
+    let opened = tauri::async_runtime::spawn_blocking(move || workspace::open_folder(&real, &label))
+        .await
+        .map_err(|e| ReaderError::new("terminal_failed", e.to_string()))?
+        .map_err(|message| ReaderError::new("terminal_failed", message))?;
+    log::info!("reader: folder opened in the terminal ({}) in {} ms", opened.word(), started.elapsed().as_millis());
+    Ok(opened)
 }
 
 #[cfg(test)]

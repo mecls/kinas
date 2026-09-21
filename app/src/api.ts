@@ -301,6 +301,11 @@ export const readerClose = () => invoke<void>("reader_close");
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
 export const readerRendered = (lines: number, diagrams: number, ms: number) => invoke<void>("reader_rendered", { lines, diagrams, ms });
 export const readerOpenInEditor = (path: string) => invoke<void>("reader_open_in_editor", { path });
+/**
+ * Asks Herdr for the folder's workspace: `focused` when one already carried its label, `created` otherwise. Rust
+ * re-checks the folder and makes every Herdr call; nothing is typed into the terminal (reader/workspace.rs).
+ */
+export const readerOpenInTerminal = (path: string) => invoke<"created" | "focused">("reader_open_in_terminal", { path });
 
 /** A pinned file or folder, as the sidebar shows it. `exists` is false when nothing is at the path right now. */
 export interface PinView {

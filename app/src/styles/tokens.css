@@ -31,6 +31,16 @@
   --ansi-bright-white: #f4f2ec;
   --selection: #18406b;
 
+  /* Roles, so a second ground can give them a different colour. Here each is what its rule has always used. */
+  --heading: var(--white);
+  --label: var(--muted);
+  --active-bg: var(--line);
+  --active-fg: var(--white);
+  --button-hover: #2c323b;
+  --shadow-strong: rgba(0, 0, 0, 0.45);
+  --shadow-soft: rgba(0, 0, 0, 0.35);
+  --scrim: rgba(5, 6, 8, 0.55);
+
   --mono: "SF Mono", ui-monospace, Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 

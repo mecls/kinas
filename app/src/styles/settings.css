@@ -18,7 +18,7 @@
 
 .settings-section h2 {
   margin: 0 0 10px;
-  color: var(--muted);
+  color: var(--label);
   font: 500 11px/1 var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;

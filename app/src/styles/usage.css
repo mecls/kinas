@@ -4,6 +4,11 @@
   --surface-1: var(--panel);
   --grid: #20242b;
   --axis: #383d45;
+  --nodata: #262b33;
+  --dot-fresh: #0ca30c;
+  --dot-dead: #4a4f58;
+  --tooltip-bg: #0f1216;
+  --hover-wash: rgba(244, 242, 236, 0.04);
   /* Categorical slots, dark steps of the dataviz reference palette, validated against --surface-1. */
   --series-1: #3987e5;
   --series-2: #d95926;
@@ -88,7 +93,7 @@
 }
 
 .dot-fresh {
-  background: #0ca30c;
+  background: var(--dot-fresh);
 }
 
 .dot-stale {
@@ -97,7 +102,7 @@
 
 .dot-dead,
 .dot-reset {
-  background: #4a4f58;
+  background: var(--dot-dead);
 }
 
 .dot-idle {
@@ -200,7 +205,7 @@
 }
 
 .button:hover {
-  background: #2c323b;
+  background: var(--button-hover);
 }
 
 /* Chart panel */
@@ -219,7 +224,7 @@
 
 .chart-title {
   margin: 0;
-  color: var(--muted);
+  color: var(--label);
   font: 500 11px/1 var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -275,13 +280,18 @@
   fill: url(#kinas-no-data);
 }
 
+.chart-hatch {
+  stroke: var(--nodata);
+  stroke-width: 2;
+}
+
 .chart-hit {
   fill: transparent;
 }
 
 .chart-hit:hover,
 .chart-hit:focus {
-  fill: rgba(244, 242, 236, 0.04);
+  fill: var(--hover-wash);
   outline: none;
 }
 
@@ -316,7 +326,7 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #0f1216;
+  background: var(--tooltip-bg);
   pointer-events: none;
   font: 11px/1.5 var(--mono);
   color: var(--muted);

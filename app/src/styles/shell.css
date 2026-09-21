@@ -71,8 +71,8 @@
 }
 
 .sidebar-item[aria-current="page"] {
-  background: var(--line);
-  color: var(--white);
+  background: var(--active-bg);
+  color: var(--active-fg);
 }
 
 .sidebar-settings {
@@ -103,7 +103,7 @@
   min-width: 0;
   margin: 0 0 6px 8px;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--label);
   font: 500 11px/1 var(--mono);
   letter-spacing: 0.06em;
   text-overflow: ellipsis;
@@ -155,8 +155,8 @@
 }
 
 .sidebar-row[aria-current="true"] {
-  background: var(--line);
-  color: var(--white);
+  background: var(--active-bg);
+  color: var(--active-fg);
 }
 
 /* A pin whose file is gone: still listed, plainly not usable. Only its Unpin does anything. */
@@ -274,7 +274,7 @@
   font: 500 12px/1 var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--label);
 }
 
 /* The panel's width comes from the divider (App.tsx sets flex-basis); this is its share until that arrives.

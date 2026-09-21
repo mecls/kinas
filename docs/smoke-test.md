@@ -257,8 +257,9 @@ Settings → Appearance: Follow macOS, Light or Dark. One stylesheet, two ground
       outlives the app — is not, nor does it inherit one from whatever started Kinas — `automated (cargo test, pty.rs)`
 - [x] Choosing Light turns the page to warm white through the **window**, not through the page: Rust sets the
       app's appearance and WebKit's `prefers-color-scheme` follows, with no attribute on `<html>`; the running
-      terminal takes the new theme without a remount; Dark turns both back; anything but the three choices is
-      refused and the stored one kept — `automated (appearance.e2e.ts)`, 6 passing, 2026-09-21
+      terminal takes the new theme without a remount, and the foot of the pane, below the last whole row, is the
+      ground rather than xterm's own black; Dark turns all of it back; anything but the three choices is refused
+      and the stored one kept — `automated (appearance.e2e.ts)`, 6 passing, 2026-09-21
 - [ ] The title bar, the native select, the checkbox and the scrollbars turn with the setting; relaunching with
       Light stored under a dark macOS shows no dark flash; with Follow macOS chosen, turning macOS's appearance
       turns the app while it runs — `outstanding — needs Miguel`

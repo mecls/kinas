@@ -23,6 +23,7 @@ async function choose(value: string) {
 }
 
 const ground = () => browser.execute(() => getComputedStyle(document.documentElement).getPropertyValue("--ground").trim());
+const viewportBackground = () => browser.execute(() => getComputedStyle(document.querySelector(".xterm-viewport")!).backgroundColor);
 const prefersLight = () => browser.execute(() => matchMedia("(prefers-color-scheme: light)").matches);
 /** A command's answer, or its refusal. Not `{ error }`: that is the shape of a WebDriver error, and the client throws it. */
 const invoke = <T>(command: string, args?: Record<string, unknown>) =>
@@ -68,6 +69,8 @@ describe("Settings → Appearance", () => {
   it("the terminal, which is never remounted, takes the new ground on the one that is running", async () => {
     await waitForHook("terminalBackground");
     await browser.waitUntil(async () => (await hook<string | null>("terminalBackground")) === LIGHT, { timeout: 10000, timeoutMsg: "the pane kept its dark theme" });
+    // xterm.css paints the viewport #000, which shows below the last whole row: on warm white, a black bar.
+    expect(await viewportBackground()).toBe("rgb(244, 242, 236)");
   });
 
   it("Dark turns it back, pane included", async () => {
@@ -76,6 +79,7 @@ describe("Settings → Appearance", () => {
     expect(await prefersLight()).toBe(false);
     expect(await stored()).toBe("dark");
     await browser.waitUntil(async () => (await hook<string | null>("terminalBackground")) === DARK, { timeout: 10000, timeoutMsg: "the pane kept its light theme" });
+    expect(await viewportBackground()).toBe("rgb(11, 13, 16)");
   });
 
   it("refuses anything but the three choices, and keeps what was stored", async () => {

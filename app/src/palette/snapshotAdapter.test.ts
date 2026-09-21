@@ -32,3 +32,17 @@ test("the palette's Status is the CLI's status, from the snapshot", () => {
   expect(lines.some((l) => l.startsWith("  pi · glm-5.3:cloud") && l.includes("2 msgs"))).toBe(true);
   expect(lines).toContain("This Mac           no reading yet");
 });
+
+test("a stale line is gold in the terminal's own yellow, which reads on either ground", () => {
+  const old = NOW - 41 * 60_000;
+  const stale: UsageSnapshot = {
+    ...snapshot,
+    quotas: snapshot.quotas.map((q) => ({ ...q, updated_at: old })),
+    readers: snapshot.readers.map((r) => (r.reader === "claude-plan" ? { ...r, last_success_at: old } : r)),
+  };
+  const lines = statusLines(statusFromStore(snapshotAdapter(stale), NOW), true);
+  expect(lines[0]).toStartWith("\x1b[33mClaude · session");
+  expect(lines[0]).toEndWith("(stale)\x1b[0m");
+  // No 24-bit colour anywhere: a fixed gold is 1.8:1 on warm white.
+  expect(lines.join("\n")).not.toContain("38;2;");
+});

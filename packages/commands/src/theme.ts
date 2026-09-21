@@ -1,23 +1,27 @@
-// The Kinas look, shared by every command (CLI v0 brief): one palette, one set of glyphs, one banner, so the CLI looks
-// the same in the app's terminal pane, in any emulator and over SSH. Colour is 24-bit ANSI, only on a TTY, never
-// with NO_COLOR.
+// The Kinas look, shared by every command (CLI v0 brief): one set of tones, one set of glyphs, one banner. Colour only
+// on a TTY, never with NO_COLOR.
+//
+// A terminal's ground is dark or light and a program cannot always know which: Herdr's session outlives the app, so
+// nothing the Kinas pane sets reaches a shell inside it. So only what reads on BOTH grounds is painted exactly, in
+// 24-bit: royal blue, crimson, and the logo, which brings its own disc. Text rides the terminal's own colours —
+// primary text is the foreground, secondary text is ANSI bright black, gold is ANSI yellow. In the Kinas pane those
+// slots are --white, --muted and --gold on either ground (app/src/styles/tokens.css, held there by tokens.test.ts), so
+// the pane draws the brief's colours; anywhere else the text takes that terminal's colours and can always be read.
 
 import { LOGO_GRID } from "./logo-grid.ts";
 
+/** What is painted exactly, whatever the terminal. */
 export const palette = {
   /** Structure and headings. */
   blue: "#00549E",
-  /** Primary text. */
+  /** The logo's dots. Primary text is not painted: it is the terminal's foreground. */
   white: "#F4F2EC",
-  /** Secondary text. */
-  muted: "#8593A6",
   /** Something needs a decision or is failing — nothing else. */
   crimson: "#C4262E",
-  /** The crew, and warnings — nothing else. */
-  gold: "#DFAE3C",
 } as const;
 
-export type Tone = keyof typeof palette;
+/** `white` is primary text, `muted` secondary; `gold` is the crew and warnings, and nothing else. */
+export type Tone = "blue" | "white" | "muted" | "crimson" | "gold";
 
 export const glyph = {
   sep: "·",
@@ -70,9 +74,20 @@ function rgb(hex: string): string {
   return `${(n >> 16) & 255};${(n >> 8) & 255};${n & 255}`;
 }
 
+/** The SGR colour of each tone: 24-bit for the two brand colours, an ANSI slot for the rest, nothing for primary text. */
+const SGR: Record<Tone, string> = {
+  blue: `38;2;${rgb(palette.blue)}`,
+  crimson: `38;2;${rgb(palette.crimson)}`,
+  muted: "90",
+  gold: "33",
+  white: "",
+};
+
+/** Gold is never bold: a terminal draws bold ANSI yellow in the bright slot, which is another colour. */
 export function paint(tone: Tone, text: string, color: boolean, bold = false): string {
   if (!color || text === "") return text;
-  return `\x1b[${bold ? "1;" : ""}38;2;${rgb(palette[tone])}m${text}\x1b[0m`;
+  const codes = [bold && tone !== "gold" ? "1" : "", SGR[tone]].filter((code) => code !== "").join(";");
+  return codes === "" ? text : `\x1b[${codes}m${text}\x1b[0m`;
 }
 
 /** The banner's face in blue, its shadow in the muted tone. */
@@ -93,7 +108,7 @@ export function logoLines(color: boolean): string[] {
       if (run === "") return;
       if (!color) line += run;
       else if (runOnDisc) line += `\x1b[38;2;${rgb(palette.white)};48;2;${rgb(LOGO_NAVY)}m${run}\x1b[0m`;
-      else line += paint("white", run, true);
+      else line += `\x1b[38;2;${rgb(palette.white)}m${run}\x1b[0m`;
       run = "";
     };
     for (let cx = 0; cx < size; cx += 2) {

@@ -56,6 +56,15 @@ describe("the launch screen", () => {
     expect(count({ ...packet, decisions: { ...packet.decisions, data: [] } })).toBe(1);
   });
 
+  test("no text colour is fixed for a dark ground: only blue, crimson and the logo are 24-bit", () => {
+    const out = renderLaunch(packet, { columns: 100, color: true, now: world.now });
+    // The old secondary grey and the old gold, as 24-bit: near-invisible on warm white.
+    expect(out).not.toContain("133;147;166");
+    expect(out).not.toContain("223;174;60");
+    const exact = new Set([...out.matchAll(/38;2;(\d+;\d+;\d+)/g)].map((m) => m[1]));
+    expect([...exact].sort()).toEqual(["0;84;158", "196;38;46", "244;242;236"]);
+  });
+
   test("without colour there is no escape code at all", () => {
     expect(renderLaunch(packet, { columns: 100, color: false, now: world.now })).not.toContain("\x1b[");
   });

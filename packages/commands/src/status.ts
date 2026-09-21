@@ -144,7 +144,9 @@ export function statusJson(result: StatusResult) {
   };
 }
 
-const GOLD = "\x1b[38;2;223;174;60m";
+// theme.ts's gold: ANSI yellow, which reads on a dark ground and on a light one, and is --gold in the Kinas pane.
+// Spelled here because the ⌘K palette imports this module, and the CLI's banner has no business in the webview.
+const GOLD = "\x1b[33m";
 const RESET = "\x1b[0m";
 const LABEL_WIDTH = 19;
 

@@ -9,8 +9,22 @@ describe("theme", () => {
     expect(BANNER_WIDTH).toBeLessThanOrEqual(60);
   });
 
-  test("the palette is the brief's", () => {
-    expect(palette).toEqual({ blue: "#00549E", white: "#F4F2EC", muted: "#8593A6", crimson: "#C4262E", gold: "#DFAE3C" });
+  test("the palette holds only what is painted exactly: the two brand colours, and the logo's warm white", () => {
+    expect(palette).toEqual({ blue: "#00549E", white: "#F4F2EC", crimson: "#C4262E" });
+  });
+
+  test("text rides the terminal's own colours, so it reads on a dark ground and on a light one", () => {
+    // Primary text is the terminal's foreground: no colour at all, bold when asked.
+    expect(paint("white", "x", true)).toBe("x");
+    expect(paint("white", "x", true, true)).toBe("\x1b[1mx\x1b[0m");
+    // Secondary text and gold are ANSI slots, which the Kinas pane sets to --muted and --gold on either ground.
+    expect(paint("muted", "x", true)).toBe("\x1b[90mx\x1b[0m");
+    expect(paint("gold", "x", true)).toBe("\x1b[33mx\x1b[0m");
+    // Gold is never bold: a terminal draws bold ANSI yellow in the bright slot, which is another colour.
+    expect(paint("gold", "x", true, true)).toBe("\x1b[33mx\x1b[0m");
+    // The brand colours read on both grounds and stay exact.
+    expect(paint("blue", "x", true, true)).toBe("\x1b[1;38;2;0;84;158mx\x1b[0m");
+    expect(paint("crimson", "x", true)).toBe("\x1b[38;2;196;38;46mx\x1b[0m");
   });
 
   test("without colour the banner and text are plain", () => {
@@ -22,7 +36,7 @@ describe("theme", () => {
   test("with colour the face is royal blue, the shadow muted, and widths are unchanged", () => {
     const lines = bannerLines(true);
     expect(lines[0]).toContain("\x1b[38;2;0;84;158m██");
-    expect(lines[0]).toContain("\x1b[38;2;133;147;166m╗");
+    expect(lines[0]).toContain("\x1b[90m╗");
     for (const l of lines) expect(visibleWidth(l)).toBe(BANNER_WIDTH);
     expect(accentLine(2, true)).toBe("\x1b[38;2;196;38;46m━━\x1b[0m");
   });

@@ -1,0 +1,96 @@
+<!doctype html>
+<!--
+  A Gate 1 mockup: one plain HTML file per screen, throwaway by design — no framework, no build
+  step, no script tag. Style it with DESIGN.md's semantic tokens only (the <style> below is the token
+  block of design/preview.html; do not add a raw hex, a raw px size or a raw spacing value).
+  Review it inside Kinas with `kinas open tasks/<feature-slug>/mockups/<screen>.html`: the reader
+  renders it in a sandbox that allows inline styles and nothing external, so keep no link tag, no
+  web font and no script tag — the brand fonts fall back to the system stack there. Iterate until
+  the captain says "yes, that"; where DESIGN.md and this file disagree, DESIGN.md wins and the
+  mockup is corrected before Gate 1 is approved. Nothing about a screen is decided in a component
+  before it was decided here. DESIGN.md's `--text-md 13/20` is `--fs-md` / `--lh-md` below.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crew · Fleet board</title>
+<style>
+/* ===== Brand layer (overridable) ===== */
+:root{
+  --brand-accent:#00549E;
+  --brand-font-ui:"Inter";
+  --brand-font-mono:"JetBrains Mono";
+  --brand-font-display:"Clash Display";
+}
+/* ===== Semantic layer, light ===== */
+:root{
+  --bg:#F4F2EC; --surface:#FFFFFF; --surface-2:#EDEAE2; --line:#E3DFD5; --line-strong:#CFC9BC;
+  --ink:#1B1F27; --ink-2:#5B6170; --ink-3:#8A8F9B;
+  --accent:var(--brand-accent); --accent-ink:#FFFFFF;
+  --accent-soft:color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --meter:#5B6170; --meter-track:#E9E5DC;
+  --ok:#2E8B57; --warn:#B87A12; --danger:#C4262E; --stale:#7C818D;
+  --cat-1:#3E7C8A; --cat-2:#7A62B0; --cat-3:#8A6A4E; --cat-4:#6B6F2A; --cat-5:#A8527A; --cat-6:#4E5F8C;
+  --term-bg:#10192B; --term-fg:#E7EEF7;
+  --shadow-float:0 8px 24px rgb(20 23 30 / .12), 0 1px 3px rgb(20 23 30 / .08);
+
+  --font-ui:var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono:var(--brand-font-mono), "SF Mono", Menlo, monospace;
+  --font-display:var(--brand-font-display), var(--font-ui);
+
+  --fs-xs:11px; --lh-xs:16px; --fs-sm:12px; --lh-sm:18px; --fs-md:13px; --lh-md:20px;
+  --fs-lg:15px; --lh-lg:22px; --fs-xl:20px; --lh-xl:28px; --fs-num:28px; --lh-num:32px;
+
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+  --sidebar-w:220px; --panel-w:360px; --chrome-h:32px; --strip-h:96px; --page-max:1120px; --row-h:36px; --row-h-progress:56px; --hit:28px; --hit-touch:44px; --tabbar-h:49px;
+  color-scheme:light;
+}
+/* ===== Dark, system ===== */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14171E; --surface:#1B1F27; --surface-2:#232833; --line:#2B3140; --line-strong:#3A4152;
+    --ink:#EDEEF2; --ink-2:#A1A7B4; --ink-3:#6E7482;
+    --accent:color-mix(in oklab, var(--brand-accent), white 32%); --accent-ink:#0E1420;
+    --accent-soft:color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --meter:#A1A7B4; --meter-track:#2B3140;
+    --ok:#4FB37A; --warn:#D9A03A; --danger:#E5575E; --stale:#7C818D;
+    --cat-1:#5FA3B2; --cat-2:#9D88D6; --cat-3:#B08E70; --cat-4:#A3A85A; --cat-5:#CF7AA0; --cat-6:#7688B8;
+    --shadow-float:0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3);
+    color-scheme:dark;
+  }
+}
+/* ===== Dark, forced (set data-theme="dark" on <html> to check the other theme) ===== */
+:root[data-theme="dark"]{
+  --bg:#14171E; --surface:#1B1F27; --surface-2:#232833; --line:#2B3140; --line-strong:#3A4152;
+  --ink:#EDEEF2; --ink-2:#A1A7B4; --ink-3:#6E7482;
+  --accent:color-mix(in oklab, var(--brand-accent), white 32%); --accent-ink:#0E1420;
+  --accent-soft:color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter:#A1A7B4; --meter-track:#2B3140;
+  --ok:#4FB37A; --warn:#D9A03A; --danger:#E5575E; --stale:#7C818D;
+  --cat-1:#5FA3B2; --cat-2:#9D88D6; --cat-3:#B08E70; --cat-4:#A3A85A; --cat-5:#CF7AA0; --cat-6:#7688B8;
+  --shadow-float:0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3);
+  color-scheme:dark;
+}
+
+/* ===== Base ===== */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 var(--fs-md)/var(--lh-md) var(--font-ui);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.ink2,.unit{color:var(--ink-2)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+/* ===== This screen (semantic tokens only) ===== */
+</style>
+</head>
+<body>
+<main style="max-width:var(--page-max);padding:var(--space-5)">
+  <h1 style="margin:0 0 var(--space-5);font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600">Crew · Fleet board</h1>
+  <p class="ink2">To be filled in Gate 1. The Crew page: one lane per project, one card per worker or scout.</p>
+  <p class="ink2">DESIGN.md §4 components it will use: Lane, Card, Status badge.</p>
+</main>
+</body>
+</html>

@@ -79,8 +79,15 @@ async function pickAccent(hex: string) {
 describe("Settings → Appearance", () => {
   before(async () => {
     await $(".sidebar").waitForExist({ timeout: 60000 });
-    await browser.keys(["Meta", ","]);
-    await expect($('section[data-page="settings"]')).toBeDisplayed();
+    // The first chord after launch can land before the window's listeners are attached (as goToUsage says in the
+    // Usage specs; found here when this spec ran first in the full run, 2026-09-22), so it is pressed until it lands.
+    await browser.waitUntil(
+      async () => {
+        await browser.keys(["Meta", ","]);
+        return $('section[data-page="settings"]').isDisplayed();
+      },
+      { timeout: 30000, timeoutMsg: "⌘, never showed Settings" },
+    );
     await $('select[aria-label="Appearance"]').waitForExist({ timeout: 10000 });
   });
 

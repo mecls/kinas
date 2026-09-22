@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UsageSnapshot } from "../api.ts";
-import { buildChart } from "./chartModel.ts";
+import { Table } from "../ui/index.ts";
+import { buildChart, periodRows, type PeriodRow } from "./chartModel.ts";
 import { compactTokens } from "./format.ts";
 
-// Model usage by day (R38): the last 30 Europe/Lisbon days, stacked columns by harness·model, hand-drawn
-// SVG. Marks follow the dataviz specs: columns ≤ 24 px, 4 px rounded tops, a 2 px surface gap between
-// segments, hairline grid; a legend, a per-day hover/focus readout, and a table view as its twin.
+// Model usage by day (R38): the last 30 Europe/Lisbon days, stacked columns by provider in its category colour
+// (DESIGN.md §5 Usage), hand-drawn SVG. Marks follow the dataviz specs: columns ≤ 24 px, 4 px rounded tops, a 2 px
+// surface gap between segments, hairline grid; a legend of providers, a per-day readout that names the models, and
+// the Today and Month to date tables as its twin.
 
 const HEIGHT = 190;
 const PAD = { left: 48, right: 8, top: 10, bottom: 24 };
@@ -28,13 +30,15 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setWidth(Math.max(260, el.clientWidth)));
+    // The content box, not clientWidth: the frame's padding is not the chart's to draw in.
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(260, Math.floor(entry!.contentRect.width))));
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
   const model = useMemo(() => buildChart(snapshot, includeCache), [snapshot, includeCache]);
   const slots = new Map(model.series.map((s) => [s.key, s.slot]));
+  const labels = new Map(model.series.map((s) => [s.key, s.label]));
   const plotW = width - PAD.left - PAD.right;
   const plotH = HEIGHT - PAD.top - PAD.bottom;
   const top = model.ticks.at(-1) || 1;
@@ -48,7 +52,7 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
   return (
     <>
       <div className="chart-head">
-        <h2 className="chart-title">Model usage by day · tokens</h2>
+        <h3 className="chart-title">Model usage by day · tokens</h3>
         <div className="chart-controls">
           <label>
             <input type="checkbox" checked={includeCache} onChange={(e) => setIncludeCache(e.currentTarget.checked)} />
@@ -57,14 +61,14 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
         </div>
       </div>
       {snapshot.backfill.running && (
-        <p className="muted chart-note" data-testid="backfill">
+        <p className="chart-note" data-testid="backfill">
           Reading history… {snapshot.backfill.done}/{snapshot.backfill.total} files
         </p>
       )}
       {snapshot.first_usage_date === null ? (
-        <p className="muted chart-note">No transcripts read yet.</p>
+        <p className="chart-note">No transcripts read yet.</p>
       ) : (
-        firstDataIndex > 0 && <p className="muted chart-note">No data before {snapshot.first_usage_date}.</p>
+        firstDataIndex > 0 && <p className="chart-note">No data before {snapshot.first_usage_date}.</p>
       )}
 
       <div className="chart-wrap" ref={wrap} onMouseLeave={() => setHover(null)}>
@@ -99,7 +103,7 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
                   const drawnTop = isTop ? segTop : segTop + GAP;
                   const drawnH = Math.max(0, cursor - drawnTop);
                   cursor = segTop;
-                  const fill = `var(--series-${slots.get(seg.key) ?? 8})`;
+                  const fill = `var(--cat-${slots.get(seg.key) ?? 6})`;
                   return isTop ? (
                     <path key={seg.key} d={roundedTop(x, drawnTop, barW, drawnH)} fill={fill} />
                   ) : (
@@ -112,7 +116,8 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
 
           <line className="chart-baseline" x1={PAD.left} x2={width - PAD.right} y1={baseline} y2={baseline} />
           {model.days.map((day, i) =>
-            i % 7 === 0 || i === model.days.length - 1 ? (
+            // Every seventh day, and the last one unless a weekly label sits too close to it to read.
+            i % 7 === 0 || (i === model.days.length - 1 && i % 7 >= 3) ? (
               <text key={day.date} className="chart-tick" x={PAD.left + i * slotW + slotW / 2} y={HEIGHT - 6} textAnchor="middle">
                 {shortDate(day.date)}
               </text>
@@ -150,58 +155,60 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
               .reverse()
               .map((seg) => (
                 <div className="tooltip-row" key={seg.key}>
-                  <span className="tooltip-key" style={{ background: `var(--series-${slots.get(seg.key) ?? 8})` }} />
-                  <span>{seg.key}</span>
+                  <span className="tooltip-key" style={{ background: `var(--cat-${slots.get(seg.key) ?? 6})` }} />
+                  <span>{labels.get(seg.key) ?? seg.key}</span>
                   <span className="tooltip-value">{compactTokens(seg.value)}</span>
                 </div>
               ))}
+            {hovered.models.map((m) => (
+              <div className="tooltip-row tooltip-model" key={m.key}>
+                <span />
+                <span>{m.key}</span>
+                <span className="tooltip-value">{compactTokens(m.value)}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       {model.series.length > 0 && (
-        <ul className="legend" aria-label="Series">
+        <ul className="legend" aria-label="Providers">
           {model.series.map((s) => (
-            <li key={s.key}>
-              <span className="swatch" style={{ background: `var(--series-${s.slot})` }} />
+            <li key={s.key} data-provider={s.key}>
+              <span className="swatch" style={{ background: `var(--cat-${s.slot})` }} />
               {s.label}
             </li>
           ))}
         </ul>
       )}
 
-      <details className="chart-table">
-        <summary>Show as table</summary>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Series</th>
-              <th className="num">In</th>
-              <th className="num">Cache read</th>
-              <th className="num">Out</th>
-              <th className="num">Messages</th>
-            </tr>
-          </thead>
-          <tbody>
-            {snapshot.usage
-              .slice()
-              .reverse()
-              .map((r) => (
-                <tr key={`${r.date}|${r.harness}|${r.provider}|${r.model}`}>
-                  <td>{r.date}</td>
-                  <td>
-                    {r.harness} · {r.model}
-                  </td>
-                  <td className="num">{r.tokens_in.toLocaleString("en-US")}</td>
-                  <td className="num">{r.tokens_cache_read.toLocaleString("en-US")}</td>
-                  <td className="num">{r.tokens_out.toLocaleString("en-US")}</td>
-                  <td className="num">{r.messages.toLocaleString("en-US")}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </details>
+      <div className="usage-tables">
+        <PeriodTable caption="Today" rows={periodRows(snapshot, "today")} period="today" />
+        <PeriodTable caption="Month to date" rows={periodRows(snapshot, "month")} period="month" />
+      </div>
     </>
+  );
+}
+
+const n = (v: number) => v.toLocaleString("en-US");
+
+/** One period's tokens per harness · model, busiest first; a period with none says so in one line. */
+function PeriodTable({ caption, rows, period }: { caption: string; rows: PeriodRow[]; period: string }) {
+  if (rows.length === 0) return <p className="chart-note" data-period={period}>{caption}: no transcripts.</p>;
+  return (
+    <Table
+      data-period={period}
+      caption={caption}
+      columns={[
+        { key: "series", label: "Model" },
+        { key: "in", label: "In", align: "right" },
+        { key: "cache", label: "Cache read", align: "right" },
+        { key: "out", label: "Out", align: "right" },
+        { key: "messages", label: "Messages", align: "right" },
+      ]}
+      rows={rows.map((r) => ({ series: r.key, in: n(r.tokens_in), cache: n(r.tokens_cache_read), out: n(r.tokens_out), messages: n(r.messages) }))}
+      rowKey={(row) => String(row.series)}
+      rowProps={(row) => ({ "data-series": String(row.series) })}
+    />
   );
 }

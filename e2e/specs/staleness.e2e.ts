@@ -5,7 +5,7 @@ import { browser, $, expect } from "@wdio/globals";
 
 const stub = process.env.KINAS_E2E_STUB_URL!;
 const stubRequests = async () => ((await (await fetch(`${stub}/__count`)).json()) as { requests: number }).requests;
-const gauge = (subscription: string, window: string) => $(`.gauge[data-subscription="${subscription}"][data-window="${window}"]`);
+const gauge = (subscription: string, window: string) => $(`section[data-page="usage"] [data-subscription="${subscription}"][data-window="${window}"]`);
 
 /** Home is the first screen (keymap.md, 2026-09-22); the gauges live on Usage, ⌘4 away. The first chord after launch
  * can land before the window's listeners are attached, so it is pressed until the page shows. */
@@ -32,12 +32,12 @@ describe("numbers that are no longer true", () => {
 
   it("hides the number of a window whose reset has passed", async () => {
     await expect(gauge("claude-plan", "week")).toHaveAttribute("data-state", "reset");
-    await expect(gauge("claude-plan", "week").$(".gauge-number")).toHaveText("—");
+    await expect(gauge("claude-plan", "week").$(".ui-gauge-value")).toHaveText("—");
     await expect(gauge("claude-plan", "week")).toHaveText(expect.stringContaining("waiting for a new reading"));
   });
 
   it("shows a rate-limited Ollama as such, after exactly one request", async () => {
-    const card = $('.gauge-empty[data-subscription="ollama-cloud"]');
+    const card = $('.usage-empty[data-subscription="ollama-cloud"]');
     await card.waitForExist({ timeout: 60000 });
     await expect(card).toHaveAttribute("data-state", "dead");
     await expect(card).toHaveText(expect.stringContaining("rate limited (HTTP 429)"));

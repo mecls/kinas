@@ -40,15 +40,15 @@ describe("nothing connected, then a key", () => {
   before(goToUsage);
 
   it("shows Connect Claude Code and Add API key, and makes no request", async () => {
-    await $('.gauge-empty[data-subscription="claude-plan"]').waitForExist({ timeout: 60000 });
-    await expect($('.gauge-empty[data-subscription="claude-plan"] .button')).toHaveText("Connect Claude Code");
-    await expect($('.gauge-empty[data-subscription="ollama-cloud"] .button')).toHaveText("Add API key");
+    await $('.usage-empty[data-subscription="claude-plan"]').waitForExist({ timeout: 60000 });
+    await expect($('.usage-empty[data-subscription="claude-plan"] .ui-button')).toHaveText("Connect Claude Code");
+    await expect($('.usage-empty[data-subscription="ollama-cloud"] .ui-button')).toHaveText("Add API key");
     await browser.pause(3000);
     expect(await stubRequests()).toBe(0);
   });
 
   it("opens Settings from Add API key, with the Claude hook lines and status", async () => {
-    await $('.gauge-empty[data-subscription="ollama-cloud"] .button').click();
+    await $('.usage-empty[data-subscription="ollama-cloud"] .ui-button').click();
     await expect($('section[data-page="settings"]')).toBeDisplayed();
     await expect($('[data-testid="hook-status"]')).toHaveText(expect.stringContaining("never seen"));
     // The embedded WebKit driver rejects text selectors mixed with CSS, so read the lines instead.
@@ -66,8 +66,8 @@ describe("nothing connected, then a key", () => {
     // Esc goes back to the page Settings was opened from.
     await browser.keys(["Escape"]);
     await expect($('section[data-page="usage"]')).toBeDisplayed();
-    await $('.gauge[data-subscription="ollama-cloud"][data-window="session"]').waitForExist({ timeout: 60000 });
-    await expect($('.gauge[data-subscription="ollama-cloud"][data-window="session"]')).toHaveText(expect.stringContaining("2.5% used"));
+    await $('section[data-page="usage"] [data-subscription="ollama-cloud"][data-window="session"]').waitForExist({ timeout: 60000 });
+    await expect($('section[data-page="usage"] [data-subscription="ollama-cloud"][data-window="session"]')).toHaveText(expect.stringContaining("2.5% used"));
     expect(await stubRequests()).toBe(1);
   });
 

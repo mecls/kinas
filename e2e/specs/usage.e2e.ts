@@ -3,7 +3,9 @@ import { browser, $, $$, expect } from "@wdio/globals";
 // AC-2 (Journey A): the Usage page shows the Claude gauges from the status-line hand-off, the Ollama gauges
 // from the stub, a 30-day chart that hatches the days before the first transcript, and this Mac.
 
-const gauge = (subscription: string, window: string) => $(`.gauge[data-subscription="${subscription}"][data-window="${window}"]`);
+// A quota by its data-* pair (the design system, 2026-09-22): the hero gauge for the windows that decide the day, a
+// metric row in the provider's section for the rest.
+const gauge = (subscription: string, window: string) => $(`section[data-page="usage"] [data-subscription="${subscription}"][data-window="${window}"]`);
 
 /** Home is the first screen (keymap.md, 2026-09-22); the gauges live on Usage, ⌘4 away. The first chord after launch
  * can land before the window's listeners are attached, so it is pressed until the page shows. */
@@ -39,26 +41,34 @@ describe("the Usage page", () => {
   });
 
   it("lists Ollama's requests per model under each window, busiest first", async () => {
-    await expect(gauge("ollama-cloud", "session").$('li[data-model="glm-5.3:cloud"]')).toHaveText(expect.stringContaining("12 requests"));
-    const week = await gauge("ollama-cloud", "week").$$(".gauge-models li").map((li) => li.getAttribute("data-model"));
-    expect(week).toEqual(["glm-5.3:cloud", "gpt-oss:120b"]);
-    await expect(gauge("ollama-cloud", "week").$('li[data-model="gpt-oss:120b"]')).toHaveText(expect.stringContaining("9 requests"));
+    // A table per window since the design system (Model, Requests), each row keeping its data-model; read in one trip.
+    const tables = await browser.execute(() => {
+      const rows = (window: string) =>
+        Array.from(document.querySelectorAll(`section[data-page="usage"] [data-section="ollama"] [data-requests-window="${window}"] tbody tr`)).map((tr) => [
+          tr.getAttribute("data-model"),
+          tr.querySelector("td:last-child")?.textContent ?? "",
+        ]);
+      return { session: rows("session"), week: rows("week") };
+    });
+    expect(tables.session).toContainEqual(["glm-5.3:cloud", "12"]);
+    expect(tables.week.map(([model]) => model)).toEqual(["glm-5.3:cloud", "gpt-oss:120b"]);
+    expect(tables.week).toContainEqual(["gpt-oss:120b", "9"]);
   });
 
   it("charts the transcripts and hatches the days before the first one", async () => {
     await browser.waitUntil(async () => (await $$(".legend li")).length === 2, { timeout: 60000, timeoutMsg: "legend never showed both series" });
+    // The legend lists providers only; the models are in the tooltip and the tables (DESIGN.md §5 Usage).
     const legend = await $$(".legend li").map((li) => li.getText());
-    expect(legend).toEqual(["claude-code · claude-opus-5", "pi · glm-5.3:cloud"]);
+    expect(legend).toEqual(["Anthropic", "Ollama"]);
     expect((await $$("rect[data-nodata]")).length).toBe(26);
     await expect($(".chart-note*=No data before")).toBeDisplayed();
   });
 
   it("shows this Mac, with disk space in Finder's GB", async () => {
-    for (const tile of ["cpu", "memory", "disk"]) {
-      await $(`.tile[data-tile="${tile}"]`).waitForExist({ timeout: 30000 });
-      await expect($(`.tile[data-tile="${tile}"]`)).toHaveText(expect.stringContaining("as of"));
-    }
-    await expect($('.tile[data-tile="disk"]')).toHaveText(expect.stringMatching(/\d+(\.\d)? GB[\s\S]*available of \d+ GB · \d+(\.\d)? GB free now/));
+    // Three metric rows under one "as of" caption since the design system.
+    for (const metric of ["cpu", "memory", "disk"]) await $(`section[data-page="usage"] [data-section="host"] [data-metric="${metric}"]`).waitForExist({ timeout: 30000 });
+    await expect($('section[data-page="usage"] [data-section="host"] .ui-caption')).toHaveText(expect.stringContaining("as of"));
+    await expect($('section[data-page="usage"] [data-section="host"] [data-metric="disk"]')).toHaveText(expect.stringMatching(/\d+(\.\d)? GB[\s\S]*available of \d+ GB · \d+(\.\d)? GB free now/));
   });
 });
 
@@ -69,7 +79,7 @@ describe("the Usage page", () => {
 const convexStub = process.env.KINAS_E2E_CONVEX_STUB!;
 const convexKey = process.env.KINAS_E2E_CONVEX_KEY!;
 const convexRequests = async () => ((await (await fetch(`${convexStub}/__convex_count`)).json()) as { requests: number }).requests;
-const convexMetric = (metric: string, window = "month") => $(`.gauge[data-provider="convex"][data-metric="${metric}"][data-window="${window}"]`);
+const convexMetric = (metric: string, window = "month") => $(`.ui-metric-row[data-provider="convex"][data-metric="${metric}"][data-window="${window}"]`);
 
 /**
  * Every month gauge's text and state, read in **one** in-page call.
@@ -88,7 +98,7 @@ const convexMetric = (metric: string, window = "month") => $(`.gauge[data-provid
 const convexMonth = () =>
   browser.execute(() =>
     Object.fromEntries(
-      Array.from(document.querySelectorAll('.gauge[data-provider="convex"][data-window="month"]')).map((el) => [
+      Array.from(document.querySelectorAll('section[data-page="usage"] [data-section="convex-month"] .ui-metric-row[data-provider="convex"]')).map((el) => [
         (el as HTMLElement).dataset.metric,
         { text: el.textContent ?? "", state: (el as HTMLElement).dataset.state ?? "" },
       ]),
@@ -133,8 +143,8 @@ const callValue = <T,>(cmd: string, args: Record<string, unknown>) =>
 
 describe("Convex usage", () => {
   it("offers Add deploy key and makes no request until a deployment is saved", async () => {
-    await $('.gauge-empty[data-provider="convex"]').waitForExist({ timeout: 60000 });
-    await expect($('.gauge-empty[data-provider="convex"] .button')).toHaveText("Add deploy key");
+    await $('.usage-empty[data-provider="convex"]').waitForExist({ timeout: 60000 });
+    await expect($('.usage-empty[data-provider="convex"] .ui-button')).toHaveText("Add deploy key");
 
     // The tier is stored *here*, not in the next case, and the reason is pacing rather than taste.
     // `set_convex_plan` calls `control.refresh()`, and `poller::MIN_GAP_MS` refuses any request within 60 s of
@@ -178,20 +188,21 @@ describe("Convex usage", () => {
     // The window names itself as the *calendar* month, not the billing period: Convex bills on a
     // signup-anchored period (e.g. 16 Sep – 16 Oct) and this API reports calendar months only, so the
     // percentage is an upper bound and must not read as "of this billing period" (R4, R6, amended).
-    expect(month.functionCalls?.text).toContain("calendar month to date (UTC)");
+    // Said once, as the rows' title, since the design system.
+    await expect($('section[data-page="usage"] [data-section="convex-month"] .ui-rows-title')).toHaveText("Calendar month to date (UTC)");
 
     // R11: one request per poll window, not one per render.
     expect(await convexRequests()).toBe(1);
   });
 
   it("lists today's figures, the metrics with no allowance, and what this API cannot report", async () => {
-    const detail = $('[data-section="convex-detail"]');
+    const detail = $('section[data-page="usage"] [data-section="convex-detail"]');
     await detail.waitForExist({ timeout: 30000 });
-    await expect(detail).toHaveText(expect.stringContaining("today (UTC)"));
+    await expect(detail).toHaveText(expect.stringContaining("Today (UTC)"));
     await expect(detail).toHaveText(expect.stringContaining("12,000 calls"));
     // R8: a cost has no denominator, so it is a figure and never a gauge.
     await expect(detail).toHaveText(expect.stringContaining("$4.20"));
-    expect(await $$('.gauge[data-provider="convex"][data-metric="aiGatewayCostDollars"]')).toHaveLength(0);
+    expect(await $$('[data-provider="convex"][data-metric="aiGatewayCostDollars"] .ui-bar')).toHaveLength(0);
     // The reason the month percentage is an upper bound is on screen, not buried in a comment.
     await expect($('[data-testid="convex-billing-window"]')).toHaveText(expect.stringContaining("upper bound"));
     // R15: said plainly, once, instead of placeholder gauges.
@@ -228,8 +239,8 @@ describe("Convex usage", () => {
     // as a driver fault.
     const after = await browser.execute(() => ({
       errorLine: document.querySelector('[data-testid="convex-error"]')?.textContent ?? "",
-      functionCalls: document.querySelector('.gauge[data-provider="convex"][data-metric="functionCalls"][data-window="month"]')?.textContent ?? "",
-      empties: document.querySelectorAll('.gauge-empty[data-provider="convex"]').length,
+      functionCalls: document.querySelector('.ui-metric-row[data-provider="convex"][data-metric="functionCalls"][data-window="month"]')?.textContent ?? "",
+      empties: document.querySelectorAll('.usage-empty[data-provider="convex"]').length,
     }));
     expect(after.errorLine).toContain("deploy key rejected");
     // R12: the stored numbers stand, and the gauges are still gauges rather than an empty state.
@@ -265,18 +276,19 @@ describe("Hostinger VPS", () => {
     expect(choices[1]!.state).toBe("stopped");
 
     expect(await call("set_hostinger_vm", { vmId: 17923, label: "srv17923.hstgr.cloud · KVM 4" })).toBeFalsy();
-    await $('[data-section="hostinger-tile"] .tile[data-metric="ram"]').waitForExist({ timeout: 90000 });
+    await $('section[data-page="usage"] [data-section="hostinger"] .ui-metric-row[data-metric="ram"]').waitForExist({ timeout: 90000 });
 
     // One in-page read for every assertion below, for the reason given on `convexMonth`.
     const vps = await browser.execute(() => {
-      const tile = (metric: string) => document.querySelector(`.tile[data-metric="${metric}"]`)?.textContent ?? "";
+      const tile = (metric: string) => document.querySelector(`section[data-page="usage"] [data-section="hostinger"] [data-metric="${metric}"]`)?.textContent ?? "";
       return {
         cpu: tile("cpu"),
         ram: tile("ram"),
         disk: tile("disk"),
         uptime: tile("uptime"),
-        bandwidth: document.querySelector('.gauge[data-provider="hostinger"][data-metric="bandwidth"]')?.textContent ?? "",
-        bars: document.querySelectorAll('.gauge[data-provider="hostinger"] .gauge-fill').length,
+        machine: document.querySelector('section[data-page="usage"] [data-section="hostinger"] .ui-card-title')?.textContent ?? "",
+        bandwidth: document.querySelector('[data-provider="hostinger"][data-metric="bandwidth"]')?.textContent ?? "",
+        bars: document.querySelectorAll('section[data-page="usage"] [data-section="hostinger"] .ui-bar').length,
         caveat: document.querySelector('[data-testid="hostinger-billing-window"]')?.textContent ?? "",
       };
     });
@@ -289,8 +301,8 @@ describe("Hostinger VPS", () => {
     expect(vps.disk).toContain("of 50.0 GiB");
     expect(vps.cpu).toContain("13%");
     expect(vps.uptime).toContain("14 d 0 h");
-    // The tile names its machine, including a power state, from the row's own detail — no second lookup.
-    expect(vps.ram).toContain("srv17923.hstgr.cloud · KVM 4 · running");
+    // The card names its machine, including a power state, from the rows' own detail — no second lookup.
+    expect(vps.machine).toContain("srv17923.hstgr.cloud · KVM 4 · running");
 
     // R10: the month's traffic is a **figure**, not a bar, until the delta-versus-counter question is settled.
     // Both directions summed is 4 TiB of the fixture's traffic; the absent bar is the point of the assertion.

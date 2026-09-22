@@ -42,9 +42,9 @@ export function SectionHeader({
 }
 
 /** A page section: --space-6 above, the header, then its content. */
-export function Section({ children, ...rest }: { children: ReactNode } & HTMLAttributes<HTMLElement>) {
+export function Section({ children, className, ...rest }: { children: ReactNode } & HTMLAttributes<HTMLElement>) {
   return (
-    <section className="ui-section" {...rest}>
+    <section className={className ? `ui-section ${className}` : "ui-section"} {...rest}>
       {children}
     </section>
   );

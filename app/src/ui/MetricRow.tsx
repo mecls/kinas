@@ -2,8 +2,9 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { Bar, type Tone } from "./Bar.tsx";
 import "./MetricRow.css";
 
-// DESIGN.md §4 Metric row. `used` drives the inline bar (null: no bar); `value` and `unit` are what is read on the
-// right ("1.9", "of 5 GB"); `upperBound` is the 312 % case — the bar full in --danger and "upper bound" as the unit.
+// DESIGN.md §4 Metric row. `used` drives the inline bar — null draws none, because a figure with no allowance has no
+// denominator and an empty bar would read as "none used"; `value` and `unit` are what is read on the right ("1.9",
+// "of 5 GB"); `upperBound` is the 312 % case — the bar full in --danger and "upper bound" as the unit.
 
 export function MetricRow({
   label,
@@ -17,7 +18,7 @@ export function MetricRow({
   return (
     <div className="ui-metric-row" {...rest}>
       <span className="ui-metric-label">{label}</span>
-      <Bar pct={upperBound ? 100 : used} tone={upperBound ? "danger" : tone} inline />
+      {used === null && !upperBound ? <span className="ui-metric-nobar" /> : <Bar pct={upperBound ? 100 : used} tone={upperBound ? "danger" : tone} inline />}
       <span className="ui-metric-value">
         <span className="ui-num">{value}</span> <span className="ui-unit">{upperBound ? "% upper bound" : unit}</span>
       </span>

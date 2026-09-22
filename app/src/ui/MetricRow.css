@@ -1,11 +1,21 @@
 /* Metric row (DESIGN.md §4; preview 174–179): a label on the left, an inline bar, the value on the right in mono with
    its unit in --ink-2. Rows stack inside a card: nine Convex metrics are nine rows, not nine tiles. A value past its
    limit fills the bar with --danger and says "upper bound" in the unit slot. */
+/* The rows of one card share their columns (subgrid), so the bars line up whatever each value says. */
 .ui-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px minmax(150px, max-content);
+  column-gap: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 0 var(--space-4);
+}
+.ui-rows > * {
+  grid-column: 1 / -1;
+}
+.ui-rows > .ui-metric-row {
+  grid-template-columns: subgrid;
 }
 .ui-rows-title {
   margin: 0;
@@ -17,7 +27,7 @@
 }
 .ui-metric-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px 150px;
+  grid-template-columns: minmax(0, 1fr) 96px minmax(150px, max-content);
   gap: var(--space-4);
   align-items: center;
   height: var(--row-h);

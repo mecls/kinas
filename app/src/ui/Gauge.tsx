@@ -4,7 +4,8 @@ import "./Gauge.css";
 
 // DESIGN.md §4 Gauge. The bar is the status — there is no dot in the corner. `used` is the percentage; `unit` the
 // words after the number ("% used", "% of 100 GB"); `detail` the one line below ("resets in 3 h 43 m, 13:30" /
-// "09:31, stale" / "last seen yesterday 22:10"). `dead` shows "No reading" and no number.
+// "09:31, stale" / "last seen yesterday 22:10"). `dead` shows "No reading" and no number; a `used` of null shows the
+// `placeholder` (a window past its reset: "—", because the stored number belongs to a window that ended).
 
 export function Gauge({
   title,
@@ -14,6 +15,7 @@ export function Gauge({
   detail,
   dead = false,
   muted = false,
+  placeholder = "No reading",
   ...rest
 }: {
   title: ReactNode;
@@ -23,6 +25,7 @@ export function Gauge({
   detail: ReactNode;
   dead?: boolean;
   muted?: boolean;
+  placeholder?: ReactNode;
 } & HTMLAttributes<HTMLElement>) {
   const shown = dead ? null : used;
   return (
@@ -30,7 +33,7 @@ export function Gauge({
       <div className="ui-gauge-title">{title}</div>
       <div className="ui-gauge-value" data-muted={muted || dead ? "true" : undefined}>
         {shown === null ? (
-          <span className="ui-gauge-none">No reading</span>
+          <span className="ui-gauge-none">{dead ? "No reading" : placeholder}</span>
         ) : (
           <>
             <span className="ui-num">{formatUsed(shown)}</span>

@@ -28,11 +28,17 @@ test("asOf uses the Lisbon clock, with the date when it is not today", () => {
   expect(asOf(null, NOW)).toBe("never read");
 });
 
-test("tone thresholds: crimson at ≤ 10, gold at ≤ 25", () => {
-  expect(tone(10)).toBe("crimson");
-  expect(tone(10.5)).toBe("gold");
-  expect(tone(25)).toBe("gold");
-  expect(tone(26)).toBe("blue");
+test("tone by % used (DESIGN.md §2.2): warn from 80, danger from 95; a stale reading is stale whatever its number", () => {
+  expect(tone(79, "fresh")).toBe("meter");
+  expect(tone(80, "fresh")).toBe("warn");
+  expect(tone(94.9, "fresh")).toBe("warn");
+  expect(tone(95, "fresh")).toBe("danger");
+  expect(tone(312, "fresh")).toBe("danger");
+  expect(tone(97, "stale")).toBe("stale");
+  // No number, no warning: a dead or reset reading draws no fill, and its bar is the neutral meter.
+  expect(tone(97, "dead")).toBe("meter");
+  expect(tone(97, "reset")).toBe("meter");
+  expect(tone(null, "fresh")).toBe("meter");
 });
 
 test("left is floored", () => {

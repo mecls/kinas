@@ -1,6 +1,8 @@
 // Text for the Usage page. Times are Europe/Lisbon (R11); "left" is always floored (build spec invariant 6).
 
 import { leftPct, lisbonClock } from "@kinas/store/quota-line";
+import type { ReadingState } from "../api.ts";
+import { toneOf, type Tone } from "../ui/Bar.tsx";
 
 export { leftPct, lisbonClock };
 
@@ -24,13 +26,13 @@ export function asOf(updatedAt: number | null, now: number): string {
   return updatedAt === null ? "never read" : `as of ${lisbonClock(updatedAt, now)}`;
 }
 
-export type Tone = "blue" | "gold" | "crimson";
-
-/** Bar colour by % left (R38): crimson at ≤ 10, gold at ≤ 25, blue above. */
-export function tone(left: number): Tone {
-  if (left <= 10) return "crimson";
-  if (left <= 25) return "gold";
-  return "blue";
+/**
+ * A bar's tone by % used (DESIGN.md §2.2, replacing R38's % left): `ui/Bar.ts toneOf` is the law, and a reading's
+ * state comes first — stale is stale whatever its number, and a dead or reset one shows no number to warn about.
+ */
+export function tone(used: number | null, state: ReadingState): Tone {
+  if (state === "dead" || state === "reset") return "meter";
+  return toneOf(used, state === "stale");
 }
 
 /**

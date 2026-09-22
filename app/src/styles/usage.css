@@ -1,274 +1,84 @@
-/* The Usage page (R38): instrument panel — monospace labels, big numbers, thin lines, on either ground. Its own
-   colours are variables on .usage with two values, like tokens.css and held to it by the same test. */
+/* The Usage page (DESIGN.md §5 Usage): layout only. The gauges, rows, tables and headers are the components'
+   (app/src/ui/); what is left here is where they sit, and the chart, which is this page's own drawing. Tokens only. */
 
 .usage {
-  --surface-1: var(--surface);
-  --grid: #20242b;
-  --axis: #383d45;
-  --nodata: #262b33;
-  --dot-fresh: #0ca30c;
-  --dot-dead: #4a4f58;
-  --tooltip-bg: #0f1216;
-  --hover-wash: rgba(244, 242, 236, 0.04);
-  /* Categorical slots, dark steps of the dataviz reference palette, validated against --surface-1. */
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  --series-5: #d55181;
-  --series-6: #008300;
-  --series-7: #9085e9;
-  --series-8: #e66767;
-
+  max-width: var(--page-max);
   padding: var(--space-5) var(--space-6) var(--space-7);
-}
-
-/* The light ground (tokens.css). --surface-1 follows --panel by itself, and the fresh dot's green reads on both. The
-   series take the reference palette's light steps, except 3, 4, 5 and 6: their light steps fall under 3:1 on white,
-   and the steps above already clear it, so those four are the same on both grounds. */
-@media screen and (prefers-color-scheme: light) {
-  .usage {
-    --grid: #e4e9ee;
-    --axis: #c0cad4;
-    --nodata: #dde3ea;
-    --dot-dead: #a3adb8;
-    --tooltip-bg: #faf9f5;
-    --hover-wash: rgba(0, 84, 158, 0.06);
-    --series-1: #2a78d6;
-    --series-2: #eb6834;
-    --series-7: #4a3aa7;
-    --series-8: #e34948;
-  }
 }
 
 .usage .ui-titlerow {
   margin-bottom: var(--space-3);
 }
 
-.usage-loading {
-  padding: 12px 0;
+/* One section per provider, each with its single freshness caption; its cards and tables stack with a small gap. */
+.usage-provider > * + *,
+.usage-stack > * + * {
+  margin-top: var(--space-3);
 }
 
-.muted {
-  color: var(--muted);
-  font: 12px/1.5 var(--mono);
+.usage-stack {
+  margin-top: var(--space-3);
 }
 
-/* Gauges */
-
-.gauges {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.gauge,
-.tile,
-.panel {
-  background: var(--surface-1);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.gauge,
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px;
-  min-width: 0;
-}
-
-.gauge-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.gauge-label {
-  color: var(--muted);
-  font: 500 11px/1 var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.gauge-plan {
-  color: var(--muted);
-  font: 11px/1 var(--mono);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 2px 5px;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  margin-left: auto;
-  border-radius: 50%;
-  background: var(--muted);
-  flex: none;
-}
-
-.dot-fresh {
-  background: var(--dot-fresh);
-}
-
-.dot-stale {
-  background: var(--gold);
-}
-
-.dot-dead,
-.dot-reset {
-  background: var(--dot-dead);
-}
-
-.dot-idle {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--muted);
-}
-
-.gauge-number,
-.tile-number {
-  font: 600 40px/1.05 var(--sans);
-  color: var(--white);
-  letter-spacing: -0.02em;
-}
-
-.gauge-unit {
-  margin-left: 6px;
-  font: 500 13px/1 var(--mono);
-  color: var(--muted);
-  letter-spacing: 0;
-}
-
-.gauge-bar {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line);
-  overflow: hidden;
-}
-
-.gauge-fill {
-  height: 100%;
-  border-radius: 2px;
-}
-
-.tone-blue {
-  background: var(--blue);
-}
-
-.tone-gold {
-  background: var(--gold);
-}
-
-.tone-crimson {
-  background: var(--crimson);
-}
-
-.gauge-detail,
-.gauge-asof {
+.usage-note,
+.chart-note {
   margin: 0;
-  color: var(--muted);
-  font: 12px/1.4 var(--mono);
-  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
-.gauge-asof.is-stale {
-  color: var(--gold);
+/* A provider with no readings sits in the hero row as a gauge-shaped card holding its empty state. */
+.usage-empty .ui-empty {
+  margin-top: var(--space-2);
 }
 
-/* Requests per model in the window (Ollama), busiest first: name in primary ink, count muted. */
-.gauge-models {
+/* Today above Month to date: side by side, a model's name and the column heads wrap. */
+.usage-tables {
   display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font: 12px/1.4 var(--mono);
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
-.gauge-models li {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.gauge-model {
-  color: var(--white);
-  overflow-wrap: anywhere;
-}
-
-.gauge-model-count {
-  color: var(--muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.gauge-empty .gauge-number {
-  color: var(--muted);
-}
-
-.button {
-  align-self: flex-start;
-  margin-top: 4px;
-  appearance: none;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--line);
-  color: var(--white);
-  font: 500 12px/1 var(--sans);
-  padding: 7px 10px;
-  cursor: default;
-}
-
-.button:hover {
-  background: var(--button-hover);
-}
-
-/* Chart panel */
-
-.panel {
-  margin-top: 16px;
-  padding: 14px 16px 12px;
-}
+/* The chart: hairline grid, the baseline one step stronger, the days before the first transcript hatched. */
 
 .chart-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px 16px;
+  gap: var(--space-2) var(--space-4);
 }
 
 .chart-title {
   margin: 0;
-  color: var(--label);
-  font: 500 11px/1 var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
 }
 
 .chart-controls {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   margin-left: auto;
-  color: var(--muted);
-  font: 12px/1 var(--mono);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
 .chart-controls label {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.chart-note {
-  margin: 6px 0 0;
+  gap: var(--space-1h);
 }
 
 .chart-wrap {
   position: relative;
-  margin-top: 10px;
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
 }
 
 .chart-svg {
@@ -279,18 +89,19 @@
 }
 
 .chart-grid {
-  stroke: var(--grid);
+  stroke: var(--line);
   stroke-width: 1;
 }
 
 .chart-baseline {
-  stroke: var(--axis);
+  stroke: var(--line-strong);
   stroke-width: 1;
 }
 
 .chart-tick {
-  fill: var(--muted);
-  font: 10px var(--mono);
+  fill: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -299,7 +110,7 @@
 }
 
 .chart-hatch {
-  stroke: var(--nodata);
+  stroke: var(--line);
   stroke-width: 2;
 }
 
@@ -309,106 +120,98 @@
 
 .chart-hit:hover,
 .chart-hit:focus {
-  fill: var(--hover-wash);
+  fill: var(--accent-soft);
+  fill-opacity: 0.5;
   outline: none;
 }
 
+/* The legend lists providers only, each a dot in its category colour. */
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  margin: 10px 0 0;
+  gap: var(--space-1h) var(--space-4);
+  margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
-  color: var(--muted);
-  font: 11px/1.3 var(--mono);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
 .legend li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1h);
 }
 
-.swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
+.swatch,
+.tooltip-key {
   flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: var(--radius-pill);
 }
 
 .tooltip {
   position: absolute;
   z-index: 2;
-  min-width: 180px;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--tooltip-bg);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
   pointer-events: none;
-  font: 11px/1.5 var(--mono);
-  color: var(--muted);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
 }
 
 .tooltip-date {
-  color: var(--white);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
+  color: var(--ink);
 }
 
 .tooltip-row {
   display: grid;
-  grid-template-columns: 10px auto 1fr;
+  grid-template-columns: var(--dot) auto 1fr;
   align-items: center;
-  gap: 6px;
-}
-
-.tooltip-key {
-  width: 10px;
-  height: 2px;
-  border-radius: 1px;
+  gap: var(--space-1h);
 }
 
 .tooltip-value {
-  color: var(--white);
-  font-weight: 600;
-  text-align: right;
+  padding-left: var(--space-3);
+  color: var(--ink);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
-.chart-table {
-  margin-top: 10px;
-  color: var(--muted);
-  font: 11px/1.4 var(--mono);
+/* Shared until slice 6 restyles Settings and the reader on the components: the quiet line and the old button that
+   Settings, its Convex and Hostinger sections and the reader still use. Moved here from the old page, on tokens. */
+.muted {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
-.chart-table summary {
+.button {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--line);
+  color: var(--white);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: 1;
+  padding: var(--space-1h) var(--space-2);
   cursor: default;
 }
 
-.chart-table table {
-  width: 100%;
-  margin-top: 6px;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.chart-table th,
-.chart-table td {
-  padding: 3px 8px 3px 0;
-  border-bottom: 1px solid var(--grid);
-  text-align: left;
-}
-
-.chart-table td.num,
-.chart-table th.num {
-  text-align: right;
-}
-
-/* This Mac */
-
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  margin-top: 16px;
+.button:hover {
+  background: var(--button-hover);
 }

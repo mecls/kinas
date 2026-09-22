@@ -124,6 +124,7 @@ pub fn run() {
             commands::set_reader_editor,
             commands::set_projects_root,
             commands::set_appearance,
+            commands::set_accent,
             commands::set_menu_bar_quota,
             commands::set_global_hotkey,
             commands::set_launch_at_login,

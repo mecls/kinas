@@ -15,6 +15,7 @@ import {
   setShortcuts as saveShortcuts,
   setSidebarVisible,
 } from "./api.ts";
+import { applyAccent } from "./theme.ts";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { WorkPage } from "./pages/Work.tsx";
@@ -138,6 +139,7 @@ export function App() {
         setShortcuts(withDefaults(prefs.shortcuts));
         showSidebar(prefs.sidebar_visible);
         setReaderWidth(prefs.reader_width_pct);
+        applyAccent(prefs.accent);
       },
       () => {},
     );

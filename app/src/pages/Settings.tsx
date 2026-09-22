@@ -3,6 +3,7 @@ import {
   getSettings,
   removeOllamaKey,
   saveOllamaKey,
+  setAccent,
   setAppearance,
   setGlobalHotkey,
   setLaunchAtLogin,
@@ -16,6 +17,7 @@ import {
 import { chordFromEvent } from "../settings/chord.ts";
 import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
+import { AccentField } from "../ui/AccentField.tsx";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 
 // Settings (PRD §3.9, amended 2026-09-15): a page, opened from the gear at the foot of the sidebar or ⌘,. It stays
@@ -256,6 +258,8 @@ export function SettingsPage({
                 </option>
               ))}
             </select>
+            <p className="muted">The accent: the selected nav row, primary buttons and a selected card's edge. A shade that would not read in either ground is not saved.</p>
+            <AccentField value={settings.accent} onChange={(hex) => void act("appearance", () => setAccent(hex))} />
             {note("appearance")}
           </section>
 

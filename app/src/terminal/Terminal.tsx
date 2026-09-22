@@ -6,7 +6,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 import { dispatchAppAction } from "../actions.ts";
 import type { Shortcuts } from "../settings/shortcuts.ts";
-import { onThemeChange } from "../theme.ts";
+import { onThemeChange, resolvedToken } from "../theme.ts";
 import { writeClipboard } from "./clipboard.ts";
 import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
@@ -19,16 +19,16 @@ const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
 const COPIED_TOAST_MS = 1500;
 
 /** The pane's colours come from tokens.css like every other colour in the app: read when the terminal starts, and
- * again whenever the ground turns. xterm repaints what is already on screen, except cells a program painted in 24-bit. */
+ * again whenever the ground turns. xterm repaints what is already on screen, except cells a program painted in 24-bit.
+ * Read as painted (`resolvedToken`), since a token may be an expression xterm cannot parse. */
 function terminalTheme(): ITheme {
-  const css = getComputedStyle(document.documentElement);
-  const token = (name: string) => css.getPropertyValue(`--${name}`).trim();
+  const token = (name: string) => resolvedToken(`--${name}`);
   return {
-    background: token("ground"),
-    foreground: token("white"),
-    cursor: token("white"),
-    cursorAccent: token("ground"),
-    selectionBackground: token("selection"),
+    background: token("term-bg"),
+    foreground: token("term-fg"),
+    cursor: token("term-fg"),
+    cursorAccent: token("term-bg"),
+    selectionBackground: token("term-selection"),
     black: token("ansi-black"),
     red: token("ansi-red"),
     green: token("ansi-green"),
@@ -66,8 +66,9 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
     const xterm = new XTerm({
       macOptionIsMeta: false,
       scrollback: 10000,
-      fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
-      fontSize: 13,
+      // The pane's type is the app's mono face at the body size, from the tokens (DESIGN.md §2.5).
+      fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim(),
+      fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue("--fs-md"), 10),
       cursorBlink: true,
       theme: terminalTheme(),
     });

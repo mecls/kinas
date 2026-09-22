@@ -374,7 +374,7 @@
    whole row leaves over showed as a black strip at the foot of the pane: faint on the dark ground, a bar on the
    light one. One class more specific than xterm's own rule, which loads after this sheet. */
 .terminal-host .xterm .xterm-viewport {
-  background-color: var(--ground);
+  background-color: var(--term-bg);
 }
 
 .terminal-notice {

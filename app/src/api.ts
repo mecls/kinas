@@ -137,6 +137,8 @@ export interface SettingsView {
   org_name: string;
   /** Which ground the window draws on: "system" follows macOS. */
   appearance: "system" | "light" | "dark";
+  /** The accent as "#rrggbb", or null for the brand's own (DESIGN.md §2.1). */
+  accent: string | null;
   /** "subscription/window", e.g. "claude-plan/session". */
   menu_bar_quota: string;
   /** Tauri accelerator syntax, e.g. "Cmd+Shift+Space". */
@@ -175,6 +177,8 @@ export const setReaderEditor = (value: string) => invoke<void>("set_reader_edito
 export const setProjectsRoot = (path: string) => invoke<string>("set_projects_root", { path });
 /** The app applies it to the window itself, title bar included; the page follows through prefers-color-scheme. */
 export const setAppearance = (value: string) => invoke<void>("set_appearance", { value });
+/** "#rrggbb" lower-case, refused otherwise; null removes the choice. The page sets --brand-accent itself. */
+export const setAccent = (value: string | null) => invoke<void>("set_accent", { value });
 export const setMenuBarQuota = (value: string) => invoke<void>("set_menu_bar_quota", { value });
 /** Rejected by the app unless the chord includes ⌘ (R30). */
 export const setGlobalHotkey = (chord: string) => invoke<void>("set_global_hotkey", { chord });
@@ -222,6 +226,8 @@ export interface UiPrefs {
    * width saved before the move still applies.
    */
   reader_width_pct: number;
+  /** The accent as "#rrggbb", or null for the brand's own; applied at boot. */
+  accent: string | null;
 }
 
 export const getUiPrefs = () => invoke<UiPrefs>("get_ui_prefs");

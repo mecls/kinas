@@ -46,6 +46,8 @@ pub struct SettingsView {
     pub org_name: String,
     /// `system`, `light` or `dark`: which ground the window draws on.
     pub appearance: String,
+    /// The accent chosen in Settings as `#rrggbb`, or `None` for the brand's own (DESIGN.md §2.1).
+    pub accent: Option<String>,
     pub menu_bar_quota: String,
     pub global_hotkey: String,
     pub launch_at_login: bool,
@@ -87,6 +89,7 @@ pub fn get_settings(
     let (
         org_name,
         appearance,
+        accent,
         menu_bar_quota,
         global_hotkey,
         launch_at_login,
@@ -104,6 +107,7 @@ pub fn get_settings(
         (
             name,
             system::stored_appearance(system::get_setting(&conn, org, "appearance")).0.to_string(),
+            system::stored_accent(system::get_setting(&conn, org, "accent")),
             text("menu_bar_quota", "claude-plan/session"),
             text("global_hotkey", system::DEFAULT_HOTKEY),
             system::get_setting(&conn, org, "launch_at_login").and_then(|v| v.as_bool()).unwrap_or(true),
@@ -118,6 +122,7 @@ pub fn get_settings(
     Ok(SettingsView {
         org_name,
         appearance,
+        accent,
         menu_bar_quota,
         global_hotkey,
         launch_at_login,
@@ -183,6 +188,24 @@ pub fn set_reader_editor(store: State<'_, Store>, value: String) -> Result<(), S
     system::put_setting(&store.conn(), store.org_id(), "reader_editor", &serde_json::json!(value)).map_err(|e| e.to_string())
 }
 
+/// Settings → Appearance's accent. Stored as `#rrggbb`, or the row removed for the brand's own; the page reads it
+/// back through `get_settings` and sets `--brand-accent` itself — no capability, no message, no window call.
+#[tauri::command]
+pub fn set_accent(store: State<'_, Store>, value: Option<String>) -> Result<(), String> {
+    let conn = store.conn();
+    let org = store.org_id();
+    match value {
+        Some(hex) => {
+            let hex = system::parse_accent(&hex)?;
+            system::put_setting(&conn, org, "accent", &serde_json::json!(hex)).map_err(|e| e.to_string())
+        }
+        None => conn
+            .execute("DELETE FROM settings WHERE org_id = ?1 AND key = 'accent'", [org])
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
+    }
+}
+
 /// Settings → Appearance. Stored first, then applied to the window: the title bar and the webview's
 /// `prefers-color-scheme` follow from that one call, so the page needs no capability and no message.
 #[tauri::command]
@@ -229,6 +252,8 @@ pub struct UiPrefs {
     /// 2026-09-15). That row was the Work page; since 2026-09-18 the reader is the panel on the right of the whole
     /// window and the row is the stage. The key kept its name so a width saved before the move still applies.
     pub reader_width_pct: f64,
+    /// The accent chosen in Settings, or `None` for the brand's own; applied by the page at boot (DESIGN.md §2.1).
+    pub accent: Option<String>,
 }
 
 /// 45 since the sidebar grew to 220 px (2026-09-18); 55 beside the old 72 px rail. Must equal DEFAULT_PANEL_PCT in
@@ -251,6 +276,7 @@ pub fn get_ui_prefs(store: State<'_, Store>) -> UiPrefs {
         shortcuts: system::get_setting(&conn, org, "shortcuts").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default(),
         sidebar_visible: system::get_setting(&conn, org, "sidebar_visible").and_then(|v| v.as_bool()).unwrap_or(true),
         reader_width_pct: reader_width(system::get_setting(&conn, org, "reader_width_pct")),
+        accent: system::stored_accent(system::get_setting(&conn, org, "accent")),
     }
 }
 

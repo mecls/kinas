@@ -26,14 +26,18 @@ describe("the print palette", () => {
   });
 
   test("the page is white and the text is dark", () => {
+    expect(palette.get("--bg")).toBe("#ffffff");
     expect(palette.get("--ground")).toBe("#ffffff");
+    expect(contrastOnWhite(palette.get("--ink") ?? "#ffffff")).toBeGreaterThan(12);
     expect(contrastOnWhite(palette.get("--white") ?? "#ffffff")).toBeGreaterThan(12);
   });
 
   test("every colour that draws text reaches 4.5:1 on white", () => {
-    // Text colours: the body, the muted labels, the status gold, and every ANSI step the highlighter maps onto.
-    const textTokens = [...palette.keys()].filter((name) => name === "--white" || name === "--muted" || name === "--gold" || name.startsWith("--ansi-"));
-    expect(textTokens.length).toBeGreaterThanOrEqual(11);
+    // Text colours: the body, the muted labels, the status colours, and every ANSI step the highlighter maps onto —
+    // under DESIGN.md's names and, until every sheet is rewritten (2026-09-22), the old ones too.
+    const TEXT = new Set(["--ink", "--ink-2", "--accent", "--warn", "--danger", "--ok", "--white", "--muted", "--gold"]);
+    const textTokens = [...palette.keys()].filter((name) => TEXT.has(name) || name.startsWith("--ansi-"));
+    expect(textTokens.length).toBeGreaterThanOrEqual(17);
     for (const name of textTokens) {
       const ratio = contrastOnWhite(palette.get(name)!);
       expect(`${name} ${ratio.toFixed(2)} ${ratio >= 4.5 ? "ok" : "TOO PALE"}`).toBe(`${name} ${ratio.toFixed(2)} ok`);

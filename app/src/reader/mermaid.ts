@@ -2,6 +2,8 @@
 // bundle, and each diagram is drawn once per source for as long as the ground stays. `securityLevel: "strict"` sanitizes labels and
 // turns off click handlers, because a diagram in a file an agent wrote is untrusted input.
 
+import { resolvedToken } from "../theme.ts";
+
 type Mermaid = (typeof import("mermaid"))["default"];
 
 const CACHE_LIMIT = 200;
@@ -14,24 +16,25 @@ let ground = 0;
 
 const token = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-/** Mermaid bakes colours into each SVG, so they are read from the tokens as they stand now. */
+/** Mermaid bakes colours into each SVG, so they are read from the tokens as they stand now — as painted
+ * (`resolvedToken`), since the accent is a `color-mix()` in the dark theme and khroma cannot parse one. */
 function initialize(mermaid: Mermaid): Mermaid {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "strict",
     theme: "base",
     themeVariables: {
-      background: token("--panel"),
-      primaryColor: token("--panel"),
-      primaryBorderColor: token("--blue"),
-      primaryTextColor: token("--white"),
-      secondaryColor: token("--ground"),
-      tertiaryColor: token("--ground"),
-      textColor: token("--white"),
-      // --line is invisible on --ground at a line's thickness, so lines use --muted.
-      lineColor: token("--muted"),
-      fontFamily: token("--sans"),
-      fontSize: "14px",
+      background: resolvedToken("--surface"),
+      primaryColor: resolvedToken("--surface"),
+      primaryBorderColor: resolvedToken("--accent"),
+      primaryTextColor: resolvedToken("--ink"),
+      secondaryColor: resolvedToken("--bg"),
+      tertiaryColor: resolvedToken("--bg"),
+      textColor: resolvedToken("--ink"),
+      // --line is invisible on --bg at a line's thickness, so lines use --ink-2.
+      lineColor: resolvedToken("--ink-2"),
+      fontFamily: token("--font-ui"),
+      fontSize: token("--fs-md"),
     },
   });
   return mermaid;

@@ -67,6 +67,24 @@ pub fn apply_appearance(window: &tauri::WebviewWindow, theme: Option<tauri::Them
     }
 }
 
+/// Settings → Appearance's accent (DESIGN.md §2.1, §8): the brand colour a customer may override. Six lower-case
+/// hex digits after `#`, or `None` for the brand's own — the webview sets it as one custom property on the page,
+/// and the field there refuses a shade that would not read (4.5:1 in either theme) before it reaches here.
+pub fn parse_accent(value: &str) -> Result<String, String> {
+    let bytes = value.as_bytes();
+    if bytes.len() == 7 && bytes[0] == b'#' && bytes[1..].iter().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(b)) {
+        Ok(value.to_string())
+    } else {
+        Err("accent must be #rrggbb".to_string())
+    }
+}
+
+/// The stored accent, or `None` for anything a hand or an older build may have written: the brand's own is the
+/// answer that cannot be wrong.
+pub fn stored_accent(value: Option<serde_json::Value>) -> Option<String> {
+    value.as_ref().and_then(|v| v.as_str()).and_then(|s| parse_accent(s).ok())
+}
+
 /// R30: the global hotkey must include ⌘, because ⌘ chords never produce terminal input.
 pub fn has_command_modifier(chord: &str) -> bool {
     chord
@@ -226,6 +244,25 @@ mod tests {
         }
         // Never seeded (store.rs DEFAULT_SETTINGS): a launch with no row is a launch that follows macOS.
         assert_eq!(stored_appearance(None), ("system", None));
+    }
+
+    #[test]
+    fn an_accent_is_six_lower_case_hex_digits_and_nothing_else() {
+        assert_eq!(parse_accent("#00549e"), Ok("#00549e".to_string()));
+        assert_eq!(parse_accent("#a8527a"), Ok("#a8527a".to_string()));
+        // Refused, not coerced: upper case, a missing hash, a word, a trailing character, a short form.
+        for bad in ["#00549E", "00549e", "blue", "#00549e;", "#abc", "", "#00549e "] {
+            assert_eq!(parse_accent(bad), Err("accent must be #rrggbb".to_string()), "{bad:?} was accepted");
+        }
+    }
+
+    #[test]
+    fn a_stored_accent_that_does_not_parse_is_the_brand_default() {
+        assert_eq!(stored_accent(Some(serde_json::json!("#1f6b4a"))), Some("#1f6b4a".to_string()));
+        for odd in [serde_json::json!("sepia"), serde_json::json!("#1F6B4A"), serde_json::json!(1), serde_json::Value::Null] {
+            assert_eq!(stored_accent(Some(odd)), None);
+        }
+        assert_eq!(stored_accent(None), None);
     }
 
     #[test]

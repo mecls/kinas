@@ -1,100 +1,223 @@
-/* Sintra Labs palette (reference design §3.4) inside the instrument-panel character: monospace labels, big numbers,
-   thin lines. Colours are defined once, here, under one set of names with two values: the dark ground below, and
-   after it the flag's two fields the other way round — warm white, with royal blue for structure. Which one draws
-   is the window's appearance (Settings → Appearance; Rust sets it, so the title bar agrees). tokens.test.ts holds
-   the two sets to the same names and the light one to 4.5:1. */
+/* Every colour, size and space in Kinas, once. The specification is DESIGN.md (v1.2, 2026-09-22) and the origin is
+   design/preview.html: the brand layer a customer may override, the semantic layer everything is drawn with, the
+   type scale as --fs-<step> and --lh-<step> pairs, the 4 px spacing grid with its two sub-grid steps, radius, layout and geometry.
+   Light is the default; dark comes from the window's appearance (Settings → Appearance sets it in Rust, so the title
+   bar agrees) through the one media query below — no attribute on the page carries the choice. Exactly one top-level
+   :root and one dark block: styles/testing/palette.ts reads the first of each, and tokens.test.ts holds every text
+   pair to DESIGN.md §2.4 in both themes. Components use these names only; guard.test.ts refuses a raw value anywhere
+   else (print.css, the paper palette, is the exception). */
+
+@font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url("../assets/fonts/Inter-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 500; font-style: normal; font-display: block; src: url("../assets/fonts/Inter-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url("../assets/fonts/Inter-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal; font-display: block; src: url("../assets/fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-style: normal; font-display: block; src: url("../assets/fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Bricolage Grotesque"; font-weight: 600; font-style: normal; font-display: block; src: url("../assets/fonts/BricolageGrotesque-SemiBold.woff2") format("woff2"); }
+
 :root {
-  --blue: #00549e;
-  --white: #f4f2ec;
-  --crimson: #c4262e;
-  --gold: #dfae3c;
+  /* ===== Brand layer — the only overridable layer (DESIGN.md §2.1, §8). The accent is replaced at runtime by
+     Settings → Appearance through style.setProperty("--brand-accent"); nothing else is. ===== */
+  --brand-accent: #00549e;
+  --brand-font-ui: "Inter";
+  --brand-font-mono: "JetBrains Mono";
+  --brand-font-display: "Bricolage Grotesque";
 
-  --ground: #0b0d10;
-  --panel: #12151a;
-  --line: #232830;
-  --muted: #8a8f98;
+  /* ===== Semantic layer, light (§2.2) ===== */
+  --bg: #f4f2ec;
+  --surface: #ffffff;
+  --surface-2: #edeae2;
+  --line: #e3dfd5;
+  --line-strong: #cfc9bc;
 
-  /* The terminal pane draws on --ground in --white. Its 16 ANSI colours are steps of the palette light enough to
-     read on --ground, so Herdr (theme "terminal") and every program in the pane use the app's colours. Four slots
-     are tokens by another name — black is --line, bright black is --muted, yellow is --gold, bright white is
-     --white — and the kinas CLI leans on that: it paints its secondary text and its gold in those slots. */
-  --ansi-black: #232830;
-  --ansi-red: #e0444b;
-  --ansi-green: #4fb286;
-  --ansi-yellow: #dfae3c;
-  --ansi-blue: #3d8fd9;
-  --ansi-magenta: #c27ab8;
-  --ansi-cyan: #4ab3c2;
-  --ansi-white: #c9c6bf;
-  --ansi-bright-black: #8a8f98;
-  --ansi-bright-red: #f06a70;
-  --ansi-bright-green: #7fd3a8;
-  --ansi-bright-yellow: #f0c96a;
-  --ansi-bright-blue: #72b0ea;
-  --ansi-bright-magenta: #dca2d4;
-  --ansi-bright-cyan: #7fd0db;
-  --ansi-bright-white: #f4f2ec;
-  --selection: #18406b;
+  --ink: #1b1f27;
+  --ink-2: #5b6170;
+  --ink-3: #8a8f9b;
 
-  /* Roles, so a second ground can give them a different colour. Here each is what its rule has always used. */
-  --heading: var(--white);
-  --label: var(--muted);
-  --active-bg: var(--line);
-  --active-fg: var(--white);
-  --button-hover: #2c323b;
-  --shadow-strong: rgba(0, 0, 0, 0.45);
-  --shadow-soft: rgba(0, 0, 0, 0.35);
-  --scrim: rgba(5, 6, 8, 0.55);
+  --accent: var(--brand-accent);
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in oklab, var(--accent) 11%, var(--surface));
 
-  --mono: "SF Mono", ui-monospace, Menlo, monospace;
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --meter: #5b6170;
+  --meter-track: #e9e5dc;
 
-  color-scheme: dark;
+  --ok: #2e8b57;
+  --warn: #b87a12;
+  --danger: #c4262e;
+  --stale: #7c818d;
+
+  --cat-1: #3e7c8a;
+  --cat-2: #7a62b0;
+  --cat-3: #8a6a4e;
+  --cat-4: #6b6f2a;
+  --cat-5: #a8527a;
+  --cat-6: #4e5f8c;
+
+  --shadow-float: 0 8px 24px rgb(20 23 30 / 0.12), 0 1px 3px rgb(20 23 30 / 0.08);
+  --scrim: rgb(10 20 32 / 0.3);
+
+  /* The terminal's own palette, never used outside the pane (§2.2; since 1.2 it follows the theme). The sixteen ANSI
+     colours are steps light enough — here, dark enough — to read on --term-bg at 4.5:1; black is the hairline,
+     bright black the secondary ink, bright white the pane's ink, and the kinas CLI leans on those three slots. */
+  --term-bg: #f4f2ec;
+  --term-fg: #0a1420;
+  --term-selection: #ccddec;
+  --ansi-black: #e3dfd5;
+  --ansi-red: #a61b23;
+  --ansi-green: #1f6b47;
+  --ansi-yellow: #855c00;
+  --ansi-blue: #1d5f9e;
+  --ansi-magenta: #8a2a80;
+  --ansi-cyan: #0f6674;
+  --ansi-white: #3a4553;
+  --ansi-bright-black: #5b6170;
+  --ansi-bright-red: #c4262e;
+  --ansi-bright-green: #1d7a4f;
+  --ansi-bright-yellow: #6f4e00;
+  --ansi-bright-blue: #00549e;
+  --ansi-bright-magenta: #7b2f73;
+  --ansi-bright-cyan: #0b5561;
+  --ansi-bright-white: #0a1420;
+
+  /* ===== Type (§2.5) ===== */
+  --font-ui: var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: var(--brand-font-mono), "SF Mono", ui-monospace, Menlo, monospace;
+  --font-display: var(--brand-font-display), var(--font-ui);
+
+  --fs-xs: 11px; --lh-xs: 16px;
+  --fs-sm: 12px; --lh-sm: 18px;
+  --fs-md: 13px; --lh-md: 20px;
+  --fs-lg: 15px; --lh-lg: 22px;
+  --fs-xl: 20px; --lh-xl: 28px;
+  --fs-num: 28px; --lh-num: 32px;
+
+  --m-fs-sm: 13px; --m-lh-sm: 18px;
+  --m-fs-body: 15px; --m-lh-body: 22px;
+  --m-fs-title: 20px; --m-lh-title: 26px;
+  --m-fs-large: 28px; --m-lh-large: 34px;
+
+  /* ===== Space, radius, layout, geometry, motion (§2.6, §2.7) ===== */
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-1h: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --sidebar-w: 220px;
+  --panel-w: 360px;
+  --panel-w-min: 320px;
+  --pane-min: 280px;
+  --chrome-h: 32px;
+  --strip-h: 96px;
+  --page-max: 1120px;
+  --row-h: 36px;
+  --row-h-progress: 56px;
+  --hit: 28px;
+  --hit-touch: 44px;
+  --tabbar-h: 49px;
+
+  --focus-w: 2px;
+  --icon: 16px;
+  --icon-sm: 14px;
+  --dot: 7px;
+  --dot-ring: 1.75px;
+  --chip: 10px;
+  --bar-h: 4px;
+  --bar-h-inline: 2px;
+
+  --dur-fast: 150ms;
+  --dur-slow: 200ms;
+
+  color-scheme: light;
+
+  /* ===== The old names, for the sheets not yet rewritten. Each slice of the design-system build deletes the ones
+     its sheet no longer needs; slice 6 deletes the block and tokens.test.ts asserts it is gone. Never add to it. ===== */
+  --ground: var(--bg);
+  --panel: var(--surface);
+  --white: var(--ink);
+  --muted: var(--ink-2);
+  --blue: var(--accent);
+  --crimson: var(--danger);
+  --gold: var(--warn);
+  --heading: var(--ink);
+  --label: var(--ink-2);
+  --active-bg: var(--accent-soft);
+  --active-fg: var(--ink);
+  --button-hover: var(--surface-2);
+  --selection: var(--term-selection);
+  --shadow-strong: rgb(10 20 32 / 0.18);
+  --shadow-soft: rgb(10 20 32 / 0.12);
+  --sans: var(--font-ui);
+  --mono: var(--font-mono);
 }
 
-/* The light ground. `screen and`, so a print from either scheme is exactly what print.css says. --blue and --crimson
-   are absent because they read on both grounds. --white stays the name of the primary text colour, as it does in
-   print.css: here it is the logo's navy. */
-@media screen and (prefers-color-scheme: light) {
+/* ===== Dark (§2.3): the same names, swapped values; screen only, so a print is what print.css says from either. ===== */
+@media screen and (prefers-color-scheme: dark) {
   :root {
-    --white: #0a1420;
-    --gold: #855c00;
+    --bg: #14171e;
+    --surface: #1b1f27;
+    --surface-2: #232833;
+    --line: #2b3140;
+    --line-strong: #3a4152;
 
-    --ground: #f4f2ec;
-    --panel: #ffffff;
-    --line: #c3d2dc;
-    --muted: #566273;
+    --ink: #edeef2;
+    --ink-2: #a1a7b4;
+    --ink-3: #6e7482;
 
-    /* Dark enough to read on --ground. Black and white swap roles with the ground, as they do above: black is a
-       surface and white is ink, so a program that prints "white" text is still read. */
-    --ansi-black: #c3d2dc;
-    --ansi-red: #a61b23;
-    --ansi-green: #1f6b47;
-    --ansi-yellow: #855c00;
-    --ansi-blue: #1d5f9e;
-    --ansi-magenta: #8a2a80;
-    --ansi-cyan: #0f6674;
-    --ansi-white: #3a4553;
-    --ansi-bright-black: #566273;
-    --ansi-bright-red: #c4262e;
-    --ansi-bright-green: #1d7a4f;
-    --ansi-bright-yellow: #6f4e00;
-    --ansi-bright-blue: #00549e;
-    --ansi-bright-magenta: #7b2f73;
-    --ansi-bright-cyan: #0b5561;
-    --ansi-bright-white: #0a1420;
-    --selection: #ccddec;
+    --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+    --accent-ink: #0e1420;
+    --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
 
-    --heading: var(--blue);
-    --label: var(--blue);
-    --active-bg: #e0eaf3;
-    --active-fg: var(--blue);
-    --button-hover: #b3c6d3;
-    --shadow-strong: rgba(10, 20, 32, 0.18);
-    --shadow-soft: rgba(10, 20, 32, 0.12);
-    --scrim: rgba(10, 20, 32, 0.3);
+    --meter: #a1a7b4;
+    --meter-track: #2b3140;
 
-    color-scheme: light;
+    --ok: #4fb37a;
+    --warn: #d9a03a;
+    --danger: #e5575e;
+    --stale: #7c818d;
+
+    --cat-1: #5fa3b2;
+    --cat-2: #9d88d6;
+    --cat-3: #b08e70;
+    --cat-4: #a3a85a;
+    --cat-5: #cf7aa0;
+    --cat-6: #7688b8;
+
+    --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --scrim: rgb(5 6 8 / 0.55);
+
+    --term-bg: #10192b;
+    --term-fg: #e7eef7;
+    --term-selection: #18406b;
+    --ansi-black: #2b3140;
+    --ansi-red: #e5575e;
+    --ansi-green: #4fb286;
+    --ansi-yellow: #dfae3c;
+    --ansi-blue: #3d8fd9;
+    --ansi-magenta: #c27ab8;
+    --ansi-cyan: #4ab3c2;
+    --ansi-white: #c9c6bf;
+    --ansi-bright-black: #a1a7b4;
+    --ansi-bright-red: #f06a70;
+    --ansi-bright-green: #7fd3a8;
+    --ansi-bright-yellow: #f0c96a;
+    --ansi-bright-blue: #72b0ea;
+    --ansi-bright-magenta: #dca2d4;
+    --ansi-bright-cyan: #7fd0db;
+    --ansi-bright-white: #e7eef7;
+
+    --shadow-strong: rgb(0 0 0 / 0.45);
+    --shadow-soft: rgb(0 0 0 / 0.35);
+
+    color-scheme: dark;
   }
 }
 
@@ -103,11 +226,19 @@ body,
 #root {
   height: 100%;
   margin: 0;
-  background: var(--ground);
-  color: var(--white);
-  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
 }
 
 [hidden] {

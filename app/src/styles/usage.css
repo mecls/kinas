@@ -2,7 +2,7 @@
    colours are variables on .usage with two values, like tokens.css and held to it by the same test. */
 
 .usage {
-  --surface-1: var(--panel);
+  --surface-1: var(--surface);
   --grid: #20242b;
   --axis: #383d45;
   --nodata: #262b33;

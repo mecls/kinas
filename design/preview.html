@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kinas design system v1.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600&display=swap" rel="stylesheet">
+<style>
+/* ===== Brand layer (overridable) ===== */
+:root{
+  --brand-accent:#00549E;
+  --brand-font-ui:"Inter";
+  --brand-font-mono:"JetBrains Mono";
+  --brand-font-display:"Clash Display";
+}
+/* ===== Semantic layer, light ===== */
+:root{
+  --bg:#F4F2EC; --surface:#FFFFFF; --surface-2:#EDEAE2; --line:#E3DFD5; --line-strong:#CFC9BC;
+  --ink:#1B1F27; --ink-2:#5B6170; --ink-3:#8A8F9B;
+  --accent:var(--brand-accent); --accent-ink:#FFFFFF;
+  --accent-soft:color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --meter:#5B6170; --meter-track:#E9E5DC;
+  --ok:#2E8B57; --warn:#B87A12; --danger:#C4262E; --stale:#7C818D;
+  --cat-1:#3E7C8A; --cat-2:#7A62B0; --cat-3:#8A6A4E; --cat-4:#6B6F2A; --cat-5:#A8527A; --cat-6:#4E5F8C;
+  --term-bg:#10192B; --term-fg:#E7EEF7;
+  --shadow-float:0 8px 24px rgb(20 23 30 / .12), 0 1px 3px rgb(20 23 30 / .08);
+
+  --font-ui:var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono:var(--brand-font-mono), "SF Mono", Menlo, monospace;
+  --font-display:var(--brand-font-display), "Bricolage Grotesque", var(--font-ui);
+
+  --fs-xs:11px; --lh-xs:16px; --fs-sm:12px; --lh-sm:18px; --fs-md:13px; --lh-md:20px;
+  --fs-lg:15px; --lh-lg:22px; --fs-xl:20px; --lh-xl:28px; --fs-num:28px; --lh-num:32px;
+  --m-fs-sm:13px; --m-lh-sm:18px; --m-fs-body:15px; --m-lh-body:22px; --m-fs-title:20px; --m-lh-title:26px; --m-fs-large:28px; --m-lh-large:34px;
+
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+  --sidebar-w:220px; --panel-w:360px; --chrome-h:32px; --page-max:1120px; --row-h:36px; --row-h-progress:56px; --hit:28px; --hit-touch:44px; --tabbar-h:49px;
+  color-scheme:light;
+}
+/* ===== Dark, system ===== */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14171E; --surface:#1B1F27; --surface-2:#232833; --line:#2B3140; --line-strong:#3A4152;
+    --ink:#EDEEF2; --ink-2:#A1A7B4; --ink-3:#6E7482;
+    --accent:color-mix(in oklab, var(--brand-accent), white 32%); --accent-ink:#0E1420;
+    --accent-soft:color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --meter:#A1A7B4; --meter-track:#2B3140;
+    --ok:#4FB37A; --warn:#D9A03A; --danger:#E5575E; --stale:#7C818D;
+    --cat-1:#5FA3B2; --cat-2:#9D88D6; --cat-3:#B08E70; --cat-4:#A3A85A; --cat-5:#CF7AA0; --cat-6:#7688B8;
+    --shadow-float:0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3);
+    color-scheme:dark;
+  }
+}
+/* ===== Dark, forced ===== */
+:root[data-theme="dark"]{
+  --bg:#14171E; --surface:#1B1F27; --surface-2:#232833; --line:#2B3140; --line-strong:#3A4152;
+  --ink:#EDEEF2; --ink-2:#A1A7B4; --ink-3:#6E7482;
+  --accent:color-mix(in oklab, var(--brand-accent), white 32%); --accent-ink:#0E1420;
+  --accent-soft:color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter:#A1A7B4; --meter-track:#2B3140;
+  --ok:#4FB37A; --warn:#D9A03A; --danger:#E5575E; --stale:#7C818D;
+  --cat-1:#5FA3B2; --cat-2:#9D88D6; --cat-3:#B08E70; --cat-4:#A3A85A; --cat-5:#CF7AA0; --cat-6:#7688B8;
+  --shadow-float:0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3);
+  color-scheme:dark;
+}
+
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 var(--fs-md)/var(--lh-md) var(--font-ui);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.unit{color:var(--ink-2)}
+.ink2{color:var(--ink-2)}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+/* ===== Preview chrome ===== */
+.pv{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bg);border-bottom:1px solid var(--line);padding:var(--space-3) var(--space-5);display:flex;flex-wrap:wrap;gap:var(--space-3) var(--space-5);align-items:center}
+.pv-title{display:flex;align-items:baseline;gap:var(--space-2);margin-right:auto}
+.pv-title b{font-family:var(--font-display);font-weight:600;font-size:var(--fs-xl)}
+.ctl{display:flex;align-items:center;gap:var(--space-2)}
+.ctl>span{color:var(--ink-2);font-size:var(--fs-sm)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:var(--radius-sm);padding:2px}
+.seg button{border:0;background:transparent;height:24px;padding:0 10px;border-radius:4px;color:var(--ink-2);font-size:var(--fs-sm)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.sw-btn{width:22px;height:22px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line-strong);padding:0}
+.sw-btn[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+.pv input[type=color]{width:26px;height:26px;border:1px solid var(--line-strong);border-radius:50%;padding:0;background:none;overflow:hidden}
+.pv select{height:26px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);padding:0 6px;font-size:var(--fs-sm)}
+.contrast{font-size:var(--fs-sm);color:var(--ink-2)}
+.contrast.bad{color:var(--danger)}
+.stage{padding:var(--space-5)}
+.stage[hidden]{display:none}
+.scroller{overflow-x:auto;padding-bottom:var(--space-2)}
+.note{max-width:1280px;margin:0 auto var(--space-4);color:var(--ink-2);font-size:var(--fs-sm)}
+
+/* ===== Mac window ===== */
+.win{width:1280px;height:820px;margin:0 auto;display:grid;grid-template-columns:var(--sidebar-w) 1fr var(--panel-w);border:1px solid var(--line-strong);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg)}
+.side{border-right:1px solid var(--line);padding:var(--space-3) var(--space-2);display:flex;flex-direction:column;gap:2px;overflow:auto}
+.lights{display:flex;gap:8px;padding:4px 8px 14px}
+.lights i{width:12px;height:12px;border-radius:50%;background:var(--line-strong)}
+.word{font-family:var(--font-display);font-weight:600;font-size:var(--fs-xl);line-height:var(--lh-xl);padding:0 8px var(--space-3);letter-spacing:-.01em}
+.nav{display:flex;align-items:center;gap:var(--space-2);height:30px;padding:0 var(--space-2);border-radius:var(--radius-sm);color:var(--ink-2);text-decoration:none;border:0;background:none;width:100%;text-align:left}
+.nav:hover{background:var(--surface-2)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--ink)}
+.nav[aria-current="page"] svg{color:var(--accent)}
+.nav .cnt{margin-left:auto;font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--ink-2)}
+.side h4{margin:var(--space-5) var(--space-2) var(--space-1);font-size:var(--fs-sm);font-weight:500;color:var(--ink-2)}
+.chip{width:10px;height:10px;border-radius:3px;flex:none}
+.machine{margin-top:auto;display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2);font-size:var(--fs-sm);color:var(--ink-2)}
+.machine .dot{margin-left:auto}
+
+.page{overflow:auto;padding:var(--space-5) var(--space-6) var(--space-7)}
+.page-in{max-width:var(--page-max)}
+.titlerow{display:flex;align-items:center;gap:var(--space-2)}
+.titlerow h1{font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600;margin:0 auto 0 0}
+.btn{display:inline-flex;align-items:center;gap:6px;height:var(--hit);padding:0 var(--space-3);border-radius:var(--radius-sm);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.primary:hover{background:color-mix(in oklab, var(--accent), black 10%)}
+.btn.text{border-color:transparent;background:transparent;color:var(--ink-2)}
+.btn.text:hover{color:var(--ink);background:var(--surface-2)}
+.kbd{font:500 var(--fs-xs)/1 var(--font-mono);padding:2px 5px;border:1px solid var(--line-strong);border-radius:4px;color:var(--ink-2)}
+.btn.primary .kbd{border-color:color-mix(in oklab, var(--accent-ink) 40%, transparent);color:var(--accent-ink)}
+
+.sec{margin-top:var(--space-6)}
+.sec-h{display:flex;align-items:baseline;gap:var(--space-3);margin-bottom:var(--space-3)}
+.sec-h h2{font-size:var(--fs-lg);line-height:var(--lh-lg);font-weight:600;margin:0}
+.cap{font-size:var(--fs-sm);color:var(--ink-2)}
+.sec-h .act{margin-left:auto;color:var(--accent);font-size:var(--fs-sm);font-weight:500;text-decoration:none;background:none;border:0;padding:0}
+
+.plist{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden}
+.prow{display:grid;grid-template-columns:10px minmax(0,1fr) 160px 260px 16px;align-items:center;gap:var(--space-4);min-height:var(--row-h-progress);padding:var(--space-2) var(--space-4);border-top:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;width:100%;text-align:left;transition:background .15s ease-out}
+.prow:first-child{border-top:0}
+.prow:hover{background:var(--surface-2)}
+.prow[aria-selected="true"]{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.prow .nm{font-weight:500;display:flex;align-items:center;gap:var(--space-2)}
+.prow .ev{font-size:var(--fs-sm);line-height:var(--lh-sm);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .chev{color:var(--ink-3)}
+.segbar{display:flex;height:4px;border-radius:2px;background:var(--meter-track);overflow:hidden;gap:2px}
+.segbar i{display:block;height:100%}
+.badges{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;background:var(--surface-2);font-size:var(--fs-sm);color:var(--ink);white-space:nowrap}
+.badge .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--c)}
+.dot.ring{background:transparent;box-shadow:inset 0 0 0 1.75px var(--c)}
+.dot.cross{background:none;position:relative}
+.dot.cross::before,.dot.cross::after{content:"";position:absolute;left:3px;top:-1px;width:1.5px;height:9px;background:var(--c);transform:rotate(45deg)}
+.dot.cross::after{transform:rotate(-45deg)}
+.tag{font-size:var(--fs-xs);color:var(--ink-2);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:0 5px;line-height:16px;font-weight:400}
+
+.inbox{display:grid;gap:var(--space-2)}
+.ibx{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-4);align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4)}
+.ibx .q{font-weight:500;display:flex;gap:var(--space-2);align-items:center}
+.ibx .r{font-size:var(--fs-sm);color:var(--ink-2);margin-top:2px}
+.ibx .acts{display:flex;gap:var(--space-2);align-items:center}
+
+.gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3)}
+.gauge{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4)}
+.gauge .t{color:var(--ink-2)}
+.gauge .v{display:flex;align-items:baseline;gap:6px;margin:var(--space-1) 0 var(--space-3)}
+.gauge .v .num{font-size:var(--fs-num);line-height:var(--lh-num);font-weight:500}
+.gauge .v.muted .num{color:var(--ink-2)}
+.bar{height:4px;border-radius:2px;background:var(--meter-track);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--meter);border-radius:2px}
+.bar.warn i{background:var(--warn)} .bar.danger i{background:var(--danger)} .bar.stale i{background:var(--stale)}
+.gauge .d{font-size:var(--fs-xs);line-height:var(--lh-xs);color:var(--ink-2);margin-top:var(--space-2)}
+.attn{margin-top:var(--space-3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:0 var(--space-4)}
+.attn h3{font-size:var(--fs-sm);font-weight:500;color:var(--ink-2);margin:0;padding-top:var(--space-3)}
+.mrow{display:grid;grid-template-columns:minmax(0,1fr) 96px 150px;gap:var(--space-4);align-items:center;height:var(--row-h);border-top:1px solid var(--line)}
+.attn h3+.mrow{border-top:0}
+.mrow .bar{height:2px}
+.mrow .val{text-align:right}
+
+.panel{background:var(--surface);border-left:1px solid var(--line);overflow:auto;display:flex;flex-direction:column}
+.panel-h{padding:var(--space-4) var(--space-5) var(--space-3);border-bottom:1px solid var(--line)}
+.panel-h .crumb{display:flex;align-items:center;gap:var(--space-2);color:var(--ink-2);font-size:var(--fs-sm)}
+.panel-h h3{font-size:var(--fs-lg);line-height:var(--lh-lg);margin:var(--space-2) 0 var(--space-2);font-weight:600}
+.panel-b{padding:0 var(--space-5) var(--space-5);flex:1}
+.panel-b h4{font-size:var(--fs-sm);font-weight:500;color:var(--ink-2);margin:var(--space-5) 0 var(--space-2)}
+.panel-b p{margin:0}
+.panel-b ol{margin:0;padding-left:18px}
+.panel-b ol li{margin-bottom:4px}
+.qbox{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-3)}
+.qbox .rec{font-size:var(--fs-sm);color:var(--ink-2);margin-top:var(--space-1)}
+.checks{list-style:none;margin:0;padding:0}
+.checks li{display:grid;grid-template-columns:14px 1fr auto;gap:var(--space-2);align-items:center;min-height:28px}
+.checks li .ink2{font-size:var(--fs-sm)}
+.checks .err{grid-column:2 / -1;font:var(--fs-xs)/var(--lh-xs) var(--font-mono);color:var(--ink-2);background:var(--bg);border-radius:var(--radius-sm);padding:6px 8px;margin-bottom:4px}
+.tl{list-style:none;margin:0;padding:0;position:relative}
+.tl li{display:grid;grid-template-columns:40px 14px 1fr;gap:var(--space-2);align-items:start;padding-bottom:var(--space-3);position:relative}
+.tl li::after{content:"";position:absolute;left:51px;top:14px;bottom:0;width:1px;background:var(--line)}
+.tl li:last-child::after{display:none}
+.tl .tm{font:var(--fs-xs)/var(--lh-md) var(--font-mono);color:var(--ink-2)}
+.tl .dot{margin-top:7px}
+.panel-f{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:var(--space-3) var(--space-5);display:flex;gap:var(--space-2);justify-content:flex-end}
+
+/* ===== iPhone ===== */
+.phones{display:flex;gap:var(--space-6);justify-content:center;flex-wrap:wrap}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--space-3)}
+.phone-wrap figcaption{color:var(--ink-2);font-size:var(--fs-sm)}
+.phone{width:390px;height:844px;border-radius:54px;border:11px solid #0C0E12;background:var(--bg);overflow:hidden;display:flex;flex-direction:column;position:relative;font-size:var(--m-fs-body);line-height:var(--m-lh-body)}
+.sbar{height:47px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;font-weight:600;font-size:15px}
+.sbar .isl{width:120px;height:34px;border-radius:20px;background:#0C0E12}
+.sbar .ic{display:flex;gap:5px}
+.sbar .ic i{width:16px;height:10px;border-radius:3px;background:var(--ink)}
+.sbar .ic i:first-child{width:14px;border-radius:2px;opacity:.9}
+.pbody{flex:1;overflow:auto;padding:0 16px 16px}
+.ltitle{font-size:var(--m-fs-large);line-height:var(--m-lh-large);font-weight:600;margin:var(--space-2) 0 2px}
+.mcap{font-size:var(--m-fs-sm);color:var(--ink-2)}
+.mcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;margin-top:var(--space-3)}
+.mwait{display:flex;align-items:center;gap:var(--space-3);min-height:var(--hit-touch);padding:var(--space-3) var(--space-4);background:var(--accent-soft);border:0;width:100%;text-align:left;border-radius:var(--radius-md);margin-top:var(--space-4)}
+.mwait b{font-weight:500}
+.mwait .go{margin-left:auto;color:var(--accent);font-weight:500;display:flex;align-items:center;gap:2px}
+.mh{font-size:var(--m-fs-sm);color:var(--ink-2);font-weight:500;margin:var(--space-5) 0 0}
+.mrow2{display:grid;grid-template-columns:10px 1fr 16px;gap:var(--space-3);align-items:center;padding:var(--space-3) var(--space-4);border-top:1px solid var(--line);min-height:60px}
+.mrow2:first-child{border-top:0}
+.mrow2 .nm{font-weight:500}
+.mrow2 .badges{justify-content:flex-start;margin-top:6px}
+.mrow2 .badge{font-size:var(--m-fs-sm)}
+.mrow2 .chev{color:var(--ink-3)}
+.mmet{display:grid;grid-template-columns:1fr 64px auto;gap:var(--space-3);align-items:center;min-height:var(--hit-touch);padding:0 var(--space-4);border-top:1px solid var(--line)}
+.mmet:first-child{border-top:0}
+.mmet .bar{height:3px}
+.tabbar{flex:none;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--surface);padding-bottom:22px}
+.tab{height:var(--tabbar-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;line-height:12px;color:var(--ink-2);position:relative;border:0;background:none}
+.tab svg.i{width:22px;height:22px;stroke-width:1.6}
+.tab[aria-current="page"]{color:var(--accent)}
+.tab .pip{position:absolute;top:4px;left:calc(50% + 6px);min-width:16px;height:16px;border-radius:8px;background:var(--ink);color:var(--bg);font:500 10px/16px var(--font-mono);text-align:center;padding:0 4px}
+.navbar{display:flex;align-items:center;justify-content:space-between;height:var(--hit-touch);padding:0 8px;flex:none}
+.navbar .back{display:flex;align-items:center;gap:2px;color:var(--accent);background:none;border:0;height:var(--hit-touch);padding:0 8px}
+.navbar .back svg.i{width:20px;height:20px}
+.navbar .mid{font-weight:600}
+.navbar .side-t{color:var(--ink-2);font-size:var(--m-fs-sm);padding:0 8px}
+.mtitle{font-size:var(--m-fs-title);line-height:var(--m-lh-title);font-weight:600;margin:var(--space-2) 0}
+.pbody ol{padding-left:20px;margin:var(--space-2) 0 0}
+.pbody ol li{margin-bottom:6px}
+.evid{display:flex;align-items:center;gap:var(--space-2);min-height:var(--hit-touch);padding:0 var(--space-4);border:0;background:var(--surface);width:100%;text-align:left}
+.evid .chev{margin-left:auto;color:var(--ink-3)}
+.actbar{flex:none;display:grid;grid-template-columns:auto 1fr 1.4fr;gap:var(--space-2);padding:var(--space-3) 16px 30px;border-top:1px solid var(--line);background:var(--surface)}
+.mbtn{height:var(--hit-touch);border-radius:var(--radius-md);border:1px solid var(--line-strong);background:var(--surface);font-weight:500;padding:0 var(--space-4)}
+.mbtn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.mbtn.text{border-color:transparent;color:var(--ink-2);background:transparent}
+.sheet-top{display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 8px;flex:none}
+.sheet-top button{background:none;border:0;color:var(--accent);height:var(--hit-touch);padding:0 8px}
+.field{margin-top:var(--space-5)}
+.field label{display:block;font-size:var(--m-fs-sm);color:var(--ink-2);font-weight:500;margin-bottom:6px}
+.picker{display:flex;align-items:center;gap:var(--space-3);min-height:var(--hit-touch);padding:0 var(--space-4);background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius-md)}
+.picker .chev{margin-left:auto;color:var(--ink-3);transform:rotate(90deg)}
+.ta{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);min-height:110px}
+.mseg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface-2);border-radius:var(--radius-md);padding:3px;gap:3px}
+.mseg button{border:0;background:transparent;border-radius:8px;min-height:52px;padding:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:18px}
+.mseg button small{font:var(--fs-xs)/16px var(--font-mono);color:var(--ink-2)}
+.mseg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.mseg button:disabled{color:var(--ink-3);cursor:not-allowed}
+.help{font-size:var(--m-fs-sm);color:var(--ink-2);margin-top:6px}
+.swrow{display:flex;align-items:center;gap:var(--space-3);min-height:var(--hit-touch);padding:0 var(--space-4);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md)}
+.switch{margin-left:auto;width:51px;height:31px;border-radius:16px;background:var(--accent);position:relative;flex:none}
+.switch::after{content:"";position:absolute;right:2px;top:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgb(0 0 0 / .25)}
+.launchbar{flex:none;padding:var(--space-3) 16px 30px;border-top:1px solid var(--line);background:var(--surface)}
+.launchbar .mbtn{width:100%}
+
+/* ===== Components ===== */
+.comp{max-width:1120px;margin:0 auto;display:grid;gap:var(--space-7)}
+.comp h2{font-size:var(--fs-lg);font-weight:600;margin:0 0 var(--space-1)}
+.comp .lead{color:var(--ink-2);margin:0 0 var(--space-4);max-width:70ch}
+.swgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--space-2) var(--space-4)}
+.swg h3{font-size:var(--fs-sm);font-weight:500;color:var(--ink-2);margin:var(--space-4) 0 var(--space-2);grid-column:1/-1}
+.sw{display:grid;grid-template-columns:36px 1fr;gap:var(--space-3);align-items:center}
+.sw .box{width:36px;height:36px;border-radius:var(--radius-sm);border:1px solid var(--line)}
+.sw code{font:var(--fs-sm)/var(--lh-sm) var(--font-mono);display:block}
+.sw small{color:var(--ink-2);font:var(--fs-xs)/var(--lh-xs) var(--font-mono)}
+.typespec{display:grid;gap:var(--space-3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4) var(--space-5)}
+.typespec div{display:grid;grid-template-columns:140px 1fr;gap:var(--space-4);align-items:baseline}
+.typespec code{font:var(--fs-xs)/var(--lh-xs) var(--font-mono);color:var(--ink-2)}
+.row-wrap{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+.g5{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--space-3)}
+.term{border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--line)}
+.term .chrome{height:var(--chrome-h);display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-3);background:var(--surface-2);font-size:var(--fs-sm)}
+.term .chrome .r{margin-left:auto;display:flex;gap:var(--space-1)}
+.term .chrome .r button{height:22px;border:0;background:none;color:var(--ink-2);padding:0 8px;border-radius:4px;font-size:var(--fs-sm)}
+.term .chrome .r button:hover{background:var(--line)}
+.term pre{margin:0;background:var(--term-bg);color:var(--term-fg);font:var(--fs-sm)/1.6 var(--font-mono);padding:var(--space-4);overflow-x:auto}
+.term pre .d{opacity:.55}
+.toast{display:inline-flex;align-items:center;gap:var(--space-4);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-float);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3) var(--space-2) var(--space-4)}
+.toast.err{color:var(--danger)}
+.empty{background:var(--surface);border:1px dashed var(--line-strong);border-radius:var(--radius-md);padding:var(--space-5);display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);color:var(--ink-2)}
+table.t{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden}
+table.t th{font-size:var(--fs-sm);font-weight:500;color:var(--ink-2);text-align:left;padding:0 var(--space-4);height:var(--row-h);border-bottom:1px solid var(--line)}
+table.t td{padding:0 var(--space-4);height:var(--row-h);border-bottom:1px solid var(--line)}
+table.t tr:last-child td{border-bottom:0}
+table.t tbody tr:hover{background:var(--surface-2)}
+table.t .r{text-align:right}
+.lane{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-lg);padding:var(--space-3);width:300px}
+.lane-h{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)}
+.lane-h .slots{margin-left:auto;font:var(--fs-xs)/var(--lh-xs) var(--font-mono);color:var(--ink-2)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);margin-top:var(--space-2)}
+.card.sel{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.card .ct{font-weight:500;margin-bottom:6px}
+.comp-2col{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--space-5)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H10v-4H6v4H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="i-term" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="m5 7 2 1.5L5 10M8.5 10.5H11"/></symbol>
+  <symbol id="i-crew" viewBox="0 0 16 16"><rect x="2" y="3" width="3.5" height="10" rx="1"/><rect x="6.25" y="3" width="3.5" height="7" rx="1"/><rect x="10.5" y="3" width="3.5" height="5" rx="1"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9h3.5l1 1.5h3l1-1.5H14M3.5 3.5h9L14 9v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9z"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 16 16"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0M8 11.5l2.5-3"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4zM9 2v3h3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="m6 4 4 4-4 4"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="m10 3.5-4.5 4.5 4.5 4.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></symbol>
+  <symbol id="i-server" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="4.5" rx="1"/><rect x="2.5" y="9" width="11" height="4.5" rx="1"/><path d="M5 4.75h.01M5 11.25h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.5v3.5M8 5h.01"/></symbol>
+</svg>
+
+<header class="pv">
+  <div class="pv-title"><b>kinas</b><span class="ink2">Design system v1.1, preview</span></div>
+  <div class="ctl"><span>View</span>
+    <div class="seg" id="views">
+      <button aria-pressed="true" data-v="mac">Mac</button>
+      <button aria-pressed="false" data-v="phone">iPhone</button>
+      <button aria-pressed="false" data-v="comp">Components</button>
+    </div>
+  </div>
+  <div class="ctl"><span>Theme</span>
+    <div class="seg" id="themes">
+      <button aria-pressed="true" data-t="system">System</button>
+      <button aria-pressed="false" data-t="light">Light</button>
+      <button aria-pressed="false" data-t="dark">Dark</button>
+    </div>
+  </div>
+  <div class="ctl"><span>Accent</span>
+    <button class="sw-btn" aria-pressed="true" aria-label="Royal blue" data-a="#00549E" style="background:#00549E"></button>
+    <button class="sw-btn" aria-pressed="false" aria-label="Forest" data-a="#1F6B4A" style="background:#1F6B4A"></button>
+    <button class="sw-btn" aria-pressed="false" aria-label="Violet" data-a="#5B3FB8" style="background:#5B3FB8"></button>
+    <button class="sw-btn" aria-pressed="false" aria-label="Graphite" data-a="#2B2F36" style="background:#2B2F36"></button>
+    <input type="color" id="custom" value="#00549E" aria-label="Custom accent">
+    <span class="contrast" id="contrast"></span>
+  </div>
+  <div class="ctl"><span>UI font</span>
+    <select id="font" aria-label="UI font">
+      <option value='"Inter"'>Inter</option>
+      <option value='"IBM Plex Sans"'>IBM Plex Sans</option>
+      <option value='system-ui'>System</option>
+    </select>
+  </div>
+</header>
+
+<!-- ================= MAC ================= -->
+<section class="stage" data-view="mac">
+  <p class="note">Home on the Mac, the morning after. Select a folder row to open its most important task in the right panel.</p>
+  <div class="scroller">
+    <div class="win" role="application" aria-label="Kinas Mac window">
+      <nav class="side" aria-label="Sidebar">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="word">kinas</div>
+        <button class="nav" aria-current="page"><svg class="i"><use href="#i-home"/></svg>Home</button>
+        <button class="nav"><svg class="i"><use href="#i-term"/></svg>Work</button>
+        <button class="nav"><svg class="i"><use href="#i-crew"/></svg>Crew</button>
+        <button class="nav"><svg class="i"><use href="#i-inbox"/></svg>Inbox<span class="cnt">3</span></button>
+        <button class="nav"><svg class="i"><use href="#i-gauge"/></svg>Usage</button>
+        <button class="nav"><svg class="i"><use href="#i-file"/></svg>Reader</button>
+        <button class="nav"><svg class="i"><use href="#i-gear"/></svg>Settings</button>
+        <h4>Client folders</h4>
+        <div id="sideFolders"></div>
+        <div class="machine"><svg class="i"><use href="#i-server"/></svg>Hostinger VPS<span class="dot" style="--c:var(--ok)" aria-hidden="true"></span><span class="ink2">connected</span></div>
+      </nav>
+
+      <main class="page">
+        <div class="page-in">
+          <div class="titlerow">
+            <h1>Home</h1>
+            <button class="btn"><span class="dot ring" style="--c:var(--warn)"></span><span class="num">3</span> waiting on you</button>
+            <button class="btn primary"><svg class="i"><use href="#i-plus"/></svg>Launch task <span class="kbd">⌘N</span></button>
+          </div>
+
+          <section class="sec">
+            <div class="sec-h"><h2>Overnight</h2><span class="cap" title="Source: crew event log">since 23:40 yesterday, 9 h 51 m</span></div>
+            <div class="plist" id="plist" role="listbox" aria-label="Client folders"></div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-h"><h2>Waiting on you</h2><span class="cap">3 items</span><button class="act">Open inbox</button></div>
+            <div class="inbox">
+              <div class="ibx">
+                <div><div class="q"><span class="chip" style="background:var(--cat-1)"></span>Store the supplier webhook secret in Convex env or the VPS keychain?</div>
+                <div class="r">Recommendation: Convex env, so preview deploys get it too.</div></div>
+                <div class="acts"><button class="btn text">Deny</button><button class="btn">Answer</button><button class="btn primary">Approve plan <span class="kbd">A</span></button></div>
+              </div>
+              <div class="ibx">
+                <div><div class="q"><span class="chip" style="background:var(--cat-5)"></span>Review PR #142: gauge stale state</div>
+                <div class="r">All checks pass. Two screenshots changed, both expected.</div></div>
+                <div class="acts"><button class="btn text">Deny</button><button class="btn">Answer</button><button class="btn primary">Approve PR <span class="kbd">A</span></button></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-h"><h2>Usage</h2><span class="cap" title="Oldest reading on this section">as of 09:31</span><button class="act">Open usage</button></div>
+            <div class="gauges">
+              <div class="gauge"><div class="t">Claude, this week</div><div class="v"><span class="num">62</span><span class="unit">% used</span></div><div class="bar"><i style="width:62%"></i></div><div class="d">resets Thursday 14:00</div></div>
+              <div class="gauge"><div class="t">Claude, this session</div><div class="v"><span class="num">34</span><span class="unit">% used</span></div><div class="bar"><i style="width:34%"></i></div><div class="d">resets in 3 h 43 m, 13:30</div></div>
+              <div class="gauge"><div class="t">Ollama credits</div><div class="v"><span class="num">71</span><span class="unit">% used</span></div><div class="bar"><i style="width:71%"></i></div><div class="d">renews 1 October</div></div>
+            </div>
+            <div class="attn">
+              <h3>Needs attention</h3>
+              <div class="mrow"><span>Hostinger VPS, disk</span><div class="bar warn"><i style="width:84%"></i></div><span class="val"><span class="num">84</span> <span class="unit">% of 100 GB</span></span></div>
+              <div class="mrow"><span>Convex, function calls</span><div class="bar danger"><i style="width:100%"></i></div><span class="val"><span class="num">312</span> <span class="unit">% upper bound</span></span></div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <aside class="panel" id="panel" aria-label="Task detail"></aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================= IPHONE ================= -->
+<section class="stage" data-view="phone" hidden>
+  <p class="note" style="text-align:center">The three phone jobs: see the night, approve, launch. Same tokens, iPhone type scale, 44 pt targets, actions at the bottom.</p>
+  <div class="phones">
+    <figure class="phone-wrap" style="margin:0">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span class="isl"></span><span class="ic"><i></i><i></i></span></div>
+        <div class="pbody">
+          <div class="ltitle">Home</div>
+          <div class="mcap">Overnight since 23:40 yesterday</div>
+          <button class="mwait"><span class="dot ring" style="--c:var(--warn)"></span><b><span class="num">3</span> waiting on you</b><span class="go">Review<svg class="i"><use href="#i-chev"/></svg></span></button>
+          <div class="mh">Overnight</div>
+          <div class="mcard" id="mFolders"></div>
+          <div class="mh">Usage, as of 09:31</div>
+          <div class="mcard">
+            <div class="mmet"><span>Claude week</span><div class="bar"><i style="width:62%"></i></div><span><span class="num">62</span> <span class="unit">%</span></span></div>
+            <div class="mmet"><span>Claude session</span><div class="bar"><i style="width:34%"></i></div><span><span class="num">34</span> <span class="unit">%</span></span></div>
+            <div class="mmet"><span>Ollama credits</span><div class="bar"><i style="width:71%"></i></div><span><span class="num">71</span> <span class="unit">%</span></span></div>
+            <div class="mmet"><span>VPS disk</span><div class="bar warn"><i style="width:84%"></i></div><span><span class="num">84</span> <span class="unit">%</span></span></div>
+          </div>
+        </div>
+        <nav class="tabbar">
+          <button class="tab" aria-current="page"><svg class="i"><use href="#i-home"/></svg>Home</button>
+          <button class="tab"><svg class="i"><use href="#i-inbox"/></svg>Inbox<span class="pip">3</span></button>
+          <button class="tab"><svg class="i"><use href="#i-crew"/></svg>Crew</button>
+          <button class="tab"><svg class="i"><use href="#i-plus"/></svg>Launch</button>
+        </nav>
+      </div>
+      <figcaption>Home</figcaption>
+    </figure>
+
+    <figure class="phone-wrap" style="margin:0">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span class="isl"></span><span class="ic"><i></i><i></i></span></div>
+        <div class="navbar"><button class="back"><svg class="i"><use href="#i-back"/></svg>Inbox</button><span class="side-t"><span class="num">1</span> of <span class="num">3</span></span></div>
+        <div class="pbody">
+          <div class="mcap" style="display:flex;align-items:center;gap:8px"><span class="chip" style="background:var(--cat-1)"></span>ar-watches</div>
+          <div class="mtitle">Inventory sync rewrite</div>
+          <span class="badge"><span class="dot ring" style="--c:var(--warn)"></span>needs decision</span>
+          <div class="mh">Plan</div>
+          <ol>
+            <li>Replace the nightly CSV import with the supplier's webhook.</li>
+            <li>Verify each payload with a signed secret.</li>
+            <li>Write stock changes to Convex and log them per watch.</li>
+            <li>Keep the CSV import as a fallback for one release.</li>
+          </ol>
+          <div class="mh">Question</div>
+          <div class="mcard" style="padding:12px 16px">
+            <div>Store the webhook secret in Convex env or the VPS keychain?</div>
+            <div class="mcap" style="margin-top:4px">Recommendation: Convex env, so preview deploys get it too.</div>
+          </div>
+          <div class="mcard"><button class="evid"><span class="dot" style="--c:var(--ok)"></span>Evidence: prototype passes <span class="num">38</span> of <span class="num">38</span> tests<svg class="i chev"><use href="#i-chev"/></svg></button></div>
+        </div>
+        <div class="actbar"><button class="mbtn text">Deny</button><button class="mbtn">Answer</button><button class="mbtn primary">Approve plan</button></div>
+      </div>
+      <figcaption>Approve a plan</figcaption>
+    </figure>
+
+    <figure class="phone-wrap" style="margin:0">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span class="isl"></span><span class="ic"><i></i><i></i></span></div>
+        <div class="sheet-top"><button>Cancel</button><b>New task</b><span style="width:64px"></span></div>
+        <div class="pbody">
+          <div class="field" style="margin-top:8px"><label>Folder</label>
+            <div class="picker"><span class="chip" style="background:var(--cat-1)"></span>ar-watches<svg class="i chev"><use href="#i-chev"/></svg></div></div>
+          <div class="field"><label>Brief</label>
+            <div class="ta">Add a low-stock alert to the inventory page, with a threshold per watch model.</div></div>
+          <div class="field"><label>Provider</label>
+            <div class="mseg">
+              <button disabled>Claude<small>0 of 1 free</small></button>
+              <button aria-pressed="true">Codex<small>1 of 2 free</small></button>
+              <button aria-pressed="false">Ollama<small>3 of 4 free</small></button>
+            </div>
+            <div class="help">Claude is busy with the acme-9c2e-site fix until about 10:40.</div>
+          </div>
+          <div class="field"><div class="swrow">Ask for a plan before building<span class="switch" role="switch" aria-checked="true"></span></div></div>
+        </div>
+        <div class="launchbar"><button class="mbtn primary">Launch task</button></div>
+      </div>
+      <figcaption>Launch a crew task</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= COMPONENTS ================= -->
+<section class="stage" data-view="comp" hidden>
+  <div class="comp">
+
+    <div>
+      <h2>Color</h2>
+      <p class="lead">Four roles, never mixed. Neutrals measure, the accent is interactive or selected, status is state, category is identity. Values shown as light / dark.</p>
+      <div class="swgrid swg" id="swatches"></div>
+    </div>
+
+    <div>
+      <h2>Type</h2>
+      <p class="lead">Mac scale. Numbers are always mono with tabular figures, units follow in ink-2.</p>
+      <div class="typespec">
+        <div><code>--text-num 28/32</code><span><span class="num" style="font-size:var(--fs-num);line-height:var(--lh-num);font-weight:500">1,284</span> <span class="unit">function calls</span></span></div>
+        <div><code>--text-xl 20/28</code><span style="font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600">Page title</span></div>
+        <div><code>--text-lg 15/22</code><span style="font-size:var(--fs-lg);line-height:var(--lh-lg);font-weight:600">Section title</span></div>
+        <div><code>--text-md 13/20</code><span>Body, labels, navigation, and buttons.</span></div>
+        <div><code>--text-sm 12/18</code><span style="font-size:var(--fs-sm)">Captions, table cells, badges</span></div>
+        <div><code>--text-xs 11/16</code><span style="font-size:var(--fs-xs);color:var(--ink-2)">as of 09:31</span></div>
+        <div><code>--font-display</code><span style="font-family:var(--font-display);font-size:var(--fs-xl);font-weight:600">kinas</span></div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Status badges</h2>
+      <p class="lead">The word is always ink; the dot carries the color. A solid dot is what the system is doing. A ring means it is waiting on a person.</p>
+      <div class="row-wrap" id="badgeAll"></div>
+    </div>
+
+    <div>
+      <h2>Gauge states</h2>
+      <p class="lead">The bar is the status. Fine bars use the neutral meter, never the accent.</p>
+      <div class="g5">
+        <div class="gauge"><div class="t">Fine</div><div class="v"><span class="num">42</span><span class="unit">% used</span></div><div class="bar"><i style="width:42%"></i></div><div class="d">resets in 3 h 43 m</div></div>
+        <div class="gauge"><div class="t">Past 80 %</div><div class="v"><span class="num">84</span><span class="unit">% of 100 GB</span></div><div class="bar warn"><i style="width:84%"></i></div><div class="d">about 16 GB left</div></div>
+        <div class="gauge"><div class="t">Past 95 %</div><div class="v"><span class="num">97</span><span class="unit">% used</span></div><div class="bar danger"><i style="width:97%"></i></div><div class="d">resets Thursday 14:00</div></div>
+        <div class="gauge"><div class="t">Stale</div><div class="v muted"><span class="num">71</span><span class="unit">% used</span></div><div class="bar stale"><i style="width:71%"></i></div><div class="d">09:02, stale</div></div>
+        <div class="gauge"><div class="t">Dead</div><div class="v muted"><span style="font-size:var(--fs-lg);line-height:var(--lh-num)">No reading</span></div><div class="bar"><i style="width:0"></i></div><div class="d">last seen yesterday 22:10</div></div>
+      </div>
+    </div>
+
+    <div class="comp-2col">
+      <div>
+        <h2>Metric rows</h2>
+        <p class="lead">Nine Convex metrics are nine rows, not nine tiles.</p>
+        <div class="attn" style="margin-top:0">
+          <div class="mrow" style="border-top:0"><span>Function calls</span><div class="bar danger"><i style="width:100%"></i></div><span class="val"><span class="num">312</span> <span class="unit">% upper bound</span></span></div>
+          <div class="mrow"><span>Database I/O</span><div class="bar"><i style="width:38%"></i></div><span class="val"><span class="num">1.9</span> <span class="unit">of 5 GB</span></span></div>
+          <div class="mrow"><span>File storage</span><div class="bar"><i style="width:12%"></i></div><span class="val"><span class="num">0.6</span> <span class="unit">of 5 GB</span></span></div>
+          <div class="mrow"><span>Action compute</span><div class="bar"><i style="width:27%"></i></div><span class="val"><span class="num">5.4</span> <span class="unit">of 20 GB·h</span></span></div>
+        </div>
+      </div>
+      <div>
+        <h2>Table</h2>
+        <p class="lead">For lists that are read. No stripes, no vertical lines.</p>
+        <table class="t">
+          <thead><tr><th>Today</th><th class="r">Requests</th><th class="r">Cost</th></tr></thead>
+          <tbody>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="chip" style="background:var(--cat-6)"></span>Claude</span></td><td class="r num">412</td><td class="r"><span class="num">0.00</span> <span class="unit">plan</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="chip" style="background:var(--cat-2)"></span>Codex</span></td><td class="r num">186</td><td class="r"><span class="num">0.00</span> <span class="unit">plan</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="chip" style="background:var(--cat-3)"></span>Ollama</span></td><td class="r num">1,904</td><td class="r"><span class="num">3.12</span> <span class="unit">credits</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="comp-2col">
+      <div>
+        <h2>Lane and cards</h2>
+        <p class="lead">One lane per client folder. Selected card: accent-soft and a 2 px accent edge.</p>
+        <div class="lane">
+          <div class="lane-h"><span class="chip" style="background:var(--cat-1)"></span><b style="font-weight:500">ar-watches</b><span class="slots">Claude 1/1 · Codex 1/2</span></div>
+          <div class="card sel"><div class="ct">Inventory sync rewrite</div><span class="badge"><span class="dot ring" style="--c:var(--warn)"></span>needs decision</span></div>
+          <div class="card"><div class="ct">Client list CSV export</div><span class="badge"><span class="dot" style="--c:var(--ok)"></span>done</span></div>
+        </div>
+      </div>
+      <div>
+        <h2>Buttons</h2>
+        <p class="lead">Labels name exactly what happens. 28 px on the Mac, 44 pt on the phone.</p>
+        <div class="row-wrap"><button class="btn primary">Approve plan</button><button class="btn">Answer</button><button class="btn text">Deny</button></div>
+        <h2 style="margin-top:var(--space-5)">Toast and empty state</h2>
+        <div class="row-wrap" style="margin:var(--space-3) 0"><span class="toast">Plan approved<button class="btn text">Undo</button></span><span class="toast err">CI failed on PR #31. Open the checks to see the build error.</span></div>
+        <div class="empty">No work overnight in this folder.<button class="btn">Launch task</button></div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Terminal chrome</h2>
+      <p class="lead">The only place the terminal palette appears.</p>
+      <div class="term">
+        <div class="chrome"><b style="font-weight:500">crew-3 · ar-watches</b><span class="badge"><span class="dot" style="--c:var(--meter)"></span>working</span><span class="ink2">codex</span><span class="r"><button>Detach</button><button>Copy</button></span></div>
+<pre><span class="d">~/clients/ar-watches</span> $ pnpm test
+ ✓ inventory/webhook.verify (12)
+ ✓ inventory/stock.write (26)
+<span class="d">Test files  2 passed · Tests  38 passed · 4.1 s</span></pre>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+const root=document.documentElement;
+
+/* ---------- data ---------- */
+const S={
+  done:{w:'done',c:'--ok',k:'solid'}, working:{w:'working',c:'--meter',k:'solid'},
+  queued:{w:'queued',c:'--stale',k:'solid'}, blocked:{w:'blocked',c:'--danger',k:'solid'},
+  red:{w:'CI red',c:'--danger',k:'solid'}, stale:{w:'stale',c:'--stale',k:'solid'},
+  dead:{w:'dead',c:'--ink-3',k:'cross'},
+  decision:{w:'needs decision',c:'--warn',k:'ring'}, pr:{w:'PR open',c:'--meter',k:'ring'},
+  ready:{w:'ready',c:'--ok',k:'ring'}
+};
+const dot=s=>`<span class="dot ${S[s].k==='ring'?'ring':S[s].k==='cross'?'cross':''}" style="--c:var(${S[s].c})" aria-hidden="true"></span>`;
+const badge=(s,n)=>`<span class="badge">${dot(s)}${n!=null?`<span class="n">${n}</span>`:''}${S[s].w}</span>`;
+
+const folders=[
+ {id:'ar-watches',cat:1,ev:'Plan ready for you: inventory sync rewrite, 05:48',counts:{done:4,decision:1},seg:{done:4,working:0,wait:1,fail:0},
+  task:{title:'Inventory sync rewrite',state:'decision',
+   brief:'Replace the nightly CSV import with the supplier\'s webhook so stock changes land within a minute.',
+   plan:['Replace the nightly CSV import with the supplier\'s webhook.','Verify each payload with a signed secret.','Write stock changes to Convex and log them per watch.','Keep the CSV import as a fallback for one release.'],
+   q:['Store the webhook secret in Convex env or the VPS keychain?','Recommendation: Convex env, so preview deploys get it too.'],
+   tl:[['23:52','Order: rewrite inventory sync on the supplier webhook','order'],['00:14','Codex crewmate started','working'],['03:40','Prototype passes 38 of 38 tests','done'],['05:48','Plan ready, one decision needed','decision']],
+   acts:['Deny','Answer','Approve plan']}},
+ {id:'arc-edu',cat:2,ev:'Working: enrolment export to Drive, started 04:10',counts:{done:2,working:1},seg:{done:2,working:1,wait:0,fail:0},
+  task:{title:'Enrolment export to Drive',state:'working',
+   brief:'Export each week\'s enrolments as a sheet into the shared Drive folder, one file per cohort.',
+   checks:[['working','Build','running'],['done','Typecheck','passed'],['done','Lint','passed']],
+   tl:[['01:02','Order: weekly enrolment export','order'],['01:05','Ollama crewmate started','working'],['03:58','Drive auth works with the service account','done'],['04:10','Export step started','working']],
+   acts:['Open session']}},
+ {id:'acme-9c2e-site',cat:3,ev:'CI red on PR #31: build failed, 03:22',counts:{done:1,red:1},seg:{done:1,working:0,wait:0,fail:1},
+  task:{title:'Booking form validation',state:'red',
+   brief:'Validate the trial class booking form on the client and server, with clear errors in Portuguese.',
+   checks:[['done','Typecheck','passed'],['done','Lint','passed'],['red','Build','failed']],
+   err:'next build: Type error in app/booking/page.tsx:41',
+   tl:[['00:30','Order: validate the booking form','order'],['00:33','Claude crewmate started','working'],['03:10','PR #31 opened','pr'],['03:22','Build failed','red']],
+   acts:['Open session','Send back to crew']}},
+ {id:'client-portal',cat:4,ev:'Ready to merge: progress timeline widget, 06:40',counts:{done:3,ready:1},seg:{done:3,working:0,wait:1,fail:0},
+  task:{title:'Progress timeline widget',state:'ready',
+   brief:'Show each client\'s milestones as a vertical timeline on their portal page.',
+   checks:[['done','Typecheck','passed'],['done','Tests','14 passed'],['done','Screenshots','3 changed, reviewed']],
+   tl:[['22:15','Order: timeline widget for the portal','order'],['02:48','PR #58 opened','pr'],['06:32','Crew reviewer approved','done'],['06:40','Ready to merge','ready']],
+   acts:['Open PR','Merge']}},
+ {id:'kinas',cat:5,internal:true,ev:'PR #142 open: gauge stale state, 06:12',counts:{done:5,pr:2},seg:{done:5,working:0,wait:2,fail:0},
+  task:{title:'Gauge stale state',state:'pr',
+   brief:'Render stale readings in the stale token with "09:31, stale" instead of the freshness caption.',
+   checks:[['done','Typecheck','passed'],['done','Contrast','all pairs pass'],['done','Screenshots','2 changed, both expected']],
+   tl:[['23:45','Order: gauge stale and dead states','order'],['02:20','Codex crewmate started','working'],['06:12','PR #142 opened','pr']],
+   acts:['Deny','Answer','Approve PR']}},
+];
+
+/* ---------- sidebar folders ---------- */
+document.getElementById('sideFolders').innerHTML=folders.map(f=>
+ `<button class="nav"><span class="chip" style="background:var(--cat-${f.cat})"></span>${f.id}${f.internal?'<span class="cnt">internal</span>':''}</button>`).join('');
+
+/* ---------- progress rows ---------- */
+const segbar=s=>{const t=s.done+s.working+s.wait+s.fail;const p=v=>(v/t*100)+'%';
+ return `<div class="segbar" aria-hidden="true">${s.done?`<i style="width:${p(s.done)};background:var(--ok)"></i>`:''}${s.working?`<i style="width:${p(s.working)};background:var(--meter)"></i>`:''}${s.wait?`<i style="width:${p(s.wait)};background:var(--warn)"></i>`:''}${s.fail?`<i style="width:${p(s.fail)};background:var(--danger)"></i>`:''}</div>`};
+const order=['decision','pr','ready','red','working','done'];
+const badgesFor=c=>order.filter(k=>c[k]).map(k=>badge(k,c[k])).join('');
+const plist=document.getElementById('plist');
+plist.innerHTML=folders.map((f,i)=>`
+ <button class="prow" role="option" aria-selected="${i===0}" data-i="${i}">
+  <span class="chip" style="background:var(--cat-${f.cat})"></span>
+  <span style="min-width:0"><span class="nm">${f.id}${f.internal?'<span class="tag">internal</span>':''}</span><div class="ev">${f.ev}</div></span>
+  ${segbar(f.seg)}
+  <span class="badges">${badgesFor(f.counts)}</span>
+  <svg class="i chev"><use href="#i-chev"/></svg>
+ </button>`).join('');
+
+/* ---------- panel ---------- */
+const panel=document.getElementById('panel');
+function renderPanel(f){
+ const t=f.task;
+ const primaryIdx=t.acts.length-1;
+ panel.innerHTML=`
+  <div class="panel-h">
+   <div class="crumb"><span class="chip" style="background:var(--cat-${f.cat})"></span>${f.id}</div>
+   <h3>${t.title}</h3>${badge(t.state)}
+  </div>
+  <div class="panel-b">
+   <h4>Brief</h4><p>${t.brief}</p>
+   ${t.plan?`<h4>Plan</h4><ol>${t.plan.map(s=>`<li>${s}</li>`).join('')}</ol>`:''}
+   ${t.q?`<h4>Question</h4><div class="qbox">${t.q[0]}<div class="rec">${t.q[1]}</div></div>`:''}
+   ${t.checks?`<h4>Checks</h4><ul class="checks">${t.checks.map(c=>`<li>${dot(c[0])}<span>${c[1]}</span><span class="ink2">${c[2]}</span>${c[0]==='red'&&t.err?`<span class="err">${t.err}</span>`:''}</li>`).join('')}</ul>`:''}
+   <h4>Timeline</h4>
+   <ul class="tl">${t.tl.map(e=>`<li><span class="tm">${e[0]}</span>${e[2]==='order'?'<span class="dot" style="--c:var(--ink);margin-top:7px"></span>':dot(e[2])}<span>${e[1]}${e[2]==='order'?' <span class="tag">order</span>':''}</span></li>`).join('')}</ul>
+  </div>
+  <div class="panel-f">${t.acts.map((a,i)=>`<button class="btn ${i===primaryIdx?'primary':(a==='Deny'?'text':'')}">${a}</button>`).join('')}</div>`;
+}
+renderPanel(folders[0]);
+plist.addEventListener('click',e=>{
+ const r=e.target.closest('.prow');if(!r)return;
+ plist.querySelectorAll('.prow').forEach(x=>x.setAttribute('aria-selected','false'));
+ r.setAttribute('aria-selected','true');renderPanel(folders[+r.dataset.i]);
+});
+
+/* ---------- phone folders ---------- */
+document.getElementById('mFolders').innerHTML=folders.map(f=>`
+ <div class="mrow2"><span class="chip" style="background:var(--cat-${f.cat})"></span>
+  <div><div class="nm">${f.id}</div><div class="badges">${badgesFor(f.counts)}</div></div>
+  <svg class="i chev"><use href="#i-chev"/></svg></div>`).join('');
+
+/* ---------- components ---------- */
+document.getElementById('badgeAll').innerHTML=['queued','working','blocked','red','done','stale','dead','decision','pr','ready'].map(s=>badge(s)).join('');
+const sw=[
+ ['Surfaces',[['--bg','#F4F2EC / #14171E'],['--surface','#FFFFFF / #1B1F27'],['--surface-2','#EDEAE2 / #232833'],['--line','#E3DFD5 / #2B3140'],['--line-strong','#CFC9BC / #3A4152']]],
+ ['Text',[['--ink','#1B1F27 / #EDEEF2'],['--ink-2','#5B6170 / #A1A7B4'],['--ink-3','#8A8F9B / #6E7482']]],
+ ['Accent, from --brand-accent',[['--accent','brand / brand + 32% white'],['--accent-soft','accent 11% / 18%'],['--accent-ink','#FFFFFF / #0E1420']]],
+ ['Meter',[['--meter','#5B6170 / #A1A7B4'],['--meter-track','#E9E5DC / #2B3140']]],
+ ['Status',[['--ok','#2E8B57 / #4FB37A'],['--warn','#B87A12 / #D9A03A'],['--danger','#C4262E / #E5575E'],['--stale','#7C818D / #7C818D']]],
+ ['Category',[['--cat-1','teal'],['--cat-2','violet'],['--cat-3','walnut'],['--cat-4','olive'],['--cat-5','rose'],['--cat-6','slate']]],
+ ['Terminal',[['--term-bg','#10192B'],['--term-fg','#E7EEF7']]],
+];
+document.getElementById('swatches').innerHTML=sw.map(g=>`<h3>${g[0]}</h3>`+g[1].map(t=>`<div class="sw"><span class="box" style="background:var(${t[0]})"></span><span><code>${t[0]}</code><small>${t[1]}</small></span></div>`).join('')).join('');
+
+/* ---------- controls ---------- */
+const press=(group,btn)=>{group.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)))};
+document.getElementById('views').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;press(e.currentTarget,b);
+ document.querySelectorAll('.stage').forEach(s=>s.hidden=s.dataset.view!==b.dataset.v)});
+document.getElementById('themes').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;press(e.currentTarget,b);
+ if(b.dataset.t==='system')delete root.dataset.theme;else root.dataset.theme=b.dataset.t});
+
+const hex2rgb=h=>{h=h.replace('#','');return[0,2,4].map(i=>parseInt(h.slice(i,i+2),16))};
+const rgb2hex=a=>'#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase();
+const lum=a=>{const c=a.map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]};
+const ratio=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
+const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+function checkAccent(h){
+ const a=hex2rgb(h), white=[255,255,255], darkInk=[14,20,32];
+ const light=ratio(a,white);
+ const darkAcc=mix(a,white,.32); /* sRGB approximation of the oklab mix */
+ const dark=ratio(darkAcc,darkInk);
+ const el=document.getElementById('contrast');
+ if(light>=4.5&&dark>=4.5){el.className='contrast';el.textContent=`Light ${light.toFixed(1)}:1, dark ${dark.toFixed(1)}:1, passes`;return}
+ let fix=a;
+ if(light<4.5){for(let t=0;t<=1;t+=.02){const c=mix(a,[0,0,0],t);if(ratio(c,white)>=4.5){fix=c;break}}}
+ el.className='contrast bad';
+ el.textContent=`Light ${light.toFixed(1)}:1, dark ${dark.toFixed(1)}:1. Kinas would offer ${rgb2hex(fix)}`;
+}
+function setAccent(h){root.style.setProperty('--brand-accent',h);checkAccent(h)}
+document.querySelectorAll('.sw-btn').forEach(b=>b.addEventListener('click',()=>{
+ document.querySelectorAll('.sw-btn').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+ document.getElementById('custom').value=b.dataset.a.toLowerCase();setAccent(b.dataset.a)}));
+document.getElementById('custom').addEventListener('input',e=>{
+ document.querySelectorAll('.sw-btn').forEach(x=>x.setAttribute('aria-pressed','false'));setAccent(e.target.value)});
+document.getElementById('font').addEventListener('change',e=>root.style.setProperty('--brand-font-ui',e.target.value));
+checkAccent('#00549E');
+</script>
+</body>
+</html>

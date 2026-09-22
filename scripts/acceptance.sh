@@ -159,7 +159,9 @@ if want ac12; then
   [ -L "$KINAS" ] && pass "~/.local/bin/kinas is a symlink" || fail "~/.local/bin/kinas is not a symlink"
   herdr session list 2>/dev/null | grep -q '^default *running' && pass "Herdr default session running" || fail "Herdr default session not running"
   started=$(echo "$log" | grep 'terminal: starting' | tail -1)
-  echo "$started" | grep -q '"herdr; exec' && pass "the pane attached Herdr's default session: ${started##*INFO] }" || fail "the pane did not start herdr: '$started'"
+  # Since the launch screen (2026-09-15) a bundled app runs `KINAS_ENTER=herdr COLORFGBG='…' '<cli>'; [ $? -eq 10 ] || herdr; exec …`;
+  # only a build with no CLI beside it starts on `"herdr; exec`. Either way Herdr follows.
+  echo "$started" | grep -q -E '("|\|\| )herdr; exec' && pass "the pane attached Herdr's default session: ${started##*INFO] }" || fail "the pane did not start herdr: '$started'"
 fi
 
 if want ac11; then

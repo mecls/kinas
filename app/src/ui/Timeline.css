@@ -1,0 +1,41 @@
+/* Timeline (DESIGN.md §4; preview 196–201): the time on the left in --fs-xs mono --ink-2, a status dot, the text; a
+   hairline joins the dots. An order from the captain carries a small "order" tag. */
+.ui-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+.ui-timeline li {
+  display: grid;
+  grid-template-columns: 40px 14px 1fr;
+  gap: var(--space-2);
+  align-items: start;
+  padding-bottom: var(--space-3);
+  position: relative;
+}
+.ui-timeline li::after {
+  content: "";
+  position: absolute;
+  left: 51px;
+  top: 14px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.ui-timeline li:last-child::after {
+  display: none;
+}
+.ui-timeline-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--ink-2);
+}
+.ui-timeline .ui-dot {
+  /* Centred on the first line of text. */
+  margin-top: calc((var(--lh-md) - var(--dot)) / 2);
+}
+.ui-timeline-text .ui-tag {
+  margin-left: var(--space-1h);
+}

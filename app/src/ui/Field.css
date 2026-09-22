@@ -1,0 +1,112 @@
+/* Settings field and switch (DESIGN.md §4; preview 252–265): the label above, the control below, help in --ink-2;
+   groups are cards. A secret is a write-only field with a "Stored in Keychain" caption. The switch is 51 × 31, on is
+   the accent, off is --line-strong. The Accent field: six swatches, a colour input, the two ratios. */
+.ui-field {
+  display: block;
+  margin-top: var(--space-4);
+}
+.ui-field:first-child {
+  margin-top: 0;
+}
+.ui-field-label {
+  display: block;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: var(--space-1h);
+}
+.ui-field-help {
+  margin: var(--space-1h) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+.ui-field-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.ui-input {
+  height: var(--hit);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  min-width: 0;
+}
+.ui-input::placeholder {
+  color: var(--ink-3);
+}
+.ui-input:disabled {
+  color: var(--ink-3);
+}
+
+.ui-switch {
+  width: 51px;
+  height: 31px;
+  border-radius: var(--radius-pill);
+  border: 0;
+  padding: 0;
+  background: var(--line-strong);
+  position: relative;
+  flex: none;
+}
+.ui-switch[aria-checked="true"] {
+  background: var(--accent);
+}
+.ui-switch::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  transition: transform var(--dur-fast) ease-out;
+}
+.ui-switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+}
+
+.ui-accent-swatches {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ui-accent-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  padding: 0;
+  background: var(--c);
+}
+.ui-accent-swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.ui-accent-any {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  padding: 0;
+  background: none;
+  overflow: hidden;
+}
+.ui-accent-contrast {
+  margin: var(--space-1h) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+.ui-accent-contrast[data-passes="false"] {
+  color: var(--danger);
+}

@@ -1,0 +1,25 @@
+/* Status badge (DESIGN.md §4; preview 148–150): a pill in --surface-2 holding a dot and a word; the word is ink,
+   the dot carries the colour. A count comes first, in mono ("4 done"). */
+.ui-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1h);
+  justify-content: flex-end;
+}
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1h);
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.ui-badge-n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

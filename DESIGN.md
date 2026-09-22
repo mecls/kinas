@@ -186,6 +186,8 @@ Geometry (amended 1.2): --focus-w 2 · --icon 16 · --icon-sm 14 · --dot 7 · -
 
 150 ms ease-out for hover and reveal, 200 ms for panels and sheets. Nothing bounces, and no number animates. Respect `prefers-reduced-motion`.
 
+Amended 1.2 (2026-09-22): in the Mac app a **background never transitions**. WKWebView freezes a `background` or `background-color` transition across the window's theme change — every element with one kept its dark colour on a light page — so hover and reveal motion applies to `transform`, `opacity` and `width`, and a background changes at once; `app/src/styles/guard.test.ts` refuses a background transition.
+
 ## 3. Layout
 
 ### 3.1 The Mac window

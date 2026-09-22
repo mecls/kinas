@@ -1,0 +1,38 @@
+/* Metric row (DESIGN.md §4; preview 174–179): a label on the left, an inline bar, the value on the right in mono with
+   its unit in --ink-2. Rows stack inside a card: nine Convex metrics are nine rows, not nine tiles. A value past its
+   limit fills the bar with --danger and says "upper bound" in the unit slot. */
+.ui-rows {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-4);
+}
+.ui-rows-title {
+  margin: 0;
+  padding-top: var(--space-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.ui-metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 150px;
+  gap: var(--space-4);
+  align-items: center;
+  height: var(--row-h);
+  border-top: 1px solid var(--line);
+}
+.ui-metric-row:first-child,
+.ui-rows-title + .ui-metric-row {
+  border-top: 0;
+}
+.ui-metric-row .ui-metric-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-metric-row .ui-metric-value {
+  text-align: right;
+  white-space: nowrap;
+}

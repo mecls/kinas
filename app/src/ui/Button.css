@@ -1,0 +1,57 @@
+/* Button (DESIGN.md §4; preview 123–130). Three kinds: secondary is the default — a surface with a strong hairline;
+   primary is the accent under its ink; text is quiet. --hit tall on the Mac. The label names exactly what happens. */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1h);
+  height: var(--hit);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ui-button:hover {
+  background: var(--surface-2);
+}
+.ui-button:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.ui-button[data-kind="primary"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+.ui-button[data-kind="primary"]:hover {
+  background: color-mix(in oklab, var(--accent), black 10%);
+}
+.ui-button[data-kind="text"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+}
+.ui-button[data-kind="text"]:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+/* Kbd: the key hint inside a button or beside a label (preview 129–130). */
+.ui-kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1;
+  padding: var(--space-0) var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+}
+.ui-button[data-kind="primary"] .ui-kbd {
+  border-color: color-mix(in oklab, var(--accent-ink) 40%, transparent);
+  color: var(--accent-ink);
+}

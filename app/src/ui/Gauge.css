@@ -1,0 +1,44 @@
+/* Gauge (DESIGN.md §4; preview 164–173): a title in --ink-2, the number in --fs-num mono with its unit beside it,
+   a bar below, one line of detail. A stale reading mutes the number and draws the bar in --stale; a dead one says
+   "No reading" and draws no fill. Three abreast in a hero row. */
+.ui-gauges {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+.ui-gauge {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+.ui-gauge-title {
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+.ui-gauge-value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1h);
+  margin: var(--space-1) 0 var(--space-3);
+}
+.ui-gauge-value .ui-num {
+  font-size: var(--fs-num);
+  line-height: var(--lh-num);
+  font-weight: 500;
+}
+.ui-gauge-value[data-muted="true"] .ui-num {
+  color: var(--ink-2);
+}
+.ui-gauge-value .ui-gauge-none {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-num);
+  color: var(--ink-2);
+}
+.ui-gauge-detail {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-2);
+}

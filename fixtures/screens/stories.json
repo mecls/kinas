@@ -1,0 +1,282 @@
+{
+  "light": {
+    "[data-story=\"Button/primary\"] .ui-button": {
+      "background-color": "rgb(0, 84, 158)",
+      "border-radius": "6px",
+      "color": "rgb(255, 255, 255)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "13px",
+      "height": "28px"
+    },
+    "[data-story=\"Button/secondary\"] .ui-button": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-top-color": "rgb(207, 201, 188)",
+      "color": "rgb(27, 31, 39)"
+    },
+    "[data-story=\"Button/text\"] .ui-button": {
+      "background-color": "rgba(0, 0, 0, 0)",
+      "color": "rgb(91, 97, 112)"
+    },
+    "[data-story=\"Card/selected\"] .ui-card": {
+      "background-color": "oklab(0.939156 -0.004411 -0.014591)",
+      "box-shadow": "rgb(0, 84, 158) 2px 0px 0px 0px inset"
+    },
+    "[data-story=\"Chip/cat-1\"] .ui-chip": {
+      "background-color": "rgb(62, 124, 138)",
+      "width": "10px"
+    },
+    "[data-story=\"EmptyState/plain\"] .ui-empty": {
+      "border-top-color": "rgb(207, 201, 188)",
+      "border-top-style": "dashed",
+      "color": "rgb(91, 97, 112)"
+    },
+    "[data-story=\"Field/switch\"] .ui-switch[aria-checked=\"true\"]": {
+      "background-color": "rgb(0, 84, 158)",
+      "height": "31px",
+      "width": "51px"
+    },
+    "[data-story=\"Field/text\"] .ui-input": {
+      "border-radius": "6px",
+      "border-top-color": "rgb(207, 201, 188)",
+      "height": "28px"
+    },
+    "[data-story=\"Gauge/danger\"] .ui-bar i": {
+      "background-color": "rgb(196, 38, 46)"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-bar i": {
+      "background-color": "rgb(91, 97, 112)"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-gauge": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(227, 223, 213)",
+      "padding-top": "16px"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-gauge-detail": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "11px"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-num": {
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "28px",
+      "font-weight": "500",
+      "line-height": "32px"
+    },
+    "[data-story=\"Gauge/stale\"] .ui-bar i": {
+      "background-color": "rgb(124, 129, 141)"
+    },
+    "[data-story=\"Gauge/warn\"] .ui-bar i": {
+      "background-color": "rgb(184, 122, 18)"
+    },
+    "[data-story=\"InboxItem/plan\"] .ui-inbox-item": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px"
+    },
+    "[data-story=\"MetricRow/rows\"] .ui-metric-row": {
+      "border-top-color": "rgb(27, 31, 39)",
+      "height": "36px"
+    },
+    "[data-story=\"Nav/sidebar\"] .ui-nav[aria-current=\"page\"]": {
+      "background-color": "oklab(0.939156 -0.004411 -0.014591)",
+      "color": "rgb(27, 31, 39)",
+      "height": "30px"
+    },
+    "[data-story=\"Nav/sidebar\"] .ui-nav[aria-current=\"page\"] .ui-icon": {
+      "color": "rgb(0, 84, 158)"
+    },
+    "[data-story=\"Nav/sidebar\"] .ui-word": {
+      "font-family": "\"Bricolage Grotesque\", Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "20px"
+    },
+    "[data-story=\"ProgressRow/list\"] .ui-progress-row[aria-selected=\"true\"]": {
+      "background-color": "oklab(0.939156 -0.004411 -0.014591)",
+      "min-height": "56px"
+    },
+    "[data-story=\"SectionHeader/reading\"] .ui-caption": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "[data-story=\"SectionHeader/reading\"] .ui-section-action": {
+      "color": "rgb(27, 31, 39)"
+    },
+    "[data-story=\"SectionHeader/reading\"] h2": {
+      "font-size": "15px",
+      "font-weight": "600",
+      "line-height": "22px"
+    },
+    "[data-story=\"StatusBadge/decision\"] .ui-badge": {
+      "background-color": "rgb(237, 234, 226)",
+      "border-radius": "999px",
+      "color": "rgb(27, 31, 39)",
+      "font-size": "12px",
+      "height": "22px"
+    },
+    "[data-story=\"StatusBadge/decision\"] .ui-dot": {
+      "background-color": "rgba(0, 0, 0, 0)",
+      "box-shadow": "rgb(184, 122, 18) 0px 0px 0px 1.75px inset",
+      "width": "7px"
+    },
+    "[data-story=\"StatusBadge/done\"] .ui-dot": {
+      "background-color": "rgb(46, 139, 87)"
+    },
+    "[data-story=\"Table/today\"] th": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px",
+      "height": "36px"
+    },
+    "[data-story=\"TerminalChrome/working\"] .ui-termchrome": {
+      "background-color": "rgb(237, 234, 226)",
+      "height": "32px"
+    },
+    "[data-story=\"TitleRow/home\"] h1": {
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "20px",
+      "font-weight": "600",
+      "line-height": "28px"
+    },
+    "[data-story=\"Toast/success\"] .ui-toast": {
+      "background-color": "rgb(255, 255, 255)",
+      "box-shadow": "rgba(20, 23, 30, 0.12) 0px 8px 24px 0px, rgba(20, 23, 30, 0.08) 0px 1px 3px 0px"
+    }
+  },
+  "dark": {
+    "[data-story=\"Button/primary\"] .ui-button": {
+      "background-color": "oklab(0.623875 -0.027266 -0.090197)",
+      "border-radius": "6px",
+      "color": "rgb(14, 20, 32)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "13px",
+      "height": "28px"
+    },
+    "[data-story=\"Button/secondary\"] .ui-button": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-top-color": "rgb(58, 65, 82)",
+      "color": "rgb(237, 238, 242)"
+    },
+    "[data-story=\"Button/text\"] .ui-button": {
+      "background-color": "rgba(0, 0, 0, 0)",
+      "color": "rgb(161, 167, 180)"
+    },
+    "[data-story=\"Card/selected\"] .ui-card": {
+      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "box-shadow": "oklab(0.623875 -0.027266 -0.090197) 2px 0px 0px 0px inset"
+    },
+    "[data-story=\"Chip/cat-1\"] .ui-chip": {
+      "background-color": "rgb(95, 163, 178)",
+      "width": "10px"
+    },
+    "[data-story=\"EmptyState/plain\"] .ui-empty": {
+      "border-top-color": "rgb(58, 65, 82)",
+      "border-top-style": "dashed",
+      "color": "rgb(161, 167, 180)"
+    },
+    "[data-story=\"Field/switch\"] .ui-switch[aria-checked=\"true\"]": {
+      "background-color": "oklab(0.623875 -0.027266 -0.090197)",
+      "height": "31px",
+      "width": "51px"
+    },
+    "[data-story=\"Field/text\"] .ui-input": {
+      "border-radius": "6px",
+      "border-top-color": "rgb(58, 65, 82)",
+      "height": "28px"
+    },
+    "[data-story=\"Gauge/danger\"] .ui-bar i": {
+      "background-color": "rgb(229, 87, 94)"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-bar i": {
+      "background-color": "rgb(161, 167, 180)"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-gauge": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(43, 49, 64)",
+      "padding-top": "16px"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-gauge-detail": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "11px"
+    },
+    "[data-story=\"Gauge/fine\"] .ui-num": {
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "28px",
+      "font-weight": "500",
+      "line-height": "32px"
+    },
+    "[data-story=\"Gauge/stale\"] .ui-bar i": {
+      "background-color": "rgb(124, 129, 141)"
+    },
+    "[data-story=\"Gauge/warn\"] .ui-bar i": {
+      "background-color": "rgb(217, 160, 58)"
+    },
+    "[data-story=\"InboxItem/plan\"] .ui-inbox-item": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px"
+    },
+    "[data-story=\"MetricRow/rows\"] .ui-metric-row": {
+      "border-top-color": "rgb(237, 238, 242)",
+      "height": "36px"
+    },
+    "[data-story=\"Nav/sidebar\"] .ui-nav[aria-current=\"page\"]": {
+      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "color": "rgb(237, 238, 242)",
+      "height": "30px"
+    },
+    "[data-story=\"Nav/sidebar\"] .ui-nav[aria-current=\"page\"] .ui-icon": {
+      "color": "oklab(0.623875 -0.027266 -0.090197)"
+    },
+    "[data-story=\"Nav/sidebar\"] .ui-word": {
+      "font-family": "\"Bricolage Grotesque\", Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "20px"
+    },
+    "[data-story=\"ProgressRow/list\"] .ui-progress-row[aria-selected=\"true\"]": {
+      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "min-height": "56px"
+    },
+    "[data-story=\"SectionHeader/reading\"] .ui-caption": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px"
+    },
+    "[data-story=\"SectionHeader/reading\"] .ui-section-action": {
+      "color": "rgb(237, 238, 242)"
+    },
+    "[data-story=\"SectionHeader/reading\"] h2": {
+      "font-size": "15px",
+      "font-weight": "600",
+      "line-height": "22px"
+    },
+    "[data-story=\"StatusBadge/decision\"] .ui-badge": {
+      "background-color": "rgb(35, 40, 51)",
+      "border-radius": "999px",
+      "color": "rgb(237, 238, 242)",
+      "font-size": "12px",
+      "height": "22px"
+    },
+    "[data-story=\"StatusBadge/decision\"] .ui-dot": {
+      "background-color": "rgba(0, 0, 0, 0)",
+      "box-shadow": "rgb(217, 160, 58) 0px 0px 0px 1.75px inset",
+      "width": "7px"
+    },
+    "[data-story=\"StatusBadge/done\"] .ui-dot": {
+      "background-color": "rgb(79, 179, 122)"
+    },
+    "[data-story=\"Table/today\"] th": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px",
+      "height": "36px"
+    },
+    "[data-story=\"TerminalChrome/working\"] .ui-termchrome": {
+      "background-color": "rgb(35, 40, 51)",
+      "height": "32px"
+    },
+    "[data-story=\"TitleRow/home\"] h1": {
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "20px",
+      "font-weight": "600",
+      "line-height": "28px"
+    },
+    "[data-story=\"Toast/success\"] .ui-toast": {
+      "background-color": "rgb(27, 31, 39)",
+      "box-shadow": "rgba(0, 0, 0, 0.4) 0px 8px 24px 0px, rgba(0, 0, 0, 0.3) 0px 1px 3px 0px"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+/* Toast and empty state (DESIGN.md §4; preview 291–293). A toast floats on --shadow-float, one line, one optional
+   action; success has no colour and only an error uses --danger. An empty state is one sentence in --ink-2 and one
+   action, never an illustration. */
+.ui-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  color: var(--ink);
+}
+.ui-toast[data-kind="error"] {
+  color: var(--danger);
+}
+
+.ui-empty {
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}

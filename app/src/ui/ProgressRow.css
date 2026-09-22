@@ -1,0 +1,54 @@
+/* Progress row (DESIGN.md §4; preview 138–147): one row per client folder, --row-h-progress tall — the chip and name,
+   one line in --ink-2 with the latest event, a segmented bar, count badges for non-zero states, a chevron. Selected:
+   --accent-soft with a 2 px accent edge. The list is a card with hairlines between rows. */
+.ui-plist {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.ui-progress-row {
+  display: grid;
+  grid-template-columns: var(--chip) minmax(0, 1fr) 160px 260px var(--icon);
+  align-items: center;
+  gap: var(--space-4);
+  min-height: var(--row-h-progress);
+  padding: var(--space-2) var(--space-4);
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: inherit;
+}
+.ui-progress-row:first-child {
+  border-top: 0;
+}
+.ui-progress-row:hover {
+  background: var(--surface-2);
+}
+.ui-progress-row[aria-selected="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset var(--focus-w) 0 0 var(--accent);
+}
+.ui-progress-row .ui-progress-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+  min-width: 0;
+}
+.ui-progress-row .ui-progress-event {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-progress-row .ui-progress-chev {
+  color: var(--ink-3);
+}
+.ui-progress-row[data-quiet="true"] .ui-progress-bar {
+  visibility: hidden;
+}

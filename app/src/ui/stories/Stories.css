@@ -1,0 +1,41 @@
+/* The stories page: every component in every state, one section per state, on the page ground. Debug builds only. */
+.ui-stories {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6) var(--space-7);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  color: var(--ink);
+  background: var(--bg);
+  height: 100%;
+  overflow: auto;
+}
+.ui-stories h1 {
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  font-weight: 600;
+  margin: 0 0 var(--space-5);
+}
+.ui-stories-component {
+  margin-top: var(--space-6);
+}
+.ui-stories-component h2 {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+.ui-story {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+.ui-story-name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--ink-2);
+}

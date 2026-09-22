@@ -1,0 +1,33 @@
+/* Inbox item, compact (DESIGN.md §4; preview 158–162): the question with its folder chip, the recommendation in
+   --ink-2, and the actions inline — Approve (primary), Answer (secondary), Deny (text). */
+.ui-inbox {
+  display: grid;
+  gap: var(--space-2);
+}
+.ui-inbox-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.ui-inbox-question {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+}
+.ui-inbox-rec {
+  margin: var(--space-0) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+.ui-inbox-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

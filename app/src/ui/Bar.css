@@ -1,0 +1,54 @@
+/* Bar (DESIGN.md §2.2, §4 Gauge; preview 146–147, 170–172): --bar-h tall on --meter-track; the fill is --meter when
+   fine, --warn past 80 %, --danger past 95 %, --stale when the reading is old. Never the accent. Inline (a metric
+   row) it is --bar-h-inline. The segmented bar shows done, working, waiting and failed side by side. */
+.ui-bar {
+  display: block;
+  height: var(--bar-h);
+  border-radius: var(--space-0);
+  background: var(--meter-track);
+  overflow: hidden;
+}
+.ui-bar[data-inline="true"] {
+  height: var(--bar-h-inline);
+}
+.ui-bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--space-0);
+  background: var(--meter);
+  transition: width var(--dur-fast) ease-out;
+}
+.ui-bar[data-tone="warn"] i {
+  background: var(--warn);
+}
+.ui-bar[data-tone="danger"] i {
+  background: var(--danger);
+}
+.ui-bar[data-tone="stale"] i {
+  background: var(--stale);
+}
+
+.ui-segbar {
+  display: flex;
+  height: var(--bar-h);
+  border-radius: var(--space-0);
+  background: var(--meter-track);
+  overflow: hidden;
+  gap: var(--space-0);
+}
+.ui-segbar i {
+  display: block;
+  height: 100%;
+}
+.ui-segbar i[data-seg="done"] {
+  background: var(--ok);
+}
+.ui-segbar i[data-seg="working"] {
+  background: var(--meter);
+}
+.ui-segbar i[data-seg="wait"] {
+  background: var(--warn);
+}
+.ui-segbar i[data-seg="fail"] {
+  background: var(--danger);
+}

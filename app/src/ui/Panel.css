@@ -1,0 +1,94 @@
+/* The right panel's task-detail anatomy (DESIGN.md §5 Crew; preview 181–202): a header with the folder chip as a
+   crumb, the title and a badge; sub-headers in --fs-sm --ink-2; a question card on --bg with the recommendation
+   below; the checks list; a sticky action bar at the foot. The panel itself is the shell's. */
+.ui-panel-h {
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.ui-panel-crumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.ui-panel-h h3 {
+  margin: var(--space-2) 0;
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+}
+.ui-panel-b {
+  padding: 0 var(--space-5) var(--space-5);
+  flex: 1;
+}
+.ui-panel-b h4 {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.ui-panel-b p {
+  margin: 0;
+}
+.ui-panel-b ol {
+  margin: 0;
+  padding-left: calc(var(--space-4) + var(--space-0));
+}
+.ui-panel-b ol li {
+  margin-bottom: var(--space-1);
+}
+.ui-panel-f {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: var(--space-3) var(--space-5);
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.ui-qbox {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+.ui-qbox-rec {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+
+.ui-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ui-checks li {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--hit);
+}
+.ui-checks-result {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+.ui-checks-err {
+  grid-column: 2 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-2);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1h) var(--space-2);
+  margin-bottom: var(--space-1);
+}

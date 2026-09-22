@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { applyAccent } from "../theme.ts";
 import { BRAND_ACCENT, describe, isAccent, passes, SWATCHES } from "./accent.ts";
+import { Button } from "./Button.tsx";
+import "./Field.css";
 
 // DESIGN.md §4 "Accent field": a colour control in Settings → Appearance that shows the contrast of the ink on the
 // accent in both themes and will not save a shade under 4.5:1 in either — it offers the nearest one that passes.
@@ -46,9 +48,9 @@ export function AccentField({ value, onChange }: { value: string | null; onChang
         {verdict.offer && (
           <>
             {" "}
-            <button type="button" className="button" onClick={() => choose(verdict.offer)}>
+            <Button kind="text" onClick={() => choose(verdict.offer)}>
               Use it
-            </button>
+            </Button>
           </>
         )}
       </p>

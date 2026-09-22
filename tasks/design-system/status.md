@@ -7,8 +7,8 @@
 - Gate 4 · Slice plan: APPROVED 2026-09-22
 
 ## Slices
-- [ ] Slice 0 · ship PR #22 (the light theme) ✓ 2026-09-22 · the worktree ✓ · the documents ✓ · Gates 2–4 · the docs-first amendments
-- [ ] Slice 1 · tracer bullet: `tokens.css` ported, fonts bundled, the accent setting; the app runs on the new tokens with nothing else restyled
+- [x] Slice 0 · ship PR #22 (the light theme), the worktree, the documents, Gates 2–4, the docs-first amendments — 2026-09-22
+- [x] Slice 1 · tracer bullet (2026-09-22, `5bd6d5d`): `tokens.css` ported, fonts bundled, the accent setting; the app runs on the new tokens with nothing else restyled
 - [ ] Slice 2 · the primitives in `app/src/ui/` with stories, the guard test → ship point 1
 - [ ] Slice 3 · the shell: sidebar, nav, title row, client folders, connection row, `go.home`
 - [ ] Slice 4 · Usage on the primitives → ship point 2

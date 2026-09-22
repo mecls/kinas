@@ -1,0 +1,34 @@
+/* Terminal chrome (DESIGN.md §4; preview 284–290): a --chrome-h bar above the pane in --surface-2 holding the session
+   name, a status badge and the profile, with the actions on the right. The pane below it keeps its own palette. */
+.ui-termchrome {
+  height: var(--chrome-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink);
+}
+.ui-termchrome-session {
+  font-family: var(--font-mono);
+}
+.ui-termchrome-acts {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-1);
+}
+.ui-termchrome-acts button {
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--space-1);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.ui-termchrome-acts button:hover {
+  background: var(--line);
+}

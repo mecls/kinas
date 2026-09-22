@@ -1,0 +1,56 @@
+/* Section header (DESIGN.md §3.2, §4; preview 132–136): a title in --fs-lg, an optional caption in --ink-2 beside it
+   (where freshness lives, once per section), an optional action on the right. Sections are --space-6 apart. */
+.ui-section {
+  margin-top: var(--space-6);
+}
+.ui-section:first-child {
+  margin-top: 0;
+}
+.ui-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.ui-section-head h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+}
+.ui-caption {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+.ui-section-info {
+  color: var(--ink-2);
+  display: inline-flex;
+  align-self: center;
+}
+.ui-section-action {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+}
+.ui-section-action:hover {
+  text-decoration: underline;
+}
+
+/* Title row (DESIGN.md §3.2; preview 121–122): the page title in --fs-xl, then quiet actions on the right. */
+.ui-titlerow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ui-titlerow h1 {
+  margin: 0 auto 0 0;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  font-weight: 600;
+}

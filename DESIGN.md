@@ -2,10 +2,11 @@
 
 The law for how Kinas looks, the way `keymap.md` is the law for keys. An agent building any surface reads this first, uses only what it defines, and adds to it before using anything it does not define.
 
-Version 1.1, 2026-09-22.
+Version 1.2, 2026-09-22.
 
 ## Changes
 
+- **1.2, 2026-09-22 (the design system build).** The law meets the code. The terminal follows the theme: `--term-bg` and `--term-fg` take a light value too, and the sixteen ANSI colours have a set per theme (2.2, 2.3). The type scale is written as pairs, `--fs-*` / `--lh-*`, because that is what `font-size` and `line-height` take (2.5). Two sub-grid spacing steps, `--space-0` 2 and `--space-1h` 6, for gaps inside a component (2.6). The display face is Bricolage Grotesque (OFL): Clash Display's license does not allow the files in a public repository (2.5, the open item closed). `--panel-w` is the panel's default share and the divider decides, down to `--pane-min` (2.6). Section 9 gains "Adding a surface", the procedure every later build follows, and names `app/src/styles/tokens.css` as the source of truth until `tokens.json` is needed for the phone. The gauge thresholds in 2.2 (80 %, 95 % used) replace the app's earlier ≤ 25 / ≤ 10 % left.
 - **1.1, 2026-09-22.** Scope set to an engineering tool for the team, with no agency pages. Added the Home page (overnight progress per client folder, plus usage), iPhone layouts for approving and launching, and a two-layer token model so the open-source build can swap accent and fonts. Added a categorical palette for folders and providers, layout tokens, and a complete dark theme. Fixed the contrast values that failed: `--stale`, `--warn`, and the dark `--accent-ink`. Removed the accent from gauge bars, removed the crew's use of `--warn`, and removed `--info`. Migration steps now end on a definition of done instead of a duration.
 - **1.0.** First version.
 
@@ -77,8 +78,11 @@ Category (identity only: folders, providers)
 --cat-6         #4E5F8C   slate
 
 Terminal (the pane's own palette, never used outside it)
---term-bg       #10192B
---term-fg       #E7EEF7
+--term-bg       #F4F2EC   light; #10192B dark (amended 1.2: the pane follows the theme)
+--term-fg       #0A1420   light; #E7EEF7 dark
+--term-selection #CCDDEC  light; #18406B dark
+--ansi-*        sixteen colours, a set per theme, every one ≥ 4.5:1 on its --term-bg; --ansi-black = --line,
+                --ansi-bright-black = --ink-2, --ansi-yellow = --warn, --ansi-bright-white = --term-fg
 
 Floating layers only
 --shadow-float  0 8px 24px rgb(20 23 30 / .12), 0 1px 3px rgb(20 23 30 / .08)
@@ -89,7 +93,7 @@ Rules:
 - **Accent** marks the interactive and the selected. It is never a bar fill, a status, or a category.
 - **Status colors** appear as dots, bars, and segments. They are never text, with one exception: `--danger` for an error message (5.7:1 on `--surface`).
 - **Category colors** appear as a chip or a chart series, always next to the name they stand for. Each client folder and provider gets one in Settings, and it stays stable. Past six, colors repeat and the name disambiguates.
-- **Bars** fill with `--meter` when fine, `--warn` past 80 %, `--danger` past 95 %, and `--stale` when the reading is older than its window.
+- **Bars** fill with `--meter` when fine, `--warn` past 80 %, `--danger` past 95 %, and `--stale` when the reading is older than its window. (1.2: these replace the app's earlier ≤ 25 / ≤ 10 % *left* rule; a dead reading draws no bar.)
 - **The brand's gold and crimson** appear only as `--warn` and `--danger`.
 
 ### 2.3 Color, dark theme
@@ -108,7 +112,7 @@ Same token names, swapped values. Never a second stylesheet.
 --shadow-float 0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3)
 ```
 
-`--accent-ink` flips to dark because white on the lightened accent drops to about 3.4:1. The terminal palette does not change.
+`--accent-ink` flips to dark because white on the lightened accent drops to about 3.4:1. Amended 1.2 (2026-09-22): the terminal palette *does* change — the pane draws on the window's ground in both themes with the ANSI set of that theme (decided with the light theme of PR #22); a program that paints its own 24-bit theme does not follow.
 
 ### 2.4 Contrast (measured, WCAG 2.x)
 
@@ -132,15 +136,15 @@ The contrast test (section 9) checks every pair in both themes and at the curren
 --font-mono     var(--brand-font-mono), "SF Mono", Menlo, monospace
 --font-display  var(--brand-font-display), var(--font-ui)   wordmark and launch screen only
 
-Mac scale (px / line-height)
---text-xs    11 / 16    freshness, units, times
---text-sm    12 / 18    captions, table cells, badges
---text-md    13 / 20    body, labels, nav, buttons
---text-lg    15 / 22    section titles, card titles
---text-xl    20 / 28    page titles
---text-num   28 / 32    the hero number in a gauge (mono, tabular)
+Mac scale (px / line-height) — written in tokens.css as the pair --fs-<step> / --lh-<step> (amended 1.2)
+--text-xs    11 / 16    freshness, units, times          (--fs-xs / --lh-xs)
+--text-sm    12 / 18    captions, table cells, badges     (--fs-sm / --lh-sm)
+--text-md    13 / 20    body, labels, nav, buttons        (--fs-md / --lh-md)
+--text-lg    15 / 22    section titles, card titles       (--fs-lg / --lh-lg)
+--text-xl    20 / 28    page titles                       (--fs-xl / --lh-xl)
+--text-num   28 / 32    the hero number in a gauge (mono, tabular)   (--fs-num / --lh-num)
 
-iPhone scale (px / line-height)
+iPhone scale (px / line-height) — --m-fs-<step> / --m-lh-<step>
 --m-text-sm      13 / 18    captions, badges, tab labels
 --m-text-body    15 / 22    body, rows, buttons
 --m-text-title   20 / 26    screen titles below the large title
@@ -151,13 +155,15 @@ Weights: 400 regular, 500 medium, 600 semibold. Nothing bolder.
 
 Rules: labels are sentence case, never all caps, never letter-spaced. Numbers are always mono with tabular figures, right-aligned in tables, and carry their unit in `--ink-2`. Mono is for numbers, code, paths, keys, and the terminal. It is never for labels or prose.
 
-The display font must be redistributable, since it ships in an open-source repo. Clash Display stays only if its license permits bundling it. Otherwise it is replaced with an OFL display face before release.
+The display font must be redistributable, since it ships in an open-source repo. Amended 1.2 (2026-09-22): Clash Display's ITF Free Font License does not permit sharing the files, so the display face is **Bricolage Grotesque** (OFL) — `--brand-font-display: "Bricolage Grotesque"`. Inter and JetBrains Mono (OFL) are bundled with the app as woff2 files under `app/src/assets/fonts/`, each with its license beside it; nothing is fetched at runtime.
 
 ### 2.6 Space, radius, layout
 
 ```
 Spacing on a 4 px grid
 --space-1 4   --space-2 8   --space-3 12   --space-4 16   --space-5 24   --space-6 32   --space-7 48
+--space-0 2   --space-1h 6   (amended 1.2: the two sub-grid steps, for gaps inside a component — a dot and its word,
+                             a label and its value — never for layout)
 
 Radius
 --radius-sm 6    inputs, badges, nav items
@@ -165,12 +171,15 @@ Radius
 --radius-lg 14   panels, the reader, dialogs, sheets
 
 Layout
---sidebar-w     220   --panel-w   360 (resizable, min 320)
+--sidebar-w     220   --panel-w   360 (the panel's default share; the divider decides, down to --pane-min 280 — amended 1.2)
 --chrome-h      32    --strip-h   96
 --page-max      1120  --row-h     36     --row-h-progress  56
 --hit           28    --hit-touch 44     --tabbar-h        49 (plus the safe area)
 
 Borders: 1 px --line. No shadows on cards. --shadow-float only on the palette, menus, toasts, and sheets.
+
+Geometry (amended 1.2): --focus-w 2 · --icon 16 · --icon-sm 14 · --dot 7 · --dot-ring 1.75 · --chip 10 ·
+--bar-h 4 · --bar-h-inline 2 · --radius-pill 999. Motion: --dur-fast 150ms · --dur-slow 200ms (2.7).
 ```
 
 ### 2.7 Motion
@@ -342,11 +351,23 @@ Sentence case everywhere. No abbreviation a newcomer would not know: write "Data
 ## 9. How agents use this
 
 - `DESIGN.md` at the repo root is the law, beside `keymap.md`. A PRD's UI section names components from section 4. If a component is missing, the PRD adds it here first.
-- Tokens live in `design/tokens.json` and generate `tokens.css`. Components live in `app/src/ui/<Component>.tsx`, with one story each in `app/src/ui/stories/`. Pages compose components and add no styles of their own beyond layout, which uses the layout tokens.
+- Tokens live in `app/src/styles/tokens.css` (amended 1.2: hand-written, held equal to section 2 by `app/src/styles/design.test.ts`; `design/tokens.json` and its generator arrive with the phone, whose native app needs `KinasTokens.swift`). Components live in `app/src/ui/<Component>.tsx` with a sibling `.css`, one story per state in `app/src/ui/stories/`, exported from `app/src/ui/index.ts`; a page imports from there and nowhere else. Pages compose components and add no styles of their own beyond layout, which uses the layout tokens.
 - A test greps `app/src` for raw hex colors, raw `px` sizes, and raw spacing values outside the generated tokens, and fails on any.
 - Every story renders in both themes at the default accent and at one extreme test accent. A test checks contrast on every text pair.
 - Screenshots of every page, in both themes, on the Mac window and the iPhone width, are part of the smoke test. A design regression is a visible diff, not a feeling.
 - When this file changes, the date and the reason go in Changes at the top, never a rewrite of history.
+
+### Adding a surface
+
+The procedure every later build follows, in this order (added 1.2, 2026-09-22):
+
+1. **Read this file first**, then `keymap.md`. A PRD's screens line names the components from section 4 the surface composes.
+2. **Reuse a component, or add one here first**: a state or a component that section 4 does not describe is written into section 4 — its anatomy, its states, its tokens — before any code, then built in `app/src/ui/` with a story per state, then used.
+3. **Mock the screen** as plain HTML from `tasks/_templates/mockup.html` (it inlines this file's tokens from `tokens.css`) under `tasks/<feature>/mockups/`, using only semantic tokens and section 4's components, and **review it in the reader** with `kinas open tasks/<feature>/mockups/<screen>.html`; iterate until the captain says "yes, that". Where this file and the mockup disagree, this file wins and the mockup is corrected before Gate 1 is approved.
+4. **Build**: the page composes `app/src/ui/` components and adds layout only; the guard test (`app/src/styles/guard.test.ts`) refuses any raw colour, font size or spacing outside `tokens.css`; the contrast test holds every text pair in both themes; the story renders every state.
+5. **Update `design/preview.html`** when a token or a component changed, so the preview and the app never drift (`app/src/styles/preview.test.ts` holds their tokens equal); add the page to `docs/design/screens/` in both themes.
+
+An agent starting the Crew page with no memory of this file's authors should find `Lane`, `Card`, `InboxItem`, `StatusBadge` and `TerminalChrome` in `app/src/ui/` with stories, mock the board from the preview, and ship a page that looks like it was always there — without asking a design question.
 
 ## 10. Migration of what exists
 
@@ -362,6 +383,6 @@ Each step ships when its definition of done holds, not on a date.
 
 ## Open items
 
-- Whether Clash Display's license permits bundling it in the open-source repo (2.5).
+- ~~Whether Clash Display's license permits bundling it in the open-source repo (2.5).~~ Closed 1.2: it does not; Bricolage Grotesque.
 - Whether the iPhone app is native Swift or web, which decides the token delivery (3.3).
 - Assumed: each folder under `clients/` is one Crew lane, and internal projects sit beside them marked "internal". Confirm.

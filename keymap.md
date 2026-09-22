@@ -14,8 +14,10 @@ registers it (PRD rule 5). A binding in code that is not listed here is a bug.
 | Chord | Action |
 |---|---|
 | ⌘K | Open the command palette |
-| ⌘1 | Go to the Usage page |
+| ⌘1 | Go to the Home page (Usage until 2026-09-22, see below) |
 | ⌘2 | Go to the Work page |
+| ⌘3 | Reserved for the Crew page (Build 3); bound to nothing until then |
+| ⌘4 | Go to the Usage page |
 | ⌘S | Hide or show the sidebar (remembered across launches) |
 | ⌘, | Open the Settings page (also the gear at the foot of the sidebar) |
 | ⌘W | Hide the window (the app, readers and terminal keep running) |
@@ -23,10 +25,16 @@ registers it (PRD rule 5). A binding in code that is not listed here is a bug.
 | ⌘M | Minimise the window (macOS standard) |
 | ⌘Q | Quit Kinas (the terminal child gets SIGHUP, then SIGKILL after 2 s) |
 
-⌘K, ⌘1, ⌘2, ⌘S and ⌘, are defaults: Settings → Keyboard shortcuts rebinds them, and the terminal pane follows.
+⌘K, ⌘1, ⌘2, ⌘4, ⌘S and ⌘, are defaults: Settings → Keyboard shortcuts rebinds them, and the terminal pane follows.
 A shortcut must include ⌘ (so it never takes a key from the terminal), cannot be a macOS menu chord (⌘C ⌘V ⌘X ⌘A
 ⌘Z ⌘⇧Z ⌘W ⌘H ⌘M ⌘Q) or the global hotkey, and cannot repeat another shortcut. Wherever this file names one of
-the five, it means the chord bound to it now.
+the six, it means the chord bound to it now.
+
+Amended 2026-09-22 (design system): Home is the first page and takes ⌘1; Usage moves to ⌘4. A chord saved in
+Settings before that day that now equals another action's default (a saved ⌘1 for Usage, with nothing saved for
+Home) is dropped when read, so the two actions never share a chord; a pair the captain bound on purpose is kept.
+The sidebar's other entries — Crew, Inbox, Reader — are click-only and have no palette command (Reader is a panel,
+not a page; Crew and Inbox arrive with Build 3). The theme and the accent in Settings → Appearance have no key.
 
 ## Command palette
 
@@ -58,7 +66,7 @@ The only ⌘ chords the app handles in the pane:
 | ⌘K | Open the palette |
 | ⌘C | Copy the selection, if there is one; otherwise nothing |
 | ⌘V | Paste (bracketed when the running program enabled bracketed paste) |
-| ⌘1 / ⌘2 | Switch pages |
+| ⌘1 / ⌘2 / ⌘4 | Switch pages |
 | ⌘S | Hide or show the sidebar |
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |
@@ -111,11 +119,17 @@ the projects root never move keyboard focus. If the terminal had it, it keeps it
 never accept the card; Open and Dismiss take a click. Closing the reader with × gives the terminal focus while the
 Work page is showing; on any other page the terminal is hidden, and focus is left where it was.
 
-## Sidebar (Pinned, Files, Recent)
+## Sidebar (the navigation, Pinned, Files, Recent, Client folders)
 
 Added 2026-09-21 (sidebar folders). The sidebar adds no key bindings and no palette command. **Pin**, **Unpin** and
 **Open in the terminal** — the buttons that show when a folder's row is pointed at — are click-only, for the reason
 the reader's controls are; this file stays the gate.
+
+Amended 2026-09-22 (design system): the navigation lists Home, Work, Crew, Inbox, Usage, Reader and Settings. Home,
+Work, Usage and Settings have the chords above; **Crew**, **Inbox** and **Reader** are click-only. Reader reopens the
+last document in the panel, or says at the foot of the sidebar that there is nothing to reopen. The **Client folders**
+rows and the VPS row at the foot are click-only too: a folder row opens that folder in the reader, as its tree row
+does. Selecting a folder's colour or marking it internal happens in Settings → Client folders, by click.
 
 **Open in the terminal** is the one sidebar action that moves you. Kinas asks Herdr, through its CLI, for that
 folder's workspace — focusing the one that already carries the folder's label, creating it in that folder if there

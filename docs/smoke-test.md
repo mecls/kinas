@@ -59,14 +59,16 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
 - [x] ⌃C stops `sleep 100` — `automated (keyboard.e2e.ts)`, ⌃C sent as a real keydown on xterm's textarea
 - [x] ⌘K raises the palette instead of reaching the shell — `automated (keyboard.e2e.ts)`
 - [x] ⌘K opens the palette; Esc closes it; the next line reaches the shell — `automated (palette.e2e.ts)`
-- [x] ⌘1 / ⌘2 switch pages from inside the terminal — `automated (keyboard.e2e.ts)`
+- [x] ⌘1 / ⌘2 switch pages from inside the terminal — `automated (keyboard.e2e.ts)` (since 2026-09-22 ⌘1 is Home and
+      ⌘4 is Usage; the spec follows)
 - [x] ⌘S hides and shows the sidebar from inside the terminal; the next line reaches the shell —
       `automated (keyboard.e2e.ts)`
 - [x] A shortcut rebound in Settings (⌘B for the sidebar) works, its old chord does nothing, and a chord that is
       already taken is refused with whose it is — `automated (settings.e2e.ts)`
-- [ ] The sidebar (220 px since 2026-09-18: an icon and a name for Usage and Work, Settings at the foot), the gear
-      and the Settings page look right; at the window's minimum width, 820 px, the page and the reader each still
-      have their 280 px — `outstanding — needs Miguel`
+- [ ] The sidebar (220 px since 2026-09-18; since 2026-09-22 the wordmark, Home · Work · Crew · Inbox · Usage ·
+      Reader · Settings, the client folders with their chips, the VPS row at the foot), the gear and the Settings page
+      look right; at the window's minimum width, 820 px, the page and the reader each still have their 280 px —
+      `outstanding — needs Miguel`
 - [ ] The same with a physical keyboard — `outstanding — needs Miguel`
 
 ## Selection and clipboard
@@ -244,6 +246,9 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
 ## Light theme
 
 Settings → Appearance: Follow macOS, Light or Dark. One stylesheet, two grounds; the window's appearance chooses.
+Amended 2026-09-22 (design system): the token names below are the old set's; from slice 1 of the design system the
+same checks run over `DESIGN.md`'s tokens (`--bg`, `--surface`, `--ink`, …) with the accent as well — see the
+"Design system" section that slice adds.
 
 - [x] The two grounds are the same set of names; on warm white and on a white panel every colour that draws text
       reaches 4.5:1 and every chart series 3:1; four ANSI slots equal their tokens on both; no rule holds a colour
@@ -321,7 +326,8 @@ Write annoyances here as they happen (task 3.9).
 
 ## Accepted differences from Ghostty
 
-- Font: Kinas uses SF Mono; Ghostty's default is JetBrains Mono.
+- Font: Kinas used SF Mono until 2026-09-22; since the design system it bundles JetBrains Mono (`--font-mono`), the
+  same family as Ghostty's default, at 13 px.
 - Since the light theme (2026-09-21), the `kinas` CLI's secondary text and its banner's shadow are ANSI bright
   black, not a fixed `#8593A6`. In the dark pane that is `#8A8F98` (`--muted`): a shade less blue, 5.99:1 on the
   ground where it was 6.23:1. In Ghostty it is Ghostty's bright black.

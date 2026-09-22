@@ -3,7 +3,7 @@
 
 The operating system for a company that runs on AI agents. Local first, one person first.
 
-Kinas is a Mac app with the kinas CLI inside it. It gives one developer a single place to work: a terminal pane with Herdr and the crew, a usage page that shows what every provider subscription and this machine are doing, and, as the agents move in, the run feed, the approvals that reach your phone, and the deployer that ships client changes with rollback.
+Kinas is a Mac app with the kinas CLI inside it. It gives one developer a single place to work: a Home page that says what happened overnight and what needs you, a terminal pane with Herdr and the crew, a usage page that shows what every provider subscription and this machine are doing, and, as the agents move in, the run feed, the approvals that reach your phone, and the deployer that ships client changes with rollback.
 
 Everything runs on your Mac. No server, no SSH, no API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows locally.
 
@@ -104,6 +104,17 @@ Settings (⌘,) shows the same lines with Copy buttons and whether the hook is b
 **Ollama Cloud.** Create an API key on ollama.com and paste it into Settings. It is stored in the macOS
 Keychain (service `ai.sintralabs.kinas`, account `ollama-cloud-api-key`), never in the store or logs.
 
+## The pages
+
+Amended 2026-09-22 (design system). The sidebar lists Home, Work, Crew, Inbox, Usage, Reader and Settings, then your
+client folders — every git repository under the projects folder, each with a colour chip that stays with it — and,
+at the foot, the VPS connection when one is configured. **Home** (⌘1) is the first page: the night's progress per
+client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
+**Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** and
+**Inbox** wait for Build 3 and say so. **Reader** reopens the last document in the panel. Every surface is built
+from `DESIGN.md`'s tokens and components (`app/src/ui/`); a test refuses any raw colour, size or spacing outside
+`app/src/styles/tokens.css`.
+
 ## Appearance
 
 Kinas draws on one of two grounds: the dark one, or warm white with royal blue — the two fields of the palette
@@ -111,6 +122,11 @@ the other way round. Settings → Appearance chooses: Follow macOS (the default,
 Dark. It is a Settings control only: there is no ⌘K command and no shortcut. The app sets the window's own
 appearance, so the title bar agrees with the page, and the terminal pane, code highlighting and Mermaid
 diagrams turn with it. Printing is the same from either.
+
+Amended 2026-09-22 (design system): the same section chooses the **accent** — the colour of the selected nav row,
+primary buttons and the selected card's edge — from six swatches or any colour. A shade whose text would fall under
+4.5:1 in either theme is not saved; the field offers the nearest one that passes. The fonts (Inter, JetBrains Mono,
+Bricolage Grotesque for the wordmark — all OFL) ship inside the app; nothing is fetched.
 
 The `kinas` CLI reads on both grounds without being told which it is on: royal blue and crimson are exact,
 and its text uses the terminal's own foreground, bright black and yellow — which in the Kinas pane are the
@@ -145,6 +161,9 @@ The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug buil
 
 ```
 app/                 Tauri app: src-tauri/ (Rust: store, PTY, readers, menu bar) and src/ (React webview)
+app/src/ui/          the component library — one file per DESIGN.md component, a story per state (stories/)
+app/src/styles/      tokens.css (every colour, size and space), the page sheets, the guard and contrast tests
+app/src/assets/fonts/ Inter, JetBrains Mono, Bricolage Grotesque as woff2, with their OFL licences
 cli/                 the kinas CLI (Clack, Ink for the launch screen), compiled by scripts/build-cli.ts
 packages/store/      staleness, quota line, StorageAdapter, the CLI's read-only SQLite adapter
 packages/commands/   the command registry shared by the CLI and the palette, and the shared theme
@@ -155,7 +174,8 @@ fixtures/            shared test data (synthetic files are marked .synthetic)
 e2e/                 WebdriverIO specs and runner
 keymap.md            every key binding
 DESIGN.md            the design system: tokens, components, pages — the law for every surface
-design/preview.html  DESIGN.md rendered, both themes, for a browser
+design/preview.html  DESIGN.md rendered, both themes, for a browser; held equal to tokens.css by a test
+docs/design/screens/ Home, Usage, Settings and the stories in both themes, as the e2e captured them
 AGENTS.md            how agents work here: the four gates, the resume rule, where the documents live
 docs/smoke-test.md   the terminal's acceptance checklist
 docs/adr/            the decisions that outlive a feature, numbered, never rewritten (adr.test.ts holds them)

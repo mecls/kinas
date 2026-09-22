@@ -11,6 +11,18 @@ spikes/
 .DS_Store
 *.log
 
-# Planning documents and the names AC-10 looks for stay on this Mac: the repository is public
-tasks/
+# Planning documents and the names AC-10 looks for stay on this Mac (the repository is public) —
+# except the templates and, per feature, its status file, PRD and mockups, which the private-names
+# check guards like any other tracked file
+tasks/*
+!tasks/_templates/
+!tasks/*/
+tasks/*/*
+!tasks/_templates/*
+!tasks/*/status.md
+!tasks/*/prd.md
+!tasks/*/mockups/
 scripts/private-names
+
+# Build worktrees live under .claude/ beside the vendored skills; only the skills are tracked
+.claude/worktrees/

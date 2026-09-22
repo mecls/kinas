@@ -2,6 +2,7 @@ mod cli_link;
 mod commands;
 mod keychain;
 mod paths;
+mod projects;
 mod pty;
 mod quota_line;
 mod reader;
@@ -93,6 +94,7 @@ pub fn run() {
             Ok(())
         })
         .manage(pty::PtyState::default())
+        .manage(projects::ProjectsCache::default())
         .manage(reader::ReaderState::default())
         .invoke_handler(tauri::generate_handler![
             commands::store_info,
@@ -132,6 +134,9 @@ pub fn run() {
             commands::set_shortcuts,
             commands::set_sidebar_visible,
             commands::set_reader_width,
+            projects::list_projects,
+            projects::set_folder_category,
+            projects::set_folder_internal,
             reader::reader_open,
             reader::reader_read_text,
             reader::reader_list_dir,

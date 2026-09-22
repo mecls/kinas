@@ -3,8 +3,11 @@ import {
   getSettings,
   removeOllamaKey,
   saveOllamaKey,
+  type ProjectRow,
   setAccent,
   setAppearance,
+  setFolderCategory,
+  setFolderInternal,
   setGlobalHotkey,
   setLaunchAtLogin,
   setMenuBarQuota,
@@ -18,6 +21,8 @@ import { chordFromEvent } from "../settings/chord.ts";
 import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
 import { AccentField } from "../ui/AccentField.tsx";
+import { CATEGORIES, categoriesFor } from "../ui/category.ts";
+import { Chip, Switch, TitleRow } from "../ui/index.ts";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 
 // Settings (PRD §3.9, amended 2026-09-15): a page, opened from the gear at the foot of the sidebar or ⌘,. It stays
@@ -71,10 +76,15 @@ export function SettingsPage({
   active,
   shortcuts,
   onShortcutsChange,
+  projects,
+  onProjectsChange,
 }: {
   active: boolean;
   shortcuts: Shortcuts;
   onShortcutsChange: (next: Shortcuts) => Promise<void>;
+  /** The client folders the sidebar lists (App.tsx), and the way to have them read again after a change here. */
+  projects: readonly ProjectRow[];
+  onProjectsChange: () => void;
 }) {
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -146,9 +156,7 @@ export function SettingsPage({
 
   return (
     <div className="settings" ref={root} tabIndex={-1} onKeyDown={onKeyDown} data-recording={recording ? "true" : undefined}>
-      <header className="page-header">
-        <h1>Settings</h1>
-      </header>
+      <TitleRow title="Settings" />
       {!settings ? (
         <p className="muted">{loadError ?? "Reading settings…"}</p>
       ) : (
@@ -319,6 +327,17 @@ export function SettingsPage({
             {note("projects")}
           </section>
 
+          <section className="settings-section" data-section="folders">
+            <h2>Client folders</h2>
+            <p className="muted">Every git repository up to three levels under the projects folder, as the sidebar lists it. The chip is the folder's colour on every page; click it for the next of the six. An internal folder is listed last, with the tag.</p>
+            {projects.length === 0 ? (
+              <p className="muted">No repositories under the projects folder yet.</p>
+            ) : (
+              <ClientFolderRows projects={projects} onCategory={(name, cat) => void act("folders", () => setFolderCategory(name, cat).then(onProjectsChange))} onInternal={(name, internal) => void act("folders", () => setFolderInternal(name, internal).then(onProjectsChange))} />
+            )}
+            {note("folders")}
+          </section>
+
           <section className="settings-section" data-section="reader">
             <h2>Reader</h2>
             <p className="muted">Open in editor splits Herdr&apos;s focused pane and runs this command with the file.</p>
@@ -377,5 +396,31 @@ function ShortcutRow({
         {recording ? "Cancel" : "Change"}
       </button>
     </li>
+  );
+}
+
+/** The client folders' choices (DESIGN.md §3.1): the chip cycles the six categories, the switch marks a folder internal. */
+function ClientFolderRows({ projects, onCategory, onInternal }: { projects: readonly ProjectRow[]; onCategory: (name: string, cat: number) => void; onInternal: (name: string, internal: boolean) => void }) {
+  const categories = categoriesFor(
+    projects.map((p) => p.name),
+    Object.fromEntries(projects.map((p) => [p.name, p.category])),
+  );
+  return (
+    <ul className="settings-folders" aria-label="Client folders">
+      {projects.map((p) => {
+        const cat = categories[p.name]!;
+        return (
+          <li key={p.path} data-folder={p.name} data-cat={cat}>
+            <button type="button" className="settings-folder-chip" aria-label={`${p.name}: category ${cat} of ${CATEGORIES}, click for the next`} title={`Category ${cat} of ${CATEGORIES}`} onClick={() => onCategory(p.name, (cat % CATEGORIES) + 1)}>
+              <Chip cat={cat} />
+            </button>
+            <span className="settings-folder-name" title={p.display}>
+              {p.name}
+            </span>
+            <Switch checked={p.internal} onChange={(next) => onInternal(p.name, next)} aria-label={`${p.name} is internal`} />
+          </li>
+        );
+      })}
+    </ul>
   );
 }

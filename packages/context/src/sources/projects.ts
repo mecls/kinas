@@ -169,14 +169,22 @@ export async function readRepo(path: string, name: string): Promise<{ row: Proje
   };
 }
 
+/**
+ * What each repository is called: its folder name, or its path from the root when two share one. The sidebar's
+ * `projects.rs` names them the same way; fixtures/projects-discovery.json holds both to it.
+ */
+export function namesFor(root: string, repos: readonly string[]): string[] {
+  const byBase = new Map<string, number>();
+  for (const r of repos) byBase.set(basename(r), (byBase.get(basename(r)) ?? 0) + 1);
+  return repos.map((r) => ((byBase.get(basename(r)) ?? 0) > 1 ? relative(root, r) || basename(r) : basename(r)));
+}
+
 export async function readProjects(root: string): Promise<ProjectsReading> {
   if (!existsSync(root)) throw new SourceError(`no projects folder at ${root}`);
   const repos = await discoverRepos(root);
-  const byBase = new Map<string, number>();
-  for (const r of repos) byBase.set(basename(r), (byBase.get(basename(r)) ?? 0) + 1);
-  const nameOf = (r: string) => ((byBase.get(basename(r)) ?? 0) > 1 ? relative(root, r) || basename(r) : basename(r));
+  const names = namesFor(root, repos);
 
-  const readings = await Promise.all(repos.map((r) => readRepo(r, nameOf(r))));
+  const readings = await Promise.all(repos.map((r, i) => readRepo(r, names[i]!)));
   return {
     rows: readings.map((r) => r.row),
     commits: new Map(readings.map((r) => [r.row.path, r.commits])),

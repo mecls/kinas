@@ -81,7 +81,7 @@ const clickAndReadNotice = (scope: string, label: string, pattern: string) =>
     pattern,
   ) as Promise<string>;
 
-const showing = (page: "usage" | "work") => browser.execute((p: string) => !document.querySelector<HTMLElement>(`section[data-page="${p}"]`)!.hidden, page);
+const showing = (page: "home" | "usage" | "work") => browser.execute((p: string) => !document.querySelector<HTMLElement>(`section[data-page="${p}"]`)!.hidden, page);
 
 const logLines = (needle: string) => (existsSync(APP_LOG) ? readFileSync(APP_LOG, "utf8").split("\n").filter((line) => line.includes(needle)) : []);
 
@@ -166,7 +166,7 @@ describe("Open in the terminal", () => {
 
   it("asks Herdr for the folder's workspace, lands in it on the Work page, and types nothing into the pane", async () => {
     await browser.keys(["Meta", "1"]);
-    await browser.waitUntil(() => showing("usage"), { timeout: 10000, timeoutMsg: "the Usage page never showed" });
+    await browser.waitUntil(() => showing("home"), { timeout: 10000, timeoutMsg: "the Home page never showed" });
     const before = herdrSnapshot(SESSION);
     firstWorkspace = before.focused_workspace_id;
     expect(before.workspaces.some((w) => w.label === ALPHA)).toBe(false);
@@ -204,7 +204,7 @@ describe("Open in the terminal", () => {
     herdr(SESSION, "workspace", "focus", firstWorkspace);
     await browser.waitUntil(() => herdrSnapshot(SESSION).focused_workspace_id === firstWorkspace, { timeout: 10000, timeoutMsg: "Herdr never went back to the first workspace" });
     await browser.keys(["Meta", "1"]);
-    await browser.waitUntil(() => showing("usage"), { timeout: 10000, timeoutMsg: "the Usage page never showed" });
+    await browser.waitUntil(() => showing("home"), { timeout: 10000, timeoutMsg: "the Home page never showed" });
     const before = herdrSnapshot(SESSION);
     const focusedBefore = logLines("reader: folder opened in the terminal (focused)").length;
 
@@ -229,12 +229,12 @@ describe("Open in the terminal", () => {
     await browser.execute(() => document.querySelector<HTMLButtonElement>(".reader-close")!.click());
     await browser.waitUntil(() => browser.execute(() => document.querySelector(".shell")?.getAttribute("data-panel") === "closed"), { timeout: 10000, timeoutMsg: "the reader never closed" });
     await browser.keys(["Meta", "1"]);
-    await browser.waitUntil(() => showing("usage"), { timeout: 10000, timeoutMsg: "the Usage page never showed" });
+    await browser.waitUntil(() => showing("home"), { timeout: 10000, timeoutMsg: "the Home page never showed" });
     const before = herdrSnapshot(SESSION);
 
     const said = await clickAndReadNotice(".sidebar-recent", `Open ${BETA} in the terminal`, "^No such file: ");
     expect(said).toBe(`No such file: ${join(root, BETA)}`);
-    expect(await showing("usage")).toBe(true);
+    expect(await showing("home")).toBe(true);
     expect(await browser.execute(() => document.querySelector(".shell")?.getAttribute("data-panel"))).toBe("closed");
     expect(herdrSnapshot(SESSION).workspaces).toHaveLength(before.workspaces.length);
   });
@@ -244,7 +244,7 @@ describe("Open in the terminal", () => {
     await browser.pause(1000);
     const said = await clickAndReadNotice(".sidebar-pinned", `Open ${ALPHA} in the terminal`, "Herdr");
     expect(said).toMatch(/^(Herdr isn't running; attach it first|Herdr isn't installed)$/);
-    expect(await showing("usage")).toBe(true);
+    expect(await showing("home")).toBe(true);
     expect(await hook<string>("terminalText")).not.toMatch(TYPED_CD);
   });
 });

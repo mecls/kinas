@@ -20,7 +20,7 @@ describe("the terminal pane", () => {
   it("keeps the same shell across page switches and a hidden window", async () => {
     const pid = await shellPid();
     await browser.keys(["Meta", "1"]);
-    await expect($('section[data-page="usage"]')).toBeDisplayed();
+    await expect($('section[data-page="home"]')).toBeDisplayed();
     await browser.keys(["Meta", "2"]);
     expect(await shellPid()).toBe(pid);
 

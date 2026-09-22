@@ -107,8 +107,10 @@ Keychain (service `ai.sintralabs.kinas`, account `ollama-cloud-api-key`), never 
 ## The pages
 
 Amended 2026-09-22 (design system). The sidebar lists Home, Work, Crew, Inbox, Usage, Reader and Settings, then your
-client folders — every git repository under the projects folder, each with a colour chip that stays with it — and,
-at the foot, the VPS connection when one is configured. **Home** (⌘1) is the first page: the night's progress per
+client folders — every git repository up to three levels under the projects folder, each with a colour chip that
+stays with it (Settings → Client folders picks the colour and marks a folder internal, which lists it last with a
+tag; a click opens the folder in the reader, and the row offers the terminal and pin buttons every folder row has) —
+and, at the foot, the VPS connection when one is configured: connected, stale or error, the Hostinger reader's own word. **Home** (⌘1) is the first page: the night's progress per
 client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
 **Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** and
 **Inbox** wait for Build 3 and say so. **Reader** reopens the last document in the panel. Every surface is built

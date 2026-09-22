@@ -62,7 +62,7 @@ describe("the keyboard contract in a plain shell", () => {
   it("⌘1 and ⌘2 switch pages from inside the terminal", async () => {
     await hook("focusTerminal");
     await browser.keys(["Meta", "1"]);
-    await expect($('section[data-page="usage"]')).toBeDisplayed();
+    await expect($('section[data-page="home"]')).toBeDisplayed();
     await browser.keys(["Meta", "2"]);
     await expect($('section[data-page="work"]')).toBeDisplayed();
   });

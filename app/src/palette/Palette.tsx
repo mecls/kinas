@@ -37,7 +37,7 @@ export function Palette({ onClose }: { onClose: () => void }) {
           const snapshot = await getUsageSnapshot();
           return statusFromStore(snapshotAdapter(snapshot), snapshot.now);
         },
-        navigate: (page) => dispatchAppAction(page === "usage" ? "go.usage" : "go.work"),
+        navigate: (page) => dispatchAppAction(`go.${page}`),
         refresh: () => refreshReadings(),
         toggleSidebar: () => dispatchAppAction("sidebar"),
         openSettings: () => dispatchAppAction("settings"),

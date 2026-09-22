@@ -6,7 +6,7 @@ import { hook, typeLine, waitForShell, waitForTerminal } from "../helpers.ts";
 
 describe("the command palette", () => {
   it("opens with ⌘K and lists exactly the palette commands", async () => {
-    await $('section[data-page="usage"]').waitForDisplayed({ timeout: 60000 });
+    await $('section[data-page="home"]').waitForDisplayed({ timeout: 60000 });
     // Right after launch the first chord can land before the window's listeners are attached; press until open.
     await browser.waitUntil(
       async () => {
@@ -17,7 +17,8 @@ describe("the command palette", () => {
     );
     await expect($(".palette")).toBeDisplayed();
     const ids = await $$(".palette-item").map((item) => item.getAttribute("data-command"));
-    expect(ids).toEqual(["status", "refresh", "go.usage", "go.work", "sidebar", "settings"]);
+    // keymap.md, 2026-09-22: Home joined the palette; Crew, Inbox and Reader are click-only and do not.
+    expect(ids).toEqual(["status", "refresh", "go.home", "go.usage", "go.work", "sidebar", "settings"]);
   });
 
   it("runs Status and shows the status lines", async () => {

@@ -20,7 +20,7 @@
   --series-7: #9085e9;
   --series-8: #e66767;
 
-  padding: 0 28px 28px;
+  padding: var(--space-5) var(--space-6) var(--space-7);
 }
 
 /* The light ground (tokens.css). --surface-1 follows --panel by itself, and the fresh dot's green reads on both. The
@@ -41,9 +41,8 @@
   }
 }
 
-.usage .page-header {
-  padding-left: 0;
-  padding-right: 0;
+.usage .ui-titlerow {
+  margin-bottom: var(--space-3);
 }
 
 .usage-loading {

@@ -1,0 +1,21 @@
+{
+  "_": "How the git repositories under the projects root are found and named, shared by packages/context (the packet) and app/src-tauri/src/projects.rs (the sidebar). `tree` is every file to create under a temporary root — a `.git` folder cannot be committed, so the tree is described, not checked in. `repos` is what discovery must find, relative to the root and sorted; `names` is what each is called: its folder name, or its path from the root when two share a name.",
+  "max_depth": 3,
+  "skip": ["node_modules", "target", "dist", "build", "vendor", "Library"],
+  "tree": [
+    "hub/.git/HEAD",
+    "clients/acme/.git/HEAD",
+    "clients/acme/node_modules/dep/.git/HEAD",
+    "clients/big/app/.git/HEAD",
+    "clients/big/app/vendor/lib/.git/HEAD",
+    "one/site/.git/HEAD",
+    "two/site/.git/HEAD",
+    "worktree/.git",
+    ".hidden/repo/.git/HEAD",
+    "a/b/c/d/.git/HEAD",
+    "target/built/.git/HEAD",
+    "plain/README.md"
+  ],
+  "repos": ["clients/acme", "clients/big/app", "hub", "one/site", "two/site", "worktree"],
+  "names": ["acme", "app", "hub", "one/site", "two/site", "worktree"]
+}

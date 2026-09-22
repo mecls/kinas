@@ -23,7 +23,22 @@ async function fill(selector: string, value: string) {
   if (!found) throw new Error(`no <input> matches ${selector}`);
 }
 
+/** Home is the first screen (keymap.md, 2026-09-22); the gauges live on Usage, ⌘4 away. The first chord after launch
+ * can land before the window's listeners are attached, so it is pressed until the page shows. */
+async function goToUsage() {
+  await $('section[data-page="home"]').waitForDisplayed({ timeout: 60000 });
+  await browser.waitUntil(
+    async () => {
+      await browser.keys(["Meta", "4"]);
+      return $('section[data-page="usage"]').isDisplayed();
+    },
+    { timeout: 30000, timeoutMsg: "⌘4 never showed the Usage page" },
+  );
+}
+
 describe("nothing connected, then a key", () => {
+  before(goToUsage);
+
   it("shows Connect Claude Code and Add API key, and makes no request", async () => {
     await $('.gauge-empty[data-subscription="claude-plan"]').waitForExist({ timeout: 60000 });
     await expect($('.gauge-empty[data-subscription="claude-plan"] .button')).toHaveText("Connect Claude Code");
@@ -65,7 +80,7 @@ describe("nothing connected, then a key", () => {
 });
 
 describe("Settings from the sidebar, and its shortcuts", () => {
-  it("the gear at the foot of the sidebar opens Settings", async () => {
+  it("the Settings row in the sidebar opens Settings", async () => {
     await browser.keys(["Escape"]);
     await expect($('section[data-page="usage"]')).toBeDisplayed();
     await $('.sidebar button[aria-label="Settings"]').click();
@@ -77,7 +92,7 @@ describe("Settings from the sidebar, and its shortcuts", () => {
     await $('[data-shortcut="sidebar"] .button').click();
     await expect($('[data-shortcut="sidebar"] .shortcut-chord')).toHaveText("Press a chord…");
     await browser.keys(["Meta", "1"]);
-    await expect($('[data-section="shortcuts"] .settings-message')).toHaveText("⌘1 is already the shortcut for Go to Usage");
+    await expect($('[data-section="shortcuts"] .settings-message')).toHaveText("⌘1 is already the shortcut for Go to Home");
     await expect($('[data-shortcut="sidebar"] .shortcut-chord')).toHaveText("⌘S");
     // Recording ran nothing: still on Settings.
     await expect($('section[data-page="settings"]')).toBeDisplayed();

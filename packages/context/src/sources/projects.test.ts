@@ -2,8 +2,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { git, write } from "../testing/world.ts";
-import { discoverRepos, readProjects, readRepo } from "./projects.ts";
+import { fixture, git, write } from "../testing/world.ts";
+import { discoverRepos, namesFor, readProjects, readRepo } from "./projects.ts";
 
 const dirs: string[] = [];
 function tempDir(): string {
@@ -91,12 +91,15 @@ describe("projects through git plumbing", () => {
     expect(row.dirty).toBe(0);
   });
 
-  test("discovery finds repositories three levels down and skips node_modules and dot folders", async () => {
+  test("discovery finds repositories three levels down, skips node_modules and dot folders, and names them as the sidebar does", async () => {
+    // The tree, the repositories and the names are fixtures/projects-discovery.json's: app/src-tauri/src/projects.rs
+    // finds the sidebar's client folders by the same rules and is held to the same file.
+    const shared = JSON.parse(fixture("projects-discovery.json")) as { tree: string[]; repos: string[]; names: string[] };
     const root = tempDir();
-    for (const p of ["hub", "clients/acme", "clients/big/app", "clients/acme/node_modules/dep", ".hidden/repo", "a/b/c/d"]) {
-      write(join(root, p, ".git/HEAD"), "ref: refs/heads/main\n");
-    }
-    expect((await discoverRepos(root)).map((p) => p.slice(root.length + 1))).toEqual(["a/b/c", "clients/acme", "clients/big/app", "hub"].filter((p) => p !== "a/b/c"));
+    for (const p of shared.tree) write(join(root, p), p.endsWith("/.git") ? "gitdir: /elsewhere\n" : "ref: refs/heads/main\n");
+    const repos = await discoverRepos(root);
+    expect(repos.map((p) => p.slice(root.length + 1))).toEqual(shared.repos);
+    expect(namesFor(root, repos)).toEqual(shared.names);
   });
 
   test("a missing root is one honest line", async () => {

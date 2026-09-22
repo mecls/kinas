@@ -4,22 +4,24 @@
 
 import { chordFromEvent, type ChordKey } from "./chord.ts";
 
-export const SHORTCUT_ACTIONS = ["palette", "go.usage", "go.work", "sidebar", "settings"] as const;
+export const SHORTCUT_ACTIONS = ["palette", "go.home", "go.work", "go.usage", "sidebar", "settings"] as const;
 export type AppAction = (typeof SHORTCUT_ACTIONS)[number];
 export type Shortcuts = Record<AppAction, string>;
 
 export const DEFAULT_SHORTCUTS: Shortcuts = {
   palette: "Cmd+K",
-  "go.usage": "Cmd+1",
+  "go.home": "Cmd+1",
   "go.work": "Cmd+2",
+  "go.usage": "Cmd+4",
   sidebar: "Cmd+S",
   settings: "Cmd+,",
 };
 
 export const SHORTCUT_TITLES: Record<AppAction, string> = {
   palette: "Open the command palette",
-  "go.usage": "Go to Usage",
+  "go.home": "Go to Home",
   "go.work": "Go to Work",
+  "go.usage": "Go to Usage",
   sidebar: "Hide or show the sidebar",
   settings: "Open Settings",
 };
@@ -72,12 +74,25 @@ export function chordLabel(chord: string): string {
   return modifiers.map((m) => MODIFIER_GLYPHS[m]).join("") + (KEY_GLYPHS[key] ?? key);
 }
 
-/** The saved shortcuts over the defaults. An unknown action or a chord without ⌘ in the saved map is ignored. */
+/**
+ * The saved shortcuts over the defaults. An unknown action or a chord without ⌘ in the saved map is ignored — and so
+ * is a saved chord that equals another action's default when that other action has nothing saved (keymap.md,
+ * 2026-09-22): Home took ⌘1 from Usage, and a ⌘1 saved for Usage before that day would otherwise sit on both. A pair
+ * the captain bound on purpose has both actions saved, and keeps them.
+ */
 export function withDefaults(saved: Record<string, string> | null | undefined): Shortcuts {
   const shortcuts = { ...DEFAULT_SHORTCUTS };
+  const kept = new Set<AppAction>();
   for (const action of SHORTCUT_ACTIONS) {
     const chord = saved?.[action];
-    if (typeof chord === "string" && hasCommand(chord)) shortcuts[action] = chord;
+    if (typeof chord === "string" && hasCommand(chord)) {
+      shortcuts[action] = chord;
+      kept.add(action);
+    }
+  }
+  for (const action of kept) {
+    const collides = SHORTCUT_ACTIONS.find((other) => other !== action && !kept.has(other) && DEFAULT_SHORTCUTS[other] === shortcuts[action]);
+    if (collides) shortcuts[action] = DEFAULT_SHORTCUTS[action];
   }
   return shortcuts;
 }

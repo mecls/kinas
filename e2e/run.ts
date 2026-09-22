@@ -67,6 +67,10 @@ for (const spec of specs) {
   env.KINAS_E2E_MEMORY_KEYCHAIN = "1";
   // Test launches never register the real global hotkey or a login item.
   env.KINAS_E2E_NO_SYSTEM_HOOKS = "1";
+  // The sidebar lists the repositories under the projects root (projects.rs) on every launch, so a spec that sets
+  // no root of its own gets an empty one here rather than Miguel's real folder.
+  mkdirSync(join(dataDir, "root"), { recursive: true });
+  env.KINAS_ROOT = join(dataDir, "root");
 
   const setupFile = join(specsDir, spec.replace(/\.e2e\.ts$/, ".setup.ts"));
   const hooks: SpecSetup = existsSync(setupFile) ? ((await import(setupFile)) as SpecSetup) : {};

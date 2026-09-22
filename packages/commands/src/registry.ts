@@ -14,7 +14,7 @@ export interface CommandContext {
   /** CLI only: the lines that point at the file being opened. */
   openFile?: () => Promise<string[]>;
   /** Palette only. */
-  navigate?: (page: "usage" | "work") => void;
+  navigate?: (page: "home" | "usage" | "work") => void;
   refresh?: () => Promise<void>;
   toggleSidebar?: () => void;
   openSettings?: () => void;
@@ -82,6 +82,15 @@ export const commands: readonly Command[] = [
     doors: ["palette"],
     async run(ctx) {
       await need(ctx.refresh, "refresh")();
+      return {};
+    },
+  },
+  {
+    id: "go.home",
+    title: "Go to Home",
+    doors: ["palette"],
+    async run(ctx) {
+      need(ctx.navigate, "navigation")("home");
       return {};
     },
   },

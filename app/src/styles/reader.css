@@ -1,11 +1,13 @@
 /* The reader (tasks/prd-kinas-open.md): markdown in the house style, in the panel on the right of the window.
    tokens.css variables only. */
 
-/* The panel's width and place in the row are the shell's business (`.panel`, shell.css); this is the inside. */
+/* The panel's width and place in the row are the shell's business (`.panel`, shell.css); this is the inside.
+   A file sits on the app's surface, white in the light theme, and never on the terminal's ground beside it
+   (`--bg` and `--term-bg` are one colour in the light theme; tokens.test.ts holds this). */
 .reader {
   display: flex;
   min-height: 0;
-  background: var(--ground);
+  background: var(--surface);
 }
 
 .reader-frame {

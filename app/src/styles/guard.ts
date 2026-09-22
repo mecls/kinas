@@ -7,13 +7,13 @@ export interface Hit {
 }
 
 /** Raw values the sheets not yet rewritten still hold, by file, on the day the guard landed (2026-09-22): 314 in
- * all. Each slice of the design-system build brings its sheet to zero and removes the line; a count may only fall. */
+ * all. Each slice of the design-system build brings its sheet to zero and removes the line; a count may only fall.
+ * shell.css reached zero with slice 3 (the shell). */
 export const RATCHET: Record<string, number> = {
   "styles/overlay.css": 20,
   "styles/reader.css": 126,
-  "styles/settings.css": 37,
-  "styles/shell.css": 55,
-  "styles/usage.css": 76,
+  "styles/settings.css": 35,
+  "styles/usage.css": 74,
 };
 
 const COLOUR = /#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\brgba?\(|\bhsla?\(/g;

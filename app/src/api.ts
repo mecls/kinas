@@ -175,6 +175,22 @@ export const setOrgName = (name: string) => invoke<void>("set_org_name", { name 
 export const setReaderEditor = (value: string) => invoke<void>("set_reader_editor", { value });
 /** The projects folder (reader R1b): an absolute path that exists. Answers with the canonical path it stored. */
 export const setProjectsRoot = (path: string) => invoke<string>("set_projects_root", { path });
+
+/** A client folder (DESIGN.md §3.1): a git repository under the projects root, as projects.rs finds and names it. */
+export interface ProjectRow {
+  name: string;
+  path: string;
+  /** `~/…` under the home folder, absolute otherwise. */
+  display: string;
+  /** Settings' choice of --cat-N, or null for the one ui/category.ts derives from the name. */
+  category: number | null;
+  internal: boolean;
+}
+/** Every repository up to three levels under the projects root; the walk stands for a minute in Rust. */
+export const listProjects = () => invoke<ProjectRow[]>("list_projects");
+/** 1 to 6, refused otherwise. */
+export const setFolderCategory = (name: string, cat: number) => invoke<void>("set_folder_category", { name, cat });
+export const setFolderInternal = (name: string, internal: boolean) => invoke<void>("set_folder_internal", { name, internal });
 /** The app applies it to the window itself, title bar included; the page follows through prefers-color-scheme. */
 export const setAppearance = (value: string) => invoke<void>("set_appearance", { value });
 /** "#rrggbb" lower-case, refused otherwise; null removes the choice. The page sets --brand-accent itself. */

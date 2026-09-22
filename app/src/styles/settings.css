@@ -2,13 +2,54 @@
 
 .settings {
   max-width: 760px;
-  padding: 0 28px 40px;
+  padding: var(--space-5) var(--space-6) var(--space-7);
   outline: none;
 }
 
-.settings .page-header {
-  padding-left: 0;
-  padding-right: 0;
+.settings .ui-titlerow {
+  margin-bottom: var(--space-3);
+}
+
+/* Client folders (design-system slice 3; the card comes in slice 6): the chip, the name, the internal switch. */
+.settings-folders {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-folders li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--row-h);
+  border-top: 1px solid var(--line);
+}
+
+.settings-folders li:first-child {
+  border-top: 0;
+}
+
+.settings-folder-chip {
+  display: grid;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.settings-folder-chip:hover {
+  background: var(--surface-2);
+}
+
+.settings-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-section {

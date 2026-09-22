@@ -7,7 +7,22 @@ const stub = process.env.KINAS_E2E_STUB_URL!;
 const stubRequests = async () => ((await (await fetch(`${stub}/__count`)).json()) as { requests: number }).requests;
 const gauge = (subscription: string, window: string) => $(`.gauge[data-subscription="${subscription}"][data-window="${window}"]`);
 
+/** Home is the first screen (keymap.md, 2026-09-22); the gauges live on Usage, ⌘4 away. The first chord after launch
+ * can land before the window's listeners are attached, so it is pressed until the page shows. */
+async function goToUsage() {
+  await $('section[data-page="home"]').waitForDisplayed({ timeout: 60000 });
+  await browser.waitUntil(
+    async () => {
+      await browser.keys(["Meta", "4"]);
+      return $('section[data-page="usage"]').isDisplayed();
+    },
+    { timeout: 30000, timeoutMsg: "⌘4 never showed the Usage page" },
+  );
+}
+
 describe("numbers that are no longer true", () => {
+  before(goToUsage);
+
   it("dates the Claude reading by the session's last response, so it is stale", async () => {
     await gauge("claude-plan", "session").waitForExist({ timeout: 60000 });
     await expect(gauge("claude-plan", "session")).toHaveAttribute("data-state", "stale");

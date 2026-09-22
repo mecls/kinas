@@ -94,7 +94,7 @@ pub fn has_command_modifier(chord: &str) -> bool {
 }
 
 /// The app actions with an in-window shortcut (app/src/settings/shortcuts.ts, keymap.md).
-pub const SHORTCUT_ACTIONS: [&str; 5] = ["palette", "go.usage", "go.work", "sidebar", "settings"];
+pub const SHORTCUT_ACTIONS: [&str; 6] = ["palette", "go.home", "go.work", "go.usage", "sidebar", "settings"];
 
 /// In-window shortcuts as Settings saves them: known actions, one chord each, and every chord with ⌘ so a shortcut
 /// never takes a key from the terminal (R31). The webview explains clashes before a change gets this far.
@@ -221,6 +221,10 @@ mod tests {
         assert!(check_shortcuts(&map(&[("sidebar", "Ctrl+B")])).is_err());
         assert!(check_shortcuts(&map(&[("launch", "Cmd+L")])).is_err());
         assert!(check_shortcuts(&map(&[("go.usage", "Cmd+1"), ("go.work", "Cmd+1")])).is_err());
+        // Home has a chord since 2026-09-22 (keymap.md); the crew's ⌘3 is reserved and is not an action yet.
+        assert!(check_shortcuts(&map(&[("go.home", "Cmd+1"), ("go.usage", "Cmd+4")])).is_ok());
+        assert!(check_shortcuts(&map(&[("go.crew", "Cmd+3")])).is_err());
+        assert_eq!(SHORTCUT_ACTIONS.len(), 6);
     }
 
     #[test]

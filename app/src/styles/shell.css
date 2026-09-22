@@ -1,24 +1,24 @@
 /*
- * The shell (tasks/three-column-shell-build-spec.md §9): navigation on the left, the page in the middle, and what was
- * opened in a panel on the right. tokens.css variables only.
+ * The shell (tasks/three-column-shell-build-spec.md §9; DESIGN.md §3): navigation on the left, the page in the
+ * middle, and what was opened in a panel on the right. tokens.css variables only — guard.test.ts holds it to that.
  *
  *   div.shell[data-sidebar][data-panel]
- *     nav.sidebar               the pages, then Pinned, the open folder's Files, and Recent
+ *     nav.sidebar               the wordmark, the pages, then Pinned, the open folder's Files, Recent, the client
+ *                               folders, and the VPS row at the foot
  *     div.stage                 a flex row — the row the divider measures
- *       main.content            the three stacked pages
+ *       main.content            the six stacked pages
  *       div.stage-divider
  *       aside.shell-panel.reader  the reader
  *
  * This tree never changes shape at runtime: only `hidden` and the two data attributes do. A wrapper appearing above
  * the terminal would remount it, restart its PTY and drop Herdr's client (Build 1 R33, reader R31).
+ *
+ * --sidebar-w and --pane-min are tokens.css's: 220 + 280 + 280 is why the window's minimum width is 820
+ * (tauri.conf.json), and --pane-min must equal MIN_PANE_PX in shell/split.ts.
+ *
+ * No global box-sizing here yet: the reader, Usage and Settings sheets still assume the browser's box model until
+ * their own rewrite (ui/base.css gives the components border-box). The shell's boxes below size by flex and grid.
  */
-:root {
-  /* Fixed: the sidebar is this wide or hidden (⌘S), nothing between. 220 + 280 + 280 is why the window's minimum
-     width is 820 (tauri.conf.json). */
-  --sidebar-w: 220px;
-  /* Neither side of the divider may be narrower than this. Must equal MIN_PANE_PX in shell/split.ts. */
-  --pane-min: 280px;
-}
 
 .shell {
   display: grid;
@@ -31,83 +31,54 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* The left sidebar: the pages, what can be opened, and Settings at the foot. */
+/* The left sidebar (preview .side): the wordmark, the seven rows, what can be opened, and the machine at the foot. */
 .sidebar {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 10px 8px;
+  padding: var(--space-3) var(--space-2);
   border-right: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .sidebar-nav {
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0);
 }
 
-/* A page, or Settings: an icon and its name. */
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  appearance: none;
-  border: 0;
-  border-radius: 6px;
-  padding: 7px 8px;
-  background: transparent;
-  color: var(--muted);
-  font: 500 13px/1 var(--sans);
-  text-align: left;
-  cursor: default;
-}
-
-.sidebar-item:hover {
-  color: var(--white);
-}
-
-.sidebar-item[aria-current="page"] {
-  background: var(--active-bg);
-  color: var(--active-fg);
-}
-
-.sidebar-settings {
-  flex: none;
-  margin-top: 6px;
-}
-
-/* Pinned, Files and Recent scroll together between the pages and Settings; an empty one is not here at all. */
+/* Pinned, Files, Recent and the client folders scroll together between the pages and the foot; an empty one is not
+   here at all. */
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
-  margin-top: 6px;
+  margin-top: var(--space-1h);
   overflow: hidden auto;
 }
 
 .sidebar-section {
-  padding: 12px 0 2px;
+  padding: var(--space-3) 0 var(--space-0);
 }
 
 .sidebar-section-head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
+/* A section's heading, as the preview's "Client folders" (Nav.css .ui-nav-h): --fs-sm, --ink-2, no capitals. */
 .sidebar-label {
   flex: 1;
   min-width: 0;
-  margin: 0 0 6px 8px;
+  margin: 0 0 var(--space-1) var(--space-2);
   overflow: hidden;
-  color: var(--label);
-  font: 500 11px/1 var(--mono);
-  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -122,19 +93,22 @@
   align-items: center;
 }
 
+/* A file or a folder to open: the shape of a nav row (Nav.css .ui-nav), one step smaller. */
 .sidebar-row {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-1h);
   min-width: 0;
+  min-height: var(--hit);
   appearance: none;
   border: 0;
-  border-radius: 4px;
-  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   background: transparent;
-  color: var(--muted);
-  font: 12.5px/1.35 var(--sans);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   text-align: left;
   cursor: default;
 }
@@ -151,33 +125,33 @@
 }
 
 .sidebar-row:hover:not([aria-disabled="true"]) {
-  color: var(--white);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .sidebar-row[aria-current="true"] {
-  background: var(--active-bg);
-  color: var(--active-fg);
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 /* A pin whose file is gone: still listed, plainly not usable. Only its Unpin does anything. */
 .sidebar-pin[data-missing] .sidebar-row {
-  color: var(--muted);
-  opacity: 0.45;
+  color: var(--ink-3);
 }
 
-/* Pin, Unpin: quiet until the row is pointed at, always there for the keyboard. */
+/* Pin, Unpin, the terminal: quiet until the row is pointed at, always there for the keyboard, --hit square. */
 .sidebar-row-action {
   display: grid;
   flex: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: var(--hit);
+  height: var(--hit);
   appearance: none;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--ink-2);
   cursor: default;
   opacity: 0;
 }
@@ -190,19 +164,24 @@
 }
 
 .sidebar-row-action:hover {
-  background: var(--line);
-  color: var(--white);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
-/* A folder's row in Recent: the row, and what can be done to the folder beside it. The shape of a pin's row. */
+/* A folder's row in Recent or the client folders: the row, and what can be done to the folder beside it. */
 .sidebar-entry {
   display: flex;
   align-items: center;
 }
 
+.sidebar-entry > .ui-nav {
+  flex: 1;
+  min-width: 0;
+}
+
 /* What can be done to a folder from its row (terminal, pin). Out of the layout — not merely unseen — until the row is
    pointed at or holds the focus, so a folder's name has the whole row the rest of the time; two reserved buttons
-   would take 44 px of a 220 px sidebar from every folder. Tab reaches them: focus on the row brings them in. */
+   would take 56 px of a 220 px sidebar from every folder. Tab reaches them: focus on the row brings them in. */
 .sidebar-actions {
   display: none;
   flex: none;
@@ -222,26 +201,28 @@
   opacity: 1;
 }
 
-/* The shell's last notice while the panel is closed (Sidebar.tsx): the reader's status line, in the sidebar's width. */
+/* The shell's last notice while the panel is closed (Sidebar.tsx): one line in --warn, the reader's status line's
+   words, in the sidebar's width. */
 .sidebar-notice {
   flex: none;
-  margin: 6px 0 0;
-  padding: 5px 8px;
+  margin: var(--space-1h) 0 0;
+  padding: var(--space-1h) var(--space-2);
   border-top: 1px solid var(--line);
-  color: var(--gold);
-  font: 12px/1.4 var(--mono);
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow-wrap: anywhere;
 }
 
 .sidebar-pin-tree {
-  padding-left: 14px;
+  padding-left: calc(var(--space-3) + var(--space-0));
 }
 
-/* The tree kept the class it had inside the reader, where it filled a column; here it is one section of three. */
+/* The tree kept the class it had inside the reader, where it filled a column; here it is one section of several. */
 .sidebar .reader-files {
   flex: none;
   overflow: visible;
-  padding: 12px 0 2px;
+  padding: var(--space-3) 0 var(--space-0);
 }
 
 .stage {
@@ -265,16 +246,10 @@
   overflow: auto;
 }
 
-.page-header {
-  padding: 20px 28px 8px;
-}
-
-.page-header h1 {
-  margin: 0;
-  font: 500 12px/1 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--label);
+/* A page's content (preview .page/.page-in): padded, no wider than --page-max, the title row first (DESIGN.md §3.2). */
+.page-in {
+  max-width: var(--page-max);
+  padding: var(--space-5) var(--space-6) var(--space-7);
 }
 
 /* The panel's width comes from the divider (App.tsx sets flex-basis); this is its share until that arrives.
@@ -304,11 +279,12 @@
   border-left: 0;
 }
 
-/* The divider between the page and the panel: a thin line with a wider grip. Its margins net it no width. */
+/* The divider between the page and the panel: a grip --space-1h wide whose margins net it no width, drawn as a
+   hairline that thickens to the focus ring's width in the accent while pointed at or dragged. */
 .stage-divider {
   position: relative;
-  flex: 0 0 6px;
-  margin: 0 -3px;
+  flex: 0 0 var(--space-1h);
+  margin: 0 calc(var(--space-1h) / -2);
   z-index: 4;
   cursor: col-resize;
   touch-action: none;
@@ -319,16 +295,13 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 2px;
-  width: 1px;
-  background: transparent;
+  left: var(--space-0);
+  border-left: 1px solid transparent;
 }
 
 .stage-divider:hover::after,
 .stage[data-dragging] .stage-divider::after {
-  left: 1px;
-  width: 3px;
-  background: var(--blue);
+  border-left: 2px solid var(--accent);
 }
 
 /* While dragging, nothing selects text and the cursor stays a resize cursor over the terminal too. */
@@ -342,11 +315,12 @@
   pointer-events: none;
 }
 
+/* The Work page: the terminal on --term-bg, which follows the theme (DESIGN.md §2.3, 2026-09-22). */
 .work {
   position: absolute;
   inset: 0;
   display: flex;
-  background: var(--ground);
+  background: var(--term-bg);
 }
 
 /* The terminal's box. The reader's close button finds the terminal through this class (Reader.tsx, focusTerminal). */
@@ -361,13 +335,13 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--ground);
+  background: var(--term-bg);
 }
 
 .terminal-host {
   flex: 1;
   min-height: 0;
-  padding: 6px 0 0 8px;
+  padding: var(--space-1h) 0 0 var(--space-2);
 }
 
 /* xterm.css paints its viewport #000 and xterm 6 never gives it the theme's background, so whatever height the last
@@ -378,42 +352,46 @@
 }
 
 .terminal-notice {
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-3);
   border-bottom: 1px solid var(--line);
-  color: var(--gold);
-  font: 11px/1.4 var(--mono);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 
 /* "copied to clipboard": a moment in the pane's bottom right corner, clear of a prompt typed from the left. It never
-   takes a click from the terminal. */
+   takes a click from the terminal. (The Toast component takes this over in design-system slice 6.) */
 .terminal-toast {
   position: absolute;
-  bottom: 12px;
-  right: 14px;
+  bottom: var(--space-3);
+  right: var(--space-4);
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border: 1px solid var(--gold);
-  background: var(--ground);
-  color: var(--white);
-  font: 12px/1.3 var(--mono);
+  gap: var(--space-2);
+  padding: var(--space-1h) var(--space-3);
+  border: 1px solid var(--warn);
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   pointer-events: none;
-  animation: terminal-toast-in 120ms ease-out;
+  animation: terminal-toast-in var(--dur-fast) ease-out;
 }
 
 .terminal-toast-dot {
-  width: 7px;
-  height: 7px;
+  width: var(--dot);
+  height: var(--dot);
   border-radius: 50%;
-  background: var(--gold);
+  background: var(--warn);
 }
 
 @keyframes terminal-toast-in {
   from {
     opacity: 0;
-    transform: translateY(2px);
+    transform: translateY(var(--space-0));
   }
 }
 

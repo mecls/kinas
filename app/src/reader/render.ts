@@ -5,6 +5,7 @@
 // the webview that can type into the terminal, which is why these are rules and not preferences.
 
 import MarkdownIt, { type Env, type Token } from "markdown-it";
+import { fnv1a } from "../hash.ts";
 import { type FrontmatterView, splitFrontmatter } from "./frontmatter.ts";
 import { slugger } from "./slug.ts";
 
@@ -44,14 +45,9 @@ interface RenderEnv extends Env {
   diagrams: Diagram[];
 }
 
-/** FNV-1a (32-bit) over the UTF-16 code units, plus the length: the key a diagram's SVG is cached under (R27). */
+/** FNV-1a (32-bit, hash.ts) over the text, plus its length: the key a diagram's SVG is cached under (R27). */
 export function hashText(text: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `${(hash >>> 0).toString(16).padStart(8, "0")}-${text.length.toString(16)}`;
+  return `${fnv1a(text).toString(16).padStart(8, "0")}-${text.length.toString(16)}`;
 }
 
 const md = new MarkdownIt({ html: false, linkify: false, typographer: false });

@@ -5,7 +5,22 @@ import { browser, $, $$, expect } from "@wdio/globals";
 
 const gauge = (subscription: string, window: string) => $(`.gauge[data-subscription="${subscription}"][data-window="${window}"]`);
 
+/** Home is the first screen (keymap.md, 2026-09-22); the gauges live on Usage, ⌘4 away. The first chord after launch
+ * can land before the window's listeners are attached, so it is pressed until the page shows. */
+async function goToUsage() {
+  await $('section[data-page="home"]').waitForDisplayed({ timeout: 60000 });
+  await browser.waitUntil(
+    async () => {
+      await browser.keys(["Meta", "4"]);
+      return $('section[data-page="usage"]').isDisplayed();
+    },
+    { timeout: 30000, timeoutMsg: "⌘4 never showed the Usage page" },
+  );
+}
+
 describe("the Usage page", () => {
+  before(goToUsage);
+
   it("shows Claude's session and week from the hand-off, fresh, as % used like Claude's /usage", async () => {
     await gauge("claude-plan", "session").waitForExist({ timeout: 60000 });
     await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("42% used"));

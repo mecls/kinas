@@ -17,6 +17,7 @@ import { MacTiles } from "../usage/MacTiles.tsx";
 import { ConvexEmpty, MetricFigures, MetricGauge } from "../usage/MetricGauge.tsx";
 import { UsageChart } from "../usage/UsageChart.tsx";
 import { VpsTile } from "../usage/VpsTile.tsx";
+import { TitleRow } from "../ui/index.ts";
 
 const PROVIDERS = ["claude-plan", "ollama-cloud"] as const;
 /** Hostinger's figures are bytes and milliseconds; Convex's formatter would render them as raw counts. */
@@ -64,9 +65,7 @@ export function UsagePage({ active }: { active: boolean }) {
   if (!snapshot) {
     return (
       <div className="usage">
-        <header className="page-header">
-          <h1>Usage</h1>
-        </header>
+        <TitleRow title="Usage" />
         <p className="muted usage-loading">{error ?? "Reading…"}</p>
       </div>
     );
@@ -83,9 +82,7 @@ export function UsagePage({ active }: { active: boolean }) {
 
   return (
     <div className="usage">
-      <header className="page-header">
-        <h1>Usage</h1>
-      </header>
+      <TitleRow title="Usage" />
 
       <section className="gauges" aria-label="Plans">
         {PROVIDERS.flatMap((provider) => {

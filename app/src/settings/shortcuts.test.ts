@@ -13,10 +13,12 @@ const press = (key: string, code: string, mods: Partial<ChordKey> = {}): ChordKe
 });
 
 describe("the default shortcuts (keymap.md)", () => {
-  test("⌘K ⌘1 ⌘2 ⌘S ⌘, raise their actions", () => {
+  test("⌘K ⌘1 ⌘2 ⌘4 ⌘S ⌘, raise their actions (⌘1 is Home and ⌘4 Usage since 2026-09-22)", () => {
     expect(actionForEvent(press("k", "KeyK"), DEFAULT_SHORTCUTS)).toBe("palette");
-    expect(actionForEvent(press("1", "Digit1"), DEFAULT_SHORTCUTS)).toBe("go.usage");
+    expect(actionForEvent(press("1", "Digit1"), DEFAULT_SHORTCUTS)).toBe("go.home");
     expect(actionForEvent(press("2", "Digit2"), DEFAULT_SHORTCUTS)).toBe("go.work");
+    expect(actionForEvent(press("4", "Digit4"), DEFAULT_SHORTCUTS)).toBe("go.usage");
+    expect(actionForEvent(press("3", "Digit3"), DEFAULT_SHORTCUTS)).toBeNull();
     expect(actionForEvent(press("s", "KeyS"), DEFAULT_SHORTCUTS)).toBe("sidebar");
     expect(actionForEvent(press(",", "Comma"), DEFAULT_SHORTCUTS)).toBe("settings");
   });
@@ -38,6 +40,16 @@ describe("saved shortcuts", () => {
     expect(withDefaults({ launch: "Cmd+L", sidebar: "Ctrl+B" })).toEqual(DEFAULT_SHORTCUTS);
     expect(withDefaults(null)).toEqual(DEFAULT_SHORTCUTS);
   });
+
+  test("a chord saved before Home took ⌘1 gives way to the new default, unless the pair was bound on purpose", () => {
+    // Saved on 2026-09-21: Usage on ⌘1 (its default then). Today ⌘1 is Home's default and Home has nothing saved.
+    expect(withDefaults({ "go.usage": "Cmd+1" })).toEqual(DEFAULT_SHORTCUTS);
+    expect(actionForEvent(press("1", "Digit1"), withDefaults({ "go.usage": "Cmd+1" }))).toBe("go.home");
+    // Both saved: the captain swapped them himself, and they stay swapped.
+    expect(withDefaults({ "go.usage": "Cmd+1", "go.home": "Cmd+4" })).toEqual({ ...DEFAULT_SHORTCUTS, "go.usage": "Cmd+1", "go.home": "Cmd+4" });
+    // A saved chord that collides with nothing is kept.
+    expect(withDefaults({ "go.usage": "Cmd+U" })).toEqual({ ...DEFAULT_SHORTCUTS, "go.usage": "Cmd+U" });
+  });
 });
 
 describe("what a shortcut cannot be", () => {
@@ -54,7 +66,7 @@ describe("what a shortcut cannot be", () => {
   });
 
   test("another action's chord, or the global hotkey", () => {
-    expect(shortcutProblem("sidebar", "Cmd+1", DEFAULT_SHORTCUTS, hotkey)).toBe("⌘1 is already the shortcut for Go to Usage");
+    expect(shortcutProblem("sidebar", "Cmd+1", DEFAULT_SHORTCUTS, hotkey)).toBe("⌘1 is already the shortcut for Go to Home");
     expect(shortcutProblem("sidebar", hotkey, DEFAULT_SHORTCUTS, hotkey)).toBe("⌘⇧Space is the global hotkey");
     expect(shortcutProblem("hotkey", "Cmd+K", DEFAULT_SHORTCUTS, hotkey)).toBe("⌘K is already the shortcut for Open the command palette");
   });

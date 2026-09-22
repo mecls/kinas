@@ -9,8 +9,8 @@
 ## Slices
 - [x] Slice 0 · ship PR #22 (the light theme), the worktree, the documents, Gates 2–4, the docs-first amendments — 2026-09-22
 - [x] Slice 1 · tracer bullet (2026-09-22, `5bd6d5d`): `tokens.css` ported, fonts bundled, the accent setting; the app runs on the new tokens with nothing else restyled
-- [ ] Slice 2 · the primitives in `app/src/ui/` with stories, the guard test → ship point 1
-- [ ] Slice 3 · the shell: sidebar, nav, title row, client folders, connection row, `go.home`
+- [x] Slice 2 · the primitives in `app/src/ui/` with stories, the guard test (2026-09-22, `f838593`) → ship point 1: full e2e green alone 2026-09-22 (18/18; `reader-export` once on a loaded Mac, then 5/5 alone); **waiting for the captain's word on the push** — nothing pushed
+- [x] Slice 3 · the shell: sidebar, nav, title row, client folders, connection row, `go.home` (2026-09-22, committed locally): `bun run check` green; every touched spec green alone; the reader panel moved onto `--surface` at the captain's report (an open file had the terminal's background) — nothing pushed
 - [ ] Slice 4 · Usage on the primitives → ship point 2
 - [ ] Slice 5 · Home
 - [ ] Slice 6 · Settings cards, the reader header, palette and toasts, the terminal chrome, the alias block removed

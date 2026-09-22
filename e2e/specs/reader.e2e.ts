@@ -121,7 +121,7 @@ describe("kinas open and the reader", () => {
 
   it("opens on the right of whichever page is showing, without switching to Work (three-column shell AC-1)", async () => {
     await browser.keys(["Meta", "1"]);
-    await waitInPage(() => !document.querySelector<HTMLElement>('section[data-page="usage"]')!.hidden, "the Usage page never showed");
+    await waitInPage(() => !document.querySelector<HTMLElement>('section[data-page="home"]')!.hidden, "the Home page never showed");
     const pid = await hook<number>("ptyPid");
 
     expect(kinas("plan-300.md").code).toBe(0);
@@ -130,7 +130,7 @@ describe("kinas open and the reader", () => {
       const panel = document.querySelector<HTMLElement>("aside.reader")!;
       const content = document.querySelector<HTMLElement>(".content")!;
       return {
-        usageShowing: !document.querySelector<HTMLElement>('section[data-page="usage"]')!.hidden,
+        homeShowing: !document.querySelector<HTMLElement>('section[data-page="home"]')!.hidden,
         workShowing: !document.querySelector<HTMLElement>('section[data-page="work"]')!.hidden,
         panelHidden: panel.hidden,
         shell: document.querySelector<HTMLElement>(".shell")!.dataset.panel,
@@ -140,8 +140,8 @@ describe("kinas open and the reader", () => {
         stageRight: Math.round(document.querySelector<HTMLElement>(".stage")!.getBoundingClientRect().right),
       };
     });
-    // Still on Usage: `kinas open` used to force the Work page, because the reader lived inside it.
-    expect(layout).toMatchObject({ usageShowing: true, workShowing: false, panelHidden: false, shell: "open" });
+    // Still on Home: `kinas open` used to force the Work page, because the reader lived inside it.
+    expect(layout).toMatchObject({ homeShowing: true, workShowing: false, panelHidden: false, shell: "open" });
     // On the right: the panel starts where the page ends (the divider overlaps each by 3 px) and ends at the stage's edge.
     expect(layout.panelLeft).toBeGreaterThanOrEqual(layout.contentRight - 3);
     expect(layout.panelRight).toBe(layout.stageRight);

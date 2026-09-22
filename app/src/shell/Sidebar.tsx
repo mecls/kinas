@@ -1,35 +1,63 @@
 import { useEffect, useState } from "react";
-import { type PinView, readerAllowClick } from "../api.ts";
-import { ChevronDownIcon, ChevronRightIcon, FileIcon, FolderIcon, GaugeIcon, GearIcon, PinIcon, PinOffIcon, TerminalIcon } from "../icons.tsx";
+import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
+import type { Page } from "../App.tsx";
 import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
 import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
+import { categoriesFor } from "../ui/category.ts";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ConnectionRow,
+  CrewIcon,
+  FileIcon,
+  FolderIcon,
+  GaugeIcon,
+  GearIcon,
+  HomeIcon,
+  InboxIcon,
+  NavHeading,
+  NavItem,
+  PinIcon,
+  PinOffIcon,
+  TerminalIcon,
+  Wordmark,
+} from "../ui/index.ts";
+import { type Connection, connectionOf } from "./connection.ts";
 import { type Notice, NOTICE_MS } from "./notice.ts";
 import type { RecentEntry } from "./recent.ts";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
+/** The sidebar asks for the VPS reading this often when nothing else changes; a new reading arrives as an event. */
+const CONNECTION_MS = 60_000;
+
 /**
- * The left sidebar (three-column shell §4): the pages, then what Miguel can open — Pinned, the open folder's Files,
- * and Recent — with Settings at the foot.
+ * The left sidebar (DESIGN.md §3.1; three-column shell §4): the wordmark, the seven navigation rows, then what Miguel
+ * can open — Pinned, the open folder's Files, Recent — then the client folders with their chips, the shell's last
+ * notice, and the VPS row at the foot.
  *
  * A module-level component, like everything the shell mounts: a component defined inside App's render would be a
  * new type on every render, and React would remount the whole subtree each time.
  *
  * **A section with no rows is not rendered at all** (Miguel's choice): no header, no hint. A fresh launch shows the
- * pages and Settings, and nothing else.
+ * pages and, once the projects root has been walked, the client folders.
  *
  * It owns no reader state. Clicks go up as paths; the shell turns them into `follow` requests for the reader, which
- * stays the single owner of what is open.
+ * stays the single owner of what is open. The Reader row is a button, not a page (keymap.md, 2026-09-22): it asks
+ * the shell to bring the panel back, and reads as current while the panel is open.
  *
  * **A folder is a thing in its own right here** (2026-09-21): wherever one shows — a row in a file tree, a row in
- * Recent, a pin, the Files header — pointing at it offers a terminal button and a pin button. The terminal button
- * asks Herdr for the folder's workspace (App's `onTerminal`); nothing is typed into the pane.
+ * Recent, a pin, the Files header, a client folder — pointing at it offers a terminal button and a pin button. The
+ * terminal button asks Herdr for the folder's workspace (App's `onTerminal`); nothing is typed into the pane.
  */
 export function Sidebar({
   hidden,
   page,
   shortcuts,
   onGo,
+  onReader,
+  readerOpen,
+  projects,
   pins,
   folder,
   folderPinned,
@@ -43,9 +71,14 @@ export function Sidebar({
   panelOpen,
 }: {
   hidden: boolean;
-  page: "usage" | "work" | "settings";
+  page: Page;
   shortcuts: Shortcuts;
-  onGo: (page: "usage" | "work" | "settings") => void;
+  onGo: (page: Page) => void;
+  /** The Reader row: bring the panel back with what it last showed. */
+  onReader: () => void;
+  readerOpen: boolean;
+  /** The git repositories under the projects root (projects.rs), in the order found. */
+  projects: readonly ProjectRow[];
   pins: PinView[];
   /** The folder the reader has open (`kinas open <dir>`), or null. */
   folder: string | null;
@@ -67,18 +100,20 @@ export function Sidebar({
   const folderActions: TreeFolderActions = (path, name) => (
     <FolderActions path={path} name={name} pinned={isPinned(path)} onTerminal={onTerminal} onPin={onPin} onUnpin={onUnpin} />
   );
+  const chord = (action: keyof Shortcuts) => chordLabel(shortcuts[action]);
+  const current = (p: Page) => page === p;
 
   return (
     <nav className="sidebar" aria-label="Sidebar" hidden={hidden}>
+      <Wordmark />
       <div className="sidebar-nav">
-        <button type="button" className="sidebar-item" aria-current={page === "usage" ? "page" : undefined} onClick={() => onGo("usage")} title={`Usage (${chordLabel(shortcuts["go.usage"])})`}>
-          <GaugeIcon size={16} />
-          <span>Usage</span>
-        </button>
-        <button type="button" className="sidebar-item" aria-current={page === "work" ? "page" : undefined} onClick={() => onGo("work")} title={`Work (${chordLabel(shortcuts["go.work"])})`}>
-          <TerminalIcon size={16} />
-          <span>Work</span>
-        </button>
+        <NavItem icon={<HomeIcon />} label="Home" current={current("home")} onClick={() => onGo("home")} title={`Home (${chord("go.home")})`} />
+        <NavItem icon={<TerminalIcon />} label="Work" current={current("work")} onClick={() => onGo("work")} title={`Work (${chord("go.work")})`} />
+        <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} />
+        <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={0} onClick={() => onGo("inbox")} />
+        <NavItem icon={<GaugeIcon />} label="Usage" current={current("usage")} onClick={() => onGo("usage")} title={`Usage (${chord("go.usage")})`} />
+        <NavItem icon={<FileIcon />} label="Reader" current={readerOpen} onClick={onReader} aria-label="Reader" title="Reader: the last document, back in the panel" />
+        <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} />
       </div>
 
       <div className="sidebar-scroll">
@@ -101,7 +136,7 @@ export function Sidebar({
                 {baseName(folder)}
               </h2>
               <button type="button" className="sidebar-row-action" aria-label="Open this folder in the terminal" title="Open this folder in the terminal" onClick={() => onTerminal(folder)}>
-                <TerminalIcon size={14} />
+                <TerminalIcon size="sm" />
               </button>
               <button
                 type="button"
@@ -110,7 +145,7 @@ export function Sidebar({
                 title={folderPinned ? "Unpin this folder" : "Pin this folder"}
                 onClick={() => (folderPinned ? onUnpin(folder) : onPin(folder))}
               >
-                {folderPinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />}
+                {folderPinned ? <PinOffIcon size="sm" /> : <PinIcon size="sm" />}
               </button>
             </div>
             <FileTree root={folder} selected={selected} onOpen={onOpen} folderActions={folderActions} />
@@ -127,7 +162,7 @@ export function Sidebar({
                   <li key={entry.path} data-kind="dir">
                     <div className="sidebar-entry">
                       <button type="button" className="sidebar-row" aria-current={entry.path === folder ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
-                        <FolderIcon size={14} />
+                        <FolderIcon size="sm" />
                         <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
                       </button>
                       {folderActions(entry.path, baseName(entry.displayPath))}
@@ -136,7 +171,7 @@ export function Sidebar({
                 ) : (
                   <li key={entry.path} data-kind="file">
                     <button type="button" className="sidebar-row" aria-current={entry.path === selected ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
-                      <FileIcon size={14} />
+                      <FileIcon size="sm" />
                       <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
                     </button>
                   </li>
@@ -145,23 +180,61 @@ export function Sidebar({
             </ul>
           </section>
         )}
+
+        {projects.length > 0 && <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} />}
       </div>
 
       <SidebarNotice notice={notice} panelOpen={panelOpen} />
-
-      <button
-        type="button"
-        className="sidebar-item sidebar-settings"
-        aria-label="Settings"
-        aria-current={page === "settings" ? "page" : undefined}
-        onClick={() => onGo("settings")}
-        title={`Settings (${chordLabel(shortcuts.settings)})`}
-      >
-        <GearIcon size={16} />
-        <span>Settings</span>
-      </button>
+      <Machine />
     </nav>
   );
+}
+
+/**
+ * The client folders (DESIGN.md §3.1): one row per repository, its chip in the category Settings chose or the name
+ * derives, the internal ones last and tagged. A click opens the folder in the reader — Files and its README — as a
+ * folder in Recent does; the terminal and pin buttons appear beside it as they do on every folder row.
+ */
+function ClientFolders({ projects, folder, onOpen, folderActions }: { projects: readonly ProjectRow[]; folder: string | null; onOpen: (path: string) => void; folderActions: TreeFolderActions }) {
+  const ordered = [...projects.filter((p) => !p.internal), ...projects.filter((p) => p.internal)];
+  const categories = categoriesFor(
+    ordered.map((p) => p.name),
+    Object.fromEntries(projects.map((p) => [p.name, p.category])),
+  );
+  return (
+    <section className="sidebar-section sidebar-folders" aria-label="Client folders">
+      <NavHeading>Client folders</NavHeading>
+      <ul className="sidebar-list">
+        {ordered.map((p) => (
+          <li key={p.path} data-kind="dir" data-cat={categories[p.name]} data-internal={p.internal ? "" : undefined}>
+            <div className="sidebar-entry">
+              <NavItem chip={categories[p.name]} label={p.name} tag={p.internal ? "internal" : undefined} current={p.path === folder} title={p.display} onClick={() => onOpen(p.path)} />
+              {folderActions(p.path, p.name)}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The VPS row at the foot, from the same reading the Usage page shows (shell/connection.ts); nothing when no machine is watched. */
+function Machine() {
+  const [connection, setConnection] = useState<Connection | null>(null);
+  useEffect(() => {
+    const load = () => void getUsageSnapshot().then((s) => setConnection(connectionOf(s)), () => {});
+    load();
+    const timer = window.setInterval(load, CONNECTION_MS);
+    const stop = onReadingsChanged(load);
+    window.addEventListener("focus", load);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", load);
+      void stop.then((u) => u());
+    };
+  }, []);
+  if (!connection) return null;
+  return <ConnectionRow name={connection.name} state={connection.state} detail={connection.detail} />;
 }
 
 /**
@@ -219,8 +292,8 @@ function PinRow({
           title={title}
           onClick={activate}
         >
-          {isDir ? expanded && !missing ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} /> : <FileIcon size={14} />}
-          {isDir && <FolderIcon size={14} />}
+          {isDir ? expanded && !missing ? <ChevronDownIcon size="sm" /> : <ChevronRightIcon size="sm" /> : <FileIcon size="sm" />}
+          {isDir && <FolderIcon size="sm" />}
           <span className="sidebar-row-name">{name}</span>
         </button>
         {isDir && !missing && (
@@ -229,7 +302,7 @@ function PinRow({
           </span>
         )}
         <button type="button" className="sidebar-row-action" aria-label="Unpin" title={`Unpin ${name}`} onClick={() => onUnpin(pin.path)}>
-          <PinOffIcon size={14} />
+          <PinOffIcon size="sm" />
         </button>
       </div>
       {isDir && expanded && !missing && <PinnedFolder path={pin.path} selected={selected} onOpen={onOpen} folderActions={folderActions} />}
@@ -249,7 +322,7 @@ function PinnedFolder({ path, selected, onOpen, folderActions }: { path: string;
 function TerminalButton({ path, name, onTerminal }: { path: string; name: string; onTerminal: (path: string) => void }) {
   return (
     <button type="button" className="sidebar-row-action" aria-label={`Open ${name} in the terminal`} title={`Open ${name} in the terminal`} onClick={() => onTerminal(path)}>
-      <TerminalIcon size={14} />
+      <TerminalIcon size="sm" />
     </button>
   );
 }
@@ -277,7 +350,7 @@ function FolderActions({
     <span className="sidebar-actions">
       <TerminalButton path={path} name={name} onTerminal={onTerminal} />
       <button type="button" className="sidebar-row-action" aria-label={pinned ? `Unpin ${name}` : `Pin ${name}`} title={pinned ? `Unpin ${name}` : `Pin ${name}`} onClick={() => (pinned ? onUnpin(path) : onPin(path))}>
-        {pinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />}
+        {pinned ? <PinOffIcon size="sm" /> : <PinIcon size="sm" />}
       </button>
     </span>
   );

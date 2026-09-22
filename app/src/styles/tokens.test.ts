@@ -153,6 +153,11 @@ describe("contrast, measured (DESIGN.md §2.4, §7)", () => {
       expect(colour(theme, "--ansi-bright-black")).toBe(colour(theme, "--ink-2"));
       expect(colour(theme, "--ansi-bright-white")).toBe(colour(theme, "--term-fg"));
     });
+
+    test(`${themeName}: a file in the reader sits on the app's surface, never on the terminal's ground`, () => {
+      expect(ruleBlock(sheet("reader.css"), ".reader")).toMatch(/(^|[;{\s])background:\s*var\(--surface\);/);
+      expect(colour(theme, "--surface")).not.toBe(colour(theme, "--term-bg"));
+    });
   }
 });
 

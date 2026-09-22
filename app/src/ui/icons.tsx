@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 
 // The design system's icon set (DESIGN.md §4; design/preview.html's sprite, lines 311–327): fifteen strokes on a
 // 16-unit grid, drawn in the current colour at `--icon` (16) by default and `--icon-sm` (14) beside a row action.
-// Inline SVG, no package — a dozen paths are not worth a pinned dependency (Build 1 R6). The older Lucide drawings
-// the reader and the sidebar still use live in app/src/icons.tsx until those surfaces are rebuilt on this set.
+// Inline SVG, no package — a dozen paths are not worth a pinned dependency (Build 1 R6). Three the sidebar needs
+// beyond the sprite — folder, pin, unpin — are drawn here on the same grid. The older Lucide drawings the reader
+// still uses live in app/src/icons.tsx until its header is rebuilt on this set (design-system slice 6).
 
 export type IconSize = "md" | "sm";
 
@@ -104,5 +105,26 @@ export const InfoIcon = (p: Props) => (
   <Icon {...p}>
     <circle cx="8" cy="8" r="6" />
     <path d="M8 7.5v3.5M8 5h.01" />
+  </Icon>
+);
+
+/* Beyond the preview's sprite: what the sidebar's rows do with a folder. */
+export const FolderIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.8l1.5 1.5h4.7A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5z" />
+  </Icon>
+);
+export const PinIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M8 10.5V14" />
+    <path d="M5 10.5h6l-.8-3V4h.55a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h.55v3.5z" />
+  </Icon>
+);
+export const PinOffIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M8 10.5V14" />
+    <path d="M10.2 7.5V4h.55a.75.75 0 0 0 0-1.5H5.5" />
+    <path d="M5.8 6.2v1.3l-.8 3H11" />
+    <path d="m2.5 2.5 11 11" />
   </Icon>
 );

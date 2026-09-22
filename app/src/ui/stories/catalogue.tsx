@@ -9,12 +9,18 @@ import {
   ChecksList,
   Chip,
   ConnectionRow,
+  CrewIcon,
   Dot,
   EmptyState,
   Field,
+  FileIcon,
+  FolderIcon,
   Gauge,
+  GaugeIcon,
   Gauges,
+  GearIcon,
   HomeIcon,
+  InboxIcon,
   Inbox,
   InboxItem,
   Input,
@@ -25,6 +31,8 @@ import {
   PanelBody,
   PanelFooter,
   PanelHeader,
+  PinIcon,
+  PinOffIcon,
   PlusIcon,
   ProgressList,
   ProgressRow,
@@ -38,6 +46,7 @@ import {
   Table,
   Tag,
   TerminalChrome,
+  TerminalIcon,
   Timeline,
   TitleRow,
   Toast,
@@ -370,12 +379,33 @@ export const STORIES: Story[] = [
           <div style={{ width: "var(--sidebar-w)", display: "flex", flexDirection: "column", gap: "var(--space-0)", padding: "var(--space-3) var(--space-2)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", minHeight: "320px" }}>
             <Wordmark />
             <NavItem icon={<HomeIcon />} label="Home" current />
-            <NavItem icon={<CheckIcon />} label="Inbox" count={3} />
-            <NavItem icon={<CheckIcon />} label="Usage" count={0} />
+            <NavItem icon={<TerminalIcon />} label="Work" />
+            <NavItem icon={<CrewIcon />} label="Crew" />
+            <NavItem icon={<InboxIcon />} label="Inbox" count={3} />
+            <NavItem icon={<GaugeIcon />} label="Usage" count={0} />
+            <NavItem icon={<FileIcon />} label="Reader" />
+            <NavItem icon={<GearIcon />} label="Settings" />
             <NavHeading>Client folders</NavHeading>
             <NavItem chip={1} label="ar-watches" />
             <NavItem chip={5} label="kinas" tag="internal" />
             <ConnectionRow name="Hostinger VPS" state="connected" />
+          </div>
+        ),
+      },
+      {
+        // The three drawn beyond the preview's sprite, for the sidebar's folder rows (icons.tsx).
+        name: "folder-icons",
+        node: (
+          <div style={{ display: "flex", gap: "var(--space-4)", color: "var(--ink-2)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1h)" }}>
+              <FolderIcon /> folder
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1h)" }}>
+              <PinIcon size="sm" /> pin
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1h)" }}>
+              <PinOffIcon size="sm" /> unpin
+            </span>
           </div>
         ),
       },

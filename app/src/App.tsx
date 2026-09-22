@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
 import {
   getUiPrefs,
+  listProjects,
   onOpenPalette,
   onReaderShow,
   type PinView,
+  type ProjectRow,
   readerAllowClick,
   readerErrorOf,
   readerOpenInTerminal,
@@ -26,10 +28,14 @@ import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import type { Notice } from "./shell/notice.ts";
 import { NAV_NOTHING, navSeenOf, pushRecent, recentAfterNav, recentFolder, type RecentEntry } from "./shell/recent.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
+import { CrewPage } from "./pages/Crew.tsx";
+import { HomePage } from "./pages/Home.tsx";
+import { InboxPage } from "./pages/Inbox.tsx";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useSplit } from "./shell/useSplit.ts";
 
-export type Page = "usage" | "work" | "settings";
+/** The pages, always mounted (below). Home is the first screen since 2026-09-22 (keymap.md: ⌘1 Home, ⌘2 Work, ⌘4 Usage). */
+export type Page = "home" | "work" | "crew" | "inbox" | "usage" | "settings";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
@@ -49,7 +55,7 @@ interface PanelState {
 // divider and the panel are always there, and only `hidden` and the data attributes change. Anything that wrapped, re-keyed
 // or conditionally rendered an ancestor of <Terminal> would remount it and restart the PTY.
 export function App() {
-  const [page, setPage] = useState<Page>("usage");
+  const [page, setPage] = useState<Page>("home");
   const [palette, setPalette] = useState(false);
   const [sidebar, setSidebar] = useState(true);
   const [shortcuts, setShortcuts] = useState<Shortcuts>(DEFAULT_SHORTCUTS);
@@ -62,6 +68,8 @@ export function App() {
   const [pins, setPins] = useState<PinView[]>([]);
   /** In memory only, by design: what was merely opened is forgotten when Kinas quits (shell/recent.ts). */
   const [recent, setRecent] = useState<readonly RecentEntry[]>([]);
+  /** The client folders (projects.rs): the sidebar lists them, Settings colours them. */
+  const [projects, setProjects] = useState<readonly ProjectRow[]>([]);
   /** What the reader last reported, so Recent can tell a change from a repeat (shell/recent.ts). */
   const navSeen = useRef(NAV_NOTHING);
   /** Something the shell wants said: in the reader's status line, and at the sidebar's foot while the panel is closed. */
@@ -74,7 +82,7 @@ export function App() {
   const shortcutsRef = useRef(shortcuts);
   const sidebarShown = useRef(true);
   /** Where Esc on Settings goes back to. */
-  const lastPage = useRef<Exclude<Page, "settings">>("usage");
+  const lastPage = useRef<Exclude<Page, "settings">>("home");
   const pageRef = useRef(page);
   const expandedRef = useRef(false);
   /** Whether the keys were the terminal's when the panel expanded over it, so collapsing can give them back. */
@@ -118,7 +126,8 @@ export function App() {
 
   const run = useCallback(
     (action: AppAction) => {
-      if (action === "go.usage") goTo("usage");
+      if (action === "go.home") goTo("home");
+      else if (action === "go.usage") goTo("usage");
       else if (action === "go.work") goTo("work");
       else if (action === "palette") setPalette(true);
       else if (action === "settings") {
@@ -249,6 +258,15 @@ export function App() {
 
   const say = useCallback((text: string) => setNotice({ text, seq: ++noticeSeq.current }), []);
 
+  // The client folders, at launch, whenever the window comes forward (a clone made in the terminal should show
+  // without a relaunch — Rust walks the root again once a minute at most) and after Settings changes one.
+  const loadProjects = useCallback(() => void listProjects().then(setProjects, () => {}), []);
+  useEffect(() => {
+    loadProjects();
+    window.addEventListener("focus", loadProjects);
+    return () => window.removeEventListener("focus", loadProjects);
+  }, [loadProjects]);
+
   // Rust decides whether a path may be pinned, and says why not in its own words.
   const pin = useCallback(
     (path: string) => {
@@ -284,6 +302,15 @@ export function App() {
   const openFromSidebar = useCallback((path: string) => {
     setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current } }));
   }, []);
+
+  // The sidebar's Reader entry (keymap.md, 2026-09-22): the panel with its last document back, or the most recent
+  // file, or — on a fresh launch with nothing to show — one line at the foot of the sidebar. Never an empty panel.
+  const reopenReader = useCallback(() => {
+    if (reader.open) return;
+    if (reader.request) setReader((r) => ({ ...r, open: true }));
+    else if (recent.length > 0) openFromSidebar(recent[0]!.path);
+    else say("Nothing to reopen — kinas open <file>");
+  }, [reader.open, reader.request, recent, say, openFromSidebar]);
 
   // Open in the terminal (keymap.md, Sidebar): Rust asks Herdr for the folder's workspace — nothing is typed into the
   // pane — and only when that worked does anything move: the folder goes to the front of Recent, the Work page shows
@@ -334,11 +361,23 @@ export function App() {
         onPin={pin}
         onUnpin={unpin}
         onTerminal={openInTerminal}
+        onReader={reopenReader}
+        readerOpen={reader.open}
+        projects={projects}
         notice={notice}
         panelOpen={reader.open}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
+          <section className="page" data-page="home" hidden={page !== "home"}>
+            <HomePage onGo={goTo} />
+          </section>
+          <section className="page" data-page="crew" hidden={page !== "crew"}>
+            <CrewPage />
+          </section>
+          <section className="page" data-page="inbox" hidden={page !== "inbox"}>
+            <InboxPage />
+          </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
             <UsagePage active={page === "usage"} />
           </section>
@@ -346,7 +385,7 @@ export function App() {
             <WorkPage active={page === "work"} shortcuts={shortcuts} />
           </section>
           <section className="page" data-page="settings" hidden={page !== "settings"}>
-            <SettingsPage active={page === "settings"} shortcuts={shortcuts} onShortcutsChange={changeShortcuts} />
+            <SettingsPage active={page === "settings"} shortcuts={shortcuts} onShortcutsChange={changeShortcuts} projects={projects} onProjectsChange={loadProjects} />
           </section>
         </main>
         <div className="stage-divider" hidden={!reader.open} {...split.divider} />

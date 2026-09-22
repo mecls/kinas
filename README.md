@@ -7,7 +7,7 @@ Kinas is a Mac app with the kinas CLI inside it. It gives one developer a single
 
 Everything runs on your Mac. No server, no SSH, no API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows locally.
 
-Kinas is built as a castle: it decides the contracts, the doors, the gates, and the record. Everything inside is a seam you fill with your own tools: the harness, the store, the session runtime, the build conductor, the review loop, the channel, the providers. Defaults are shipped for every seam and none is required.
+Kinas is built as a castle: it decides the contracts, the doors, the gates, and the record. Everything inside is a seam you fill with your own tools: the harness, the store, the session runtime, the build conductor, the review loop, the channel, the providers. Defaults are shipped for every seam and none is required (`docs/adr/0013-v1-is-local-seams-swap.md`).
 
 Built by Sintra Labs to run Miraside, its first customer. Grown in tested increments: an empty castle first, then one room at a time.
 
@@ -139,5 +139,21 @@ migrations/          forward-only SQL, applied by the app
 fixtures/            shared test data (synthetic files are marked .synthetic)
 e2e/                 WebdriverIO specs and runner
 keymap.md            every key binding
+DESIGN.md            the design system: tokens, components, pages — the law for every surface
+design/preview.html  DESIGN.md rendered, both themes, for a browser
+AGENTS.md            how agents work here: the four gates, the resume rule, where the documents live
 docs/smoke-test.md   the terminal's acceptance checklist
+docs/adr/            the decisions that outlive a feature, numbered, never rewritten (adr.test.ts holds them)
+docs/external/       the world outside the repository — names and scopes, never values
+tasks/_templates/    the status file, PRD, architecture, build spec, mockup and ADR templates
+.claude/skills/      the vendored software-factory skill the gates come from
 ```
+
+## How work is done
+
+Every feature runs through four gates before implementation code exists — Product, Architecture, Program design,
+Vertical slices — each approved by the captain in so many words, with a status file per feature that a fresh
+session reads first. `AGENTS.md` is the rule book: the resume rule, the approval protocol, compaction at every
+boundary, what skips the gates, and the map from the vendored skill's file layout to `tasks/<feature>/`. The
+templates are in `tasks/_templates/`; the tracked part of a feature's folder is its status file, its PRD and
+its mockups, which are reviewed inside Kinas with `kinas open`; the build spec stays on the captain's Mac.

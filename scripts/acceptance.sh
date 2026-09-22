@@ -48,8 +48,14 @@ if want ac10; then
     fail "no private names to look for: set KINAS_PRIVATE_NAMES or write scripts/private-names"
   else
     hits=$(git grep -i -n -E "$names" || true)
-    [ -z "$hits" ] && pass "no private names in the repository (planning documents in tasks/ are git-ignored)" || fail "private names found: $hits"
+    [ -z "$hits" ] && pass "no private names in the repository (private planning documents in tasks/ are git-ignored; the tracked templates, status files, PRDs and mockups are searched like any other file)" || fail "private names found: $hits"
   fi
+  # The agent-facing documents — AGENTS.md, DESIGN.md, docs/ (ADRs, docs/external/), the templates and every
+  # feature's tracked status file and PRD — carry names and scopes, never a value. A bare prefix would match the
+  # prose that explains the rule (docs/smoke-test.md names the very grep a person runs), so every pattern wants a
+  # token character after it; the store and log checks below look for the bare prefix, since no prose lives there.
+  hits=$(git grep -n -E 'sk-ant-[A-Za-z0-9]|Bearer [A-Za-z0-9]|ghp_[A-Za-z0-9]|github_pat_[A-Za-z0-9]' -- docs AGENTS.md DESIGN.md tasks/_templates 'tasks/*/status.md' 'tasks/*/prd.md' || true)
+  [ -z "$hits" ] && pass "no secret pattern in the agent-facing documents (docs/, AGENTS.md, DESIGN.md, tasks/ templates, status files and PRDs)" || fail "a secret pattern is in a document: $hits"
   hits=$(git grep -n -E 'Claude Code-credentials|api\.anthropic\.com' -- ':!tasks' ':!scripts/acceptance.sh' || true)
   [ -z "$hits" ] && pass "no Claude credential or Anthropic API references" || fail "found: $hits"
   if [ -x "$BIN" ]; then

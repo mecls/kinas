@@ -364,11 +364,11 @@ repository with committed `README.md` and `docs/old.md`, and an ignored `notes/`
 
 ## 7. Open questions
 
-1. **Rule 24: does a click on a marked row open Changes, or the file's usual view?** I chose Changes, because the
-   marks exist to answer "what changed". If Miguel mostly clicks a rewritten markdown file to read it rendered, the
-   usual view with Changes one click away is better. Miguel decides at Gate 1.
-2. **Rule 11's caption, "5 changes since 14:02".** It costs one line of the sidebar's height while marks exist.
-   Confirm or drop it by eye in `mockups/sidebar-tree.html`.
+1. ~~**Rule 24: does a click on a marked row open Changes, or the file's usual view?**~~ Decided 2026-09-23: Changes,
+   as written — Gate 1 was approved without a change. (The case against: if Miguel mostly clicks a rewritten
+   markdown file to read it rendered, the usual view with Changes one click away would be better.)
+2. ~~**Rule 11's caption, "5 changes since 14:02".**~~ Decided 2026-09-23: kept, as mocked — Gate 1 was approved
+   without a change. It costs one line of the sidebar's height while marks exist.
 3. **Rule 20's 64 MB budget** is a guess. In a git repository only files with uncommitted or ignored text are copied,
    so a typical client repository fits many times over. A folder outside git, or the projects folder itself opened in
    Files, may spend it on the first folders walked. Gate 2 measures the Kinas repository and the projects folder, and

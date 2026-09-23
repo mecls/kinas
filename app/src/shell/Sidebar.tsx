@@ -1,5 +1,5 @@
-import { seatFolders } from "./folders.ts";
-import { useEffect, useState } from "react";
+import { folderMenu, hiddenFolders, menuAt, seatFolders, type SeatedFolder, shownFolders } from "./folders.ts";
+import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
 import type { Page } from "../App.tsx";
 import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
@@ -15,6 +15,7 @@ import {
   GearIcon,
   HomeIcon,
   InboxIcon,
+  Menu,
   NavHeading,
   NavItem,
   PinIcon,
@@ -66,6 +67,9 @@ export function Sidebar({
   onPin,
   onUnpin,
   onTerminal,
+  onHide,
+  onShow,
+  onAdd,
   notice,
   panelOpen,
 }: {
@@ -73,7 +77,7 @@ export function Sidebar({
   page: Page;
   shortcuts: Shortcuts;
   onGo: (page: Page) => void;
-  /** The git repositories under the projects root (projects.rs), in the order found. */
+  /** The client folders (projects.rs), in the order found — hidden and removed ones too, flagged: seated first, filtered after. */
   projects: readonly ProjectRow[];
   pins: PinView[];
   /** The folder the reader has open (`kinas open <dir>`), or null. */
@@ -87,6 +91,10 @@ export function Sidebar({
   onUnpin: (path: string) => void;
   /** Open this folder in the terminal: its Herdr workspace, focused or made. */
   onTerminal: (path: string) => void;
+  /** The client folders' right-click menu: off the sidebar and Home, back on, or a folder chosen in a sheet. */
+  onHide: (folder: ProjectRow) => void;
+  onShow: (folder: ProjectRow) => void;
+  onAdd: () => void;
   /** What the shell last said. Shown here only while the panel is closed — open, the reader's status line has it. */
   notice: Notice | null;
   panelOpen: boolean;
@@ -146,7 +154,7 @@ export function Sidebar({
           </section>
         )}
 
-        {projects.length > 0 && <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} />}
+        <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} onHide={onHide} onShow={onShow} onAdd={onAdd} />
 
         {recent.length > 0 && (
           <section className="sidebar-section sidebar-recent" aria-label="Recent">
@@ -189,19 +197,68 @@ export function Sidebar({
   );
 }
 
+/** Space kept between a menu opened at the pointer and the window's edge, in CSS pixels. */
+const MENU_MARGIN = 8;
+
 /**
- * The client folders (DESIGN.md §3.1): one row per repository, its chip in the category Settings chose or the name
- * derives, the internal ones last and tagged. A click opens the folder in the reader — Files and its README — as a
- * folder in Recent does; the terminal and pin buttons appear beside it as they do on every folder row.
+ * The client folders (DESIGN.md §3.1): one row per shown folder, its chip in the category Settings chose or the name
+ * derives — seated over every folder, hidden and removed ones too, so hiding one repaints no other — the internal
+ * ones last and tagged. A click opens the folder in the reader — Files and its README — as a folder in Recent does;
+ * the terminal and pin buttons appear beside it as they do on every folder row.
+ *
+ * A right-click (folder views, 2026-09-23) opens a Menu at the pointer: Hide from sidebar on a folder, Add a client
+ * folder…, and Show for each hidden one; on the heading, the same without Hide. With no folder shown the section is
+ * not drawn at all, like every empty section, and Settings → Client folders is the way back.
  */
-function ClientFolders({ projects, folder, onOpen, folderActions }: { projects: readonly ProjectRow[]; folder: string | null; onOpen: (path: string) => void; folderActions: TreeFolderActions }) {
-  const ordered = seatFolders(projects);
+function ClientFolders({
+  projects,
+  folder,
+  onOpen,
+  folderActions,
+  onHide,
+  onShow,
+  onAdd,
+}: {
+  projects: readonly ProjectRow[];
+  folder: string | null;
+  onOpen: (path: string) => void;
+  folderActions: TreeFolderActions;
+  onHide: (folder: ProjectRow) => void;
+  onShow: (folder: ProjectRow) => void;
+  onAdd: () => void;
+}) {
+  const seated = seatFolders(projects);
+  const shown = shownFolders(seated);
+  const [menu, setMenu] = useState<{ x: number; y: number; target: SeatedFolder | null; seq: number } | null>(null);
+  const seq = useRef(0);
+  const box = useRef<HTMLDivElement>(null);
+
+  // Placed at the pointer, then moved back inside the window once its size is known — before the frame is painted.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!menu || !el) return;
+    const at = menuAt(menu.x, menu.y, { width: el.offsetWidth, height: el.offsetHeight }, { width: window.innerWidth, height: window.innerHeight }, MENU_MARGIN);
+    el.style.left = `${at.left}px`;
+    el.style.top = `${at.top}px`;
+  }, [menu]);
+
+  if (shown.length === 0) return null;
+
+  const open = (e: React.MouseEvent, target: SeatedFolder | null) => {
+    // WebKit's own menu (Reload, Inspect Element) never shows on a folder row.
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, target, seq: ++seq.current });
+  };
+
   return (
     <section className="sidebar-section sidebar-folders" aria-label="Client folders">
-      <NavHeading>Client folders</NavHeading>
+      <div onContextMenu={(e) => open(e, null)}>
+        <NavHeading>Client folders</NavHeading>
+      </div>
       <ul className="sidebar-list">
-        {ordered.map((p) => (
-          <li key={p.path} data-kind="dir" data-cat={p.cat} data-internal={p.internal ? "" : undefined}>
+        {shown.map((p) => (
+          <li key={p.path} data-kind="dir" data-cat={p.cat} data-internal={p.internal ? "" : undefined} onContextMenu={(e) => open(e, p)}>
             <div className="sidebar-entry">
               <NavItem chip={p.cat} label={p.name} tag={p.internal ? "internal" : undefined} current={p.path === folder} title={p.display} onClick={() => onOpen(p.path)} />
               {folderActions(p.path, p.name)}
@@ -209,6 +266,12 @@ function ClientFolders({ projects, folder, onOpen, folderActions }: { projects: 
           </li>
         ))}
       </ul>
+      {menu && (
+        // Keyed by the right-click, so a second one elsewhere mounts a fresh menu that takes the keys again.
+        <div key={menu.seq} className="sidebar-menu" ref={box} style={{ left: menu.x, top: menu.y }}>
+          <Menu label={menu.target ? menu.target.name : "Client folders"} items={folderMenu(menu.target, hiddenFolders(seated), { hide: onHide, add: onAdd, show: onShow })} onClose={() => setMenu(null)} />
+        </div>
+      )}
     </section>
   );
 }

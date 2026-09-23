@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addClientFolder,
   getSettings,
   removeOllamaKey,
   saveOllamaKey,
@@ -7,7 +8,9 @@ import {
   setAccent,
   setAppearance,
   setFolderCategory,
+  setFolderHidden,
   setFolderInternal,
+  setFolderRemoved,
   setGlobalHotkey,
   setLaunchAtLogin,
   setMenuBarQuota,
@@ -21,7 +24,7 @@ import { chordFromEvent } from "../settings/chord.ts";
 import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
 import { AccentField } from "../ui/AccentField.tsx";
-import { seatFolders } from "../shell/folders.ts";
+import { addedLine, listedFolders, removedFolders, seatFolders, type SeatedFolder } from "../shell/folders.ts";
 import { CATEGORIES } from "../ui/category.ts";
 import { Button, Card, Chip, Switch, TitleRow } from "../ui/index.ts";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
@@ -328,12 +331,24 @@ export function SettingsPage({
 
           <Card className="settings-section" data-section="folders">
             <h2>Client folders</h2>
-            <p className="settings-help">Every git repository up to three levels under the projects folder, as the sidebar lists it. The chip is the folder's colour on every page; click it for the next of the six. An internal folder is listed last, with the tag.</p>
-            {projects.length === 0 ? (
-              <p className="settings-help">No repositories under the projects folder yet.</p>
-            ) : (
-              <ClientFolderRows projects={projects} onCategory={(name, cat) => void act("folders", () => setFolderCategory(name, cat).then(onProjectsChange))} onInternal={(name, internal) => void act("folders", () => setFolderInternal(name, internal).then(onProjectsChange))} />
-            )}
+            <p className="settings-help">
+              Every git repository up to three levels under the projects folder, and the folders you added. The chip is the folder&apos;s colour on every page; click it for the next of the six. A folder out of the sidebar is off Home too. An internal folder is listed last, with the tag. Remove takes a folder out of Kinas without touching it on disk.
+            </p>
+            <ClientFolders
+              projects={projects}
+              onCategory={(name, cat) => void act("folders", () => setFolderCategory(name, cat).then(onProjectsChange))}
+              onInternal={(name, internal) => void act("folders", () => setFolderInternal(name, internal).then(onProjectsChange))}
+              onHidden={(f, hidden) => void act("folders", () => setFolderHidden(f.path, hidden).then(onProjectsChange))}
+              onRemoved={(f, removed) => void act("folders", () => setFolderRemoved(f.path, removed).then(onProjectsChange), removed ? `Removed ${f.name}. Restore it below.` : `Restored ${f.name}`)}
+              onAdd={() =>
+                void act("folders", async () => {
+                  const result = await addClientFolder();
+                  onProjectsChange();
+                  const line = addedLine(result);
+                  if (line) setMessage({ section: "folders", text: line });
+                })
+              }
+            />
             {note("folders")}
           </Card>
 
@@ -397,26 +412,107 @@ function ShortcutRow({
   );
 }
 
-/** The client folders' choices (DESIGN.md §3.1): the chip cycles the six categories, the switch marks a folder internal. */
-function ClientFolderRows({ projects, onCategory, onInternal }: { projects: readonly ProjectRow[]; onCategory: (name: string, cat: number) => void; onInternal: (name: string, internal: boolean) => void }) {
-  // The colours as the sidebar and Home seat them; the rows keep the listing's order, so a switch never moves one.
-  const categories = Object.fromEntries(seatFolders(projects).map((f) => [f.name, f.cat]));
+/**
+ * The client folders' choices (DESIGN.md §3.1): the chip cycles the six categories, In sidebar hides a folder from the
+ * sidebar and Home, Internal lists it last, Remove takes it out of Kinas — into the Removed list, where Restore brings
+ * it back shown (folder views, 2026-09-23). Add a folder… takes any folder inside the projects folder.
+ *
+ * The colours are seated over every folder, removed ones too, as the sidebar and Home seat them; the rows keep the
+ * listing's order, so a switch never moves one.
+ */
+function ClientFolders({
+  projects,
+  onCategory,
+  onInternal,
+  onHidden,
+  onRemoved,
+  onAdd,
+}: {
+  projects: readonly ProjectRow[];
+  onCategory: (name: string, cat: number) => void;
+  onInternal: (name: string, internal: boolean) => void;
+  onHidden: (folder: ProjectRow, hidden: boolean) => void;
+  onRemoved: (folder: ProjectRow, removed: boolean) => void;
+  onAdd: () => void;
+}) {
+  const seated = new Map(seatFolders(projects).map((f) => [f.path, f]));
+  // The listing's order, each with the colour it was seated with.
+  const inOrder = projects.map((p) => seated.get(p.path)!);
+  const listed = listedFolders(inOrder);
+  const removed = removedFolders(inOrder);
   return (
-    <ul className="settings-folders" aria-label="Client folders">
-      {projects.map((p) => {
-        const cat = categories[p.name]!;
-        return (
-          <li key={p.path} data-folder={p.name} data-cat={cat}>
-            <button type="button" className="settings-folder-chip" aria-label={`${p.name}: category ${cat} of ${CATEGORIES}, click for the next`} title={`Category ${cat} of ${CATEGORIES}`} onClick={() => onCategory(p.name, (cat % CATEGORIES) + 1)}>
-              <Chip cat={cat} />
-            </button>
-            <span className="settings-folder-name" title={p.display}>
-              {p.name}
-            </span>
-            <Switch checked={p.internal} onChange={(next) => onInternal(p.name, next)} aria-label={`${p.name} is internal`} />
+    <>
+      {projects.length === 0 ? (
+        <p className="settings-help">No repositories under the projects folder yet.</p>
+      ) : listed.length === 0 ? (
+        <p className="settings-help">Every client folder is removed. Restore one below.</p>
+      ) : (
+        <ul className="settings-folders" aria-label="Client folders">
+          <li className="settings-folders-head" aria-hidden="true">
+            <span />
+            <span />
+            <span>In sidebar</span>
+            <span>Internal</span>
+            <span />
           </li>
-        );
-      })}
-    </ul>
+          {listed.map((f) => (
+            <FolderRow key={f.path} folder={f} onCategory={onCategory} onInternal={onInternal} onHidden={onHidden} onRemoved={onRemoved} />
+          ))}
+        </ul>
+      )}
+      <Button className="button settings-folders-add" onClick={onAdd}>
+        Add a folder…
+      </Button>
+      {removed.length > 0 && (
+        <>
+          <h3 className="settings-removed-h">Removed</h3>
+          <ul className="settings-folders settings-removed" aria-label="Removed folders">
+            {removed.map((f) => (
+              <li key={f.path} data-folder={f.name} data-cat={f.cat}>
+                <span className="settings-folders-cell">
+                  <Chip cat={f.cat} />
+                </span>
+                <span className="settings-folder-name" title={f.display}>
+                  {f.name}
+                </span>
+                <Button kind="text" aria-label={`Restore ${f.name}`} onClick={() => onRemoved(f, false)}>
+                  Restore
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+}
+
+function FolderRow({
+  folder: f,
+  onCategory,
+  onInternal,
+  onHidden,
+  onRemoved,
+}: {
+  folder: SeatedFolder;
+  onCategory: (name: string, cat: number) => void;
+  onInternal: (name: string, internal: boolean) => void;
+  onHidden: (folder: ProjectRow, hidden: boolean) => void;
+  onRemoved: (folder: ProjectRow, removed: boolean) => void;
+}) {
+  return (
+    <li data-folder={f.name} data-cat={f.cat} data-hidden={f.hidden ? "" : undefined}>
+      <button type="button" className="settings-folder-chip" aria-label={`${f.name}: category ${f.cat} of ${CATEGORIES}, click for the next`} title={`Category ${f.cat} of ${CATEGORIES}`} onClick={() => onCategory(f.name, (f.cat % CATEGORIES) + 1)}>
+        <Chip cat={f.cat} />
+      </button>
+      <span className="settings-folder-name" title={f.display}>
+        {f.name}
+      </span>
+      <Switch checked={!f.hidden} onChange={(shown) => onHidden(f, !shown)} aria-label={`${f.name} is in the sidebar`} />
+      <Switch checked={f.internal} onChange={(next) => onInternal(f.name, next)} aria-label={`${f.name} is internal`} />
+      <Button kind="text" aria-label={`Remove ${f.name} from Kinas`} onClick={() => onRemoved(f, true)}>
+        Remove
+      </Button>
+    </li>
   );
 }

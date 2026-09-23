@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
 import {
+  addClientFolder,
   getUiPrefs,
   listProjects,
   onOpenPalette,
@@ -13,6 +14,7 @@ import {
   readerPin,
   readerPins,
   readerUnpin,
+  setFolderHidden,
   setReaderWidth as saveReaderWidth,
   setShortcuts as saveShortcuts,
   setSidebarVisible,
@@ -26,6 +28,7 @@ import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
 import { actionForEvent, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
+import { addedLine } from "./shell/folders.ts";
 import type { Notice } from "./shell/notice.ts";
 import { NAV_NOTHING, navSeenOf, pushRecent, recentAfterNav, recentFolder, type RecentEntry } from "./shell/recent.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
@@ -271,6 +274,36 @@ export function App() {
     return () => window.removeEventListener("focus", loadProjects);
   }, [loadProjects]);
 
+  // The client folders' right-click menu (folder views, 2026-09-23). Rust checks the path against its listing and says
+  // why not in its own words; the listing is read again whatever happened, so a row that has gone disappears too.
+  const hideFolder = useCallback(
+    (f: ProjectRow) =>
+      void setFolderHidden(f.path, true)
+        .then(() => say(`Hid ${f.name} from the sidebar`), (e: unknown) => say(String(e)))
+        .finally(loadProjects),
+    [say, loadProjects],
+  );
+  const showFolder = useCallback(
+    (f: ProjectRow) =>
+      void setFolderHidden(f.path, false)
+        .then(() => say(`${f.name} is back in the sidebar`), (e: unknown) => say(String(e)))
+        .finally(loadProjects),
+    [say, loadProjects],
+  );
+  const addFolder = useCallback(
+    () =>
+      void addClientFolder()
+        .then(
+          (result) => {
+            const line = addedLine(result);
+            if (line) say(line);
+          },
+          (e: unknown) => say(String(e)),
+        )
+        .finally(loadProjects),
+    [say, loadProjects],
+  );
+
   // Rust decides whether a path may be pinned, and says why not in its own words.
   const pin = useCallback(
     (path: string) => {
@@ -364,6 +397,9 @@ export function App() {
         onPin={pin}
         onUnpin={unpin}
         onTerminal={openInTerminal}
+        onHide={hideFolder}
+        onShow={showFolder}
+        onAdd={addFolder}
         projects={projects}
         notice={notice}
         panelOpen={reader.open}

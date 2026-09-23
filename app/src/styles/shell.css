@@ -220,6 +220,13 @@
   border-top: 1px solid var(--line);
 }
 
+/* The client folders' right-click Menu (ui/Menu.tsx), at the pointer: Sidebar.tsx places it and moves it back inside the
+   window. Above the divider (4) and the reader's menu (10), below the palette (20). */
+.sidebar-menu {
+  position: fixed;
+  z-index: 15;
+}
+
 .sidebar-pin-tree {
   padding-left: calc(var(--space-3) + var(--space-0));
 }

@@ -178,7 +178,11 @@ export const setReaderEditor = (value: string) => invoke<void>("set_reader_edito
 /** The projects folder (reader R1b): an absolute path that exists. Answers with the canonical path it stored. */
 export const setProjectsRoot = (path: string) => invoke<string>("set_projects_root", { path });
 
-/** A client folder (DESIGN.md §3.1): a git repository under the projects root, as projects.rs finds and names it. */
+/**
+ * A client folder (DESIGN.md §3.1): a git repository under the projects root, or a folder added inside it, as
+ * projects.rs finds and names it. Hidden and removed ones are listed too, flagged (folder views, 2026-09-23): the
+ * colours are seated over every folder before a surface filters (shell/folders.ts).
+ */
 export interface ProjectRow {
   name: string;
   path: string;
@@ -187,12 +191,24 @@ export interface ProjectRow {
   /** Settings' choice of --cat-N, or null for the one ui/category.ts derives from the name. */
   category: number | null;
   internal: boolean;
+  /** Off the sidebar and Home; still in Settings' list. */
+  hidden: boolean;
+  /** Off Settings' list too, in its Removed list. Wins over `hidden`. */
+  removed: boolean;
 }
-/** Every repository up to three levels under the projects root; the walk stands for a minute in Rust. */
+/** Every repository up to three levels under the projects root, and every added folder; the walk stands for a minute in Rust. */
 export const listProjects = () => invoke<ProjectRow[]>("list_projects");
 /** 1 to 6, refused otherwise. */
 export const setFolderCategory = (name: string, cat: number) => invoke<void>("set_folder_category", { name, cat });
 export const setFolderInternal = (name: string, internal: boolean) => invoke<void>("set_folder_internal", { name, internal });
+/** By path, which Rust checks against its listing ("Not a client folder" otherwise). */
+export const setFolderHidden = (path: string, hidden: boolean) => invoke<void>("set_folder_hidden", { path, hidden });
+/** Remove, or Restore — which also shows the folder again. Nothing on disk is touched. */
+export const setFolderRemoved = (path: string, removed: boolean) => invoke<void>("set_folder_removed", { path, removed });
+/** What Add a client folder… did: nothing (Cancel), or what became of the folder picked, named as the listing names it. */
+export type AddOutcome = { outcome: "cancelled" } | { outcome: "added" | "shown" | "restored" | "already"; name: string };
+/** A folder sheet in the projects folder, from Rust; refused (in Rust's words) outside it, on the root itself, or while one is open. */
+export const addClientFolder = () => invoke<AddOutcome>("add_client_folder");
 /** The app applies it to the window itself, title bar included; the page follows through prefers-color-scheme. */
 export const setAppearance = (value: string) => invoke<void>("set_appearance", { value });
 /** "#rrggbb" lower-case, refused otherwise; null removes the choice. The page sets --brand-accent itself. */

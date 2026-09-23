@@ -1,5 +1,5 @@
 import type { ProjectRow, UsageSnapshot } from "../api.ts";
-import { seatFolders } from "../shell/folders.ts";
+import { seatFolders, shownFolders } from "../shell/folders.ts";
 import { Button, EmptyState, Gauge, Gauges, MetricRow, ProgressList, ProgressRow, Rows, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { PROVIDER_LABEL, WINDOW_LABEL } from "../usage/format.ts";
 import { asOfOldest, QuotaGauge } from "../usage/QuotaGauge.tsx";
@@ -30,7 +30,8 @@ export function HomePage({
   onGo: (page: "usage") => void;
   onLaunch: () => void;
 }) {
-  const folders = seatFolders(projects);
+  // Seated over every folder, then only the shown ones (folder views, 2026-09-23): a hidden folder is off Home too.
+  const folders = shownFolders(seatFolders(projects));
   return (
     <div className="page-in home">
       <TitleRow title="Home">
@@ -41,8 +42,10 @@ export function HomePage({
 
       <Section aria-label="Overnight" data-section="overnight">
         <SectionHeader title="Overnight" />
-        {folders.length === 0 ? (
+        {projects.length === 0 ? (
           <EmptyState>No client folders under the projects folder yet.</EmptyState>
+        ) : folders.length === 0 ? (
+          <EmptyState>No client folder is shown. Settings → Client folders shows them again.</EmptyState>
         ) : (
           <ProgressList label="Client folders">
             {folders.map((f) => (

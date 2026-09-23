@@ -174,7 +174,8 @@ Three layout fixes to the same sidebar ride along:
       - a **Remove** button (`aria-label="Remove <name> from Kinas"`)
     - The two switch columns carry visible headings, "In sidebar" and "Internal": two unlabelled switches in one
       row cannot be told apart.
-    - An **Add a folder…** button under the list runs the same command as the menu item.
+    - An **Add a folder…** button under the list runs the same command as the menu item. It shows even when the list
+      is empty, which then reads *"Every client folder is removed. Restore one below."* when every folder is removed.
 20. **A Removed list appears under the main list only when at least one folder is removed.**
     - Heading "Removed", one row per folder, each with its name and a **Restore** button
       (`aria-label="Restore <name>"`).
@@ -188,8 +189,8 @@ Three layout fixes to the same sidebar ride along:
 **Home**
 
 21. **Home's Overnight lists only shown folders.** It uses the same filter as the sidebar.
-    - When the listing has folders but none are shown, the empty state reads *"Every client folder is hidden.
-      Settings → Client folders shows them again."*
+    - When the listing has folders but none are shown, the empty state reads *"No client folder is shown. Settings →
+      Client folders shows them again."* (As built: "hidden" would be wrong when the folders are removed.)
     - The existing *"No client folders under the projects folder yet."* stays for an empty listing.
 
 ## 3. Flows

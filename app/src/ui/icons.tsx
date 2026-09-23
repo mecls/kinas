@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 // The design system's icon set (DESIGN.md §4; design/preview.html's sprite, lines 311–327): fifteen strokes on a
 // 16-unit grid, drawn in the current colour at `--icon` (16) by default and `--icon-sm` (14) beside a row action.
 // Inline SVG, no package — a dozen paths are not worth a pinned dependency (Build 1 R6). Three the sidebar needs
-// beyond the sprite — folder, pin, unpin — are drawn here on the same grid. The older Lucide drawings the reader
-// still uses live in app/src/icons.tsx until its header is rebuilt on this set (design-system slice 6).
+// beyond the sprite — folder, pin, unpin — are drawn here on the same grid, and so are the reader header's six
+// (back, rendered, source, expand, collapse, contents), which replaced the older Lucide set in slice 6.
 
 export type IconSize = "md" | "sm";
 
@@ -126,5 +126,38 @@ export const PinOffIcon = (p: Props) => (
     <path d="M10.2 7.5V4h.55a.75.75 0 0 0 0-1.5H5.5" />
     <path d="M5.8 6.2v1.3l-.8 3H11" />
     <path d="m2.5 2.5 11 11" />
+  </Icon>
+);
+
+/* Beyond the sprite: the reader header's controls (design-system slice 6), redrawn from Lucide's on this grid. */
+export const BackIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M8 12.5 3.5 8 8 3.5M12.5 8h-9" />
+  </Icon>
+);
+export const EyeIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" />
+    <circle cx="8" cy="8" r="2" />
+  </Icon>
+);
+export const CodeIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="m11.5 5 3 3-3 3M4.5 5l-3 3 3 3M9.5 3l-3 10" />
+  </Icon>
+);
+export const ExpandIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M10 2.5h3.5V6M6 13.5H2.5V10M13.5 2.5l-4 4M2.5 13.5l4-4" />
+  </Icon>
+);
+export const CollapseIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M3 9.5h3.5V13M13 6.5H9.5V3M9.5 6.5 14 2M2 14l4.5-4.5" />
+  </Icon>
+);
+export const ListIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M2.5 4h.01M2.5 8h.01M2.5 12h.01M5.5 4h8M5.5 8h8M5.5 12h8" />
   </Icon>
 );

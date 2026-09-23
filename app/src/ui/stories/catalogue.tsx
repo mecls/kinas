@@ -33,6 +33,12 @@ import {
   PanelHeader,
   PinIcon,
   PinOffIcon,
+  BackIcon,
+  EyeIcon,
+  CodeIcon,
+  ListIcon,
+  ExpandIcon,
+  CollapseIcon,
   PlusIcon,
   ProgressList,
   ProgressRow,
@@ -406,6 +412,15 @@ export const STORIES: Story[] = [
             <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1h)" }}>
               <PinOffIcon size="sm" /> unpin
             </span>
+          </div>
+        ),
+      },
+      {
+        // The reader header's six (slice 6), drawn on the same grid.
+        name: "reader-icons",
+        node: (
+          <div style={{ display: "flex", gap: "var(--space-4)", color: "var(--ink-2)" }}>
+            <BackIcon /> <EyeIcon /> <CodeIcon /> <ListIcon /> <ExpandIcon /> <CollapseIcon />
           </div>
         ),
       },

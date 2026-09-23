@@ -11,3 +11,19 @@ export function terminalHasFocus(): boolean {
 export function focusTerminal(): void {
   document.querySelector<HTMLTextAreaElement>(".work-terminal .xterm-helper-textarea")?.focus({ preventScroll: true });
 }
+
+/** The pane's copy, registered by the terminal: the Work page's chrome copies the selection through it (a sibling
+ * above the pane can reach xterm no other way without wrapping it, and a wrapper would remount the terminal). */
+let copier: (() => Promise<boolean>) | null = null;
+
+export function registerTerminalCopy(copy: () => Promise<boolean>): () => void {
+  copier = copy;
+  return () => {
+    if (copier === copy) copier = null;
+  };
+}
+
+/** Copies the terminal's selection as a mouse copy does, "copied to clipboard" included; false when nothing was. */
+export function copyTerminalSelection(): Promise<boolean> {
+  return copier ? copier() : Promise.resolve(false);
+}

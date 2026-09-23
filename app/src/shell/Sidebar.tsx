@@ -20,6 +20,7 @@ import {
   PinIcon,
   PinOffIcon,
   TerminalIcon,
+  Toast,
   Wordmark,
 } from "../ui/index.ts";
 import { type Connection, connectionOf } from "./connection.ts";
@@ -372,8 +373,6 @@ function SidebarNotice({ notice, panelOpen }: { notice: Notice | null; panelOpen
 
   if (!shown || panelOpen) return null;
   return (
-    <p className="sidebar-notice" role="status">
-      {shown.text}
-    </p>
+    <Toast className="sidebar-notice">{shown.text}</Toast>
   );
 }

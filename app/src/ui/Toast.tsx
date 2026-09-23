@@ -4,9 +4,9 @@ import "./Toast.css";
 
 // DESIGN.md §4 Toast: bottom centre, 3 s, one line, one optional action. Placement is the caller's; this is the box.
 
-export function Toast({ kind, action, children, ...rest }: { kind?: "error"; action?: { label: string; onClick: () => void }; children: ReactNode } & HTMLAttributes<HTMLDivElement>) {
+export function Toast({ kind, action, children, className, ...rest }: { kind?: "error"; action?: { label: string; onClick: () => void }; children: ReactNode } & HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className="ui-toast" role="status" data-kind={kind} {...rest}>
+    <div className={className ? `ui-toast ${className}` : "ui-toast"} role="status" data-kind={kind} {...rest}>
       <span>{children}</span>
       {action && (
         <Button kind="text" onClick={action.onClick}>

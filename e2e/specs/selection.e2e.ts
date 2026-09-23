@@ -135,7 +135,8 @@ describe("selection and clipboard in a plain shell", () => {
     expect(place.inLowerHalf).toBe(true);
     expect(place.fromBottom).toBeLessThan(40);
     expect(place.fromRight).toBeLessThan(40);
-    await browser.waitUntil(async () => (await toastText()) === null, { timeout: 5000, timeoutMsg: "the toast never went away" });
+    // COPIED_TOAST_MS is 3 s since the design system (DESIGN.md §4 Toast; it was 1.5 s), so the wait for it to go allows 8.
+    await browser.waitUntil(async () => (await toastText()) === null, { timeout: 8000, timeoutMsg: "the toast never went away" });
   });
 
   it("⌘C over a selection says copied to clipboard", async () => {

@@ -82,6 +82,36 @@ fn first_command(light: bool) -> Option<String> {
     Some(launch_then_herdr(cli.as_deref(), light))
 }
 
+/// What the Work page's chrome names (DESIGN.md §4 Terminal chrome): the Herdr session the pane attaches, or a plain
+/// shell. Read from the same switches as `first_command`, so the chrome says what the pane was started to do.
+#[derive(Debug, PartialEq, serde::Serialize)]
+pub struct PaneSession {
+    pub session: String,
+    pub shell: bool,
+}
+
+/// `default` unless a debug build was given one of the test switches (a name that `first_command` would refuse
+/// falls back to `default`, as the pane does).
+pub fn pane_session_of(shell_only: bool, session: Option<&str>) -> PaneSession {
+    if shell_only {
+        return PaneSession { session: "shell".into(), shell: true };
+    }
+    let name = session.filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+    PaneSession { session: name.unwrap_or("default").into(), shell: false }
+}
+
+#[tauri::command]
+pub fn pane_session() -> PaneSession {
+    #[cfg(debug_assertions)]
+    {
+        let shell_only = std::env::var("KINAS_PANE_SHELL_ONLY").as_deref() == Ok("1");
+        let session = std::env::var("KINAS_HERDR_SESSION").ok();
+        pane_session_of(shell_only, session.as_deref())
+    }
+    #[cfg(not(debug_assertions))]
+    pane_session_of(false, None)
+}
+
 /// The launch screen's exit code when q or Ctrl+C asks to stay in the shell (cli/src/main.ts).
 const STAY_IN_SHELL: u8 = 10;
 
@@ -333,6 +363,14 @@ mod tests {
         let _session = Session::spawn(profile, cols, rows, move |b| data_tx.send(b).unwrap(), move |c| exit_tx.send(c).unwrap()).unwrap();
         let code = exit_rx.recv_timeout(Duration::from_secs(10)).expect("child did not exit");
         (data_rx.try_iter().flatten().collect(), code)
+    }
+
+    #[test]
+    fn the_chrome_names_the_session_the_pane_attaches() {
+        assert_eq!(pane_session_of(false, None), PaneSession { session: "default".into(), shell: false });
+        assert_eq!(pane_session_of(false, Some("kinas-e2e-editor")), PaneSession { session: "kinas-e2e-editor".into(), shell: false });
+        assert_eq!(pane_session_of(false, Some("rm -rf")), PaneSession { session: "default".into(), shell: false });
+        assert_eq!(pane_session_of(true, Some("anything")), PaneSession { session: "shell".into(), shell: true });
     }
 
     #[test]

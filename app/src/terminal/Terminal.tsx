@@ -12,11 +12,13 @@ import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
 import { parseOsc52 } from "./osc52.ts";
 import { type SelectionSnapshot, selectionDeleteBytes } from "./selectionDelete.ts";
+import { registerTerminalCopy } from "../shell/focus.ts";
+import { Toast } from "../ui/index.ts";
 
 const EXITED = "\r\n[process exited — press Enter to restart]\r\n";
 
-/** How long "copied to clipboard" stays up after a copy. */
-const COPIED_TOAST_MS = 1500;
+/** How long "copied to clipboard" stays up after a copy: DESIGN.md §4 Toast's 3 s. */
+const COPIED_TOAST_MS = 3000;
 
 /** The pane's colours come from tokens.css like every other colour in the app: read when the terminal starts, and
  * again whenever the ground turns. xterm repaints what is already on screen, except cells a program painted in 24-bit.
@@ -121,6 +123,15 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
     el.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("mouseup", onMouseUp, true);
     el.addEventListener("copy", onCopy, true);
+    // The chrome's Copy (Work.tsx): the selection through the same door as a mouse copy.
+    const unregisterCopy = registerTerminalCopy(() =>
+      xterm.hasSelection() && xterm.getSelection() !== ""
+        ? writeClipboard(xterm.getSelection()).then((ok) => {
+            if (ok) showCopied();
+            return ok;
+          })
+        : Promise.resolve(false),
+    );
 
     // WebGL, falling back to xterm's DOM renderer, never a blank pane (R33).
     let webgl: WebglAddon | null = null;
@@ -307,6 +318,7 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       el.removeEventListener("mousedown", onMouseDown, true);
       document.removeEventListener("mouseup", onMouseUp, true);
       el.removeEventListener("copy", onCopy, true);
+      unregisterCopy();
       xterm.dispose();
       term.current = null;
     };
@@ -329,10 +341,7 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       {notice && <div className="terminal-notice">{notice}</div>}
       <div ref={host} className="terminal-host" />
       {copied && (
-        <div className="terminal-toast" role="status">
-          <span className="terminal-toast-dot" aria-hidden="true" />
-          copied to clipboard
-        </div>
+        <Toast className="terminal-toast">copied to clipboard</Toast>
       )}
     </div>
   );

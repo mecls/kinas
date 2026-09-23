@@ -8,10 +8,11 @@ export interface Hit {
 
 /** Raw values the sheets not yet rewritten still hold, by file, on the day the guard landed (2026-09-22): 314 in
  * all. Each slice of the design-system build brings its sheet to zero and removes the line; a count may only fall.
- * shell.css reached zero with slice 3 (the shell), usage.css with slice 4 (Usage), settings.css with slice 6 (Settings). */
+ * shell.css reached zero with slice 3 (the shell), usage.css with slice 4 (Usage), settings.css and overlay.css with
+ * slice 6, which also took reader.css from 126 to 29 — its header and type on the tokens, the document's prose rhythm
+ * left. */
 export const RATCHET: Record<string, number> = {
-  "styles/overlay.css": 20,
-  "styles/reader.css": 126,
+  "styles/reader.css": 29,
 };
 
 const COLOUR = /#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\brgba?\(|\bhsla?\(/g;

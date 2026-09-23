@@ -15,9 +15,8 @@
     margin: 18mm 16mm;
   }
 
-  /* A light palette: every token the document reads, redefined. The hljs set keeps at least 4.5:1 on white.
-     Since 2026-09-22 (design system) the DESIGN.md names come first; the old names below them serve the sheets not
-     yet rewritten and go with them. */
+  /* A light palette: every token the document reads, redefined, under DESIGN.md's names (the old ones went with the
+     design system's slice 6). The hljs set keeps at least 4.5:1 on white. */
   :root {
     --bg: #ffffff;
     --surface: #f5f5f5;
@@ -31,11 +30,6 @@
     --warn: #6f4e00;
     --danger: #a61b23;
     --ok: #1f6b47;
-    --ground: #ffffff;
-    --panel: #f5f5f5;
-    --muted: #555555;
-    --white: #111111;
-    --gold: #6f4e00;
     --ansi-red: #a61b23;
     --ansi-green: #1f6b47;
     --ansi-yellow: #6f4e00;

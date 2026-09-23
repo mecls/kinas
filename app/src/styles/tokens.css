@@ -137,26 +137,6 @@
   --dur-slow: 200ms;
 
   color-scheme: light;
-
-  /* ===== The old names, for the sheets not yet rewritten. Each slice of the design-system build deletes the ones
-     its sheet no longer needs; slice 6 deletes the block and tokens.test.ts asserts it is gone. Never add to it. ===== */
-  --ground: var(--bg);
-  --panel: var(--surface);
-  --white: var(--ink);
-  --muted: var(--ink-2);
-  --blue: var(--accent);
-  --crimson: var(--danger);
-  --gold: var(--warn);
-  --heading: var(--ink);
-  --label: var(--ink-2);
-  --active-bg: var(--accent-soft);
-  --active-fg: var(--ink);
-  --button-hover: var(--surface-2);
-  --selection: var(--term-selection);
-  --shadow-strong: rgb(10 20 32 / 0.18);
-  --shadow-soft: rgb(10 20 32 / 0.12);
-  --sans: var(--font-ui);
-  --mono: var(--font-mono);
 }
 
 /* ===== Dark (§2.3): the same names, swapped values; screen only, so a print is what print.css says from either. ===== */
@@ -213,9 +193,6 @@
     --ansi-bright-magenta: #dca2d4;
     --ansi-bright-cyan: #7fd0db;
     --ansi-bright-white: #e7eef7;
-
-    --shadow-strong: rgb(0 0 0 / 0.45);
-    --shadow-soft: rgb(0 0 0 / 0.35);
 
     color-scheme: dark;
   }

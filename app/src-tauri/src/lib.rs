@@ -99,6 +99,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::store_info,
             commands::pty_start,
+            pty::pane_session,
             commands::pty_write,
             commands::pty_write_binary,
             commands::pty_resize,

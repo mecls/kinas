@@ -7,8 +7,8 @@ import { declarations, mediaBlock, ruleBlock, stripComments } from "./testing/pa
 // tokens.css is the design system's one source of values (DESIGN.md v1.2). These tests hold it to the law: one
 // light :root and one dark media block declaring the same names; every text pair of DESIGN.md §2.4 at its floor in
 // both themes, at the brand accent and at every swatch the Accent field offers; the terminal's sixteen colours
-// readable on the pane's ground; no colour literal in any rule of any screen sheet; and, until the last old sheet is
-// rewritten, exactly the alias block slice 1 of the design-system build left behind — never one name more.
+// readable on the pane's ground; no colour literal in any rule of any screen sheet; and none of the old names slice 1
+// of the design-system build kept for the sheets not yet rewritten — gone since slice 6, and kept gone.
 
 const dir = import.meta.dir;
 const sheet = (name: string) => readFileSync(join(dir, name), "utf8");
@@ -19,7 +19,7 @@ const light = declarations(ruleBlock(tokens, ":root"));
 const darkOnly = declarations(ruleBlock(mediaBlock(tokens, DARK), ":root"));
 const dark = new Map([...light, ...darkOnly]);
 
-/** The names slice 1 kept for the sheets not yet rewritten. Slice 6 deletes them; this list shrinks with them. */
+/** The names slice 1 kept for the sheets not yet rewritten; slice 6 deleted them, and the test below keeps them out. */
 const ALIASES = [
   "--ground", "--panel", "--white", "--muted", "--blue", "--crimson", "--gold", "--heading", "--label", "--active-bg",
   "--active-fg", "--button-hover", "--selection", "--shadow-strong", "--shadow-soft", "--sans", "--mono",
@@ -91,7 +91,7 @@ describe("the shape of tokens.css", () => {
     }
     const sameInBoth = new Set(["--brand-accent", "--accent", "--stale"]);
     for (const [name, value] of light) {
-      if (!isColour(value) || ALIASES.includes(name) || sameInBoth.has(name) || name.startsWith("--brand-")) continue;
+      if (!isColour(value) || sameInBoth.has(name) || name.startsWith("--brand-")) continue;
       expect(darkOnly.has(name), `${name} has no dark value`).toBe(true);
     }
     for (const [name, value] of darkOnly) {
@@ -99,13 +99,15 @@ describe("the shape of tokens.css", () => {
     }
   });
 
-  test("the alias block is exactly what slice 1 left, never a name more", () => {
-    const present = ALIASES.filter((name) => light.has(name));
-    expect(present).toEqual(ALIASES);
-    // The old names resolve to the new ones, so the sheets not yet rewritten draw the same colours.
-    expect(light.get("--ground")).toBe("var(--bg)");
-    expect(light.get("--white")).toBe("var(--ink)");
-    expect(light.get("--sans")).toBe("var(--font-ui)");
+  test("the old names are gone, in either theme and in print, and no sheet reads one", () => {
+    expect(ALIASES.filter((name) => light.has(name) || dark.has(name))).toEqual([]);
+    const printed = declarations(ruleBlock(mediaBlock(sheet("print.css"), "print"), ":root"));
+    expect(printed.get("--bg")).toBe("#ffffff");
+    expect(ALIASES.filter((name) => printed.has(name))).toEqual([]);
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".css"))) {
+      const reads = ALIASES.filter((name) => new RegExp(`var\\(${name}\\)`).test(sheet(file)));
+      expect(`${file}: ${reads.join(" ") || "none"}`).toBe(`${file}: none`);
+    }
   });
 
   test("the bundled fonts are the ones the stacks name, and their files exist", () => {

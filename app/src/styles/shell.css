@@ -204,13 +204,9 @@
 /* The shell's last notice while the panel is closed (Sidebar.tsx): one line in --warn, the reader's status line's
    words, in the sidebar's width. */
 .sidebar-notice {
+  /* The Toast (ui/Toast.tsx) at the foot of the sidebar: it wraps inside the column rather than floating over it. */
   flex: none;
-  margin: var(--space-1h) 0 0;
-  padding: var(--space-1h) var(--space-2);
-  border-top: 1px solid var(--line);
-  color: var(--warn);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  margin: var(--space-1h) var(--space-2) 0;
   overflow-wrap: anywhere;
 }
 
@@ -316,11 +312,18 @@
 }
 
 /* The Work page: the terminal on --term-bg, which follows the theme (DESIGN.md §2.3, 2026-09-22). */
+/* The chrome above, the pane filling the rest. */
 .work {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   background: var(--term-bg);
+}
+
+.work > .ui-termchrome {
+  flex: none;
+  border-bottom: 1px solid var(--line);
 }
 
 /* The terminal's box. The reader's close button finds the terminal through this class (Reader.tsx, focusTerminal). */
@@ -328,6 +331,7 @@
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .terminal {
@@ -360,32 +364,15 @@
   line-height: var(--lh-xs);
 }
 
-/* "copied to clipboard": a moment in the pane's bottom right corner, clear of a prompt typed from the left. It never
-   takes a click from the terminal. (The Toast component takes this over in design-system slice 6.) */
+/* "copied to clipboard": the Toast (ui/Toast.tsx) placed in the pane's bottom right corner, clear of a prompt typed
+   from the left. It never takes a click from the terminal. */
 .terminal-toast {
   position: absolute;
   bottom: var(--space-3);
   right: var(--space-4);
   z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1h) var(--space-3);
-  border: 1px solid var(--warn);
-  background: var(--term-bg);
-  color: var(--term-fg);
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
   pointer-events: none;
   animation: terminal-toast-in var(--dur-fast) ease-out;
-}
-
-.terminal-toast-dot {
-  width: var(--dot);
-  height: var(--dot);
-  border-radius: 50%;
-  background: var(--warn);
 }
 
 @keyframes terminal-toast-in {

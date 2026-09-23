@@ -21,18 +21,20 @@
 .reader-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: var(--space-1h);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .reader-path {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--white);
-  font: 12px/1.3 var(--mono);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -40,11 +42,14 @@
 .reader-button {
   appearance: none;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   background: transparent;
-  color: var(--white);
-  font: 500 12px/1 var(--sans);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  font-weight: 500;
   cursor: default;
 }
 
@@ -53,7 +58,7 @@
 }
 
 .reader-button:disabled {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 .reader-button[aria-pressed="true"] {
@@ -65,21 +70,24 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--hit);
+  height: var(--hit);
   padding: 0;
 }
 
 /* The folder part of the path steps back so the name reads first; together they are still the whole path. */
 .reader-path-dir {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 /* The file's kind, beside its name. */
 .reader-ext {
   flex: none;
-  color: var(--muted);
-  font: 500 10.5px/1 var(--mono);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 1;
+  font-weight: 500;
   letter-spacing: 0.08em;
 }
 
@@ -87,32 +95,33 @@
 .reader-view {
   display: flex;
   flex: none;
-  padding: 2px;
+  padding: var(--space-0);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
 }
 
 .reader-view-button {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 22px;
+  width: var(--hit);
+  /* The control is --hit tall: its halves inside the 2 px inset and the hairline. */
+  height: calc(var(--hit) - var(--space-1) - var(--space-0));
   appearance: none;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--ink-2);
   cursor: default;
 }
 
 .reader-view-button:hover {
-  color: var(--white);
+  color: var(--ink);
 }
 
 .reader-view-button[aria-pressed="true"] {
   background: var(--line);
-  color: var(--white);
+  color: var(--ink);
 }
 
 /* Copy, and the ▾ that opens the rest. The menu hangs from this box, so it is the positioning parent. */
@@ -121,7 +130,7 @@
   display: flex;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .reader-copy-main,
@@ -129,24 +138,27 @@
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--white);
-  font: 500 12px/1 var(--sans);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  font-weight: 500;
   cursor: default;
 }
 
 .reader-copy-main {
-  padding: 0 9px;
-  height: 26px;
-  border-radius: 5px 0 0 5px;
+  padding: 0 var(--space-2);
+  height: calc(var(--hit) - var(--space-0));
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 
 .reader-copy-more {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 26px;
+  width: calc(var(--hit) - var(--space-1));
+  height: calc(var(--hit) - var(--space-0));
   border-left: 1px solid var(--line);
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .reader-copy-main:hover:not([aria-disabled="true"]),
@@ -156,22 +168,22 @@
 }
 
 .reader-copy-main[aria-disabled="true"] {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 /* Above the divider (4) and the reader's overlay column (3), below the palette (20). Right-aligned: the window's
    root clips anything that runs past its edge. */
 .reader-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--space-1h));
   right: 0;
   z-index: 10;
-  min-width: 188px;
-  padding: 4px;
+  min-width: calc(var(--sidebar-w) - var(--space-6));
+  padding: var(--space-1);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 12px 28px var(--shadow-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
   outline: 0;
 }
 
@@ -180,11 +192,13 @@
   width: 100%;
   appearance: none;
   border: 0;
-  border-radius: 5px;
-  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1h) var(--space-3);
   background: transparent;
-  color: var(--white);
-  font: 13px/1.2 var(--sans);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.2;
   text-align: left;
   white-space: nowrap;
   cursor: default;
@@ -197,15 +211,17 @@
 }
 
 .reader-menu-item[aria-disabled="true"] {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 .reader-status {
   margin: 0;
-  padding: 5px 12px;
+  padding: 5px var(--space-3);
   border-bottom: 1px solid var(--line);
-  color: var(--gold);
-  font: 12px/1.4 var(--mono);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
 }
 
 .reader-main {
@@ -217,11 +233,11 @@
 
 .reader-side {
   display: flex;
-  flex: 0 0 220px;
+  flex: 0 0 var(--sidebar-w);
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--surface);
 }
 
 /* Narrow reader: the side column opens over the document from the header's Files and Contents buttons. */
@@ -231,8 +247,8 @@
   bottom: 0;
   left: 0;
   z-index: 3;
-  width: 220px;
-  box-shadow: 12px 0 24px var(--shadow-soft);
+  width: var(--sidebar-w);
+  box-shadow: var(--shadow-float);
 }
 
 .reader-files,
@@ -240,19 +256,20 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 10px 8px;
+  padding: 10px var(--space-2);
 }
 
 .reader-files + .reader-contents {
   border-top: 1px solid var(--line);
 }
 
+/* A quiet sentence-case label in --ink-2, as DESIGN.md §6 writes labels — no all-caps mono (retired in slice 6). */
 .reader-label {
-  margin: 0 0 8px 4px;
-  color: var(--muted);
-  font: 500 11px/1 var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  margin: 0 0 var(--space-2) var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
 }
 
 .reader-contents ol,
@@ -263,7 +280,7 @@
 }
 
 .tree .tree {
-  padding-left: 12px;
+  padding-left: var(--space-3);
 }
 
 .reader-contents button,
@@ -273,11 +290,13 @@
   appearance: none;
   border: 0;
   border-radius: 4px;
-  padding: 4px 6px;
+  padding: var(--space-1) var(--space-1h);
   overflow: hidden;
   background: transparent;
-  color: var(--muted);
-  font: 12px/1.35 var(--sans);
+  color: var(--ink-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -289,18 +308,18 @@
 }
 
 .reader-contents li[data-level="3"] button {
-  padding-left: 24px;
+  padding-left: var(--space-5);
 }
 
 .reader-contents button:hover,
 .tree-item:hover {
-  color: var(--white);
+  color: var(--ink);
 }
 
 .reader-contents button[aria-current="true"],
 .tree-item[aria-current="true"] {
   background: var(--line);
-  color: var(--white);
+  color: var(--ink);
 }
 
 /* A folder's row: its name, and whatever the sidebar puts beside it (pin, terminal). With nothing beside it the one
@@ -320,47 +339,54 @@
 .tree-caret {
   display: inline-block;
   width: 12px;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 .tree-note {
-  padding: 4px 6px;
-  color: var(--muted);
-  font: 12px/1.35 var(--mono);
+  padding: var(--space-1) var(--space-1h);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
 }
 
 .reader-scroll {
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: 18px 28px 48px;
+  padding: 18px 28px var(--space-7);
 }
 
 .reader-note,
 .reader-problem {
-  margin: 0 0 12px;
-  color: var(--muted);
-  font: 12px/1.5 var(--mono);
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
 }
 
 .reader-problem {
-  color: var(--gold);
+  color: var(--warn);
 }
 
 /* Several files match a name: the list waits for a click (R1b). */
 .reader-picks {
   max-width: 72ch;
   margin: 0 0 18px;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .reader-picks-title {
-  margin: 0 0 8px;
-  color: var(--white);
-  font: 500 13px/1.4 var(--sans);
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+  font-weight: 500;
 }
 
 .reader-picks ul {
@@ -375,10 +401,12 @@
   appearance: none;
   border: 0;
   border-radius: 4px;
-  padding: 5px 6px;
+  padding: 5px var(--space-1h);
   background: transparent;
   color: var(--ansi-bright-blue);
-  font: 12px/1.5 var(--mono);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
   text-align: left;
   cursor: default;
   overflow-wrap: anywhere;
@@ -386,34 +414,39 @@
 
 .reader-pick:hover {
   background: var(--line);
-  color: var(--white);
+  color: var(--ink);
 }
 
 .reader-confirm {
   max-width: 72ch;
   margin: 0 0 18px;
-  padding: 12px 14px;
-  border: 1px solid var(--gold);
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--warn);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .reader-confirm-title {
-  margin: 0 0 6px;
-  color: var(--white);
-  font: 500 13px/1.4 var(--sans);
+  margin: 0 0 var(--space-1h);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+  font-weight: 500;
 }
 
 .reader-confirm-path {
   display: block;
-  color: var(--muted);
-  font: 12px/1.5 var(--mono);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .reader-confirm-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 10px;
 }
 
@@ -421,8 +454,10 @@
 
 .reader-doc {
   max-width: 72ch;
-  color: var(--white);
-  font: 15px/1.6 var(--sans);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-lg);
+  line-height: 1.6;
   overflow-wrap: break-word;
 }
 
@@ -461,7 +496,7 @@
  */
 .hljs-comment,
 .hljs-quote {
-  color: var(--muted);
+  color: var(--ink-2);
   font-style: italic;
 }
 
@@ -545,7 +580,9 @@
 .reader-gutter {
   margin: 0;
   color: var(--line);
-  font: 12.5px/1.5 var(--mono);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
   text-align: right;
   user-select: none;
   white-space: pre;
@@ -588,52 +625,59 @@
  * half-rendered page rather than complaining about one, and the count is cosmetic, never a gate.
  */
 .reader-preview-note {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 12.5px;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
 }
 
 .reader-frontmatter {
   margin: 0 0 20px;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .reader-frontmatter-title {
-  margin: 0 0 8px;
-  font: 600 17px/1.3 var(--sans);
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-ui);
+  font-size: 1.13em;
+  line-height: 1.3;
+  font-weight: 600;
 }
 
 .reader-frontmatter dl {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
 }
 
 .reader-frontmatter-row {
   display: grid;
   grid-template-columns: minmax(80px, max-content) 1fr;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .reader-frontmatter dt {
-  color: var(--muted);
-  font: 500 11px/1.9 var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.9;
+  font-weight: 500;
 }
 
 .reader-frontmatter dd {
   margin: 0;
-  font: 13px/1.6 var(--sans);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.6;
 }
 
 .reader-frontmatter-error {
-  margin: 0 0 8px;
-  color: var(--gold);
-  font: 12px/1.5 var(--mono);
+  margin: 0 0 var(--space-2);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
 }
 
 .reader-body h1,
@@ -641,22 +685,22 @@
 .reader-body h3,
 .reader-body h4 {
   margin: 1.6em 0 0.5em;
-  color: var(--heading);
+  color: var(--ink);
   line-height: 1.25;
 }
 
 .reader-body h1 {
-  font-size: 24px;
+  font-size: 1.6em;
 }
 
 .reader-body h2 {
-  padding-bottom: 4px;
+  padding-bottom: var(--space-1);
   border-bottom: 1px solid var(--line);
-  font-size: 19px;
+  font-size: 1.27em;
 }
 
 .reader-body h3 {
-  font-size: 16px;
+  font-size: 1.07em;
 }
 
 .reader-body > :first-child {
@@ -674,20 +718,24 @@
 }
 
 .reader-body code {
-  padding: 1px 4px;
+  padding: 1px var(--space-1);
   border-radius: 4px;
-  background: var(--panel);
-  font: 0.86em/1.4 var(--mono);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  line-height: 1.4;
 }
 
 .reader-body pre,
 .reader-frontmatter pre {
   overflow: auto;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  font: 12.5px/1.5 var(--mono);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
 }
 
 .reader-body pre code {
@@ -698,8 +746,8 @@
 
 .reader-body blockquote {
   margin: 1em 0;
-  padding: 2px 14px;
-  border-left: 3px solid var(--blue);
+  padding: var(--space-0) 14px;
+  border-left: 3px solid var(--accent);
   color: var(--ansi-white);
 }
 
@@ -707,18 +755,18 @@
   display: block;
   overflow: auto;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .reader-body th,
 .reader-body td {
-  padding: 6px 10px;
+  padding: var(--space-1h) 10px;
   border: 1px solid var(--line);
   text-align: left;
 }
 
 .reader-body th {
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .reader-body hr {
@@ -735,23 +783,25 @@
 }
 
 .reader-body li.task-list-item input {
-  margin: 0 6px 0 -20px;
+  margin: 0 var(--space-1h) 0 -20px;
   opacity: 1;
-  accent-color: var(--blue);
+  accent-color: var(--accent);
 }
 
 .reader-image-alt {
-  color: var(--muted);
-  font: 12px/1.5 var(--mono);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
 }
 
 .mermaid-block {
   margin: 1em 0;
-  padding: 12px;
+  padding: var(--space-3);
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
 }
 
 .mermaid-block svg {
@@ -762,7 +812,9 @@
 }
 
 .mermaid-error {
-  margin: 0 0 8px;
-  color: var(--gold);
-  font: 12px/1.5 var(--mono);
+  margin: 0 0 var(--space-2);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
 }

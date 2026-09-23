@@ -123,6 +123,8 @@ export interface UsageSnapshot {
 }
 
 export const getUsageSnapshot = () => invoke<UsageSnapshot>("get_usage_snapshot");
+/** The session the Work page's chrome names: `default`, a debug build's test session, or a plain shell. */
+export const paneSession = () => invoke<{ session: string; shell: boolean }>("pane_session");
 export const setUsageVisible = (visible: boolean) => invoke<void>("set_usage_visible", { visible });
 export const refreshReadings = () => invoke<void>("refresh_readings");
 

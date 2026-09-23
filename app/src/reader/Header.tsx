@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BackIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../icons.tsx";
+import { BackIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../ui/icons.tsx";
 import { extBadge, splitDisplayPath } from "./labels.ts";
 import { Menu, type MenuItem } from "./Menu.tsx";
 
@@ -65,15 +65,15 @@ export function Header({
   return (
     <header className="reader-head">
       <button type="button" className="reader-button reader-icon-button" onClick={onBack} disabled={!canGoBack} aria-label="Back" title="Back">
-        <BackIcon size={16} />
+        <BackIcon />
       </button>
       {view && (
         <div className="reader-view" role="group" aria-label="View">
           <button type="button" className="reader-view-button" aria-label="Rendered" aria-pressed={view === "rendered"} title="Show it rendered" onClick={() => onView("rendered")}>
-            <EyeIcon size={16} />
+            <EyeIcon />
           </button>
           <button type="button" className="reader-view-button" aria-label="Source" aria-pressed={view === "source"} title="Show the file's text" onClick={() => onView("source")}>
-            <CodeIcon size={16} />
+            <CodeIcon />
           </button>
         </div>
       )}
@@ -84,12 +84,12 @@ export function Header({
       {badge && <span className="reader-ext">{badge}</span>}
       {files && (
         <button type="button" className="reader-button reader-icon-button" aria-label="Files" title="Files" aria-pressed={files.pressed} onClick={files.onToggle}>
-          <FolderIcon size={16} />
+          <FolderIcon />
         </button>
       )}
       {contents && (
         <button type="button" className="reader-button reader-icon-button" aria-label="Contents" title="Contents" aria-pressed={contents.pressed} onClick={contents.onToggle}>
-          <ListIcon size={16} />
+          <ListIcon />
         </button>
       )}
       <div className="reader-copy">
@@ -97,7 +97,7 @@ export function Header({
           Copy
         </button>
         <button type="button" className="reader-copy-more" aria-label="More actions" aria-haspopup="menu" aria-expanded={menuOpen} title="More actions" onClick={() => setMenuOpen((open) => !open)}>
-          <ChevronDownIcon size={14} />
+          <ChevronDownIcon size="sm" />
         </button>
         {menuOpen && <Menu label="More actions" items={menu} onClose={() => setMenuOpen(false)} />}
       </div>
@@ -108,10 +108,10 @@ export function Header({
         title={expanded ? "Back to the side" : "Use the whole width"}
         onClick={() => onExpand(!expanded)}
       >
-        {expanded ? <CollapseIcon size={16} /> : <ExpandIcon size={16} />}
+        {expanded ? <CollapseIcon /> : <ExpandIcon />}
       </button>
       <button type="button" className="reader-button reader-icon-button reader-close" onClick={onClose} aria-label="Close the reader" title="Close">
-        <CloseIcon size={16} />
+        <CloseIcon />
       </button>
     </header>
   );

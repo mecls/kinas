@@ -1,7 +1,7 @@
 # 0015 · Kinas's only words to the first mate are one fixed sentence, passed as its launch argument
 
 Date: 2026-09-23
-Status: accepted
+Status: superseded by 0017
 
 ## Context
 

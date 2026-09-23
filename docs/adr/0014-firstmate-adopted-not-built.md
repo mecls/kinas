@@ -1,7 +1,7 @@
 # 0014 · The first mate is Firstmate on Claude Code, adopted, not built; Kinas writes nothing under its home
 
 Date: 2026-09-22
-Status: accepted
+Status: superseded by 0016
 
 ## Context
 

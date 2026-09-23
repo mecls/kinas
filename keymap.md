@@ -194,7 +194,7 @@ never while the terminal has focus:
 
 | Key, on a focused inbox item | Action |
 |---|---|
-| A | Approve: send the approval at once |
+| A | Approve: put the approval line on the clipboard at once and go to the first mate's pane |
 | R | Answer: open the text box |
 | D | Deny: open the text box for the reason |
 | Tab / ⇧Tab | Move between items and their controls |
@@ -202,13 +202,18 @@ never while the terminal has focus:
 | Key, in an item's open text box | Action |
 |---|---|
 | typing | The answer (A, R and D are letters here, not actions) |
-| Enter | Send |
+| Enter | Copy and go: put the answer line on the clipboard and go to the first mate's pane |
 | ⇧Enter | A new line |
-| Esc | Close the box; nothing is sent |
+| Esc | Close the box; nothing is copied |
 
-On Home's compact items, R and D open the item on the Inbox page with its box open. An item answered in the first
-mate's pane has no keys: its one button is click- and Tab-only. The client folders' right-click Menu gains **Add to
-crew** after **Hide from sidebar**, with the Menu's keys as under Sidebar.
+On Home's compact items, A does what it does on the Inbox, and R and D open the item on the Inbox page with its box
+open. The client folders' right-click Menu gains **Add to crew** after **Hide from sidebar**, with the Menu's keys as
+under Sidebar.
+
+Amended 2026-09-23 (the first mate's Gate 1, reopened after its slice 0 probe — `tasks/first-mate/prd.md` rules 5–7):
+nothing is sent from an inbox item. A and Enter put the answer line on the clipboard and go to the first mate's pane,
+where the captain pastes it with ⌘V (as under Terminal pane) and presses Enter himself. Every crew item takes A, R and
+D; the item answered only through a button, which had no keys, is gone.
 
 ## Launch screen (the Work pane at start, and `kinas` in any terminal)
 

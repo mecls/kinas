@@ -245,6 +245,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | TerminalChrome | working, shell |
 | Panel | task-detail |
 | Nav | sidebar, folder-icons, reader-icons, connection-states |
+| Menu | plain, disabled, divider |
 | Field | text, secret, switch, accent |
 | Section | usage |
 | Badges | row |

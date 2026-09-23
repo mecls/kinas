@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import { firstEnabled, menuKey } from "./menuKeys.ts";
+import { type CSSProperties, useEffect, useRef } from "react";
+import { firstEnabled, itemsOf, menuKey } from "./menuKeys.ts";
+import "./Menu.css";
 
 export interface MenuItem {
   id: string;
@@ -9,19 +10,31 @@ export interface MenuItem {
   onSelect: () => void;
 }
 
+/** A hairline between groups of items. Not an item: the arrows never land on it. */
+export interface MenuDivider {
+  id: string;
+  divider: true;
+}
+
+export type MenuEntry = MenuItem | MenuDivider;
+
+const isItem = (entry: MenuEntry): entry is MenuItem => !("divider" in entry);
+
 /**
- * The reader's ▾ menu (three-column shell §9). No library: a dozen lines of focus handling and the pure key table
- * in menuKeys.ts.
+ * DESIGN.md §4 Menu (1.3): the reader's ▾ menu (three-column shell §9), moved into the library when the client folders'
+ * right-click needed one too. No library: a dozen lines of focus handling and the pure key table in menuKeys.ts. Its
+ * place is the caller's (`className`, `style`) — under the ▾ for the reader, at the pointer for the sidebar.
  *
  * It takes focus when it opens and gives it back when it closes. Both halves matter. WebKit does not focus a button
  * when it is clicked, so with the terminal focused the keys would otherwise keep going to the PTY — Esc and the
  * arrows included — while a menu sat open on screen. And the terminal must get its keys back afterwards, or a menu
  * opened by accident would silently swallow what Miguel types next.
  */
-export function Menu({ items, onClose, label }: { items: MenuItem[]; onClose: () => void; label: string }) {
+export function Menu({ items, onClose, label, className, style }: { items: MenuEntry[]; onClose: () => void; label: string; className?: string; style?: CSSProperties }) {
   const root = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  const actions: MenuItem[] = itemsOf(items);
 
   useEffect(() => {
     const el = root.current;
@@ -59,8 +72,9 @@ export function Menu({ items, onClose, label }: { items: MenuItem[]; onClose: ()
     const result = menuKey(e.key, current, enabled);
     e.stopPropagation();
     if (result.kind !== "none" || e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    // The buttons are the items in order, dividers left out, so an index into one is an index into the other.
     if (result.kind === "focus") buttons[result.index]?.focus({ preventScroll: true });
-    else if (result.kind === "activate") select(items[result.index]);
+    else if (result.kind === "activate") select(actions[result.index]);
     else if (result.kind === "close") onClose();
   };
 
@@ -71,22 +85,26 @@ export function Menu({ items, onClose, label }: { items: MenuItem[]; onClose: ()
   };
 
   return (
-    <div className="reader-menu" role="menu" aria-label={label} tabIndex={-1} ref={root} onKeyDown={onKeyDown}>
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          role="menuitem"
-          className="reader-menu-item"
-          data-item={item.id}
-          aria-disabled={item.disabledReason ? "true" : undefined}
-          title={item.disabledReason ?? undefined}
-          tabIndex={-1}
-          onClick={() => select(item)}
-        >
-          {item.label}
-        </button>
-      ))}
+    <div className={className ? `ui-menu ${className}` : "ui-menu"} role="menu" aria-label={label} tabIndex={-1} ref={root} style={style} onKeyDown={onKeyDown}>
+      {items.map((entry) =>
+        isItem(entry) ? (
+          <button
+            key={entry.id}
+            type="button"
+            role="menuitem"
+            className="ui-menu-item"
+            data-item={entry.id}
+            aria-disabled={entry.disabledReason ? "true" : undefined}
+            title={entry.disabledReason ?? undefined}
+            tabIndex={-1}
+            onClick={() => select(entry)}
+          >
+            {entry.label}
+          </button>
+        ) : (
+          <div key={entry.id} className="ui-menu-divider" role="separator" />
+        ),
+      )}
     </div>
   );
 }

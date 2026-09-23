@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BackIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../ui/icons.tsx";
 import { extBadge, splitDisplayPath } from "./labels.ts";
-import { Menu, type MenuItem } from "./Menu.tsx";
+import { Menu, type MenuItem } from "../ui/Menu.tsx";
 
 export type View = "rendered" | "source";
 
@@ -99,7 +99,7 @@ export function Header({
         <button type="button" className="reader-copy-more" aria-label="More actions" aria-haspopup="menu" aria-expanded={menuOpen} title="More actions" onClick={() => setMenuOpen((open) => !open)}>
           <ChevronDownIcon size="sm" />
         </button>
-        {menuOpen && <Menu label="More actions" items={menu} onClose={() => setMenuOpen(false)} />}
+        {menuOpen && <Menu className="reader-menu" label="More actions" items={menu} onClose={() => setMenuOpen(false)} />}
       </div>
       <button
         type="button"

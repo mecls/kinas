@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { firstEnabled, menuKey } from "./menuKeys.ts";
+import { firstEnabled, itemsOf, menuKey } from "./menuKeys.ts";
 
 const ALL = [true, true, true, true];
 // Download and Print disabled, as on a folder with no file showing.
 const SOME = [false, false, true, true];
 
-describe("the reader menu's keys", () => {
+describe("a menu's keys (the reader's ▾, the client folders' right-click)", () => {
   test("opens on the first item that can be used", () => {
     expect(firstEnabled(ALL)).toBe(0);
     expect(firstEnabled(SOME)).toBe(2);
@@ -52,5 +52,17 @@ describe("the reader menu's keys", () => {
   test("a menu with nothing enabled moves nowhere, and any other key does nothing", () => {
     expect(menuKey("ArrowDown", -1, [false, false])).toEqual({ kind: "none" });
     expect(menuKey("a", 0, ALL)).toEqual({ kind: "none" });
+  });
+});
+
+describe("a divider is not an item", () => {
+  test("the arrows move over the items alone, so an index lands on the item it names", () => {
+    const entries = [{ id: "hide" }, { id: "add" }, { id: "rule", divider: true as const }, { id: "show-acme" }];
+    const items = itemsOf(entries);
+    expect(items.map((i) => i.id)).toEqual(["hide", "add", "show-acme"]);
+    // Down from "add" is "show-acme", never the divider between them.
+    const next = menuKey("ArrowDown", 1, items.map(() => true));
+    expect(next).toEqual({ kind: "focus", index: 2 });
+    expect(items[2]!.id).toBe("show-acme");
   });
 });

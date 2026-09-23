@@ -26,7 +26,7 @@ import { Header, type View } from "./Header.tsx";
 import { highlightCode, shouldHighlight } from "./highlight.ts";
 import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
-import type { MenuItem } from "./Menu.tsx";
+import type { MenuItem } from "../ui/Menu.tsx";
 import { cachedSvg, diagramsNeedRedrawing, renderDiagram } from "./mermaid.ts";
 import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 import { downloadLabel } from "./labels.ts";

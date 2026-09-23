@@ -24,6 +24,7 @@ import {
   InboxItem,
   Input,
   Lane,
+  Menu,
   MetricRow,
   NavHeading,
   NavItem,
@@ -430,6 +431,47 @@ export const STORIES: Story[] = [
             <ConnectionRow name="Hostinger VPS" state="stale" />
             <ConnectionRow name="Hostinger VPS" state="error" detail="HTTP 401" />
           </div>
+        ),
+      },
+    ],
+  },
+  {
+    // DESIGN.md §4 Menu (1.3): the reader's ▾ and the client folders' right-click. A story's menu is placed by its
+    // story, not the caller's class; it takes focus as it mounts, as it does in the app, and closing it does nothing.
+    component: "Menu",
+    states: [
+      {
+        name: "plain",
+        node: <Menu label="acme" items={[{ id: "hide", label: "Hide from sidebar", onSelect: () => {} }, { id: "add", label: "Add a client folder…", onSelect: () => {} }]} onClose={() => {}} />,
+      },
+      {
+        name: "disabled",
+        node: (
+          <Menu
+            label="More actions"
+            items={[
+              { id: "download", label: "Download a copy", disabledReason: "Open a file to download a copy", onSelect: () => {} },
+              { id: "print", label: "Print to PDF…", onSelect: () => {} },
+              { id: "pin", label: "Pin to the sidebar", onSelect: () => {} },
+            ]}
+            onClose={() => {}}
+          />
+        ),
+      },
+      {
+        name: "divider",
+        node: (
+          <Menu
+            label="Client folders"
+            items={[
+              { id: "hide", label: "Hide from sidebar", onSelect: () => {} },
+              { id: "add", label: "Add a client folder…", onSelect: () => {} },
+              { id: "hidden", divider: true },
+              { id: "show-acme", label: "Show acme", onSelect: () => {} },
+              { id: "show-hub", label: "Show hub", onSelect: () => {} },
+            ]}
+            onClose={() => {}}
+          />
         ),
       },
     ],

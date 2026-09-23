@@ -1,0 +1,43 @@
+/* DESIGN.md §4 Menu (1.3): the sheet and its items, tokens only. Where it sits is the caller's — `.reader-menu` under
+   the ▾ (reader.css), `.sidebar-menu` at the pointer (shell.css). */
+.ui-menu {
+  min-width: calc(var(--sidebar-w) - var(--space-6));
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  outline: 0;
+}
+
+.ui-menu-item {
+  display: block;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1h) var(--space-3);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  outline: 0;
+}
+
+.ui-menu-item:hover:not([aria-disabled="true"]),
+.ui-menu-item:focus:not([aria-disabled="true"]) {
+  background: var(--line);
+}
+
+.ui-menu-item[aria-disabled="true"] {
+  color: var(--ink-2);
+}
+
+.ui-menu-divider {
+  margin: var(--space-1) 0;
+  border-top: 1px solid var(--line);
+}

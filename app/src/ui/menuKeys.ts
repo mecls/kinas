@@ -1,4 +1,5 @@
-// What a key does inside the reader's ▾ menu. Pure, so bun tests cover it without the DOM.
+// What a key does inside a Menu (ui/Menu.tsx): the reader's ▾, the client folders' right-click. Pure, so bun tests
+// cover it without the DOM. A divider is not an item: the menu leaves it out of the list it passes here.
 //
 // The menu owns every key while it is open. It has to: WebKit does not focus a button when it is clicked, so with
 // the terminal focused the keys would otherwise keep going to the PTY — Esc and the arrows included.
@@ -40,6 +41,14 @@ export function menuKey(key: string, current: number, enabled: readonly boolean[
     default:
       return { kind: "none" };
   }
+}
+
+/**
+ * A menu's items without its dividers, in order: what the arrows move over and what an index from `menuKey` points
+ * into. The menu draws one button per item and none per divider, so the two lists line up.
+ */
+export function itemsOf<T extends object>(entries: readonly T[]): Exclude<T, { divider: true }>[] {
+  return entries.filter((e): e is Exclude<T, { divider: true }> => !("divider" in e));
 }
 
 /** The item the menu focuses when it opens: the first enabled one, or -1. */

@@ -171,47 +171,13 @@
   color: var(--ink-2);
 }
 
-/* Above the divider (4) and the reader's overlay column (3), below the palette (20). Right-aligned: the window's
-   root clips anything that runs past its edge. */
+/* The library's Menu (ui/Menu.tsx), placed under the ▾: above the divider (4) and the reader's overlay column (3),
+   below the palette (20). Right-aligned: the window's root clips anything that runs past its edge. */
 .reader-menu {
   position: absolute;
   top: calc(100% + var(--space-1h));
   right: 0;
   z-index: 10;
-  min-width: calc(var(--sidebar-w) - var(--space-6));
-  padding: var(--space-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-float);
-  outline: 0;
-}
-
-.reader-menu-item {
-  display: block;
-  width: 100%;
-  appearance: none;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: var(--space-1h) var(--space-3);
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: var(--fs-md);
-  line-height: 1.2;
-  text-align: left;
-  white-space: nowrap;
-  cursor: default;
-  outline: 0;
-}
-
-.reader-menu-item:hover:not([aria-disabled="true"]),
-.reader-menu-item:focus:not([aria-disabled="true"]) {
-  background: var(--line);
-}
-
-.reader-menu-item[aria-disabled="true"] {
-  color: var(--ink-2);
 }
 
 .reader-status {

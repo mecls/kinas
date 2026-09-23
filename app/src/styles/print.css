@@ -85,7 +85,7 @@
   .reader-picks,
   .reader-note,
   .reader-problem,
-  .reader-menu,
+  .ui-menu,
   .overlay {
     display: none !important;
   }

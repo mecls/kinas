@@ -1,5 +1,14 @@
 /* Table (DESIGN.md §4; preview 294–299): for lists that are read, not browsed. The header in --fs-sm --ink-2; rows
-   --row-h; numbers right-aligned mono; hover --surface-2. No zebra stripes, no vertical lines. */
+   --row-h; numbers right-aligned mono; hover --surface-2. No zebra stripes, no vertical lines.
+
+   No `overflow: hidden` on the table (2026-09-23): WebKit clipped the caption with the table's rounded corner, and
+   every caption lost part of its first letter ("Today", "Month to date"); a table wider than its column also lost
+   its last columns. The corners are rounded on the corner cells instead, and a table too wide for its column scrolls
+   sideways inside its wrapper — the page itself never does. */
+.ui-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
 table.ui-table {
   width: 100%;
   border-collapse: separate;
@@ -7,7 +16,6 @@ table.ui-table {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  overflow: hidden;
   font-size: var(--fs-md);
   line-height: var(--lh-md);
 }
@@ -36,7 +44,20 @@ table.ui-table td {
 table.ui-table tr:last-child td {
   border-bottom: 0;
 }
-table.ui-table tbody tr:hover {
+table.ui-table thead tr:first-child th:first-child {
+  border-top-left-radius: var(--radius-md);
+}
+table.ui-table thead tr:first-child th:last-child {
+  border-top-right-radius: var(--radius-md);
+}
+table.ui-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: var(--radius-md);
+}
+table.ui-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: var(--radius-md);
+}
+/* On the cells, not the row: a row's ground ignores the corner cells' rounding. */
+table.ui-table tbody tr:hover td {
   background: var(--surface-2);
 }
 table.ui-table .ui-table-r {

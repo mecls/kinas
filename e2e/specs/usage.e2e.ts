@@ -64,6 +64,31 @@ describe("the Usage page", () => {
     await expect($(".chart-note*=No data before")).toBeDisplayed();
   });
 
+  it("keeps each table's caption whole, and a table too wide for a narrow page scrolls inside itself", async () => {
+    // Until 2026-09-23 a table clipped itself for its rounded corners, and WebKit clipped the caption with it: every
+    // caption lost part of its first letter ("Today"), and a narrow page cut the last columns off. The page is made
+    // narrow here the way the reader's panel makes it, by the width its column is given.
+    const seen = await browser.execute(() => {
+      const month = document.querySelector<HTMLElement>('section[data-page="usage"] table[data-period="month"]')!;
+      const tables = [...document.querySelectorAll<HTMLElement>('section[data-page="usage"] table.ui-table')];
+      const clipped = tables.filter((t) => getComputedStyle(t).overflow !== "visible").length;
+      const unwrapped = tables.filter((t) => !t.parentElement!.classList.contains("ui-table-wrap")).length;
+      const content = document.querySelector<HTMLElement>(".content")!;
+      content.style.flex = "0 0 420px";
+      content.style.minWidth = "0";
+      const wrap = month.parentElement!;
+      const narrow = { table: Math.round(month.getBoundingClientRect().width), wrap: wrap.clientWidth, scrolls: wrap.scrollWidth > wrap.clientWidth, overflowX: getComputedStyle(wrap).overflowX };
+      content.style.flex = "";
+      content.style.minWidth = "";
+      return { tables: tables.length, clipped, unwrapped, narrow };
+    });
+    expect(seen.tables).toBeGreaterThanOrEqual(2);
+    expect({ clipped: seen.clipped, unwrapped: seen.unwrapped }).toEqual({ clipped: 0, unwrapped: 0 });
+    // Wider than its column at 420 px: the wrapper scrolls, so Messages is still there to scroll to.
+    expect(seen.narrow.table).toBeGreaterThan(seen.narrow.wrap);
+    expect({ scrolls: seen.narrow.scrolls, overflowX: seen.narrow.overflowX }).toEqual({ scrolls: true, overflowX: "auto" });
+  });
+
   it("shows this Mac, with disk space in Finder's GB", async () => {
     // Three metric rows under one "as of" caption since the design system.
     for (const metric of ["cpu", "memory", "disk"]) await $(`section[data-page="usage"] [data-section="host"] [data-metric="${metric}"]`).waitForExist({ timeout: 30000 });

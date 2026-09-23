@@ -4,10 +4,10 @@
 - Gates 2–4: taken as given by the same word (AGENTS.md, "anything the captain says to just do") — `prd.md` §2 and §4 are the architecture and the program design, the slices below are the plan
 
 ## Slices
-- [ ] Slice 0 · the docs first: DESIGN.md §3.1, §4 catalogue (Menu), the reader-header note; keymap.md; README.md; docs/smoke-test.md
-- [ ] Slice 1 · the sidebar's shape: the Reader row gone, Settings at the foot, Recent under Client folders; shell.e2e and the Nav story follow
-- [ ] Slice 2 · `ui/Menu`: the reader's ▾ menu moved into the library, with a divider and a story; the reader passes `reader-menu`
-- [ ] Slice 3 · Rust: `projects.rs` — hidden/removed/added by path, `set_folder_hidden`, `set_folder_removed`, `add_client_folder`, unit tests
+- [x] Slice 0 · the docs first: DESIGN.md §3.1, §4 catalogue (Menu), the reader-header note; keymap.md; README.md; docs/smoke-test.md (2026-09-23, `420b2a8`; the Menu catalogue row landed with its story in slice 2). Before it, `9edd1c7`: `packages/context/src/config.test.ts` read the real app's store, and the captain's saved projects folder broke three cases — the test now gets an empty data folder
+- [x] Slice 1 · the sidebar's shape: the Reader row gone, Settings at the foot, Recent under Client folders; shell.e2e and the Nav story follow (2026-09-23, `aafb211`): check green, shell.e2e 6/6 alone
+- [x] Slice 2 · `ui/Menu`: the reader's ▾ menu moved into the library, with a divider and a story; the reader passes `reader-menu` (2026-09-23, `7947733`): check green; reader-export 5/5, reader-pins-a 6/6, stories 2/2 alone; reader-panel 3/4 on a load of 13 (AC-3's first `terminalFocused` after a cold `kinas open`), 4/4 on the same binary at once after — watch it in the full run
+- [x] Slice 3 · Rust: `projects.rs` — hidden/removed/added by path, `set_folder_hidden`, `set_folder_removed`, `add_client_folder`, unit tests (2026-09-23, `bb5809e`): 187 Rust tests (6 new), clippy clean. The e2e seam is `KINAS_E2E_PICK_FOLDER`, a file holding the pick (empty = Cancel)
 - [ ] Slice 4 · the webview: the listing's flags, `shownFolders`, the sidebar's right-click menu, Home, Settings → Client folders
 - [ ] Slice 5 · `folders.e2e.ts`, the full e2e suite alone, the screens re-taken → ship point: commits local, **waiting for the captain's word on the push**
 

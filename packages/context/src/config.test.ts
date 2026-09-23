@@ -10,10 +10,14 @@ import { loadConfig } from "./config.ts";
 const dir = mkdtempSync(join(tmpdir(), "kinas-config-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
+// An empty data folder, so no store answers for Settings → Projects folder: without it these cases read the real
+// app's store, and a root saved there (Miguel's, 2026-09-23) outranked every file under test.
+const noStore = join(dir, "no-store");
+
 function withFile(name: string, contents: string | null): Record<string, string> {
   const path = join(dir, name);
   if (contents !== null) writeFileSync(path, contents);
-  return { KINAS_CONFIG: path };
+  return { KINAS_CONFIG: path, KINAS_DATA_DIR: noStore };
 }
 
 describe("the projects root", () => {

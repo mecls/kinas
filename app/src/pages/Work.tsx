@@ -11,7 +11,8 @@ import { TerminalChrome } from "../ui/index.ts";
 // a new wrapper around <Terminal> would remount it, restart the PTY and drop Herdr's client (reader R31, Build 1 R33).
 // The chrome is therefore a sibling above `.work-terminal`, never its parent, and it is rendered from the first frame
 // — appearing later would shift the pane's place among its siblings, and React would mount it again. The terminal
-// refits through its own ResizeObserver. `.work-terminal` is how the shell finds the pane to focus it.
+// refits through its own ResizeObserver. `.work-terminal` is how the shell finds the pane to focus it. No status badge:
+// nothing here reads what the agents in the pane are doing, and one that always said "working" misled (2026-09-23).
 export function WorkPage({ active, shortcuts }: { active: boolean; shortcuts: Shortcuts }) {
   const [pane, setPane] = useState<{ session: string; shell: boolean } | null>(null);
   useEffect(() => {
@@ -22,7 +23,6 @@ export function WorkPage({ active, shortcuts }: { active: boolean; shortcuts: Sh
     <div className="work">
       <TerminalChrome
         session={pane?.session ?? ""}
-        state={pane?.shell ? "stale" : "working"}
         profile={pane?.shell ? "plain shell" : undefined}
         // Copy, then the keys back to the pane: the click took them.
         actions={[{ label: "Copy", onClick: () => void copyTerminalSelection().finally(focusTerminal) }]}

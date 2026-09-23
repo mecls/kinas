@@ -1,8 +1,8 @@
 # Status: Tree changes — what changed on disk, marked in the file trees, with a diff
 
-- Gate 1 · Product: in progress — `prd.md`, from the captain's answers 1A, 2A, 3A, 4A, 5B+C+D (5A left in: a diff is in scope), 6A
-  - Mockups: in progress — `mockups/sidebar-tree.html`, `mockups/reader-changes.html`
-- Gate 2 · Architecture: pending (Rust and the webview are both touched, so `architecture.md` will be written)
+- Gate 1 · Product: APPROVED 2026-09-23 — `prd.md`, from the captain's answers 1A, 2A, 3A, 4A, 5B+C+D (5A left in: a diff is in scope), 6A; approved as written, so §7.1 (a click on a marked row opens Changes) and §7.2 (the caption) stand
+  - Mockups: APPROVED 2026-09-23 — `mockups/sidebar-tree.html`, `mockups/reader-changes.html`
+- Gate 2 · Architecture: in progress — `architecture.md`, private, at its absolute path in the main checkout (`tasks/tree-changes/architecture.md`)
 - Gate 3 · Program design: pending
 - Gate 4 · Slice plan: pending
 

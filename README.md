@@ -115,7 +115,12 @@ Amended 2026-09-23 (folder views): the navigation is Home, Work, Crew, Inbox and
 reader, so there is no Reader row — with Settings as the sidebar's last row, and Recent under the client folders.
 Right-click a client folder to hide it from the sidebar and Home, to show a hidden one, or to add any folder inside
 the projects folder, git or not; Settings → Client folders does the same and also removes a folder from Kinas —
-restorable there, and never touched on disk. **Home** (⌘1) is the first page: the night's progress per
+restorable there, and never touched on disk. Amended 2026-09-23 (tree changes): every file tree follows the disk and
+marks what changed since it was first shown — a status dot and **A**, **M** or **D**, a count on a folder with changes
+inside, deleted rows kept struck through — and a click on a marked file opens the reader on **Changes**, a diff against
+that moment (a deleted file shows what it said). **↻** on the tree, or **Refresh files** in the palette, clears the marks
+and starts again; so does reloading the window. Kinas only watches: nothing is committed, reverted or stored.
+**Home** (⌘1) is the first page: the night's progress per
 client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
 **Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** and
 **Inbox** wait for Build 3 and say so. Every surface is built

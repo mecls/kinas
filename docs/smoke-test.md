@@ -334,6 +334,23 @@ e2e suite ran green alone with them: 21 specs, 120 cases.
 - [ ] The folders you no longer use hidden or removed, and Settings where you want it at the foot —
       `outstanding — needs Miguel`
 
+## Tree changes
+
+Every file tree marks what changed since it was first shown, and the reader's Changes view diffs against that moment
+(2026-09-23, `tasks/tree-changes/prd.md`). Being built; each line says how it is proved once it is.
+
+- [ ] A write, an edit and a delete under an open folder mark A, M and D within a second; a collapsed folder shows the
+      strongest change's dot and the count — `outstanding — automated in tree-changes.e2e.ts`
+- [ ] An edit put back, and a file made then removed, leave no mark and no row — `outstanding — automated`
+- [ ] A marked file opens on Changes; a deleted one shows what it said, and Copy and Download take that text —
+      `outstanding — automated`
+- [ ] ↻, Refresh files and a window reload clear every mark — `outstanding — automated`
+- [ ] Nothing about changes reaches the log but counts — `outstanding — automated`
+- [ ] Median from a write on disk to its mark, over 10 writes: under 1 s — `outstanding — measured`
+- [ ] A folder's first paint in Files within 10 % of 46 ms — `outstanding — measured`
+- [ ] A real agent's session read by eye: marks, roll-ups, the Changes view on markdown and code, both themes —
+      `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

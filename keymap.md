@@ -107,7 +107,8 @@ The reader adds no key bindings of its own. The **Rendered** / **Source** toggle
 an `.html` file is **click-only**, and deliberately so: a binding would have to be unique against the palette
 and every ⌘ shortcut above, for a two-state control that lives in one header beside the mouse. **Copy**,
 **Expand** and **Close** are click-only for the same reason. If one starts being missed, that is the moment to
-add it — this file stays the gate.
+add it — this file stays the gate. Amended 2026-09-23 (tree changes): the toggle's third button, **Changes**, shown
+while the open file has a change mark, is click-only too, and a fold's "N unchanged lines" row unfolds by click.
 
 The header's **▾** menu is the one place the reader handles keys, and only while it is open: it takes focus when
 it opens and gives it back when it closes, so that nothing typed at an open menu reaches the terminal.
@@ -141,6 +142,12 @@ Work, Usage and Settings have the chords above; **Crew**, **Inbox** and **Reader
 last document in the panel, or says at the foot of the sidebar that there is nothing to reopen. The **Client folders**
 rows and the VPS row at the foot are click-only too: a folder row opens that folder in the reader, as its tree row
 does. Selecting a folder's colour or marking it internal happens in Settings → Client folders, by click.
+
+Amended 2026-09-23 (tree changes): every file tree marks what changed since it was first shown. The **↻** on a
+tree's head — the Files header, an expanded pinned folder's row, and the reader's own Files label — clears that tree's
+marks and starts counting again; it is **click-only**, like every sidebar action, and the palette offers the same as
+**Refresh files**, for the folder Files shows. So the sidebar now has one palette command; it still adds no chord.
+A click on a marked row opens the reader on its Changes view.
 
 Amended 2026-09-23 (folder views): the navigation lists Home, Work, Crew, Inbox and Usage. The **Reader** row is
 gone: a file's or a folder's row opens the reader, and × closes it. **Settings** is the sidebar's last row, at its

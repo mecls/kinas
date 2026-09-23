@@ -4,8 +4,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // AC-1 (the empty app and its store), the shell rules R28 (close hides) and R33 (pages stay mounted), and the
-// sidebar of DESIGN.md §3.1: the seven rows, the client folders from the projects root (shell.setup.ts plants
-// fixtures/projects-discovery.json's tree), their categories, and the Reader row.
+// sidebar of DESIGN.md §3.1: the five pages and Settings at the foot, the client folders from the projects root
+// (shell.setup.ts plants fixtures/projects-discovery.json's tree), their categories, and no Reader row (folder views,
+// 2026-09-23).
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const db = join(dataDir, "kinas.sqlite");
@@ -96,7 +97,7 @@ const folderRows = () =>
 describe("the sidebar (DESIGN.md §3.1)", () => {
   const shared = JSON.parse(readFileSync(join(process.cwd(), "fixtures/projects-discovery.json"), "utf8")) as { names: string[] };
 
-  it("has the seven rows, no count at zero, no machine without a VPS, and the client folders by name, six colours for six", async () => {
+  it("has the five pages, Settings as its last row, no count at zero, no machine without a VPS, and the client folders by name, six colours for six", async () => {
     await browser.waitUntil(async () => (await folderRows()).length === shared.names.length, { timeout: 30000, timeoutMsg: "the client folders never listed" });
     const seen = await browser.execute(() => ({
       rows: [...document.querySelectorAll(".sidebar-nav .ui-nav .ui-nav-label")].map((n) => n.textContent),
@@ -104,8 +105,14 @@ describe("the sidebar (DESIGN.md §3.1)", () => {
       current: [...document.querySelectorAll('.sidebar-nav .ui-nav[aria-current="page"] .ui-nav-label')].map((n) => n.textContent),
       machine: document.querySelector(".ui-machine") !== null,
       heading: document.querySelector(".sidebar-folders .ui-nav-h")?.textContent ?? null,
+      last: document.querySelector(".sidebar")?.lastElementChild?.querySelector(".ui-nav-label")?.textContent ?? null,
+      sections: [...document.querySelectorAll(".sidebar-scroll > section")].map((s) => s.getAttribute("aria-label")),
     }));
-    expect(seen.rows).toEqual(["Home", "Work", "Crew", "Inbox", "Usage", "Reader", "Settings"]);
+    expect(seen.rows).toEqual(["Home", "Work", "Crew", "Inbox", "Usage"]);
+    // Settings left the pages for the foot (folder views, 2026-09-23): the sidebar's last element, below the machine.
+    expect(seen.last).toBe("Settings");
+    // Nothing is pinned, open or recent at launch: the client folders are the only section drawn.
+    expect(seen.sections).toEqual(["Client folders"]);
     expect(seen.counts).toBe(0);
     expect(seen.current).toEqual(["Home"]);
     expect(seen.machine).toBe(false);
@@ -138,28 +145,12 @@ describe("the sidebar (DESIGN.md §3.1)", () => {
     await expect($('section[data-page="home"]')).toBeDisplayed();
   });
 
-  it("the Reader row with nothing to reopen says so at the foot of the sidebar, and opens no panel", async () => {
-    // The click and the read in one trip: the notice lasts NOTICE_MS (6 s) and each WebDriver command here costs
-    // ~5 s, so a click, a find and a getText in three commands arrive after it has gone.
-    const seen = await browser.execute(
-      () =>
-        new Promise<{ notice: string | null; panel: string | null; current: string | null }>((resolve) => {
-          const row = document.querySelector<HTMLElement>('.sidebar-nav .ui-nav[aria-label="Reader"]')!;
-          row.click();
-          const started = Date.now();
-          const look = () => {
-            const notice = document.querySelector(".sidebar-notice")?.textContent ?? null;
-            if (notice !== null || Date.now() - started > 3000) {
-              resolve({
-                notice,
-                panel: document.querySelector(".shell")?.getAttribute("data-panel") ?? null,
-                current: row.getAttribute("aria-current"),
-              });
-            } else window.setTimeout(look, 50);
-          };
-          look();
-        }),
-    );
-    expect(seen).toEqual({ notice: "Nothing to reopen — kinas open <file>", panel: "closed", current: null });
+  it("has no Reader row: the reader opens from a file's row, and the panel stays closed at launch", async () => {
+    // The row is gone (folder views, 2026-09-23); the panel itself keeps its aria-label, so this looks only in the sidebar.
+    const seen = await browser.execute(() => ({
+      reader: document.querySelectorAll('.sidebar [aria-label="Reader"]').length,
+      panel: document.querySelector(".shell")?.getAttribute("data-panel") ?? null,
+    }));
+    expect(seen).toEqual({ reader: 0, panel: "closed" });
   });
 });

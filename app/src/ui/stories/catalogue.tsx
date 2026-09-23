@@ -13,7 +13,6 @@ import {
   Dot,
   EmptyState,
   Field,
-  FileIcon,
   FolderIcon,
   Gauge,
   GaugeIcon,
@@ -389,12 +388,11 @@ export const STORIES: Story[] = [
             <NavItem icon={<CrewIcon />} label="Crew" />
             <NavItem icon={<InboxIcon />} label="Inbox" count={3} />
             <NavItem icon={<GaugeIcon />} label="Usage" count={0} />
-            <NavItem icon={<FileIcon />} label="Reader" />
-            <NavItem icon={<GearIcon />} label="Settings" />
             <NavHeading>Client folders</NavHeading>
             <NavItem chip={1} label="ar-watches" />
             <NavItem chip={5} label="kinas" tag="internal" />
             <ConnectionRow name="Hostinger VPS" state="connected" />
+            <NavItem icon={<GearIcon />} label="Settings" />
           </div>
         ),
       },

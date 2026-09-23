@@ -31,7 +31,8 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* The left sidebar (preview .side): the wordmark, the seven rows, what can be opened, and the machine at the foot. */
+/* The left sidebar (preview .side): the wordmark, the five pages, what can be opened, and at the foot the machine and
+   Settings. */
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -49,7 +50,7 @@
   gap: var(--space-0);
 }
 
-/* Pinned, Files, Recent and the client folders scroll together between the pages and the foot; an empty one is not
+/* Pinned, Files, the client folders and Recent scroll together between the pages and the foot; an empty one is not
    here at all. */
 .sidebar-scroll {
   flex: 1;
@@ -208,6 +209,15 @@
   flex: none;
   margin: var(--space-1h) var(--space-2) 0;
   overflow-wrap: anywhere;
+}
+
+/* Settings, the sidebar's last row (folder views, 2026-09-23): below the machine, out of the scrolling sections, under
+   a hairline so it never reads as one more folder. */
+.sidebar-foot {
+  flex: none;
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--line);
 }
 
 .sidebar-pin-tree {

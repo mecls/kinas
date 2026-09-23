@@ -33,9 +33,9 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path
 const CONNECTION_MS = 60_000;
 
 /**
- * The left sidebar (DESIGN.md §3.1; three-column shell §4): the wordmark, the seven navigation rows, then what Miguel
- * can open — Pinned, the open folder's Files, Recent — then the client folders with their chips, the shell's last
- * notice, and the VPS row at the foot.
+ * The left sidebar (DESIGN.md §3.1; three-column shell §4): the wordmark, the five pages, then what Miguel can open —
+ * Pinned, the open folder's Files — the client folders with their chips, Recent, and at the foot the shell's last
+ * notice, the VPS row and Settings, the last row (folder views, 2026-09-23).
  *
  * A module-level component, like everything the shell mounts: a component defined inside App's render would be a
  * new type on every render, and React would remount the whole subtree each time.
@@ -44,8 +44,8 @@ const CONNECTION_MS = 60_000;
  * pages and, once the projects root has been walked, the client folders.
  *
  * It owns no reader state. Clicks go up as paths; the shell turns them into `follow` requests for the reader, which
- * stays the single owner of what is open. The Reader row is a button, not a page (keymap.md, 2026-09-22): it asks
- * the shell to bring the panel back, and reads as current while the panel is open.
+ * stays the single owner of what is open. There is no Reader row (keymap.md, 2026-09-23): every file and folder row
+ * opens the reader, and with nothing to open the row had nothing to show.
  *
  * **A folder is a thing in its own right here** (2026-09-21): wherever one shows — a row in a file tree, a row in
  * Recent, a pin, the Files header, a client folder — pointing at it offers a terminal button and a pin button. The
@@ -56,8 +56,6 @@ export function Sidebar({
   page,
   shortcuts,
   onGo,
-  onReader,
-  readerOpen,
   projects,
   pins,
   folder,
@@ -75,9 +73,6 @@ export function Sidebar({
   page: Page;
   shortcuts: Shortcuts;
   onGo: (page: Page) => void;
-  /** The Reader row: bring the panel back with what it last showed. */
-  onReader: () => void;
-  readerOpen: boolean;
   /** The git repositories under the projects root (projects.rs), in the order found. */
   projects: readonly ProjectRow[];
   pins: PinView[];
@@ -113,8 +108,6 @@ export function Sidebar({
         <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} />
         <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={0} onClick={() => onGo("inbox")} />
         <NavItem icon={<GaugeIcon />} label="Usage" current={current("usage")} onClick={() => onGo("usage")} title={`Usage (${chord("go.usage")})`} />
-        <NavItem icon={<FileIcon />} label="Reader" current={readerOpen} onClick={onReader} aria-label="Reader" title="Reader: the last document, back in the panel" />
-        <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} />
       </div>
 
       <div className="sidebar-scroll">
@@ -153,6 +146,8 @@ export function Sidebar({
           </section>
         )}
 
+        {projects.length > 0 && <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} />}
+
         {recent.length > 0 && (
           <section className="sidebar-section sidebar-recent" aria-label="Recent">
             <h2 className="sidebar-label">Recent</h2>
@@ -182,11 +177,14 @@ export function Sidebar({
           </section>
         )}
 
-        {projects.length > 0 && <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} />}
       </div>
 
       <SidebarNotice notice={notice} panelOpen={panelOpen} />
       <Machine />
+      {/* The last row, below the machine (folder views, 2026-09-23): out of the scrolling sections, always in view. */}
+      <div className="sidebar-foot">
+        <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} />
+      </div>
     </nav>
   );
 }

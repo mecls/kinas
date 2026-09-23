@@ -315,15 +315,6 @@ export function App() {
     setFocusTick((n) => n + 1);
   }, [goTo]);
 
-  // The sidebar's Reader entry (keymap.md, 2026-09-22): the panel with its last document back, or the most recent
-  // file, or — on a fresh launch with nothing to show — one line at the foot of the sidebar. Never an empty panel.
-  const reopenReader = useCallback(() => {
-    if (reader.open) return;
-    if (reader.request) setReader((r) => ({ ...r, open: true }));
-    else if (recent.length > 0) openFromSidebar(recent[0]!.path);
-    else say("Nothing to reopen — kinas open <file>");
-  }, [reader.open, reader.request, recent, say, openFromSidebar]);
-
   // Open in the terminal (keymap.md, Sidebar): Rust asks Herdr for the folder's workspace — nothing is typed into the
   // pane — and only when that worked does anything move: the folder goes to the front of Recent, the Work page shows
   // and the terminal gets the keys. The click is first put through the human-click door, as a pinned folder's is
@@ -373,8 +364,6 @@ export function App() {
         onPin={pin}
         onUnpin={unpin}
         onTerminal={openInTerminal}
-        onReader={reopenReader}
-        readerOpen={reader.open}
         projects={projects}
         notice={notice}
         panelOpen={reader.open}

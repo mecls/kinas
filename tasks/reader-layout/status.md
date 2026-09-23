@@ -5,9 +5,9 @@
   icon for every tab; the limits as written)
   - Mockups: APPROVED 2026-09-23, with the gate — `mockups/window.html` (three states), `mockups/reader.html` (six
     states)
-- Gate 2 · Architecture: in progress — `architecture.md` (private: at its absolute path in the main checkout,
+- Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private: at its absolute path in the main checkout,
   `tasks/reader-layout/architecture.md`), written 2026-09-23; it answers PRD §7.2 (the drawn bar always zooms)
-- Gate 3 · Program design: pending
+- Gate 3 · Program design: in progress — `build-spec.md` §11 (private, beside `architecture.md` in the main checkout)
 - Gate 4 · Slice plan: pending — the order is settled: Part 1 (the column and the text) first, then Part 2 (tabs,
   Recent out of the sidebar), then Part 3 (the title bar, ← and →)
 

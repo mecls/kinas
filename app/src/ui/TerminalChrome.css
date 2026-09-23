@@ -1,5 +1,6 @@
 /* Terminal chrome (DESIGN.md §4; preview 284–290): a --chrome-h bar above the pane in --surface-2 holding the session
-   name, a status badge and the profile, with the actions on the right. The pane below it keeps its own palette. */
+   name, a status badge when the state is known, and the profile, with the actions on the right. The pane below it
+   keeps its own palette. */
 .ui-termchrome {
   height: var(--chrome-h);
   display: flex;

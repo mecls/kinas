@@ -241,12 +241,27 @@ figure{margin:0 0 var(--space-7)}
 figcaption{margin:0 0 var(--space-3);max-width:calc(var(--page-max) * .7)}
 figcaption b{font-weight:600}
 figcaption .ink2{display:block;margin-top:var(--space-1)}
+.note{margin-top:var(--space-2);font-size:var(--fs-sm);line-height:var(--lh-sm)}
+/* The reader */
 .frame{display:flex;flex-direction:column;height:calc(var(--row-h) * 13);border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface);overflow:hidden}
 .frame.panel{max-width:calc(var(--sidebar-w) * 4)}
-/* Header */
+/* Tab strip: --chrome-h on --surface-2, the showing tab on --surface joined to the header */
+.tabs{display:flex;flex:none;height:var(--chrome-h);background:var(--surface-2);box-shadow:inset 0 -1px 0 var(--line);overflow:hidden;position:relative}
+.tab{position:relative;display:flex;align-items:center;gap:var(--space-2);flex:none;max-width:calc(var(--sidebar-w) - var(--space-5));padding:0 var(--space-2) 0 var(--space-3);border-right:1px solid var(--line);color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm);white-space:nowrap}
+.tab .name{overflow:hidden;text-overflow:ellipsis}
+.tab .dim{color:var(--ink-3)}
+.tab .x{display:grid;place-items:center;width:var(--space-4);height:var(--space-4);border-radius:var(--radius-sm);visibility:hidden}
+.tab .x .i{width:var(--space-3);height:var(--space-3)}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink)}
+.tab[aria-selected="true"] .x,.tab.hover .x{visibility:visible}
+.tab.hover{color:var(--ink)}
+.tab.hover .x{background:var(--line)}
+.tab.lifted{z-index:2;background:var(--surface);color:var(--ink);box-shadow:var(--shadow-float);border-radius:var(--radius-sm);transform:translateY(calc(var(--space-1) / -2))}
+.tabs .fade{position:absolute;top:0;bottom:1px;right:0;width:var(--space-6);background:linear-gradient(to right, transparent, var(--surface-2))}
+.tabs .fade.l{left:0;right:auto;background:linear-gradient(to left, transparent, var(--surface-2))}
+/* Header, without Back */
 .rh{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--line);background:var(--surface)}
 .ib{display:grid;place-items:center;width:var(--hit);height:var(--hit);padding:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:transparent;color:var(--ink)}
-.ib:disabled{color:var(--ink-3)}
 .ib[aria-pressed="true"],.vt [aria-pressed="true"]{background:var(--line)}
 .vt{display:flex;padding:calc(var(--space-1) / 2);border:1px solid var(--line);border-radius:var(--radius-sm)}
 .vt button{display:grid;place-items:center;width:var(--hit);height:calc(var(--hit) - var(--space-2));padding:0;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ink-2)}
@@ -257,10 +272,11 @@ figcaption .ink2{display:block;margin-top:var(--space-1)}
 .copy{display:flex;border:1px solid var(--line);border-radius:var(--radius-sm)}
 .copy button{height:calc(var(--hit) - var(--space-1) / 2);padding:0 var(--space-2);border:0;background:transparent;font-size:var(--fs-sm)}
 .copy button + button{display:grid;place-items:center;border-left:1px solid var(--line)}
-/* The callout that says what a control will do; a mockup's tooltip, drawn */
-.tip{position:absolute;z-index:2;padding:var(--space-1) var(--space-2);border-radius:var(--radius-sm);background:var(--ink);color:var(--surface);font-size:var(--fs-xs);line-height:var(--lh-xs);white-space:nowrap;box-shadow:var(--shadow-float)}
+/* A drawn tooltip */
+.tip{position:absolute;z-index:3;padding:var(--space-1) var(--space-2);border-radius:var(--radius-sm);background:var(--ink);color:var(--surface);font-size:var(--fs-xs);line-height:var(--lh-xs);white-space:nowrap;box-shadow:var(--shadow-float)}
 .has-tip{position:relative}
 .has-tip .tip{top:calc(100% + var(--space-1));right:0}
+.has-tip .tip.left{right:auto;left:0}
 /* Body */
 .main{position:relative;display:flex;flex:1;min-height:0}
 .side{display:flex;flex-direction:column;flex:none;min-height:0;background:var(--surface)}
@@ -277,26 +293,24 @@ nav.side{padding:var(--space-3) var(--space-2)}
 .tree .open::before{content:"▾ "}
 .tree .file::before{content:""}
 .tree .in1{padding-left:var(--space-5)}
-.tree .in2{padding-left:var(--space-6)}
-/* The column's edge: the 1 px line, and the 2 px accent while pointed at or dragged */
 .edge{position:relative;flex:none;width:1px;background:var(--line)}
 .edge.hot{width:2px;background:var(--accent);cursor:col-resize}
 .edge .tip{bottom:var(--space-6);left:calc(100% + var(--space-2))}
 .scroll{flex:1;min-width:0;overflow:hidden;padding:var(--space-4) calc(var(--space-5) + var(--space-1)) var(--space-7)}
 .doc{color:var(--ink);font-size:var(--fs-lg);line-height:1.6}
-.doc h1,.doc h2,.doc h3{margin:1.4em 0 .5em;line-height:1.25}
-.doc h1{margin-top:0;font-size:1.6em}
+.doc h2,.doc h3{margin:1.4em 0 .5em;line-height:1.25}
 .doc h2{padding-bottom:var(--space-1);border-bottom:1px solid var(--line);font-size:1.27em}
 .doc h3{font-size:1.07em}
+.doc > :first-child{margin-top:0}
 .doc p{margin:0 0 1em}
-.doc em{color:var(--ink-2)}
-.doc code{padding:1px var(--space-1);border-radius:var(--radius-sm);background:var(--surface-2);font:.86em/1.4 var(--font-mono)}
-.note{margin-top:var(--space-2);font-size:var(--fs-sm);line-height:var(--lh-sm)}
+
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="back" viewBox="0 0 16 16"><path d="M8 12.5 3.5 8 8 3.5M12.5 8h-9"/></symbol>
+  <symbol id="fwd" viewBox="0 0 16 16"><path d="M8 3.5 12.5 8 8 12.5M3.5 8h9"/></symbol>
+  <symbol id="sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/></symbol>
   <symbol id="eye" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol>
   <symbol id="code" viewBox="0 0 16 16"><path d="m11.5 5 3 3-3 3M4.5 5l-3 3 3 3M9.5 3l-3 10"/></symbol>
   <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.8l1.5 1.5h4.7A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5z"/></symbol>
@@ -305,185 +319,24 @@ nav.side{padding:var(--space-3) var(--space-2)}
   <symbol id="expand" viewBox="0 0 16 16"><path d="M10 2.5h3.5V6M6 13.5H2.5V10M13.5 2.5l-4 4M2.5 13.5l4-4"/></symbol>
   <symbol id="collapse" viewBox="0 0 16 16"><path d="M3 9.5h3.5V13M13 6.5H9.5V3M9.5 6.5 14 2M2 14l4.5-4.5"/></symbol>
   <symbol id="close" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></symbol>
+  <symbol id="file" viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4zM9 2v3h3"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H10v-4H6v4H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="term" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="m5 7 2 1.5L5 10M8.5 10.5H11"/></symbol>
+  <symbol id="crew" viewBox="0 0 16 16"><rect x="2" y="3" width="3.5" height="10" rx="1"/><rect x="6.25" y="3" width="3.5" height="7" rx="1"/><rect x="10.5" y="3" width="3.5" height="5" rx="1"/></symbol>
+  <symbol id="inbox" viewBox="0 0 16 16"><path d="M2 9h3.5l1 1.5h3l1-1.5H14M3.5 3.5h9L14 9v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9z"/></symbol>
+  <symbol id="gauge" viewBox="0 0 16 16"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0M8 11.5l2.5-3"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></symbol>
 </svg>
-
 <main style="max-width:var(--page-max);padding:var(--space-5)">
-  <h1 style="margin:0 0 var(--space-2);font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600">The reader's layout</h1>
-  <p class="ink2" style="margin:0 0 var(--space-6)">One screen, four states: the reader, 640 px wide or more, with its side column shown, hidden, widened, and holding Files and Contents together. Below 640 px nothing changes. The document shown is this feature's own PRD.</p>
-
-  <!-- ===== 1 ===== -->
-  <figure>
-    <figcaption><b>1 · Contents showing, the edge pointed at.</b>
-      <span class="ink2">The Contents button is pressed. The pointer is on the line between the column and the text: it turns into the 2 px accent line, and the cursor becomes a resize cursor. Drag it to set a width from 160 to 480 px; double-click it to go back to 220. The text already fills the space to the right, with no 72ch stop.</span></figcaption>
-    <div class="frame panel">
-      <header class="rh">
-        <button class="ib" disabled aria-label="Back"><svg class="i"><use href="#back"/></svg></button>
-        <div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div>
-        <span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span>
-        <span class="ext">MD</span>
-        <button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button>
-        <div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div>
-        <button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button>
-        <button class="ib" aria-label="Close the reader"><svg class="i"><use href="#close"/></svg></button>
-      </header>
-      <div class="main">
-        <nav class="side" style="width:var(--sidebar-w)" aria-label="Contents">
-          <p class="label">Contents</p>
-          <ol>
-            <li class="row">The reader's layout — Implementation Spec</li>
-            <li class="row l2" aria-current="true">1. Objective</li>
-            <li class="row l2">Announcement</li>
-            <li class="row l2">2. Business rules (invariants — never violate)</li>
-            <li class="row l3">The two buttons</li>
-            <li class="row l3">What Kinas remembers</li>
-            <li class="row l3">The column's width</li>
-            <li class="row l3">The text</li>
-            <li class="row l2">3. Flows</li>
-            <li class="row l2">4. Surfaces</li>
-            <li class="row l2">5. Validation</li>
-            <li class="row l2">6. Out of scope</li>
-            <li class="row l2">7. Open questions</li>
-          </ol>
-        </nav>
-        <div class="edge hot"><span class="tip">Drag to resize · double-click for 220</span></div>
-        <div class="scroll">
-          <article class="doc">
-            <h2 style="margin-top:0">1. Objective</h2>
-            <p>The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose. So on a big screen, even with the reader expanded, a third of it is empty.</p>
-            <p>This change lets the captain hide and show Contents and Files from the header's two buttons at every width, drag the column's edge to make it narrower or wider, and read prose across the whole width the reader has. Kinas remembers the first two choices across files and relaunches.</p>
-          </article>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <!-- ===== 2 ===== -->
-  <figure>
-    <figcaption><b>2 · Contents hidden, the text filling.</b>
-      <span class="ink2">One click on the pressed Contents button. The column is gone, and so are its strip and its line. The button is released, and its tooltip now says "Show Contents". The paragraph you were reading is still at the top. Kinas remembers this for the next file and the next launch.</span></figcaption>
-    <div class="frame panel">
-      <header class="rh">
-        <button class="ib" disabled aria-label="Back"><svg class="i"><use href="#back"/></svg></button>
-        <div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div>
-        <span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span>
-        <span class="ext">MD</span>
-        <span class="has-tip"><button class="ib" aria-pressed="false" aria-label="Contents" title="Show Contents"><svg class="i"><use href="#list"/></svg></button><span class="tip">Show Contents</span></span>
-        <div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div>
-        <button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button>
-        <button class="ib" aria-label="Close the reader"><svg class="i"><use href="#close"/></svg></button>
-      </header>
-      <div class="main">
-        <div class="scroll">
-          <article class="doc">
-            <h2 style="margin-top:0">1. Objective</h2>
-            <p>The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose. So on a big screen, even with the reader expanded, a third of it is empty.</p>
-            <p>This change lets the captain hide and show Contents and Files from the header's two buttons at every width, drag the column's edge to make it narrower or wider, and read prose across the whole width the reader has. Kinas remembers the first two choices across files and relaunches.</p>
-            <h2>Announcement</h2>
-            <p>The reader now gets out of your way. The Contents and Files buttons in its header work at every size: click one to put that list away, click it again to bring it back.</p>
-          </article>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <!-- ===== 3 ===== -->
-  <figure>
-    <figcaption><b>3 · Expanded on a wide screen, the column dragged wider.</b>
-      <span class="ink2">The reader has the whole window. The column is at a remembered 320 px, wide enough for "2. Business rules (invariants — never violate)" to show in full. The text takes all the rest, about 140 characters a line at the captain's screen width, where it stopped at about 95. If the window gets too narrow for 320 px, the column narrows so the text keeps at least 320 px, and it widens back when there is room.</span></figcaption>
-    <div class="frame">
-      <header class="rh">
-        <button class="ib" disabled aria-label="Back"><svg class="i"><use href="#back"/></svg></button>
-        <div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div>
-        <span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span>
-        <span class="ext">MD</span>
-        <button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button>
-        <div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div>
-        <button class="ib" aria-label="Collapse"><svg class="i"><use href="#collapse"/></svg></button>
-        <button class="ib" aria-label="Close the reader"><svg class="i"><use href="#close"/></svg></button>
-      </header>
-      <div class="main">
-        <nav class="side" style="width:calc(var(--sidebar-w) + var(--space-7) + var(--space-6) + var(--space-3) + var(--space-2))" aria-label="Contents">
-          <p class="label">Contents</p>
-          <ol>
-            <li class="row">The reader's layout — Implementation Spec</li>
-            <li class="row l2">1. Objective</li>
-            <li class="row l2">Announcement</li>
-            <li class="row l2" aria-current="true">2. Business rules (invariants — never violate)</li>
-            <li class="row l3">The two buttons</li>
-            <li class="row l3">What Kinas remembers</li>
-            <li class="row l3">The column's width</li>
-            <li class="row l3">The text</li>
-            <li class="row l3">What does not change</li>
-            <li class="row l2">3. Flows</li>
-            <li class="row l2">4. Surfaces</li>
-            <li class="row l2">5. Validation</li>
-          </ol>
-        </nav>
-        <div class="edge"></div>
-        <div class="scroll">
-          <article class="doc">
-            <h2 style="margin-top:0">2. Business rules (invariants — never violate)</h2>
-            <h3>The text</h3>
-            <p><b>Prose fills the reader's width.</b> The 72ch cap on the rendered document goes. Markdown now takes the whole width, as source, preview and image files already do. The reader's own padding stays as it is, and it is the only margin: 18 px at the top, 28 px at the sides, 48 px at the bottom. Tables, code blocks, the frontmatter card, images and diagrams take the width they have, and never more, as today.</p>
-            <p><b>Your place survives a reflow.</b> Whenever the text's width changes, the line at the top of the reader stays at the top, to within one line, and the section highlighted in Contents stays the same. The width changes on Expand and Collapse, on dragging the page/reader divider or the column's edge, on hiding or showing Files or Contents, and on resizing the window.</p>
-          </article>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <!-- ===== 4 ===== -->
-  <figure>
-    <figcaption><b>4 · Files and Contents together, with the sidebar hidden (⌘S) and a folder open.</b>
-      <span class="ink2">Both buttons are pressed, and each one hides only its own section. With Files hidden, Contents takes the whole column; with both hidden, the column is gone. The two share one width.</span></figcaption>
-    <div class="frame panel">
-      <header class="rh">
-        <button class="ib" aria-label="Back"><svg class="i"><use href="#back"/></svg></button>
-        <div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div>
-        <span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span>
-        <span class="ext">MD</span>
-        <button class="ib" aria-pressed="true" aria-label="Files" title="Hide Files"><svg class="i"><use href="#folder"/></svg></button>
-        <button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button>
-        <div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div>
-        <button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button>
-        <button class="ib" aria-label="Close the reader"><svg class="i"><use href="#close"/></svg></button>
-      </header>
-      <div class="main">
-        <div class="side" style="width:var(--sidebar-w)">
-          <section class="tree" aria-label="Files">
-            <p class="label">Files</p>
-            <ol>
-              <li class="row open">reader-layout</li>
-              <li class="row in1">mockups</li>
-              <li class="row file in1" aria-current="true">prd.md</li>
-              <li class="row file in1">status.md</li>
-            </ol>
-          </section>
-          <nav aria-label="Contents">
-            <p class="label">Contents</p>
-            <ol>
-              <li class="row">The reader's layout — Implementation Spec</li>
-              <li class="row l2" aria-current="true">1. Objective</li>
-              <li class="row l2">Announcement</li>
-              <li class="row l2">2. Business rules (invariants — never violate)</li>
-              <li class="row l3">The two buttons</li>
-              <li class="row l3">What Kinas remembers</li>
-            </ol>
-          </nav>
-        </div>
-        <div class="edge"></div>
-        <div class="scroll">
-          <article class="doc">
-            <h2 style="margin-top:0">1. Objective</h2>
-            <p>The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose.</p>
-            <p>Kinas remembers the choices across files and relaunches. Below 640 px nothing changes: there the column already lives behind the same two buttons.</p>
-          </article>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <p class="ink2 note">Not drawn: the reader narrower than 640 px, which is unchanged. The Files and Contents buttons open their section over the text, 220 px wide, and a click there is not remembered.</p>
+<h1 style="margin:0 0 var(--space-2);font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600">The reader</h1>
+<p class="ink2" style="margin:0 0 var(--space-6)">The reader panel in six states, 640 px wide or more: tabs along its top, its header without ←, and the side column shown, hidden, widened and shared. Below 640 px the column works as today. The document shown is this feature's own PRD; the whole window, with its top bar, is <span class="mono">window.html</span>.</p>
+<figure><figcaption><b>1 · Contents showing, the edge pointed at.</b><span class="ink2">Four tabs along the top; prd.md is showing, joined to the header below it. The header no longer starts with ← (the window's top bar has it). The Contents button is pressed. The pointer is on the line between the column and the text: it turns into the 2 px accent line with a resize cursor. Drag for 160–480 px; double-click for 220. The text fills everything to its right.</span></figcaption><div class="frame panel"><div class="tabs" role="tablist" aria-label="Open files"><div class="tab" role="tab" aria-selected="true"><svg class="i"><use href="#file"/></svg><span class="name">prd.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">status.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">DESIGN.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">keymap.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div></div><header class="rh"><div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div><span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span><span class="ext">MD</span><button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button><div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div><button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button><button class="ib" aria-label="Close the reader" title="Hide the reader; the tabs stay"><svg class="i"><use href="#close"/></svg></button></header><div class="main"><nav class="side" style="width:var(--sidebar-w)" aria-label="Contents"><p class="label">Contents</p><ol><li class="row " title="The reader's layout, its tabs, and the window's top bar">The reader's layout, its tabs, and the window's top bar</li><li class="row l2" aria-current="true" title="1. Objective">1. Objective</li><li class="row l2" title="Announcement">Announcement</li><li class="row l2" title="2. Business rules (invariants — never violate)">2. Business rules (invariants — never violate)</li><li class="row l3" title="Part 1 · The column and the text">Part 1 · The column and the text</li><li class="row l3" title="Part 2 · Tabs">Part 2 · Tabs</li><li class="row l3" title="Part 3 · The top bar">Part 3 · The top bar</li><li class="row l3" title="For all three parts">For all three parts</li><li class="row l2" title="3. Flows">3. Flows</li><li class="row l2" title="4. Surfaces">4. Surfaces</li><li class="row l2" title="5. Validation">5. Validation</li><li class="row l2" title="6. Out of scope">6. Out of scope</li><li class="row l2" title="7. Open questions">7. Open questions</li></ol></nav><div class="edge hot"><span class="tip">Drag to resize · double-click for 220</span></div><div class="scroll"><article class="doc"><h2>1. Objective</h2><p>Three changes to how the captain moves around Kinas. They share the reader's header and its Back button, so they are one spec, but they are built in order so that the first can ship before the others.</p><p><b>Part 1 · The column and the text.</b> The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose.</p><p><b>Part 2 · Tabs.</b> Every file opened in the reader gets a tab, as in a code editor. The tabs are the recent files, at most 15, and Recent leaves the sidebar.</p></article></div></div></div></figure>
+<figure><figcaption><b>2 · Contents hidden, the text filling.</b><span class="ink2">One click on the pressed Contents button. The column is gone, strip and line with it, and the button's tooltip now says "Show Contents". The paragraph you were reading is still at the top. Kinas remembers this for the next file, the next tab and the next launch.</span></figcaption><div class="frame panel"><div class="tabs" role="tablist" aria-label="Open files"><div class="tab" role="tab" aria-selected="true"><svg class="i"><use href="#file"/></svg><span class="name">prd.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">status.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">DESIGN.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">keymap.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div></div><header class="rh"><div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div><span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span><span class="ext">MD</span><span class="has-tip"><button class="ib" aria-pressed="false" aria-label="Contents" title="Show Contents"><svg class="i"><use href="#list"/></svg></button><span class="tip">Show Contents</span></span><div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div><button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button><button class="ib" aria-label="Close the reader" title="Hide the reader; the tabs stay"><svg class="i"><use href="#close"/></svg></button></header><div class="main"><div class="scroll"><article class="doc"><h2>1. Objective</h2><p>Three changes to how the captain moves around Kinas. They share the reader's header and its Back button, so they are one spec, but they are built in order so that the first can ship before the others.</p><p><b>Part 1 · The column and the text.</b> The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose.</p><p><b>Part 2 · Tabs.</b> Every file opened in the reader gets a tab, as in a code editor. The tabs are the recent files, at most 15, and Recent leaves the sidebar.</p></article></div></div></div></figure>
+<figure><figcaption><b>3 · Expanded on a wide screen, the column dragged wider.</b><span class="ink2">The reader has the whole stage. The column is at a remembered 320 px, wide enough for every heading here. The text takes all the rest: about 140 characters a line at the captain's screen width, where it stopped at about 95. If the window gets too narrow for 320 px, the column narrows so the text keeps at least 320 px, and widens back when there is room.</span></figcaption><div class="frame "><div class="tabs" role="tablist" aria-label="Open files"><div class="tab" role="tab" aria-selected="true"><svg class="i"><use href="#file"/></svg><span class="name">prd.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">status.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">DESIGN.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">keymap.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div></div><header class="rh"><div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div><span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span><span class="ext">MD</span><button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button><div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div><button class="ib" aria-label="Collapse"><svg class="i"><use href="#collapse"/></svg></button><button class="ib" aria-label="Close the reader" title="Hide the reader; the tabs stay"><svg class="i"><use href="#close"/></svg></button></header><div class="main"><nav class="side" style="width:calc(var(--sidebar-w) + var(--space-7) + var(--space-6) + var(--space-3) + var(--space-2))" aria-label="Contents"><p class="label">Contents</p><ol><li class="row " title="The reader's layout, its tabs, and the window's top bar">The reader's layout, its tabs, and the window's top bar</li><li class="row l2" title="1. Objective">1. Objective</li><li class="row l2" title="Announcement">Announcement</li><li class="row l2" aria-current="true" title="2. Business rules (invariants — never violate)">2. Business rules (invariants — never violate)</li><li class="row l3" title="Part 1 · The column and the text">Part 1 · The column and the text</li><li class="row l3" title="Part 2 · Tabs">Part 2 · Tabs</li><li class="row l3" title="Part 3 · The top bar">Part 3 · The top bar</li><li class="row l3" title="For all three parts">For all three parts</li><li class="row l2" title="3. Flows">3. Flows</li><li class="row l2" title="4. Surfaces">4. Surfaces</li><li class="row l2" title="5. Validation">5. Validation</li><li class="row l2" title="6. Out of scope">6. Out of scope</li><li class="row l2" title="7. Open questions">7. Open questions</li></ol></nav><div class="edge"></div><div class="scroll"><article class="doc"><h2>2. Business rules (invariants — never violate)</h2><h3>Part 1 · The column and the text</h3><p><b>Prose fills the reader's width.</b> The 72ch cap on the rendered document goes. Markdown now takes the whole width, as source, preview and image files already do. The reader's own padding stays as it is, and it is the only margin: 18 px at the top, 28 px at the sides, 48 px at the bottom.</p><p><b>Your place survives a reflow.</b> Whenever the text's width changes, the line at the top of the reader stays at the top, to within one line, and the section highlighted in Contents stays the same: on Expand and Collapse, on either divider, on hiding or showing Files, Contents or the sidebar, and on resizing the window.</p></article></div></div></div></figure>
+<figure><figcaption><b>4 · Files and Contents together, with the sidebar hidden (⌘S) and a folder open.</b><span class="ink2">Both buttons are pressed, and each hides only its own section. With Files hidden, Contents takes the whole column; with both hidden, the column is gone. The two share one width. Files is the open folder's tree, one for the whole reader: switching tabs does not change it.</span></figcaption><div class="frame panel"><div class="tabs" role="tablist" aria-label="Open files"><div class="tab" role="tab" aria-selected="true"><svg class="i"><use href="#file"/></svg><span class="name">prd.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">status.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">DESIGN.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">keymap.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div></div><header class="rh"><div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div><span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span><span class="ext">MD</span><button class="ib" aria-pressed="true" aria-label="Files" title="Hide Files"><svg class="i"><use href="#folder"/></svg></button><button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button><div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div><button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button><button class="ib" aria-label="Close the reader" title="Hide the reader; the tabs stay"><svg class="i"><use href="#close"/></svg></button></header><div class="main"><div class="side" style="width:var(--sidebar-w)"><section class="tree" aria-label="Files"><p class="label">Files</p><ol><li class="row open">reader-layout</li><li class="row in1">mockups</li><li class="row file in1" aria-current="true">prd.md</li><li class="row file in1">status.md</li></ol></section><nav aria-label="Contents"><p class="label">Contents</p><ol><li class="row " title="The reader's layout, its tabs, and the window's top bar">The reader's layout, its tabs, and the window's top bar</li><li class="row l2" aria-current="true" title="1. Objective">1. Objective</li><li class="row l2" title="Announcement">Announcement</li><li class="row l2" title="2. Business rules (invariants — never violate)">2. Business rules (invariants — never violate)</li><li class="row l3" title="Part 1 · The column and the text">Part 1 · The column and the text</li><li class="row l3" title="Part 2 · Tabs">Part 2 · Tabs</li><li class="row l3" title="Part 3 · The top bar">Part 3 · The top bar</li><li class="row l3" title="For all three parts">For all three parts</li><li class="row l2" title="3. Flows">3. Flows</li><li class="row l2" title="4. Surfaces">4. Surfaces</li><li class="row l2" title="5. Validation">5. Validation</li><li class="row l2" title="6. Out of scope">6. Out of scope</li><li class="row l2" title="7. Open questions">7. Open questions</li></ol></nav></div><div class="edge"></div><div class="scroll"><article class="doc"><h2>1. Objective</h2><p>Three changes to how the captain moves around Kinas. They share the reader's header and its Back button, so they are one spec, but they are built in order so that the first can ship before the others.</p><p><b>Part 1 · The column and the text.</b> The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose.</p><p><b>Part 2 · Tabs.</b> Every file opened in the reader gets a tab, as in a code editor. The tabs are the recent files, at most 15, and Recent leaves the sidebar.</p></article></div></div></div></figure>
+<figure><figcaption><b>5 · Fifteen tabs: the strip scrolled, one tab being dragged, another under the pointer.</b><span class="ink2">Fifteen is the most; opening a sixteenth file closes the tab that was showing longest ago, never the one showing. The strip scrolls sideways (the fade on the left says there are more) and always keeps the showing tab in view. index.html is being dragged left, lifted off the strip: the others make room as it passes, dropping it sets the order, and dropping it outside the strip puts it back. board.html is under the pointer, so its × shows; a middle-click closes it too. Tabs are the recent files, so the sidebar has no Recent any more.</span></figcaption><div class="frame panel"><div class="tabs" role="tablist" aria-label="Open files" style="justify-content:flex-end"><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">ESTADO.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">README.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">main.rs</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab lifted" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">index.html</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">pty.rs</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">paths.rs</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab hover" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">board.html</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="true"><svg class="i"><use href="#file"/></svg><span class="name">prd.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><span class="fade l"></span></div><header class="rh"><div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div><span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span><span class="ext">MD</span><button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button><div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div><button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button><button class="ib" aria-label="Close the reader" title="Hide the reader; the tabs stay"><svg class="i"><use href="#close"/></svg></button></header><div class="main"><nav class="side" style="width:var(--sidebar-w)" aria-label="Contents"><p class="label">Contents</p><ol><li class="row " title="The reader's layout, its tabs, and the window's top bar">The reader's layout, its tabs, and the window's top bar</li><li class="row l2" aria-current="true" title="1. Objective">1. Objective</li><li class="row l2" title="Announcement">Announcement</li><li class="row l2" title="2. Business rules (invariants — never violate)">2. Business rules (invariants — never violate)</li><li class="row l3" title="Part 1 · The column and the text">Part 1 · The column and the text</li><li class="row l3" title="Part 2 · Tabs">Part 2 · Tabs</li><li class="row l3" title="Part 3 · The top bar">Part 3 · The top bar</li><li class="row l3" title="For all three parts">For all three parts</li><li class="row l2" title="3. Flows">3. Flows</li><li class="row l2" title="4. Surfaces">4. Surfaces</li><li class="row l2" title="5. Validation">5. Validation</li><li class="row l2" title="6. Out of scope">6. Out of scope</li><li class="row l2" title="7. Open questions">7. Open questions</li></ol></nav><div class="edge"></div><div class="scroll"><article class="doc"><h2>1. Objective</h2><p>Three changes to how the captain moves around Kinas. They share the reader's header and its Back button, so they are one spec, but they are built in order so that the first can ship before the others.</p><p><b>Part 1 · The column and the text.</b> The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose.</p><p><b>Part 2 · Tabs.</b> Every file opened in the reader gets a tab, as in a code editor. The tabs are the recent files, at most 15, and Recent leaves the sidebar.</p></article></div></div></div></figure>
+<figure><figcaption><b>6 · Two files of the same name.</b><span class="ink2">Each adds its parent folder after a dot, so the two prd.md tabs are told apart at a glance. The tooltip is the whole display path, the same text the header's path shows.</span></figcaption><div class="frame panel"><div class="tabs" role="tablist" aria-label="Open files"><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">status.md</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">prd.md <span class="dim">· first-mate</span></span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><div class="has-tip" style="display:flex"><div class="tab" role="tab" aria-selected="true"><svg class="i"><use href="#file"/></svg><span class="name">prd.md <span class="dim">· reader-layout</span></span><span class="x"><svg class="i"><use href="#close"/></svg></span></div><span class="tip left">SintraLabs/apps/kinas/tasks/reader-layout/prd.md</span></div><div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#file"/></svg><span class="name">board.html</span><span class="x"><svg class="i"><use href="#close"/></svg></span></div></div><header class="rh"><div class="vt"><button aria-pressed="true" aria-label="Rendered"><svg class="i"><use href="#eye"/></svg></button><button aria-label="Source"><svg class="i"><use href="#code"/></svg></button></div><span class="path"><span class="dir">SintraLabs/apps/kinas/tasks/reader-layout/</span>prd.md</span><span class="ext">MD</span><button class="ib" aria-pressed="true" aria-label="Contents" title="Hide Contents"><svg class="i"><use href="#list"/></svg></button><div class="copy"><button>Copy</button><button aria-label="More actions"><svg class="i"><use href="#chev"/></svg></button></div><button class="ib" aria-label="Expand"><svg class="i"><use href="#expand"/></svg></button><button class="ib" aria-label="Close the reader" title="Hide the reader; the tabs stay"><svg class="i"><use href="#close"/></svg></button></header><div class="main"><nav class="side" style="width:var(--sidebar-w)" aria-label="Contents"><p class="label">Contents</p><ol><li class="row " title="The reader's layout, its tabs, and the window's top bar">The reader's layout, its tabs, and the window's top bar</li><li class="row l2" aria-current="true" title="1. Objective">1. Objective</li><li class="row l2" title="Announcement">Announcement</li><li class="row l2" title="2. Business rules (invariants — never violate)">2. Business rules (invariants — never violate)</li><li class="row l3" title="Part 1 · The column and the text">Part 1 · The column and the text</li><li class="row l3" title="Part 2 · Tabs">Part 2 · Tabs</li><li class="row l3" title="Part 3 · The top bar">Part 3 · The top bar</li><li class="row l3" title="For all three parts">For all three parts</li><li class="row l2" title="3. Flows">3. Flows</li><li class="row l2" title="4. Surfaces">4. Surfaces</li><li class="row l2" title="5. Validation">5. Validation</li><li class="row l2" title="6. Out of scope">6. Out of scope</li><li class="row l2" title="7. Open questions">7. Open questions</li></ol></nav><div class="edge"></div><div class="scroll"><article class="doc"><h2>1. Objective</h2><p>Three changes to how the captain moves around Kinas. They share the reader's header and its Back button, so they are one spec, but they are built in order so that the first can ship before the others.</p><p><b>Part 1 · The column and the text.</b> The reader's side column holds Contents, and also Files when the sidebar is hidden. Today it is always 220 px, and while the reader is 640 px wide or more it cannot be put away. The text beside it stops at 72ch, about 95 characters of prose.</p><p><b>Part 2 · Tabs.</b> Every file opened in the reader gets a tab, as in a code editor. The tabs are the recent files, at most 15, and Recent leaves the sidebar.</p></article></div></div></div></figure>
+<p class="ink2 note">Not drawn: the reader narrower than 640 px, which keeps its overlay; a folder opened with no README, where no tab is showing and the reader says "Choose a file" under the strip; a tab whose file has gone, which shows the reader's problem message under the strip.</p>
 </main>
 </body>
 </html>

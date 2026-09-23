@@ -1,9 +1,9 @@
+import { seatFolders } from "./folders.ts";
 import { useEffect, useState } from "react";
 import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
 import type { Page } from "../App.tsx";
 import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
 import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
-import { categoriesFor } from "../ui/category.ts";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -196,19 +196,15 @@ export function Sidebar({
  * folder in Recent does; the terminal and pin buttons appear beside it as they do on every folder row.
  */
 function ClientFolders({ projects, folder, onOpen, folderActions }: { projects: readonly ProjectRow[]; folder: string | null; onOpen: (path: string) => void; folderActions: TreeFolderActions }) {
-  const ordered = [...projects.filter((p) => !p.internal), ...projects.filter((p) => p.internal)];
-  const categories = categoriesFor(
-    ordered.map((p) => p.name),
-    Object.fromEntries(projects.map((p) => [p.name, p.category])),
-  );
+  const ordered = seatFolders(projects);
   return (
     <section className="sidebar-section sidebar-folders" aria-label="Client folders">
       <NavHeading>Client folders</NavHeading>
       <ul className="sidebar-list">
         {ordered.map((p) => (
-          <li key={p.path} data-kind="dir" data-cat={categories[p.name]} data-internal={p.internal ? "" : undefined}>
+          <li key={p.path} data-kind="dir" data-cat={p.cat} data-internal={p.internal ? "" : undefined}>
             <div className="sidebar-entry">
-              <NavItem chip={categories[p.name]} label={p.name} tag={p.internal ? "internal" : undefined} current={p.path === folder} title={p.display} onClick={() => onOpen(p.path)} />
+              <NavItem chip={p.cat} label={p.name} tag={p.internal ? "internal" : undefined} current={p.path === folder} title={p.display} onClick={() => onOpen(p.path)} />
               {folderActions(p.path, p.name)}
             </div>
           </li>

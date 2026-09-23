@@ -1,22 +1,12 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { dispatchAppAction } from "../actions.ts";
-import {
-  getUsageSnapshot,
-  onBackfillProgress,
-  onReadingsChanged,
-  setUsageVisible,
-  type HostView,
-  type ProviderMetricView,
-  type QuotaView,
-  type ReaderId,
-  type ReaderView,
-  type UsageSnapshot,
-} from "../api.ts";
+import type { HostView, ProviderMetricView, QuotaView, ReaderId, ReaderView, UsageSnapshot } from "../api.ts";
 import * as convex from "../usage/convex.ts";
-import { asOf, gb, gib, lisbonClock, PROVIDER_LABEL, resetsIn, tone, usedPct, WINDOW_LABEL } from "../usage/format.ts";
+import { asOf, gb, gib, tone, usedPct, WINDOW_LABEL } from "../usage/format.ts";
 import * as hostinger from "../usage/hostinger.ts";
+import { asOfOldest, QuotaGauge, quotaDetail, shownUsed, sourcesOf } from "../usage/QuotaGauge.tsx";
 import { UsageChart } from "../usage/UsageChart.tsx";
-import { Card, EmptyState, Gauge, Gauges, MetricRow, Rows, Section, SectionHeader, Table, TitleRow } from "../ui/index.ts";
+import { Card, EmptyState, Gauges, MetricRow, Rows, Section, SectionHeader, Table, TitleRow } from "../ui/index.ts";
 
 // The Usage page (DESIGN.md §5 Usage; build-spec §4): it answers how much of what we pay for is left. A hero row of the
 // three gauges that decide the day, then one section per provider with a single freshness caption. Every number and
@@ -27,46 +17,8 @@ type Provider = (typeof PROVIDERS)[number];
 /** The windows in the order a provider's gauges read; the hero takes the first one Ollama reports. */
 const WINDOW_ORDER = ["week", "session", "month_credits"] as const;
 const OLLAMA_ORDER = ["session", "week", "month_credits"] as const;
-/** Staleness ages without new data, so the page re-reads even when nothing changed (R12). */
-const RERENDER_MS = 30_000;
-
-export function UsagePage({ active }: { active: boolean }) {
-  const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    getUsageSnapshot().then(
-      (s) => {
-        setSnapshot(s);
-        setError(null);
-      },
-      (e: unknown) => setError(String(e)),
-    );
-  }, []);
-
-  useEffect(() => {
-    load();
-    const timer = window.setInterval(load, RERENDER_MS);
-    const unlisteners = [onReadingsChanged(load), onBackfillProgress(load)];
-    return () => {
-      window.clearInterval(timer);
-      for (const u of unlisteners) void u.then((stop) => stop());
-    };
-  }, [load]);
-
-  // R13: host sampling speeds up and Ollama refreshes when this page is actually on screen.
-  useEffect(() => {
-    const update = () => void setUsageVisible(active && document.visibilityState === "visible").catch(() => {});
-    update();
-    document.addEventListener("visibilitychange", update);
-    window.addEventListener("focus", update);
-    if (active) load();
-    return () => {
-      document.removeEventListener("visibilitychange", update);
-      window.removeEventListener("focus", update);
-    };
-  }, [active, load]);
-
+/** The snapshot comes from App's one poller (usage/useUsageSnapshot.ts), shared with Home. */
+export function UsagePage({ snapshot, error }: { snapshot: UsageSnapshot | null; error: string | null }) {
   if (!snapshot) {
     return (
       <div className="usage">
@@ -101,7 +53,7 @@ export function UsagePage({ active }: { active: boolean }) {
       </Gauges>
 
       <Section className="usage-provider" data-section="claude">
-        <SectionHeader title="Claude" caption={oldest(claude, snapshot.now)} source={sources(claude)} />
+        <SectionHeader title="Claude" caption={asOfOldest(claude, snapshot.now)} source={sourcesOf(claude)} />
         <UsageChart snapshot={snapshot} />
       </Section>
 
@@ -113,49 +65,6 @@ export function UsagePage({ active }: { active: boolean }) {
 
       <MacSection host={snapshot.host} reader={reader("host")} now={snapshot.now} />
     </div>
-  );
-}
-
-/** A section's one freshness caption: "as of" its oldest reading, the only place freshness appears but for stale. */
-function oldest(readings: readonly { updated_at: number | null }[], now: number): string | undefined {
-  const times = readings.map((r) => r.updated_at).filter((t): t is number => t !== null);
-  return times.length === 0 ? undefined : asOf(Math.min(...times), now);
-}
-
-const sources = (readings: readonly { source: string }[]) => [...new Set(readings.map((r) => `Source: ${r.source}`))].join("\n") || undefined;
-
-/** "Claude · week", "Ollama · session" — and the plan when the provider names one. */
-const quotaTitle = (q: QuotaView) => `${PROVIDER_LABEL[q.subscription]} · ${WINDOW_LABEL[q.window]}${q.plan ? ` · ${q.plan}` : ""}`;
-
-/**
- * The line under a quota. The number never lies: a dead reading says why, a reset window says when it reset (its
- * stored number belongs to a window that ended), and a stale one keeps its number with its age said beside it.
- */
-function quotaDetail(q: QuotaView, reader: ReaderView | undefined, now: number): string {
-  if (q.state === "reset") return `reset at ${q.resets_at === null ? "—" : lisbonClock(q.resets_at, now)} · waiting for a new reading`;
-  if (q.state === "dead") return reader?.last_error ?? "no recent reading";
-  const resets = resetsIn(q.resets_at, now);
-  return q.state === "stale" ? `${resets} · ${asOf(q.updated_at, now)} · stale` : resets;
-}
-
-/** Hidden number: dead, or a window past its reset. Otherwise "% used", rounded up so usage is never understated. */
-const shownUsed = (q: { state: string; used_pct: number | null }) => (q.state === "dead" || q.state === "reset" || q.used_pct === null ? null : Number(usedPct(q.used_pct)));
-
-function QuotaGauge({ quota, reader, now }: { quota: QuotaView; reader: ReaderView | undefined; now: number }) {
-  return (
-    <Gauge
-      title={quotaTitle(quota)}
-      used={shownUsed(quota)}
-      unit="% used"
-      tone={tone(quota.used_pct, quota.state)}
-      detail={quotaDetail(quota, reader, now)}
-      dead={quota.state === "dead"}
-      muted={quota.state === "stale"}
-      placeholder="—"
-      data-subscription={quota.subscription}
-      data-window={quota.window}
-      data-state={quota.state}
-    />
   );
 }
 
@@ -182,7 +91,7 @@ function ProviderEmpty({ provider, reader, onConnect }: { provider: Provider | "
 function OllamaSection({ quotas, now }: { quotas: QuotaView[]; now: number }) {
   return (
     <Section className="usage-provider" data-section="ollama">
-      <SectionHeader title="Ollama" caption={oldest(quotas, now)} source={sources(quotas)} />
+      <SectionHeader title="Ollama" caption={asOfOldest(quotas, now)} source={sourcesOf(quotas)} />
       {quotas.length > 1 && (
         <Rows>
           {quotas.slice(1).map((q) => {
@@ -285,7 +194,7 @@ function ConvexSection({ metrics, reader, now, onConnect }: { metrics: ProviderM
   const format = { label: convex.metricLabel, value: convex.metricValue };
   return (
     <Section className="usage-provider" data-section="convex">
-      <SectionHeader title="Convex" caption={oldest(shown, now)} source={sources(shown)} info={convex.BILLING_WINDOW} />
+      <SectionHeader title="Convex" caption={asOfOldest(shown, now)} source={sourcesOf(shown)} info={convex.BILLING_WINDOW} />
       <Rows title={sentence(convex.windowLabel("month"))} data-section="convex-month">
         {month.map((m) => metricRow(m, format, reader, { bar: true }))}
       </Rows>
@@ -319,7 +228,7 @@ function HostingerSection({ metrics, reader, now }: { metrics: ProviderMetricVie
   const format = { label: hostinger.metricLabel, value: hostinger.metricValue };
   return (
     <Section className="usage-provider" data-section="hostinger">
-      <SectionHeader title="Hostinger VPS" caption={oldest(shown, now)} source={sources(shown)} />
+      <SectionHeader title="Hostinger VPS" caption={asOfOldest(shown, now)} source={sourcesOf(shown)} />
       {shown.length === 0 ? (
         <p className="usage-note">{reader?.last_error ?? "No VPS connected — add a token in Settings."}</p>
       ) : (

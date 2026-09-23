@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { SegBar, type Segments } from "./Bar.tsx";
 import { Chip, Tag, type Category } from "./Dot.tsx";
 import { ChevronRightIcon } from "./icons.tsx";
@@ -17,6 +17,7 @@ export function ProgressRow({
   badges = [],
   selected = false,
   onSelect,
+  ...rest
 }: {
   cat: Category;
   name: string;
@@ -26,9 +27,9 @@ export function ProgressRow({
   badges?: { state: BadgeState; count: number }[];
   selected?: boolean;
   onSelect?: () => void;
-}) {
+} & Omit<HTMLAttributes<HTMLButtonElement>, "onSelect">) {
   return (
-    <button type="button" className="ui-progress-row" role="option" aria-selected={selected} data-quiet={seg ? undefined : "true"} onClick={onSelect}>
+    <button type="button" className="ui-progress-row" role="option" aria-selected={selected} data-quiet={seg ? undefined : "true"} onClick={onSelect} {...rest}>
       <Chip cat={cat} />
       <span className="ui-progress-name">
         <span>{name}</span>

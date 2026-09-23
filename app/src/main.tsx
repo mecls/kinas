@@ -3,6 +3,7 @@ import { App } from "./App.tsx";
 import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/usage.css";
+import "./styles/home.css";
 import "./styles/settings.css";
 import "./styles/overlay.css";
 import "./styles/reader.css";

@@ -166,7 +166,9 @@ fn home() -> PathBuf {
 pub async fn list_projects(app: AppHandle) -> Result<Vec<ProjectRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let store = app.state::<Store>();
-        let root = crate::paths::projects_root_of(&store);
+        // The real path, as the reader reports every folder it opens (reader/access.rs): a root reached through a
+        // symlink (/var is /private/var) must list paths the reader's own can be compared with.
+        let root = crate::reader::access::real_root(&crate::paths::projects_root_of(&store));
         let cache = app.state::<ProjectsCache>();
         let repos = {
             let mut slot = cache.0.lock().unwrap_or_else(|p| p.into_inner());
@@ -253,6 +255,18 @@ mod tests {
         let relative: Vec<String> = repos.iter().map(|r| r.strip_prefix(dir.path()).unwrap().to_string_lossy().into_owned()).collect();
         assert_eq!(relative, shared.repos);
         assert_eq!(names_for(dir.path(), &repos), shared.names);
+    }
+
+    #[test]
+    fn a_root_reached_through_a_symlink_lists_the_real_paths_the_reader_reports() {
+        let dir = tempfile::tempdir().unwrap();
+        plant(dir.path(), &["acme/.git".to_string()]);
+        let real = fs::canonicalize(dir.path()).unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let link = elsewhere.path().join("root");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_eq!(discover_repos(&link, MAX_DEPTH), vec![link.join("acme")]);
+        assert_eq!(discover_repos(&crate::reader::access::real_root(&link), MAX_DEPTH), vec![real.join("acme")]);
     }
 
     #[test]

@@ -12,7 +12,7 @@
 - [x] Slice 2 · the primitives in `app/src/ui/` with stories, the guard test (2026-09-22, `f838593`) → ship point 1: full e2e green alone 2026-09-22 (18/18; `reader-export` once on a loaded Mac, then 5/5 alone); **waiting for the captain's word on the push** — nothing pushed
 - [x] Slice 3 · the shell: sidebar, nav, title row, client folders, connection row, `go.home` (2026-09-22, committed locally): `bun run check` green; every touched spec green alone; the reader panel moved onto `--surface` at the captain's report (an open file had the terminal's background) — nothing pushed
 - [x] Slice 4 · Usage on the primitives (2026-09-22, committed locally) → ship point 2: full e2e alone 2026-09-22 (18/19 in the run; `appearance` lost its first ⌘, on the coldest launch, now retried, 10/10 alone); **waiting for the captain's word on the push** — nothing pushed
-- [ ] Slice 5 · Home
+- [x] Slice 5 · Home (2026-09-23, committed locally): Overnight per client folder, Waiting on you, the three gauges and Needs attention from one shared usage poller; check green, home/shell/settings/usage/staleness green alone — nothing pushed
 - [ ] Slice 6 · Settings cards, the reader header, palette and toasts, the terminal chrome, the alias block removed
 - [ ] Slice 7 · DESIGN.md finished, the preview updated, screenshots, the smoke test → ship point 3
 

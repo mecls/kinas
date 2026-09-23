@@ -30,7 +30,7 @@ const out = join(tmpdir(), "kinas-print-probe");
 
 /** Every stylesheet the app loads, in main.tsx's order, with print.css last — or left out, for the control. */
 function stylesheets(): string {
-  const order = ["tokens.css", "shell.css", "usage.css", "settings.css", "overlay.css", "reader.css"];
+  const order = ["tokens.css", "shell.css", "usage.css", "home.css", "settings.css", "overlay.css", "reader.css"];
   const present = readdirSync(styles).filter((name) => name.endsWith(".css") && name !== "print.css");
   const unknown = present.filter((name) => !order.includes(name));
   if (unknown.length > 0) throw new Error(`print-probe does not know where ${unknown.join(", ")} loads; add it to the order`);

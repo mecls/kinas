@@ -1,0 +1,22 @@
+/* Home (DESIGN.md §5 Home): layout only. The rows, gauges and headers are the components' (app/src/ui/); what is left
+   here is where they sit; the page's padding and width are .page-in's (shell.css). Tokens only. */
+
+.home .ui-titlerow {
+  margin-bottom: var(--space-3);
+}
+
+.home-attn {
+  margin-top: var(--space-3);
+}
+
+.home-note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* The snapshot command failed: its words in --danger where "Reading…" was; the folders above still render. */
+.home-error {
+  color: var(--danger);
+}

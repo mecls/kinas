@@ -20,6 +20,7 @@ import {
 import { applyAccent } from "./theme.ts";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
+import { useUsageSnapshot } from "./usage/useUsageSnapshot.ts";
 import { WorkPage } from "./pages/Work.tsx";
 import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
@@ -114,6 +115,9 @@ export function App() {
     expandedRef.current = next;
     setReader((r) => ({ ...r, expanded: next }));
   }, []);
+
+  // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
+  const usage = useUsageSnapshot(page === "home" || page === "usage");
 
   // Going to a page means wanting to see it: an expanded panel goes back to the side.
   const goTo = useCallback(
@@ -303,6 +307,14 @@ export function App() {
     setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current } }));
   }, []);
 
+  // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane, so this is the
+  // Work page with the terminal holding the keys — the way Open in terminal hands them over, after the page shows.
+  const launchTask = useCallback(() => {
+    wantTerminalFocus.current = true;
+    goTo("work");
+    setFocusTick((n) => n + 1);
+  }, [goTo]);
+
   // The sidebar's Reader entry (keymap.md, 2026-09-22): the panel with its last document back, or the most recent
   // file, or — on a fresh launch with nothing to show — one line at the foot of the sidebar. Never an empty panel.
   const reopenReader = useCallback(() => {
@@ -370,7 +382,7 @@ export function App() {
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
           <section className="page" data-page="home" hidden={page !== "home"}>
-            <HomePage onGo={goTo} />
+            <HomePage usage={usage.snapshot} usageError={usage.error} projects={projects} folder={nav.folder} onOpen={openFromSidebar} onGo={goTo} onLaunch={launchTask} />
           </section>
           <section className="page" data-page="crew" hidden={page !== "crew"}>
             <CrewPage />
@@ -379,7 +391,7 @@ export function App() {
             <InboxPage />
           </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
-            <UsagePage active={page === "usage"} />
+            <UsagePage snapshot={usage.snapshot} error={usage.error} />
           </section>
           <section className="page" data-page="work" hidden={page !== "work"}>
             <WorkPage active={page === "work"} shortcuts={shortcuts} />

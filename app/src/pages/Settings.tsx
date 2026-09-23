@@ -21,7 +21,8 @@ import { chordFromEvent } from "../settings/chord.ts";
 import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
 import { AccentField } from "../ui/AccentField.tsx";
-import { CATEGORIES, categoriesFor } from "../ui/category.ts";
+import { seatFolders } from "../shell/folders.ts";
+import { CATEGORIES } from "../ui/category.ts";
 import { Chip, Switch, TitleRow } from "../ui/index.ts";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 
@@ -401,10 +402,8 @@ function ShortcutRow({
 
 /** The client folders' choices (DESIGN.md §3.1): the chip cycles the six categories, the switch marks a folder internal. */
 function ClientFolderRows({ projects, onCategory, onInternal }: { projects: readonly ProjectRow[]; onCategory: (name: string, cat: number) => void; onInternal: (name: string, internal: boolean) => void }) {
-  const categories = categoriesFor(
-    projects.map((p) => p.name),
-    Object.fromEntries(projects.map((p) => [p.name, p.category])),
-  );
+  // The colours as the sidebar and Home seat them; the rows keep the listing's order, so a switch never moves one.
+  const categories = Object.fromEntries(seatFolders(projects).map((f) => [f.name, f.cat]));
   return (
     <ul className="settings-folders" aria-label="Client folders">
       {projects.map((p) => {

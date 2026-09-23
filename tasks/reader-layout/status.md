@@ -7,13 +7,22 @@
     states)
 - Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private: at its absolute path in the main checkout,
   `tasks/reader-layout/architecture.md`), written 2026-09-23; it answers PRD §7.2 (the drawn bar always zooms)
-- Gate 3 · Program design: in progress — `build-spec.md` §11, written 2026-09-23 (private, beside `architecture.md` in
-  the main checkout; §0–§10 and §13–§19 drafted with it, §12 waits for Gate 4)
-- Gate 4 · Slice plan: pending — the order is settled: Part 1 (the column and the text) first, then Part 2 (tabs,
-  Recent out of the sidebar), then Part 3 (the title bar, ← and →)
+- Gate 3 · Program design: APPROVED 2026-09-23 — `build-spec.md` §11 (private, beside `architecture.md` in the main
+  checkout)
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12, written 2026-09-23: eleven slices, three ship points
 
 ## Slices
-- [ ] Slice 1 · tracer bullet: <written at Gate 4>
+- [ ] Slice 0 · ground: `feat/reader-layout` from `docs/reader-layout-gate-1`, rebased; the baselines
+- [ ] Slice 1 · tracer bullet: the Contents button at every width, hiding the column, stored in `reader_side`
+- [ ] Slice 2 · the column's edge: drag 160–480, the text keeps 320, double-click for 220, one save per drag
+- [ ] Slice 3 · prose fills the reader, and the place survives every reflow → ship point 1
+- [ ] Slice 4 · tracer bullet: every opened file gets a tab, and a click switches to it where it was left
+- [ ] Slice 5 · fifteen at most, closing, the reader's × keeps the tabs, a gone file, names told apart
+- [ ] Slice 6 · drag a tab to reorder the strip
+- [ ] Slice 7 · Recent leaves the sidebar → ship point 2
+- [ ] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
+- [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes
+- [ ] Slice 10 · ship point 3, and the hand-off
 
 ## Notes for a fresh session
 

@@ -6,12 +6,20 @@
 //! Each folder carries what Settings keeps for it: a category (1–6, the six `--cat-N` colours; `None` means the
 //! webview derives one from the name) and whether it is internal. Both live in the settings table as one row each,
 //! keyed by the folder's name, so nothing here needs a migration.
+//!
+//! Folder views (2026-09-23, `tasks/folder-views/prd.md`): a folder may also be **hidden** (off the sidebar and Home)
+//! or **removed** (off Settings' list too, restorable), and a folder the walk does not find may be **added** — any
+//! folder inside the projects folder, git or not. Those three are settings rows too, but keyed by **path**: the walk
+//! renames a folder when a second one with its base name appears (`site` becomes `one/site`), and a removal keyed on
+//! the old name would silently undo itself. Nothing here ever touches a folder on disk.
 
 use crate::store::Store;
 use crate::system::{get_setting, put_setting};
+use crate::reader::access::{self, Kind};
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, State};
@@ -25,6 +33,10 @@ pub const CATEGORIES: u8 = 6;
 /// The settings rows: `{ "<name>": 1..6 }`, and `["<name>", …]`.
 pub const CATEGORIES_KEY: &str = "folder_categories";
 pub const INTERNAL_KEY: &str = "folder_internal";
+/// Folder views: `["<canonical path>", …]`, sorted, one row each.
+pub const HIDDEN_KEY: &str = "folder_hidden";
+pub const REMOVED_KEY: &str = "folder_removed";
+pub const ADDED_KEY: &str = "folder_added";
 /// How long a walk of the root stands. The sidebar asks again on every focus; a walk costs milliseconds but reads
 /// every folder three levels down, and the answer rarely changes within a minute.
 const CACHE_TTL: Duration = Duration::from_secs(60);
@@ -38,6 +50,10 @@ pub struct ProjectRow {
     /// Settings' choice, or `None` for the one the webview derives from the name.
     pub category: Option<u8>,
     pub internal: bool,
+    /// Off the sidebar and Home; still in Settings' list.
+    pub hidden: bool,
+    /// Off Settings' list too, in its Removed list. A path in both lists reads as removed.
+    pub removed: bool,
 }
 
 /// The last walk, kept for `CACHE_TTL` — for one root: a changed projects root walks again at once.
@@ -130,6 +146,33 @@ pub fn stored_internal(value: Option<serde_json::Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// One of the three folder-view lists: the strings in the row, anything else ignored, as `stored_internal` does.
+pub fn stored_paths(value: Option<serde_json::Value>) -> BTreeSet<String> {
+    stored_internal(value).into_iter().collect()
+}
+
+/// Every folder the listing holds: each discovered repository, and each added folder that is still a folder inside
+/// the root and not the root itself — once each, sorted. An added folder that is gone (an unmounted volume, a changed
+/// root) is simply not listed; its row is kept, so it comes back when the folder does.
+pub fn listing(root: &Path, repos: &[PathBuf], added: &BTreeSet<String>) -> Vec<PathBuf> {
+    let mut all: BTreeSet<PathBuf> = repos.iter().cloned().collect();
+    for path in added.iter().map(PathBuf::from) {
+        if path != root && access::inside(&path, root) && path.is_dir() {
+            all.insert(path);
+        }
+    }
+    all.into_iter().collect()
+}
+
+/// The rows with each folder's view state, by path.
+pub fn with_views(mut rows: Vec<ProjectRow>, hidden: &BTreeSet<String>, removed: &BTreeSet<String>) -> Vec<ProjectRow> {
+    for row in &mut rows {
+        row.hidden = hidden.contains(&row.path);
+        row.removed = removed.contains(&row.path);
+    }
+    rows
+}
+
 /// A category as Settings may store it: 1 to 6.
 pub fn parse_category(cat: u8) -> Result<u8, String> {
     if (1..=CATEGORIES).contains(&cat) {
@@ -148,6 +191,8 @@ pub fn rows(root: &Path, home: &Path, repos: &[PathBuf], categories: &BTreeMap<S
         .map(|(path, name)| ProjectRow {
             category: categories.get(&name).copied(),
             internal: internal.contains(&name),
+            hidden: false,
+            removed: false,
             display: display_of(path, home),
             path: path.display().to_string(),
             name,
@@ -159,34 +204,83 @@ fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
 }
 
-/// The client folders for the sidebar and Settings. The walk runs off the main thread (a root on a slow disk must
-/// not freeze the window — the reader learned this on its first install) and stands for a minute; the choices are
-/// read fresh each time, so a change in Settings shows on the next call.
+/// What Settings keeps about the folders, read in one go.
+struct Stored {
+    categories: BTreeMap<String, u8>,
+    internal: Vec<String>,
+    hidden: BTreeSet<String>,
+    removed: BTreeSet<String>,
+    added: BTreeSet<String>,
+}
+
+fn stored(store: &Store) -> Stored {
+    let conn = store.conn();
+    let org = store.org_id();
+    Stored {
+        categories: stored_categories(get_setting(&conn, org, CATEGORIES_KEY)),
+        internal: stored_internal(get_setting(&conn, org, INTERNAL_KEY)),
+        hidden: stored_paths(get_setting(&conn, org, HIDDEN_KEY)),
+        removed: stored_paths(get_setting(&conn, org, REMOVED_KEY)),
+        added: stored_paths(get_setting(&conn, org, ADDED_KEY)),
+    }
+}
+
+fn put_paths(store: &Store, key: &str, paths: &BTreeSet<String>) -> Result<(), String> {
+    let conn = store.conn();
+    put_setting(&conn, store.org_id(), key, &serde_json::json!(paths)).map_err(|e| e.to_string())
+}
+
+/// The listing as it stands: the root's real path, every folder in it, and what Settings keeps. Blocking — it may walk
+/// the root — so only ever called off the main thread.
+struct Snapshot {
+    root: PathBuf,
+    folders: Vec<PathBuf>,
+    stored: Stored,
+}
+
+fn snapshot(app: &AppHandle) -> Snapshot {
+    let store = app.state::<Store>();
+    // The real path, as the reader reports every folder it opens (reader/access.rs): a root reached through a symlink
+    // (/var is /private/var) must list paths the reader's own can be compared with. Read before any other store lock
+    // is taken: the store's mutex is not reentrant (ADR 0005).
+    let root = access::real_root(&crate::paths::projects_root_of(&store));
+    let cache = app.state::<ProjectsCache>();
+    let repos = {
+        let mut slot = cache.0.lock().unwrap_or_else(|p| p.into_inner());
+        match slot.as_ref() {
+            Some((at, cached_root, repos)) if *cached_root == root && at.elapsed() < CACHE_TTL => repos.clone(),
+            _ => {
+                let repos = discover_repos(&root, MAX_DEPTH);
+                *slot = Some((Instant::now(), root.clone(), repos.clone()));
+                repos
+            }
+        }
+    };
+    let stored = stored(&store);
+    let folders = listing(&root, &repos, &stored.added);
+    Snapshot { root, folders, stored }
+}
+
+/// A path the webview names must be one this listing holds (ADR 0009): the webview never writes a path Rust did not
+/// list.
+fn listed(snap: &Snapshot, path: &str) -> Result<(), String> {
+    if snap.folders.iter().any(|f| f.as_os_str() == path) {
+        Ok(())
+    } else {
+        Err("Not a client folder".to_string())
+    }
+}
+
+/// The client folders for the sidebar, Home and Settings — hidden and removed ones included, flagged, because the
+/// colours are seated over all of them and each surface filters afterwards (prd rule 8). The walk runs off the main
+/// thread (a root on a slow disk must not freeze the window — the reader learned this on its first install) and
+/// stands for a minute; the choices are read fresh each time, so a change in Settings shows on the next call.
 #[tauri::command]
 pub async fn list_projects(app: AppHandle) -> Result<Vec<ProjectRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let store = app.state::<Store>();
-        // The real path, as the reader reports every folder it opens (reader/access.rs): a root reached through a
-        // symlink (/var is /private/var) must list paths the reader's own can be compared with.
-        let root = crate::reader::access::real_root(&crate::paths::projects_root_of(&store));
-        let cache = app.state::<ProjectsCache>();
-        let repos = {
-            let mut slot = cache.0.lock().unwrap_or_else(|p| p.into_inner());
-            match slot.as_ref() {
-                Some((at, cached_root, repos)) if *cached_root == root && at.elapsed() < CACHE_TTL => repos.clone(),
-                _ => {
-                    let repos = discover_repos(&root, MAX_DEPTH);
-                    *slot = Some((Instant::now(), root.clone(), repos.clone()));
-                    repos
-                }
-            }
-        };
-        let (categories, internal) = {
-            let conn = store.conn();
-            let org = store.org_id();
-            (stored_categories(get_setting(&conn, org, CATEGORIES_KEY)), stored_internal(get_setting(&conn, org, INTERNAL_KEY)))
-        };
-        Ok(rows(&root, &home(), &repos, &categories, &internal))
+        let snap = snapshot(&app);
+        let rows = rows(&snap.root, &home(), &snap.folders, &snap.stored.categories, &snap.stored.internal);
+        Ok(with_views(rows, &snap.stored.hidden, &snap.stored.removed))
     })
     .await
     .map_err(|e| format!("the projects listing did not finish: {e}"))?
@@ -215,6 +309,199 @@ pub fn set_folder_internal(store: State<'_, Store>, name: String, internal: bool
     }
     list.sort();
     put_setting(&conn, org, INTERNAL_KEY, &serde_json::json!(list)).map_err(|e| e.to_string())
+}
+
+/// The sidebar's Hide from sidebar and Show, and Settings' In sidebar switch: one folder off or back on the sidebar
+/// and Home, by path. Async, because checking the path against the listing may walk the root.
+#[tauri::command]
+pub async fn set_folder_hidden(app: AppHandle, path: String, hidden: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let snap = snapshot(&app);
+        listed(&snap, &path)?;
+        let mut list = snap.stored.hidden;
+        if hidden {
+            list.insert(path);
+        } else {
+            list.remove(&path);
+        }
+        put_paths(&app.state::<Store>(), HIDDEN_KEY, &list)
+    })
+    .await
+    .map_err(|e| format!("the folder was not changed: {e}"))?
+}
+
+/// Settings' Remove and Restore, by path. Restore also clears the folder from the hidden list: a folder that came back
+/// hidden would look as if Restore had done nothing (prd rule 6). Nothing on disk is touched.
+#[tauri::command]
+pub async fn set_folder_removed(app: AppHandle, path: String, removed: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let snap = snapshot(&app);
+        listed(&snap, &path)?;
+        let store = app.state::<Store>();
+        let mut list = snap.stored.removed;
+        if removed {
+            list.insert(path);
+            return put_paths(&store, REMOVED_KEY, &list);
+        }
+        list.remove(&path);
+        let mut hidden = snap.stored.hidden;
+        hidden.remove(&path);
+        put_paths(&store, REMOVED_KEY, &list)?;
+        put_paths(&store, HIDDEN_KEY, &hidden)
+    })
+    .await
+    .map_err(|e| format!("the folder was not changed: {e}"))?
+}
+
+/// What Add a client folder… did. `name` is the folder as the listing names it now.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "outcome", rename_all = "lowercase")]
+pub enum AddOutcome {
+    Cancelled,
+    Added { name: String },
+    Shown { name: String },
+    Restored { name: String },
+    Already { name: String },
+}
+
+/// What a pick does, before anything is written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AddDecision {
+    /// Not listed: it joins the added list.
+    Add,
+    /// Listed and hidden: it comes back on the sidebar.
+    Show,
+    /// Listed and removed: restored, and shown.
+    Restore,
+    /// Listed and shown already: nothing changes.
+    Already,
+}
+
+/// A picked folder that is listed changes state instead of being listed twice (prd rule 10).
+pub fn decide(real: &Path, folders: &[PathBuf], hidden: &BTreeSet<String>, removed: &BTreeSet<String>) -> AddDecision {
+    if !folders.iter().any(|f| f == real) {
+        return AddDecision::Add;
+    }
+    let key = real.to_string_lossy();
+    if removed.contains(key.as_ref()) {
+        AddDecision::Restore
+    } else if hidden.contains(key.as_ref()) {
+        AddDecision::Show
+    } else {
+        AddDecision::Already
+    }
+}
+
+/// A pick may be any folder inside the projects folder, but not the folder itself (prd rule 9). `real` and `root` are
+/// canonical. The words are what the webview says.
+pub fn check_pick(real: &Path, kind: Kind, root: &Path, home: &Path) -> Result<(), String> {
+    if kind != Kind::Dir {
+        return Err("Choose a folder".to_string());
+    }
+    if real == root {
+        return Err("That is the projects folder itself — choose a folder inside it".to_string());
+    }
+    if !access::inside(real, root) {
+        return Err(format!("Choose a folder inside the projects folder ({})", display_of(root, home)));
+    }
+    Ok(())
+}
+
+/// One folder window at a time: a second request while the first is up is refused, not stacked. Released when the
+/// command ends however it ends.
+static PICKING: AtomicBool = AtomicBool::new(false);
+
+struct Picking;
+
+impl Picking {
+    fn take() -> Result<Self, String> {
+        PICKING.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).map(|_| Picking).map_err(|_| "The folder window is already open".to_string())
+    }
+}
+
+impl Drop for Picking {
+    fn drop(&mut self) {
+        PICKING.store(false, Ordering::Release);
+    }
+}
+
+/// Asks Miguel which folder, in the projects folder. `None` is Cancel. The only function here that knows a dialog
+/// plugin exists; the webview has no dialog permission, so `capabilities/` is unchanged.
+async fn choose_folder(app: &AppHandle, window: &tauri::WebviewWindow, root: &Path) -> Result<Option<PathBuf>, String> {
+    // Debug builds only: no agent can click a native sheet, so e2e writes the pick into the file this names — empty
+    // for Cancel — and can change it between cases. Every rule after the sheet still runs on it.
+    #[cfg(debug_assertions)]
+    if let Some(file) = std::env::var_os("KINAS_E2E_PICK_FOLDER") {
+        let pick = std::fs::read_to_string(file).unwrap_or_default();
+        let pick = pick.trim();
+        return Ok((!pick.is_empty()).then(|| PathBuf::from(pick)));
+    }
+    use tauri_plugin_dialog::DialogExt;
+    let dialog = app.dialog().file().set_parent(window).set_title("Add a client folder").set_directory(root).set_can_create_directories(true);
+    // The plugin runs the sheet on the main thread itself and this waits on a worker, as reader/export.rs does.
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_folder()).await.map_err(|e| format!("the folder window did not finish: {e}"))?;
+    Ok(picked.and_then(|p| p.into_path().ok()))
+}
+
+/// Add a client folder…, from the sidebar's menu and from Settings: a folder window in the projects folder, then the
+/// pick checked, decided and written. Logs the outcome and the time, never the path or the name (ADR 0007).
+#[tauri::command]
+pub async fn add_client_folder(app: AppHandle, window: tauri::WebviewWindow) -> Result<AddOutcome, String> {
+    let _picking = Picking::take()?;
+    let root = {
+        let store = app.state::<Store>();
+        access::real_root(&crate::paths::projects_root_of(&store))
+    };
+    let Some(pick) = choose_folder(&app, &window, &root).await? else {
+        return Ok(AddOutcome::Cancelled);
+    };
+    let started = Instant::now();
+    let outcome = tauri::async_runtime::spawn_blocking(move || -> Result<AddOutcome, String> {
+        let (real, kind) = access::resolve(&pick).map_err(|_| "Choose a folder".to_string())?;
+        check_pick(&real, kind, &root, &home())?;
+        let snap = snapshot(&app);
+        let store = app.state::<Store>();
+        let key = real.to_string_lossy().into_owned();
+        let decision = decide(&real, &snap.folders, &snap.stored.hidden, &snap.stored.removed);
+        let (mut hidden, mut removed, mut added) = (snap.stored.hidden, snap.stored.removed, snap.stored.added);
+        match decision {
+            AddDecision::Add => {
+                added.insert(key.clone());
+                put_paths(&store, ADDED_KEY, &added)?;
+            }
+            AddDecision::Show => {
+                hidden.remove(&key);
+                put_paths(&store, HIDDEN_KEY, &hidden)?;
+            }
+            AddDecision::Restore => {
+                removed.remove(&key);
+                hidden.remove(&key);
+                put_paths(&store, REMOVED_KEY, &removed)?;
+                put_paths(&store, HIDDEN_KEY, &hidden)?;
+            }
+            AddDecision::Already => {}
+        }
+        // Named as the listing names it now: an added `site` beside a discovered `site` is `<parent>/site`.
+        let folders = listing(&snap.root, &snap.folders, &added);
+        let name = folders.iter().position(|f| *f == real).and_then(|i| names_for(&snap.root, &folders).into_iter().nth(i)).unwrap_or_else(|| base(&real));
+        Ok(match decision {
+            AddDecision::Add => AddOutcome::Added { name },
+            AddDecision::Show => AddOutcome::Shown { name },
+            AddDecision::Restore => AddOutcome::Restored { name },
+            AddDecision::Already => AddOutcome::Already { name },
+        })
+    })
+    .await
+    .map_err(|e| format!("the folder was not added: {e}"))??;
+    let word = match &outcome {
+        AddOutcome::Cancelled => "cancelled",
+        AddOutcome::Added { .. } => "added",
+        AddOutcome::Shown { .. } => "shown",
+        AddOutcome::Restored { .. } => "restored",
+        AddOutcome::Already { .. } => "already listed",
+    };
+    log::info!("projects: client folder {word} in {} ms", started.elapsed().as_millis());
+    Ok(outcome)
 }
 
 #[cfg(test)]
@@ -293,6 +580,89 @@ mod tests {
         assert!(site.internal);
         // A path outside the home folder shows as it is.
         assert_eq!(display_of(Path::new("/srv/x"), Path::new("/Users/me")), "/srv/x");
+    }
+
+    fn set(paths: &[&Path]) -> BTreeSet<String> {
+        paths.iter().map(|p| p.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn a_folder_hidden_or_removed_is_flagged_by_path_and_removed_wins_over_hidden() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        plant(&root, &["acme/.git".to_string(), "hub/.git".to_string(), "app/.git".to_string()]);
+        let repos = discover_repos(&root, MAX_DEPTH);
+        let hidden = set(&[&root.join("acme"), &root.join("hub")]);
+        let removed = set(&[&root.join("hub")]);
+        let rows = with_views(rows(&root, &root, &repos, &BTreeMap::new(), &[]), &hidden, &removed);
+        let state = |name: &str| rows.iter().find(|r| r.name == name).map(|r| (r.hidden, r.removed)).unwrap();
+        assert_eq!(state("acme"), (true, false));
+        // In both lists, Settings shows it under Removed: the webview reads `removed` first.
+        assert_eq!(state("hub"), (true, true));
+        assert_eq!(state("app"), (false, false));
+        assert_eq!(stored_paths(Some(serde_json::json!(["/a", 3, null, "/b"]))), BTreeSet::from(["/a".to_string(), "/b".to_string()]));
+        assert!(stored_paths(Some(serde_json::json!({ "/a": true }))).is_empty());
+    }
+
+    #[test]
+    fn an_added_folder_is_listed_once_while_it_exists_inside_the_root_and_named_beside_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        plant(&root, &["one/site/.git".to_string(), "acme/.git".to_string()]);
+        let deep = root.join("a/b/c/d/plain");
+        fs::create_dir_all(&deep).unwrap();
+        fs::create_dir_all(root.join("two/site")).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let outside = fs::canonicalize(outside.path()).unwrap();
+        let repos = discover_repos(&root, MAX_DEPTH);
+        let added = set(&[&deep, &root.join("acme"), &root.join("gone"), &outside, &root, &root.join("two/site")]);
+        let folders = listing(&root, &repos, &added);
+        // Five levels down and no .git: listed. Already discovered: once. Gone, outside, the root itself: not listed.
+        let relative: Vec<String> = folders.iter().map(|f| f.strip_prefix(&root).unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(relative, ["a/b/c/d/plain", "acme", "one/site", "two/site"]);
+        // An added `site` beside a discovered `site`: both named by their path, as two discovered ones are.
+        assert_eq!(names_for(&root, &folders), ["plain", "acme", "one/site", "two/site"]);
+        // The gone folder's row is not pruned by listing: it is still in `added` for when it comes back.
+        assert!(added.contains(root.join("gone").to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn a_pick_that_is_listed_changes_its_state_instead_of_listing_it_twice() {
+        let root = PathBuf::from("/r");
+        let folders = vec![root.join("acme"), root.join("hub"), root.join("app")];
+        let hidden = set(&[&root.join("acme"), &root.join("hub")]);
+        let removed = set(&[&root.join("hub")]);
+        assert_eq!(decide(&root.join("acme"), &folders, &hidden, &removed), AddDecision::Show);
+        assert_eq!(decide(&root.join("hub"), &folders, &hidden, &removed), AddDecision::Restore);
+        assert_eq!(decide(&root.join("app"), &folders, &hidden, &removed), AddDecision::Already);
+        assert_eq!(decide(&root.join("new"), &folders, &hidden, &removed), AddDecision::Add);
+    }
+
+    #[test]
+    fn a_pick_must_be_a_folder_inside_the_projects_folder_and_not_the_folder_itself() {
+        let home = Path::new("/Users/me");
+        let root = Path::new("/Users/me/Projects");
+        assert_eq!(check_pick(&root.join("acme"), Kind::Dir, root, home), Ok(()));
+        assert_eq!(check_pick(&root.join("a/b/c/d"), Kind::Dir, root, home), Ok(()));
+        assert_eq!(check_pick(&root.join("notes.md"), Kind::File, root, home), Err("Choose a folder".to_string()));
+        assert_eq!(check_pick(root, Kind::Dir, root, home), Err("That is the projects folder itself — choose a folder inside it".to_string()));
+        assert_eq!(check_pick(Path::new("/Users/me"), Kind::Dir, root, home), Err("Choose a folder inside the projects folder (~/Projects)".to_string()));
+        // A sibling that shares the root's name as a prefix is outside it.
+        assert_eq!(check_pick(Path::new("/Users/me/Projects-old/x"), Kind::Dir, root, home), Err("Choose a folder inside the projects folder (~/Projects)".to_string()));
+    }
+
+    #[test]
+    fn one_folder_window_at_a_time_and_the_next_may_open_once_it_closes() {
+        let first = Picking::take().unwrap();
+        assert_eq!(Picking::take().err(), Some("The folder window is already open".to_string()));
+        drop(first);
+        assert!(Picking::take().is_ok());
+    }
+
+    #[test]
+    fn the_outcome_reaches_the_webview_tagged() {
+        assert_eq!(serde_json::to_value(AddOutcome::Added { name: "plain".into() }).unwrap(), serde_json::json!({ "outcome": "added", "name": "plain" }));
+        assert_eq!(serde_json::to_value(AddOutcome::Cancelled).unwrap(), serde_json::json!({ "outcome": "cancelled" }));
     }
 
     #[test]

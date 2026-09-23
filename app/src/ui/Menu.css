@@ -1,7 +1,14 @@
 /* DESIGN.md §4 Menu (1.3): the sheet and its items, tokens only. Where it sits is the caller's — `.reader-menu` under
-   the ▾ (reader.css), `.sidebar-menu` at the pointer (shell.css). */
+   the ▾ (reader.css), `.sidebar-menu` at the pointer (shell.css).
+
+   The type is set on the sheet, not the items: base.css gives every button inside a ui- component `font: inherit`,
+   and that rule outranks `.ui-menu-item`, so a size set on the item never applied — the items took the page's body
+   size, a step above the sidebar rows (found 2026-09-23, the day the menu joined the library). */
 .ui-menu {
   min-width: calc(var(--sidebar-w) - var(--space-6));
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.2;
   padding: var(--space-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -19,9 +26,6 @@
   padding: var(--space-1h) var(--space-3);
   background: transparent;
   color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: var(--fs-md);
-  line-height: 1.2;
   text-align: left;
   white-space: nowrap;
   cursor: default;
@@ -31,6 +35,12 @@
 .ui-menu-item:hover:not([aria-disabled="true"]),
 .ui-menu-item:focus:not([aria-disabled="true"]) {
   background: var(--line);
+}
+
+/* The focused item is shown by its ground, as it was in the reader's ▾. base.css's focus ring for ui- components
+   would otherwise draw on the first item every time a menu opens, because the menu focuses it to take the keys. */
+.ui-menu .ui-menu-item:focus-visible {
+  outline: 0;
 }
 
 .ui-menu-item[aria-disabled="true"] {

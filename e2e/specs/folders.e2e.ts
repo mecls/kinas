@@ -113,9 +113,17 @@ describe("folder views (tasks/folder-views/prd.md)", () => {
     expect(Object.keys(colours)).toEqual(shared.names);
   });
 
-  it("a right-click on a folder offers Hide and Add, keeps WebKit's menu away, and Esc closes it", async () => {
+  it("a right-click on a folder offers Hide and Add at the rows' size, keeps WebKit's menu away, and Esc closes it", async () => {
     const menu = await rightClick("acme");
     expect(menu).toEqual({ prevented: true, items: ["Hide from sidebar", "Add a client folder…"] });
+    // The items are the sidebar rows' size, and the first — focused so the menu takes the keys — shows by its ground,
+    // not a ring. Both slipped when the menu joined the library: base.css's ui- rules outranked the item's own.
+    const look = await browser.execute(() => {
+      const item = getComputedStyle(document.querySelector(".sidebar-menu .ui-menu-item")!);
+      const row = getComputedStyle(document.querySelector(".sidebar-folders .ui-nav")!);
+      return { item: item.fontSize, row: row.fontSize, ring: item.outlineStyle };
+    });
+    expect(look).toEqual({ item: look.row, row: "13px", ring: "none" });
     await browser.keys(["Escape"]);
     await browser.waitUntil(() => browser.execute(() => document.querySelector(".sidebar-menu") === null), { timeout: 10000, interval: 250, timeoutMsg: "Esc did not close the menu" });
     expect(await browser.execute(() => document.querySelector('section[data-page="home"]')?.hasAttribute("hidden"))).toBe(false);

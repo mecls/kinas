@@ -7,7 +7,8 @@
     states)
 - Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private: at its absolute path in the main checkout,
   `tasks/reader-layout/architecture.md`), written 2026-09-23; it answers PRD §7.2 (the drawn bar always zooms)
-- Gate 3 · Program design: in progress — `build-spec.md` §11 (private, beside `architecture.md` in the main checkout)
+- Gate 3 · Program design: in progress — `build-spec.md` §11, written 2026-09-23 (private, beside `architecture.md` in
+  the main checkout; §0–§10 and §13–§19 drafted with it, §12 waits for Gate 4)
 - Gate 4 · Slice plan: pending — the order is settled: Part 1 (the column and the text) first, then Part 2 (tabs,
   Recent out of the sidebar), then Part 3 (the title bar, ← and →)
 

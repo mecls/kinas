@@ -4,7 +4,7 @@
   - Mockups: APPROVED 2026-09-23 — `mockups/sidebar-tree.html`, `mockups/reader-changes.html`
 - Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md`, private, at its absolute path in the main checkout (`tasks/tree-changes/architecture.md`), with its four PRD clarifications written into `prd.md` as dated notes (rules 3, 5, 15; §7.3 closed)
 - Gate 3 · Program design: APPROVED 2026-09-23 — `build-spec.md` §11, private, in the main checkout beside `architecture.md`
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12
+- Gate 4 · Slice plan: APPROVED 2026-09-23 — `build-spec.md` §12, eight slices; building from slice 0 on `feat/tree-changes`, stacked on `docs/tree-changes-gate-1` (PR #31 not merged)
 
 ## Slices
 - [ ] Slice 0 · ground: branch, `similar` pinned, `listable_name`/`listable_file` split out, docs first

@@ -12,7 +12,8 @@
 - Gate 4 · Slice plan: APPROVED 2026-09-23 — `build-spec.md` §12: eleven slices, three ship points
 
 ## Slices
-- [ ] Slice 0 · ground: `feat/reader-layout` from `docs/reader-layout-gate-1`, rebased; the baselines
+- [x] Slice 0 · ground: `feat/reader-layout` from `docs/reader-layout-gate-1`, rebased; the baselines (2026-09-23:
+  check green in 136 s; the full e2e alone, 21 specs and 122 cases green in 45 m 51 s — both in `build-spec.md` §19)
 - [ ] Slice 1 · tracer bullet: the Contents button at every width, hiding the column, stored in `reader_side`
 - [ ] Slice 2 · the column's edge: drag 160–480, the text keeps 320, double-click for 220, one save per drag
 - [ ] Slice 3 · prose fills the reader, and the place survives every reflow → ship point 1
@@ -26,9 +27,9 @@
 
 ## Notes for a fresh session
 
-- Branch `docs/reader-layout-gate-1`, in the worktree `.claude/worktrees/reader-layout`, from `origin/main` at
-  `1394be7`. Not pushed: the folder-views notes record "nothing is pushed without the captain's word", so pushing
-  and the draft PR wait for it. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
+- Branch `feat/reader-layout` (from `docs/reader-layout-gate-1`, rebased onto `origin/main` at `dd21e35` in slice 0),
+  in the worktree `.claude/worktrees/reader-layout`. Not pushed: the folder-views notes record "nothing is pushed
+  without the captain's word", so pushing and the draft PR wait for it. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
   in this worktree, never there.
 - Round 1's request came with two screenshots: the reader at about 875 px with Contents at 220 px, and the reader
   expanded on a wide screen with the text stopping at 72ch. Round 2 came, in reply to the first "Approve Gate 1",

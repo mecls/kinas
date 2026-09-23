@@ -61,6 +61,10 @@ committed, reverted or saved: Kinas only watches.
    - **No kept copy.** Where Kinas kept no copy (rule 23), and for images, any write after the baseline marks the
      file M. Kinas cannot tell an unchanged save from a change there, and "modified" when unsure is safer than
      silence.
+   - *(Clarified at Gate 2, 2026-09-23.)* "Any write" is made precise:
+     - A file that matched git's HEAD at the baseline has no copy, and is compared as `git hash-object` of the file
+       now against the baseline blob. Saving it unchanged makes no mark.
+     - A file with neither a copy nor a blob is compared by size and modification time, so a `touch` marks it M.
 4. **Folders are marked by existence only.**
    - A folder absent at the baseline and present now is **A**, and so is everything the tree lists inside it.
    - A folder present at the baseline and absent now is **D**.
@@ -76,6 +80,9 @@ committed, reverted or saved: Kinas only watches.
 
    A deleted file is judged by what it was at the baseline. A text file that is deleted is a D row, even though it
    can no longer be sniffed.
+
+   *(Clarified at Gate 2, 2026-09-23.)* A file that matched HEAD is never read at the baseline, so whether it is
+   binary is judged only when it changes: by its head now or, if it was deleted, by its blob's head.
 6. **Changes are watched under the root's real path.** A symlinked folder that leads outside the root is listed as
    today but never marked. Following it would mean watching a place Miguel never opened.
 7. **The tree follows the disk.**
@@ -135,6 +142,8 @@ committed, reverted or saved: Kinas only watches.
 15. **Refresh clears one tree's record and starts a new baseline now.**
     - **Where it is:** a ↻ button, `--hit` square like the terminal and pin buttons beside it, on the head of each
       tree. That is the Files section's header, and an expanded pinned folder's row.
+      *(Clarified at Gate 2, 2026-09-23.)* It also sits on the "Files" label of the reader's own tree, shown while
+      the sidebar is hidden. Otherwise only the palette could refresh there.
     - **When it shows:** always while that tree has marks, and only on hover otherwise.
     - **Its words:** the label is "Refresh docs". The tooltip is "Refresh docs: clear its changes and start
       counting again".
@@ -369,10 +378,15 @@ repository with committed `README.md` and `docs/old.md`, and an ignored `notes/`
    markdown file to read it rendered, the usual view with Changes one click away would be better.)
 2. ~~**Rule 11's caption, "5 changes since 14:02".**~~ Decided 2026-09-23: kept, as mocked — Gate 1 was approved
    without a change. It costs one line of the sidebar's height while marks exist.
-3. **Rule 20's 64 MB budget** is a guess. In a git repository only files with uncommitted or ignored text are copied,
-   so a typical client repository fits many times over. A folder outside git, or the projects folder itself opened in
-   Files, may spend it on the first folders walked. Gate 2 measures the Kinas repository and the projects folder, and
-   decides the number and the order the copies are taken in.
+3. ~~**Rule 20's 64 MB budget** is a guess.~~ Decided at Gate 2, 2026-09-23, by measurement:
+
+   | Folder | Files | Copies | Copy bytes | Time |
+   |---|---|---|---|---|
+   | The Kinas repository | 387 | 43 | 1.6 MB | 0.13 s |
+   | The whole projects folder | 2,369 | 224 | 3.8 MB | 1.0 s |
+
+   The budget stays 64 MB, about 17 times the whole projects folder, and the copies are taken breadth first from the
+   root.
 
 **Asked before writing, 2026-09-23, and answered:**
 1. What is a change compared against? — **A**, the moment the tree was loaded; a reload clears every mark. (B was

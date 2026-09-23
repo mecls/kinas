@@ -51,7 +51,7 @@ crew.
    folder's `origin` and validated (letters, digits, `.`, `_`, `-` in the owner and the name, nothing else). Nothing
    anyone typed and nothing read from a file enters that command. When the first mate is already running, Kinas
    says nothing to it: the sentence goes on the clipboard and the first mate's pane is shown, because a second first
-   mate in one home is read-only (Firstmate's lock) and typing is rule 2.
+   mate in one home is read-only (Firstmate's lock) and typing is rule 2 (ADR 0015).
 4. **Kinas writes nothing under Firstmate's home.** Not `data/`, `state/`, `config/` or `projects/`. The one file
    ever written there is `config/backend` (`herdr`), once, by `kinas crew setup`, before any first mate exists.
    Firstmate's status files are append-only, provenance-guarded event logs, and a foreign write fails toward a wake.

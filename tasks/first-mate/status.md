@@ -1,9 +1,9 @@
 # Status: The first mate inside Kinas (Build 3)
 
-- Gate 1 · Product: in progress — `prd.md` revised 2026-09-23 with the captain's answers, awaiting approval
-  - Mockups: seven, drawn 2026-09-23 on the library's own CSS, awaiting approval — `board`, `task-detail`,
+- Gate 1 · Product: APPROVED 2026-09-23 — `prd.md` revised that day with the captain's answers
+  - Mockups: APPROVED 2026-09-23, seven, drawn on the library's own CSS — `board`, `task-detail`,
     `inbox`, `home`, `settings-crew`, `work`, `usage-and-menu-bar`
-- Gate 2 · Architecture: pending — `architecture.md` (private) not written; start from `review-2026-09-23.md`
+- Gate 2 · Architecture: pending, next — `architecture.md` (private) not written; start from `review-2026-09-23.md`
 - Gate 3 · Program design: pending — `build-spec.md` (2026-09-22, base `592fcce`, 42 commits behind `1394be7`) is
   rewritten at this gate, with the five sections it lacks
 - Gate 4 · Slice plan: pending
@@ -44,4 +44,4 @@
   nothing under Firstmate's home, and runs one mutating script, `fm-send.sh`, on a click. No test or probe touches
   Herdr's `default` session; set `HERDR_SESSION`, because Firstmate falls back to `default` without it.
 - The process is `AGENTS.md`; the templates are in `tasks/_templates/`; the repository-wide decisions are
-  `docs/adr/0001`–`0014` (0014 is this feature's).
+  `docs/adr/0001`–`0015` (0014 and 0015 are this feature's: Firstmate adopted, and Kinas's only words to it).

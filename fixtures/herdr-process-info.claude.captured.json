@@ -1,0 +1,37 @@
+{
+  "id": "cli:pane:process_info",
+  "result": {
+    "process_info": {
+      "foreground_process_group_id": 10767,
+      "foreground_processes": [
+        {
+          "argv": [
+            "caffeinate",
+            "-i",
+            "-t",
+            "300"
+          ],
+          "argv0": "caffeinate",
+          "cmdline": "caffeinate -i -t 300",
+          "cwd": "__FM_HOME__",
+          "name": "caffeinate",
+          "pid": 10885
+        },
+        {
+          "argv": [
+            "claude",
+            "List the registered projects."
+          ],
+          "argv0": "claude",
+          "cmdline": "claude List the registered projects.",
+          "cwd": "__FM_HOME__",
+          "name": "2.1.281",
+          "pid": 10767
+        }
+      ],
+      "pane_id": "w1:p1",
+      "shell_pid": 8733
+    },
+    "type": "pane_process_info"
+  }
+}

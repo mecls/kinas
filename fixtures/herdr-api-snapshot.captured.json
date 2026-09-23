@@ -1,0 +1,187 @@
+{
+  "id": "cli:api:snapshot",
+  "result": {
+    "snapshot": {
+      "agents": [
+        {
+          "agent": "claude",
+          "agent_session": {
+            "agent": "claude",
+            "kind": "id",
+            "source": "herdr:claude",
+            "value": "20e23470-086d-44ee-84b1-e252b94806bc"
+          },
+          "agent_status": "working",
+          "cwd": "__FM_HOME__",
+          "focused": true,
+          "foreground_cwd": "__FM_HOME__",
+          "pane_id": "w1:p1",
+          "revision": 2,
+          "state_change_seq": 4,
+          "tab_id": "w1:t1",
+          "terminal_id": "term_65c2cf3d731511",
+          "terminal_title": "◐ Register local scratch probe repository",
+          "terminal_title_stripped": "Register local scratch probe repository",
+          "workspace_id": "w1"
+        },
+        {
+          "agent": "claude",
+          "agent_status": "unknown",
+          "cwd": "__ROOT__/scratch",
+          "focused": false,
+          "foreground_cwd": "__ROOT__/.treehouse/scratch-9073df/1/scratch",
+          "pane_id": "w2:p2",
+          "revision": 0,
+          "state_change_seq": 0,
+          "tab_id": "w2:t2",
+          "terminal_id": "term_65c2d03329a6a3",
+          "workspace_id": "w2"
+        }
+      ],
+      "focused_pane_id": "w1:p1",
+      "focused_tab_id": "w1:t1",
+      "focused_workspace_id": "w1",
+      "layouts": [
+        {
+          "area": {
+            "height": 40,
+            "width": 120,
+            "x": 0,
+            "y": 0
+          },
+          "focused_pane_id": "w1:p1",
+          "panes": [
+            {
+              "focused": true,
+              "pane_id": "w1:p1",
+              "rect": {
+                "height": 40,
+                "width": 120,
+                "x": 0,
+                "y": 0
+              }
+            }
+          ],
+          "splits": [],
+          "tab_id": "w1:t1",
+          "workspace_id": "w1",
+          "zoomed": false
+        },
+        {
+          "area": {
+            "height": 40,
+            "width": 120,
+            "x": 0,
+            "y": 0
+          },
+          "focused_pane_id": "w2:p2",
+          "panes": [
+            {
+              "focused": true,
+              "pane_id": "w2:p2",
+              "rect": {
+                "height": 40,
+                "width": 120,
+                "x": 0,
+                "y": 0
+              }
+            }
+          ],
+          "splits": [],
+          "tab_id": "w2:t2",
+          "workspace_id": "w2",
+          "zoomed": false
+        }
+      ],
+      "panes": [
+        {
+          "agent": "claude",
+          "agent_session": {
+            "agent": "claude",
+            "kind": "id",
+            "source": "herdr:claude",
+            "value": "20e23470-086d-44ee-84b1-e252b94806bc"
+          },
+          "agent_status": "working",
+          "cwd": "__FM_HOME__",
+          "focused": true,
+          "foreground_cwd": "__FM_HOME__",
+          "pane_id": "w1:p1",
+          "revision": 2,
+          "scroll": {
+            "max_offset_from_bottom": 0,
+            "offset_from_bottom": 0,
+            "viewport_rows": 40
+          },
+          "tab_id": "w1:t1",
+          "terminal_id": "term_65c2cf3d731511",
+          "terminal_title": "◐ Register local scratch probe repository",
+          "terminal_title_stripped": "Register local scratch probe repository",
+          "workspace_id": "w1"
+        },
+        {
+          "agent": "claude",
+          "agent_status": "unknown",
+          "cwd": "__ROOT__/scratch",
+          "focused": false,
+          "foreground_cwd": "__ROOT__/.treehouse/scratch-9073df/1/scratch",
+          "pane_id": "w2:p2",
+          "revision": 0,
+          "scroll": {
+            "max_offset_from_bottom": 0,
+            "offset_from_bottom": 0,
+            "viewport_rows": 40
+          },
+          "tab_id": "w2:t2",
+          "terminal_id": "term_65c2d03329a6a3",
+          "workspace_id": "w2"
+        }
+      ],
+      "protocol": 22,
+      "tabs": [
+        {
+          "agent_status": "working",
+          "focused": true,
+          "label": "1",
+          "number": 1,
+          "pane_count": 1,
+          "tab_id": "w1:t1",
+          "workspace_id": "w1"
+        },
+        {
+          "agent_status": "unknown",
+          "focused": false,
+          "label": "fm-scratch-count-files-c4",
+          "number": 2,
+          "pane_count": 1,
+          "tab_id": "w2:t2",
+          "workspace_id": "w2"
+        }
+      ],
+      "version": "0.9.0",
+      "workspaces": [
+        {
+          "active_tab_id": "w1:t1",
+          "agent_status": "working",
+          "focused": true,
+          "label": "firstmate",
+          "number": 1,
+          "pane_count": 1,
+          "tab_count": 1,
+          "workspace_id": "w1"
+        },
+        {
+          "active_tab_id": "w2:t2",
+          "agent_status": "unknown",
+          "focused": false,
+          "label": "└ scratch-count-files-c4 · p:1gjb0mQ-elYs0mI1xKYjmg",
+          "number": 2,
+          "pane_count": 1,
+          "tab_count": 1,
+          "workspace_id": "w2"
+        }
+      ]
+    },
+    "type": "session_snapshot"
+  }
+}

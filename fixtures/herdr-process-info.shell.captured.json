@@ -1,0 +1,23 @@
+{
+  "id": "cli:pane:process_info",
+  "result": {
+    "process_info": {
+      "foreground_process_group_id": 8733,
+      "foreground_processes": [
+        {
+          "argv": [
+            "-zsh"
+          ],
+          "argv0": "zsh",
+          "cmdline": "-zsh",
+          "cwd": "__FM_HOME__",
+          "name": "zsh",
+          "pid": 8733
+        }
+      ],
+      "pane_id": "w1:p1",
+      "shell_pid": 8733
+    },
+    "type": "pane_process_info"
+  }
+}

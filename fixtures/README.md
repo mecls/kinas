@@ -33,6 +33,18 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
       capture once a live response has been seen.
   - `handoff/*.json` — status line hand-off files built from the documented status line schema
     (code.claude.com/docs/en/statusline): `used_percentage` 0–100, `resets_at` in epoch seconds.
+- Files ending in `.captured.json` **are** captured, from the first mate's slice-0 probe (2026-09-23): Firstmate at
+  `f9f74a1` on Herdr 0.9.0, in a throwaway session with a scratch repository, never `default`. Every local path is
+  rewritten — `__FM_HOME__` (Firstmate's home), `__ROOT__` (the probe's folders and `~/.treehouse`), `__HOME__` —
+  and each file is checked against `scripts/private-names`:
+  - `firstmate-fleet-snapshot.{empty,working,held,answered-outside-chat,done}.captured.json` — `fm-fleet-snapshot.sh
+    --json` with no tasks, two workers, a finished scout beside a local-only ship held for the captain, that hold after
+    an `fm-send.sh` answer closed it without anything landing, and after the landing and teardown.
+  - `firstmate-home-summary.{fresh,done}.captured.json` — `state/home-summary.json` on a fresh home (`valid: false`,
+    `missing structured backlog`) and after the fleet settled (`valid: true`).
+  - `herdr-api-snapshot.captured.json`, `herdr-workspace-create.captured.json`,
+    `herdr-process-info.{shell,claude}.captured.json` — Herdr's answers, including a worker's workspace and Claude
+    Code's `name` being its version, not `claude`.
 - Secrets in fixtures are obviously fake (`ollama-FAKE…`, `sk-ant-FAKE…`) so the repo greps in the
   build spec's AC-10 stay meaningful.
 - No fixture contains a real transcript. Transcript fixtures are hand-written lines in the same

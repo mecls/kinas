@@ -1,0 +1,283 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-09-23T21:22:54Z",
+  "fm_home": "__FM_HOME__",
+  "roots": {
+    "fm_root": "__FM_HOME__",
+    "state": "__FM_HOME__/state",
+    "data": "__FM_HOME__/data",
+    "config": "__FM_HOME__/config",
+    "projects": "__FM_HOME__/projects"
+  },
+  "backlog": {
+    "path": "__FM_HOME__/data/backlog.md",
+    "present": true,
+    "records": [
+      {
+        "order": 1,
+        "state": "in_flight",
+        "structured": true,
+        "id": "scratch-readme-kinas-r8",
+        "checked": false,
+        "title": "add a README line saying the repository was probed by Kinas",
+        "repo": "scratch",
+        "kind": "ship",
+        "priority": null,
+        "hold_reason": "Approve landing branch fm/scratch-readme-kinas-r8 at commit 2f1966d, which appends 'Probed by Kinas.' to README.md, onto scratch main as a fast-forward? Options: approve landing, request changes, or drop it.",
+        "hold_kind": "captain",
+        "hold_until": null,
+        "hold_set": "2026-09-23T21:22:09Z",
+        "blocked_by": null,
+        "blocked_by_ids": [],
+        "blocked_reason": null,
+        "since": "2026-09-23",
+        "merged": null,
+        "reported": null,
+        "done": null,
+        "completion": {
+          "verb": null,
+          "date": null
+        },
+        "links": [],
+        "pr_url": null,
+        "report_path": null,
+        "local_note": null,
+        "raw": "- [ ] scratch-readme-kinas-r8 - add a README line saying the repository was probed by Kinas (repo: scratch) (kind: ship) (since 2026-09-23) (hold: Approve landing branch fm/scratch-readme-kinas-r8 at commit 2f1966d, which appends 'Probed by Kinas.' to README.md, onto scratch main as a fast-forward? Options: approve landing, request changes, or drop it.) (hold-kind: captain)",
+        "body_lines": [
+          "Captain hold set: 2026-09-23T21:22:09Z",
+          "Delivery: local-only, yolo off (registry posture; no deviation)."
+        ],
+        "body_excerpt": "Captain hold set: 2026-09-23T21:22:09Z Delivery: local-only, yolo off (registry posture; no deviation).",
+        "unresolved_blocker_ids": [],
+        "current_role": "held",
+        "requires_child_metadata": false,
+        "hold_age_days": 0,
+        "hold_bucket": "live",
+        "captain_actionable": true
+      },
+      {
+        "order": 2,
+        "state": "done",
+        "structured": true,
+        "id": "scratch-count-files-c4",
+        "checked": true,
+        "title": "count the files in the scratch repository and report the number",
+        "repo": "scratch",
+        "kind": "scout",
+        "priority": null,
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "hold_set": null,
+        "blocked_by": null,
+        "blocked_by_ids": [],
+        "blocked_reason": null,
+        "since": null,
+        "merged": null,
+        "reported": "2026-09-23",
+        "done": null,
+        "completion": {
+          "verb": "reported",
+          "date": "2026-09-23"
+        },
+        "links": [],
+        "pr_url": null,
+        "report_path": "data/scratch-count-files-c4/report.md",
+        "local_note": null,
+        "raw": "- [x] scratch-count-files-c4 - count the files in the scratch repository and report the number data/scratch-count-files-c4/report.md (repo: scratch) (kind: scout) (reported 2026-09-23)",
+        "body_lines": [],
+        "body_excerpt": null,
+        "unresolved_blocker_ids": [],
+        "current_role": "done",
+        "requires_child_metadata": false,
+        "hold_age_days": null,
+        "hold_bucket": null,
+        "captain_actionable": false
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "scratch-readme-kinas-r8",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "local-only",
+      "yolo": "off",
+      "project": "__FM_HOME__/projects/scratch",
+      "spawn_gen": "s1790198459.64961.17990",
+      "backend": "herdr",
+      "remote": null,
+      "paths": {
+        "meta": {
+          "path": "__FM_HOME__/state/scratch-readme-kinas-r8.meta",
+          "present": true
+        },
+        "status_log": {
+          "path": "__FM_HOME__/state/scratch-readme-kinas-r8.status",
+          "present": true,
+          "kind": "event_history",
+          "last_event": {
+            "state": "done",
+            "note": "ready in branch fm/scratch-readme-kinas-r8",
+            "raw": "done [at=1790198477]: ready in branch fm/scratch-readme-kinas-r8",
+            "age_seconds": 97
+          }
+        },
+        "worktree": {
+          "path": "__ROOT__/.treehouse/scratch-9073df/2/scratch",
+          "present": true
+        },
+        "home": {
+          "path": null,
+          "present": false
+        },
+        "report": {
+          "path": "__FM_HOME__/data/scratch-readme-kinas-r8/report.md",
+          "present": false
+        }
+      },
+      "secondmate_projects": [],
+      "current_state": {
+        "state": "done",
+        "source": "status-log",
+        "detail": "ready in branch fm/scratch-readme-kinas-r8",
+        "raw": "state: done · source: status-log · ready in branch fm/scratch-readme-kinas-r8",
+        "observed_at": "2026-09-23T21:22:54Z",
+        "freshness": "fresh"
+      },
+      "endpoint": {
+        "target": "kinas-probe-0923:w3:p2",
+        "exists": true,
+        "agent_alive": "not_checked",
+        "status": "unknown",
+        "observed_at": "2026-09-23T21:22:54Z",
+        "freshness": "fresh"
+      },
+      "pr": {
+        "url": null,
+        "source": "absent",
+        "head": null
+      },
+      "hints": {
+        "pending_decision": false,
+        "blocked_event": false,
+        "open_decisions": [],
+        "scout_report_present": false,
+        "last_event_text": "done [at=1790198477]: ready in branch fm/scratch-readme-kinas-r8"
+      },
+      "actions": {
+        "watch": "bin/fm-peek.sh fm-scratch-readme-kinas-r8",
+        "steer": "bin/fm-send.sh fm-scratch-readme-kinas-r8 '<instruction>'",
+        "return_channel_note": null
+      },
+      "backlog": {
+        "order": 1,
+        "state": "in_flight",
+        "structured": true,
+        "id": "scratch-readme-kinas-r8",
+        "checked": false,
+        "title": "add a README line saying the repository was probed by Kinas",
+        "repo": "scratch",
+        "kind": "ship",
+        "priority": null,
+        "hold_reason": "Approve landing branch fm/scratch-readme-kinas-r8 at commit 2f1966d, which appends 'Probed by Kinas.' to README.md, onto scratch main as a fast-forward? Options: approve landing, request changes, or drop it.",
+        "hold_kind": "captain",
+        "hold_until": null,
+        "hold_set": "2026-09-23T21:22:09Z",
+        "blocked_by": null,
+        "blocked_by_ids": [],
+        "blocked_reason": null,
+        "since": "2026-09-23",
+        "merged": null,
+        "reported": null,
+        "done": null,
+        "completion": {
+          "verb": null,
+          "date": null
+        },
+        "links": [],
+        "pr_url": null,
+        "report_path": null,
+        "local_note": null,
+        "raw": "- [ ] scratch-readme-kinas-r8 - add a README line saying the repository was probed by Kinas (repo: scratch) (kind: ship) (since 2026-09-23) (hold: Approve landing branch fm/scratch-readme-kinas-r8 at commit 2f1966d, which appends 'Probed by Kinas.' to README.md, onto scratch main as a fast-forward? Options: approve landing, request changes, or drop it.) (hold-kind: captain)",
+        "body_lines": [
+          "Captain hold set: 2026-09-23T21:22:09Z",
+          "Delivery: local-only, yolo off (registry posture; no deviation)."
+        ],
+        "body_excerpt": "Captain hold set: 2026-09-23T21:22:09Z Delivery: local-only, yolo off (registry posture; no deviation).",
+        "unresolved_blocker_ids": [],
+        "current_role": "held",
+        "requires_child_metadata": false,
+        "hold_age_days": 0,
+        "hold_bucket": "live",
+        "captain_actionable": true
+      }
+    }
+  ],
+  "main_inventory": {
+    "valid": true,
+    "reason": null,
+    "orphan_in_flight": [],
+    "unstructured_current_count": 0
+  },
+  "contributions": {
+    "known": 0,
+    "checked": 0,
+    "counts": {
+      "captain": 0,
+      "fleet": 0,
+      "maintainer": 0,
+      "nobody": 0
+    },
+    "unmeasured": 0,
+    "complete": true,
+    "proven_clear": true,
+    "stale_verdicts": 0,
+    "missing_verdicts": 0,
+    "unreadable_records": 0,
+    "valid_until": 900,
+    "captain": [],
+    "captain_omitted": 0
+  },
+  "scout_reports": [
+    {
+      "id": "scratch-count-files-c4",
+      "path": "__FM_HOME__/data/scratch-count-files-c4/report.md",
+      "kind": "scout"
+    }
+  ],
+  "secondmate_current": {
+    "registry": {
+      "present": false,
+      "available": true,
+      "complete": true,
+      "reason": null,
+      "provenance": "registered-table",
+      "path": "__FM_HOME__/data/secondmates.md",
+      "freshness": {
+        "status": "fresh",
+        "observed_at": "2026-09-23T21:22:54Z"
+      },
+      "records": [],
+      "input_truncated": false,
+      "records_truncated": false,
+      "reasons": [],
+      "lines_in_window": 0,
+      "records_in_window": 0
+    },
+    "records": [],
+    "total_registered": 0,
+    "total": 0,
+    "shown": 0,
+    "truncated": 0
+  },
+  "secondmate_landed": {
+    "records": [],
+    "truncated": [],
+    "unreadable": [],
+    "partial": []
+  },
+  "secondmate_guidance": {
+    "note": "For kind=secondmate, bearings selects validated structured state from that registered home; parent events and bounded terminal evidence are fallback-only supplements and never current-state authority."
+  }
+}

@@ -1,6 +1,9 @@
 # Status: The first mate inside Kinas (Build 3)
 
-- Gate 1 · Product: APPROVED 2026-09-23 — `prd.md` revised that day with the captain's answers
+- Gate 1 · Product: APPROVED 2026-09-23 — `prd.md` revised that day with the captain's answers. **Reopening proposed
+  2026-09-23 by slice 0's probe:** Firstmate does not accept the captain's answers through `fm-send.sh` (it closed a
+  held landing without landing it, and the first mate refused the approval as not coming from its chat) — the Inbox's
+  answers need the captain's decision (`build-spec.md` §17)
   - Mockups: APPROVED 2026-09-23, seven, drawn on the library's own CSS — `board`, `task-detail`,
     `inbox`, `home`, `settings-crew`, `work`, `usage-and-menu-bar`
 - Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private, main checkout), from three read passes
@@ -10,7 +13,8 @@
 
 ## Slices (build-spec.md §12, approved 2026-09-23)
 - [ ] Slice 0 · ground, and the probe that decides whether there is a build (answers `prd.md` §7 q1–q6; stops the
-  build if Firstmate's Herdr backend fails on 0.9.0)
+  build if Firstmate's Herdr backend fails on 0.9.0) — *probe done 2026-09-23: Herdr works (q1), `claude '<ask>'`
+  works (q2), the snapshot is cheap (q6); q3–q5 answered from the scripts; the baseline waits for a quiet machine*
 - [ ] Slice 1 · tracer bullet: a task in the fake home is a card on the Crew page
 - [ ] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card
 - [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1

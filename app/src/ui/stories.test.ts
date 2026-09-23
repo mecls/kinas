@@ -30,8 +30,8 @@ const FILE: Record<string, string> = {
 
 /** Not in app/src/ui/ yet, each with its reason. */
 const NOT_YET: Record<string, string> = {
-  "Reader header": "as built (DESIGN.md §5): the reader's own header, restyled in place in slice 6",
-  Palette: "the palette lives in app/src/palette/ and is restyled in place in slice 6",
+  "Reader header": "the reader's own header (app/src/reader/Header.tsx), on the tokens since slice 6 — not a library piece",
+  Palette: "the palette's own (app/src/palette/), on the tokens since slice 6 — not a library piece",
   "Tab bar": "the phone — not built in this pass (DESIGN.md §3.3)",
   "Launch form": "the phone and the palette's launch form — Build 3",
 };
@@ -67,5 +67,13 @@ describe("the law, the library and the stories agree (DESIGN.md §4, §9)", () =
 
   test("every story name is unique within its component", () => {
     for (const [component, names] of stories) expect(new Set(names).size, component).toBe(names.length);
+  });
+});
+
+describe("DESIGN.md §4's catalogue is the stories as built", () => {
+  test("every component and every state in the table, in order, and nothing else", () => {
+    const table = section4.slice(section4.indexOf("**The catalogue"));
+    const rows = [...table.matchAll(/^\| ([A-Za-z]+) \| ([a-z0-9, -]+) \|$/gm)].map((m) => `${m[1]}: ${m[2]}`);
+    expect(rows).toEqual(STORIES.map((s) => `${s.component}: ${s.states.map((st) => st.name).join(", ")}`));
   });
 });

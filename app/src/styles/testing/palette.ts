@@ -23,7 +23,7 @@ export function stripComments(css: string): string {
 }
 
 /** What sits between the braces that open at or after `from`, nested blocks included; "" when there are none. */
-function braced(css: string, from: number): string {
+export function braced(css: string, from: number): string {
   const open = css.indexOf("{", from);
   if (open < 0) return "";
   let depth = 0;

@@ -2,10 +2,11 @@
 
 The law for how Kinas looks, the way `keymap.md` is the law for keys. An agent building any surface reads this first, uses only what it defines, and adds to it before using anything it does not define.
 
-Version 1.2, 2026-09-22.
+Version 1.2, 2026-09-22; closed 2026-09-23.
 
 ## Changes
 
+- **1.2, closed 2026-09-23.** Written down as built: the catalogue of components and their stories (4), the as-built notes on the gauge's reset, the metric row's missing bars, the terminal chrome, the reader header, Settings and the toast's placements (4), and each page as it shipped (5); the migration's status (10). `tokens.css` is named the source of truth in section 2's opening, and the brand's display face in 2.1 is Bricolage Grotesque, as 2.5 already said.
 - **1.2, 2026-09-22 (the design system build).** The law meets the code. The terminal follows the theme: `--term-bg` and `--term-fg` take a light value too, and the sixteen ANSI colours have a set per theme (2.2, 2.3). The type scale is written as pairs, `--fs-*` / `--lh-*`, because that is what `font-size` and `line-height` take (2.5). Two sub-grid spacing steps, `--space-0` 2 and `--space-1h` 6, for gaps inside a component (2.6). The display face is Bricolage Grotesque (OFL): Clash Display's license does not allow the files in a public repository (2.5, the open item closed). `--panel-w` is the panel's default share and the divider decides, down to `--pane-min` (2.6). Section 9 gains "Adding a surface", the procedure every later build follows, and names `app/src/styles/tokens.css` as the source of truth until `tokens.json` is needed for the phone. The gauge thresholds in 2.2 (80 %, 95 % used) replace the app's earlier ≤ 25 / ≤ 10 % left.
 - **1.1, 2026-09-22.** Scope set to an engineering tool for the team, with no agency pages. Added the Home page (overnight progress per client folder, plus usage), iPhone layouts for approving and launching, and a two-layer token model so the open-source build can swap accent and fonts. Added a categorical palette for folders and providers, layout tokens, and a complete dark theme. Fixed the contrast values that failed: `--stale`, `--warn`, and the dark `--accent-ink`. Removed the accent from gauge bars, removed the crew's use of `--warn`, and removed `--info`. Migration steps now end on a definition of done instead of a duration.
 - **1.0.** First version.
@@ -26,7 +27,7 @@ Five principles, in order:
 
 ## 2. Tokens
 
-Tokens come in two layers. The source of truth is `design/tokens.json`. The build generates `app/src/styles/tokens.css` (and `KinasTokens.swift` if the iPhone app is native, section 3.3). Components use semantic tokens only. A raw hex, raw pixel size, or raw spacing value in a component is a build failure (section 9).
+Tokens come in two layers. The source of truth is `app/src/styles/tokens.css` (amended 1.2), and `app/src/styles/design.test.ts` holds it to the values written in this section, in both themes; `design/tokens.json` and a generator arrive with the phone's `KinasTokens.swift` (section 3.3). Components use semantic tokens only. A raw hex, raw pixel size, or raw spacing value in a component is a build failure (section 9).
 
 ### 2.1 Brand layer (the only overridable layer)
 
@@ -34,7 +35,7 @@ Tokens come in two layers. The source of truth is `design/tokens.json`. The buil
 --brand-accent        #00549E
 --brand-font-ui       "Inter"
 --brand-font-mono     "JetBrains Mono"
---brand-font-display  "Clash Display"
+--brand-font-display  "Bricolage Grotesque"   (amended 1.2; see 2.5)
 ```
 
 Everything below derives from these four or is fixed. Overriding rules are in section 8.
@@ -133,7 +134,7 @@ The contrast test (section 9) checks every pair in both themes and at the curren
 
 ```
 --font-ui       var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif
---font-mono     var(--brand-font-mono), "SF Mono", Menlo, monospace
+--font-mono     var(--brand-font-mono), "SF Mono", ui-monospace, Menlo, monospace
 --font-display  var(--brand-font-display), var(--font-ui)   wordmark and launch screen only
 
 Mac scale (px / line-height) — written in tokens.css as the pair --fs-<step> / --lh-<step> (amended 1.2)
@@ -216,11 +217,40 @@ The phone does three jobs: see the night's progress, approve (plans and PRs), an
 
 Each component exists once in `app/src/ui/` and is used by name. An agent that needs something not covered here adds a component here first.
 
+**The catalogue (as built, 1.2).** Every state below is a story: a debug build opened with `#stories` (the address bar's hash, then reload) renders each as `section[data-story="<Component>/<state>"]` in the current theme, and `app/src/ui/stories.test.ts` holds this table equal to `app/src/ui/stories/catalogue.tsx`.
+
+| Component | Stories |
+|---|---|
+| Button | primary, secondary, text, hint, disabled |
+| StatusBadge | queued, working, blocked, red, done, stale, dead, decision, pr, ready, counted |
+| Dot | solid, ring, cross |
+| Chip | cat-1, cat-2, cat-3, cat-4, cat-5, cat-6 |
+| Tag | internal, order |
+| Gauge | fine, warn, danger, stale, dead |
+| Bar | fine, warn, danger, stale, inline, segmented |
+| MetricRow | rows, attention |
+| SectionHeader | reading, activity, info, plain |
+| TitleRow | home |
+| Table | today |
+| Card | plain, selected |
+| Lane | with-cards, empty |
+| ProgressRow | list, quiet |
+| InboxItem | plan |
+| Timeline | task |
+| Toast | success, error |
+| EmptyState | with-action, plain |
+| TerminalChrome | working, shell |
+| Panel | task-detail |
+| Nav | sidebar, folder-icons, reader-icons, connection-states |
+| Field | text, secret, switch, accent |
+| Section | usage |
+| Badges | row |
+
 **Button.** Three kinds: primary (`--accent`, `--accent-ink`), secondary (`--surface`, 1 px `--line-strong`, `--ink`), and text (`--ink-2`, no border). Height is `--hit` on the Mac and `--hit-touch` on the phone. The label names exactly what happens ("Approve plan", not "Submit"), and the toast that follows uses the same verb.
 
-**Gauge.** A title (`--text-md`, `--ink-2`), the number (`--text-num`, mono), and the unit and phrase beside it ("% used", "of 50 GB"). Below it sits a 4 px bar on `--meter-track`, filled per 2.2, and one line of detail ("resets in 3 h 43 m, 13:30"). A stale reading renders the bar in `--stale` and the detail as "09:31, stale" in `--ink-2`. A dead reading shows "No reading" and no number. There is no dot in the corner, because the bar is the status.
+**Gauge.** A title (`--text-md`, `--ink-2`), the number (`--text-num`, mono), and the unit and phrase beside it ("% used", "of 50 GB"). Below it sits a 4 px bar on `--meter-track`, filled per 2.2, and one line of detail ("resets in 3 h 43 m, 13:30"). A stale reading renders the bar in `--stale` and the detail as "09:31, stale" in `--ink-2`. A dead reading shows "No reading" and no number. There is no dot in the corner, because the bar is the status. (1.2, as built: a window past its reset shows "—" in the number's place and "reset at 14:10 · waiting for a new reading", because its stored number belongs to a window that ended.)
 
-**Metric row.** A label on the left, an optional 2 px inline bar, and the value on the right in mono with its unit in `--ink-2`. Rows stack inside a section. Nine Convex metrics are nine rows, not nine tiles. A value past its limit (the 312 % case) fills the bar with `--danger` and puts "upper bound" in the unit slot.
+**Metric row.** A label on the left, an optional 2 px inline bar, and the value on the right in mono with its unit in `--ink-2`. Rows stack inside a section. Nine Convex metrics are nine rows, not nine tiles. A value past its limit (the 312 % case) fills the bar with `--danger` and puts "upper bound" in the unit slot. (1.2, as built: a figure with no allowance draws no bar at all — an empty one would read as "none used"; the rows of one card share their columns, so the bars line up whatever each value says; a live reading that moves every minute — a CPU, a VPS's memory — draws no bar either.)
 
 **Section header.** A title, an optional caption, and an optional right-side action. The caption carries freshness in one of two forms: "as of 09:31" for readings, or "since 23:40 yesterday, 7 h 50 m" for activity. Hovering the caption shows the source. This is the only place freshness appears, except for stale readings.
 
@@ -264,13 +294,13 @@ Selecting a row opens that folder's most important task in the right panel: the 
 
 **Lane.** A column on the Crew board with one lane per client folder. The header holds the folder name, its category chip, and the provider slots as "Claude 1/1 · Codex 1/2" in mono. Task cards follow. An empty lane shows one line of quiet text.
 
-**Terminal chrome.** A `--chrome-h` bar above the pane in `--surface-2`. It holds the session name, a status badge, and the profile, with Detach and Copy on the right. The pane uses the terminal palette, and nothing else in the app does.
+**Terminal chrome.** A `--chrome-h` bar above the pane in `--surface-2`. It holds the session name, a status badge, and the profile, with Detach and Copy on the right. The pane uses the terminal palette, and nothing else in the app does. (1.2, as built: a sibling above the pane, never around it, rendered from the first frame so the terminal is never remounted; the session is `default`, a debug build's test session, or a plain shell (badge stale, "plain shell"); Copy copies the pane's selection as a mouse copy does. Detach waits for a Herdr-CLI door.)
 
-**Reader header.** As built: file name, Rendered/Source toggle, Copy, the ▾ menu, Expand, and Close, in `--text-md` with `--ink-2` icons.
+**Reader header.** As built: file name, Rendered/Source toggle, Copy, the ▾ menu, Expand, and Close, in `--text-md` with `--ink-2` icons. (1.2: on the tokens, `--hit` tall, its six icons drawn on the 16 grid in `app/src/ui/icons.tsx`; it stays the reader's own, not a library component.)
 
 **Palette.** A floating layer with a single input and a list. Matches show in `--accent`, and it has `--shadow-float`.
 
-**Settings field.** The label above, the control below, and help text in `--ink-2`. Secrets are write-only fields with a "Stored in Keychain" caption. Groups are cards.
+**Settings field.** The label above, the control below, and help text in `--ink-2`. Secrets are write-only fields with a "Stored in Keychain" caption. Groups are cards. (1.2, as built: in Settings each group's title is the label of the one control or the row of controls it holds.)
 
 **Accent field (new).** A color control in Settings, Appearance. It shows the contrast of `--accent-ink` on the accent in both themes. If either is under 4.5:1, it offers the nearest passing shade and will not save the failing one.
 
@@ -289,7 +319,7 @@ It ends with one primary button, Launch task.
 
 **Empty state.** One sentence in `--ink-2` and one action. Never an illustration.
 
-**Toast.** Bottom center, 3 s, one line, one optional action. Success has no color; only errors use `--danger`.
+**Toast.** Bottom center, 3 s, one line, one optional action. Success has no color; only errors use `--danger`. (1.2, as built: the placement is the caller's — the terminal's "copied to clipboard" sits in the pane's corner, clear of a prompt; the sidebar's notice at its foot.)
 
 ## 5. The pages
 
@@ -299,6 +329,8 @@ It ends with one primary button, Launch task.
 - **Overnight (the hero):** one progress row per folder under `clients/`, with internal folders last. The caption says "since" followed by the end of your last session on any device, capped at 24 hours.
 - **Waiting on you:** up to three compact inbox items, newest first, with "All 5 in Inbox" when there are more.
 - **Usage:** the three gauges that decide the day, compact. Below them is a "Needs attention" list of metric rows for anything in `--warn`, `--danger`, or stale across Convex, the Hostinger VPS, Ollama, and this Mac. When nothing needs attention, one line says "Everything else is within limits." The caption is "as of" the oldest reading shown.
+
+*As built (1.2, 2026-09-23):* the waiting count button arrives with the Inbox (its count is zero until the crew). Overnight has no caption until an event log exists, and each folder says "No work overnight in this folder."; a row opens the folder in the reader. Waiting on you is the empty state. Needs attention lists every reading at 80 % used or more, stale or dead, every configured reader in error (once, with its reason), and this Mac's memory or disk past 80 % — never a CPU; danger first. Launch task goes to the Work page with the terminal holding the keys.
 
 **Usage.** It answers: how much of what we pay for is left. It opens with a hero row of the three gauges, larger. Below that comes one section per provider, each with its plan name and a single freshness caption:
 
@@ -310,7 +342,9 @@ It ends with one primary button, Launch task.
 
 Chart bars are colored by provider category and the legend lists providers only; models appear in the tooltip and in "Show as table". "Today" and "Month to date" are tables inside each provider's section.
 
-**Work.** The terminal pane fills the page under its chrome. The launch screen inside it keeps the wordmark and the situation panel, with labels following the type rules. The folder lanes and the review queue sit in a collapsible strip above the pane (`--strip-h`), hidden with the key in `keymap.md`.
+*As built (1.2, 2026-09-23):* the hero is Claude's week and session and Ollama's first window. Ollama's other windows are metric rows and its requests per model a table per window. Convex's rows read "250,000 calls of 1,000,000 calls · 25% used", the window said once as the rows' title, today's figures and the metrics without an allowance in their own cards. The VPS is one card named for the machine (`hostname · plan · state`), its live state rows without bars and its month's traffic a figure. The chart and its Today and Month to date tables (per harness · model) sit in the Claude section, since the transcripts they read are the coding harnesses'.
+
+**Work.** The terminal pane fills the page under its chrome. The launch screen inside it keeps the wordmark and the situation panel, with labels following the type rules. The folder lanes and the review queue sit in a collapsible strip above the pane (`--strip-h`), hidden with the key in `keymap.md`. (1.2: the chrome is built; the strip arrives with the crew.)
 
 **Crew.** A board with one lane per client folder, cards inside, and the inbox count in the title row. Task detail opens in the right panel with the brief, the plan, the timeline, the PR checks, the report link, and the session button.
 
@@ -318,7 +352,7 @@ Chart bars are colored by provider category and the legend lists providers only;
 
 **Reader.** As built. Only the header follows the component above, and the body uses the type scale.
 
-**Settings.** Cards per group: Providers, Crew, Client folders (category colors), Shortcuts, Appearance (theme, accent field, fonts), and Advanced. The tool health list from the crew installer is a table with status badges.
+**Settings.** Cards per group: Providers, Crew, Client folders (category colors), Shortcuts, Appearance (theme, accent field, fonts), and Advanced. The tool health list from the crew installer is a table with status badges. (1.2, as built: a card per existing group, in order — the Claude Code connection, Ollama, Convex, Hostinger, shortcuts, the global hotkey, Appearance with the Accent field, the menu bar, launch at login, the organisation, the projects folder, Client folders, the reader, the CLI; the grouping into Providers/Crew/Advanced comes with the crew.)
 
 **Launch screen (CLI).** The one place `--font-display` and the block-letter wordmark appear. Its panel uses the same status words and freshness rule as the app.
 
@@ -373,7 +407,7 @@ An agent starting the Crew page with no memory of this file's authors should fin
 
 ## 10. Migration of what exists
 
-Each step ships when its definition of done holds, not on a date.
+Each step ships when its definition of done holds, not on a date. (1.2, 2026-09-23: steps 1–6 are done in the design-system build — step 1 with `tokens.css` hand-written and held to section 2 by test instead of a `tokens.json`, and step 6's grep test is the guard, with one sheet still on a ratchet: `reader.css`, the document's prose rhythm, 29 raw values. Step 7 is the phone.)
 
 1. **Tokens.** `tokens.json` with both layers and both themes, generating `tokens.css`. Done when the contrast test passes on every pair in 2.4, in both themes.
 2. **Core components.** Button, Gauge, Metric row, Section header, Status badge, Progress row, Inbox item, and Table. Done when each has a story rendering in both themes.

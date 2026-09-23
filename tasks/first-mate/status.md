@@ -5,23 +5,21 @@
     `inbox`, `home`, `settings-crew`, `work`, `usage-and-menu-bar`
 - Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private, main checkout), from three read passes
   over the tree at `6214108`; its three PRD clarifications are marked in `prd.md`
-- Gate 3 · Program design: pending, next — `build-spec.md` (2026-09-22, base `592fcce`, 42 commits behind `1394be7`) is
-  rewritten at this gate, with the five sections it lacks
-- Gate 4 · Slice plan: pending
+- Gate 3 · Program design: APPROVED 2026-09-23 — `build-spec.md` rewritten that day; §11 is the program design
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12, written 2026-09-23, awaiting approval
 
-## Slices (proposed 2026-09-23; Gate 4 decides)
-- [ ] Slice 0 · the probe and the read at the pin — stops the build if Firstmate's Herdr backend fails on 0.9.0;
-  answers `prd.md` §7 1–6
-- [ ] Slice 1 · the mirror: migration 0005, the collector over the fake home, `kinas crew status`
-- [ ] Slice 2 · installed and launchable: `kinas crew setup`, Settings grouped with the Crew card, the launcher, ⌘3 and
-  ⌘5, the Work pane opening on the first mate, the chrome → ship point 1
-- [ ] Slice 3 · the board, the task detail in the right panel, Usage's Crew section
-- [ ] Slice 4 · the Inbox page, answers through `fm-send.sh`, held tasks, the one waiting count (sidebar, Home, Crew,
-  menu bar), the order log
-- [ ] Slice 5 · Home: the crew's night and Waiting on you
-- [ ] Slice 6 · Add to crew
-- [ ] Slice 7 · reconciliation, the launch screen and `kinas context` from the mirror, Features in progress, the sweep
-  → ship point 2
+## Slices (build-spec.md §12; proposed, Gate 4 decides)
+- [ ] Slice 0 · ground, and the probe that decides whether there is a build (answers `prd.md` §7 q1–q6; stops the
+  build if Firstmate's Herdr backend fails on 0.9.0)
+- [ ] Slice 1 · tracer bullet: a task in the fake home is a card on the Crew page
+- [ ] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card
+- [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1
+- [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
+- [ ] Slice 5 · the Inbox, answers through `fm-send.sh`, held tasks, one waiting count (sidebar, Crew, menu bar)
+- [ ] Slice 6 · the order log
+- [ ] Slice 7 · Home: the crew's night and Waiting on you
+- [ ] Slice 8 · Add to crew
+- [ ] Slice 9 · reconciliation, the context packet, the sweep → ship point 2
 
 ## Notes for a fresh session
 
@@ -32,7 +30,8 @@
   `tasks/first-mate/`:
   - `architecture.md` — Gate 2: ten decisions, every touch-point by file and line, the commands, the tables and their
     queries, the flows, the externals. Gate 3 writes the build spec from it.
-  - `build-spec.md` — 2026-09-22; its §16 decisions stand wherever the PRD and `architecture.md` do not change them.
+  - `build-spec.md` — rewritten 2026-09-23 (Gate 3): §11 is the program design, §12 the slice plan once Gate 4 is
+    approved. The first version is kept as `build-spec-2026-09-22.md`; nothing in it binds.
   - `review-2026-09-23.md` — Firstmate at the pin, field by field, with every argv and exit code; the build spec's 22
     stale references to the code; what the design system had already decided. Gates 2 and 3 start here.
   - `plan-2026-09-23.md` — the captain's consolidated plan, verbatim.

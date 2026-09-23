@@ -14,7 +14,9 @@ import {
   readerPin,
   readerPins,
   readerUnpin,
+  type ReaderSide,
   setFolderHidden,
+  setReaderSide as saveReaderSide,
   setReaderWidth as saveReaderWidth,
   setShortcuts as saveShortcuts,
   setSidebarVisible,
@@ -26,6 +28,7 @@ import { useUsageSnapshot } from "./usage/useUsageSnapshot.ts";
 import { WorkPage } from "./pages/Work.tsx";
 import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
+import { SIDE_DEFAULT } from "./reader/side.ts";
 import { actionForEvent, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { addedLine } from "./shell/folders.ts";
@@ -66,6 +69,8 @@ export function App() {
   const [reader, setReader] = useState<PanelState>({ open: false, expanded: false, request: null });
   const readerSeq = useRef(0);
   const [readerWidth, setReaderWidth] = useState(DEFAULT_PANEL_PCT);
+  /** The reader's side column: whether Files and Contents show while it is wide, and its width. */
+  const [side, setSide] = useState<ReaderSide>(SIDE_DEFAULT);
   /** What the reader has open, mirrored for the sidebar. The reader owns it; this is only what it last reported. */
   const [nav, setNav] = useState<ReaderNav>({ doc: null, folder: null });
   /** Stored, by an explicit click, and nothing else about what Miguel reads is (reader/pins.rs). */
@@ -155,6 +160,7 @@ export function App() {
         setShortcuts(withDefaults(prefs.shortcuts));
         showSidebar(prefs.sidebar_visible);
         setReaderWidth(prefs.reader_width_pct);
+        setSide(prefs.reader_side);
         applyAccent(prefs.accent);
       },
       () => {},
@@ -243,6 +249,13 @@ export function App() {
   }, []);
 
   const split = useSplit(readerWidth, changeReaderWidth);
+
+  // The reader's side column, stored the way the divider is: once per gesture, and a refused save keeps the choice for
+  // the session (reader-layout PRD rule 4). Stable, because the reader calls it from its header's buttons.
+  const changeSide = useCallback((next: ReaderSide) => {
+    setSide(next);
+    void saveReaderSide(next).catch(() => {});
+  }, []);
 
   // Stable, because the reader's reporting effect is keyed on it. A file or a folder goes to the front of Recent when
   // it is what changed (shell/recent.ts says why both are gated). The ref is read and written out here, not in the
@@ -440,6 +453,8 @@ export function App() {
             onPin={pin}
             onUnpin={unpin}
             notice={notice}
+            side={side}
+            onSide={changeSide}
           />
         </aside>
       </div>

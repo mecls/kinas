@@ -109,6 +109,10 @@ and every ⌘ shortcut above, for a two-state control that lives in one header b
 **Expand** and **Close** are click-only for the same reason. If one starts being missed, that is the moment to
 add it — this file stays the gate.
 
+Amended 2026-09-23 (the reader's layout, `tasks/reader-layout/prd.md`): **Files** and **Contents**, now in the
+header at every width, and the side column's **edge** (drag to resize, double-click for 220 px) are click-only too,
+for the same reason. No `keydown` handler comes with them.
+
 The header's **▾** menu is the one place the reader handles keys, and only while it is open: it takes focus when
 it opens and gives it back when it closes, so that nothing typed at an open menu reaches the terminal.
 

@@ -135,6 +135,7 @@ pub fn run() {
             commands::set_shortcuts,
             commands::set_sidebar_visible,
             commands::set_reader_width,
+            commands::set_reader_side,
             projects::list_projects,
             projects::set_folder_category,
             projects::set_folder_internal,

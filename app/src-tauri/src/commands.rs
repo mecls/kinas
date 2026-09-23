@@ -254,6 +254,9 @@ pub struct UiPrefs {
     pub reader_width_pct: f64,
     /// The accent chosen in Settings, or `None` for the brand's own; applied by the page at boot (DESIGN.md §2.1).
     pub accent: Option<String>,
+    /// Whether Contents and Files show beside the text, and the side column's width (reader-layout PRD rule 4). Read
+    /// here, before the window draws, so a hidden Contents never flashes open on the first file.
+    pub reader_side: ReaderSide,
 }
 
 /// 45 since the sidebar grew to 220 px (2026-09-18); 55 beside the old 72 px rail. Must equal DEFAULT_PANEL_PCT in
@@ -277,6 +280,7 @@ pub fn get_ui_prefs(store: State<'_, Store>) -> UiPrefs {
         sidebar_visible: system::get_setting(&conn, org, "sidebar_visible").and_then(|v| v.as_bool()).unwrap_or(true),
         reader_width_pct: reader_width(system::get_setting(&conn, org, "reader_width_pct")),
         accent: system::stored_accent(system::get_setting(&conn, org, "accent")),
+        reader_side: reader_side(system::get_setting(&conn, org, "reader_side")),
     }
 }
 
@@ -303,6 +307,86 @@ mod reader_width_tests {
         assert_eq!(reader_width(None), READER_WIDTH_DEFAULT);
         // The webview's shell/split.ts says the same number; a change to one without the other is a change to neither.
         assert_eq!(READER_WIDTH_DEFAULT, 45.0);
+    }
+}
+
+/// Contents, Files and the column's width (reader-layout PRD rules 4–7). One settings row, `reader_side`, holding
+/// no path (ADR 0007), written once per gesture (ADR 0005): a toggle's click, a drag's end, a double-click.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct ReaderSide {
+    pub contents: bool,
+    pub files: bool,
+    /// In px. The webview draws it narrower when the text would get less than 320 px, and keeps this.
+    pub width: f64,
+}
+
+/// 220 is `--sidebar-w`, the column's width before it could be dragged. Must equal SIDE_DEFAULT in reader/side.ts.
+pub const READER_SIDE_DEFAULT: ReaderSide = ReaderSide { contents: true, files: true, width: 220.0 };
+const READER_SIDE_MIN: f64 = 160.0;
+const READER_SIDE_MAX: f64 = 480.0;
+
+/// Each field on its own, so a bad width with good booleans keeps the booleans; missing or not an object is the
+/// default. A hand-edited setting never lays the reader out badly, as `reader_width` says for the divider.
+fn reader_side(value: Option<serde_json::Value>) -> ReaderSide {
+    let Some(serde_json::Value::Object(fields)) = value else { return READER_SIDE_DEFAULT };
+    let flag = |key: &str, default: bool| fields.get(key).and_then(|v| v.as_bool()).unwrap_or(default);
+    ReaderSide {
+        contents: flag("contents", READER_SIDE_DEFAULT.contents),
+        files: flag("files", READER_SIDE_DEFAULT.files),
+        width: fields
+            .get("width")
+            .and_then(|v| v.as_f64())
+            .filter(|w| w.is_finite() && (READER_SIDE_MIN..=READER_SIDE_MAX).contains(w))
+            .unwrap_or(READER_SIDE_DEFAULT.width),
+    }
+}
+
+/// The width finite and within 160–480 px, rounded to a whole pixel; refused otherwise, as `set_reader_width` refuses.
+fn valid_side(side: ReaderSide) -> Result<ReaderSide, String> {
+    if !side.width.is_finite() || !(READER_SIDE_MIN..=READER_SIDE_MAX).contains(&side.width) {
+        return Err(format!("the reader's side column must be between {READER_SIDE_MIN} and {READER_SIDE_MAX} px wide"));
+    }
+    Ok(ReaderSide { width: side.width.round(), ..side })
+}
+
+#[tauri::command]
+pub fn set_reader_side(store: State<'_, Store>, side: ReaderSide) -> Result<(), String> {
+    let side = valid_side(side)?;
+    system::put_setting(&store.conn(), store.org_id(), "reader_side", &serde_json::json!(side)).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod reader_side_tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_reader_side_is_the_default() {
+        assert_eq!(reader_side(None), READER_SIDE_DEFAULT);
+        assert_eq!(READER_SIDE_DEFAULT, ReaderSide { contents: true, files: true, width: 220.0 });
+    }
+
+    #[test]
+    fn each_field_of_a_stored_reader_side_falls_back_on_its_own() {
+        let stored = serde_json::json!({ "contents": false, "files": "x", "width": 900 });
+        assert_eq!(reader_side(Some(stored)), ReaderSide { contents: false, files: true, width: 220.0 });
+        let stored = serde_json::json!({ "contents": 1, "files": false, "width": 90 });
+        assert_eq!(reader_side(Some(stored)), ReaderSide { contents: true, files: false, width: 220.0 });
+        let stored = serde_json::json!({ "contents": true, "files": true, "width": 300 });
+        assert_eq!(reader_side(Some(stored)), ReaderSide { contents: true, files: true, width: 300.0 });
+        for bad in [serde_json::json!("x"), serde_json::Value::Null, serde_json::json!([]), serde_json::json!(220)] {
+            assert_eq!(reader_side(Some(bad)), READER_SIDE_DEFAULT);
+        }
+    }
+
+    #[test]
+    fn valid_side_refuses_a_width_outside_160_to_480() {
+        let at = |width: f64| valid_side(ReaderSide { contents: false, files: true, width });
+        for bad in [159.9, 480.1, f64::NAN, f64::INFINITY] {
+            assert!(at(bad).is_err(), "{bad} was accepted");
+        }
+        assert_eq!(at(160.0).map(|s| s.width), Ok(160.0));
+        assert_eq!(at(480.0).map(|s| s.width), Ok(480.0));
+        assert_eq!(at(300.4), Ok(ReaderSide { contents: false, files: true, width: 300.0 }));
     }
 }
 
@@ -487,7 +571,7 @@ pub fn set_hostinger_vm(store: State<'_, Store>, control: State<'_, ReaderContro
     control.refresh();
     Ok(())
 }
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
 

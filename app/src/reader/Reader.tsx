@@ -16,6 +16,7 @@ import {
   readerReadImage,
   readerReadText,
   readerRendered,
+  type ReaderSide,
 } from "../api.ts";
 import { focusTerminal } from "../shell/focus.ts";
 import { NOTICE_MS } from "../shell/notice.ts";
@@ -31,6 +32,7 @@ import { cachedSvg, diagramsNeedRedrawing, renderDiagram } from "./mermaid.ts";
 import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
+import { sectionButton, sectionPlace, type SectionState } from "./side.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
 import { Button } from "../ui/index.ts";
@@ -219,6 +221,8 @@ export function Reader({
   onPin,
   onUnpin,
   notice,
+  side,
+  onSide,
 }: {
   request: ReaderRequest | null;
   onClose: () => void;
@@ -242,6 +246,12 @@ export function Reader({
   onUnpin: (path: string) => void;
   /** Something the shell wants said here, where the reader says things. `seq` makes a repeat a new notice. */
   notice: { text: string; seq: number } | null;
+  /**
+   * Whether Files and Contents show beside the text while the reader is wide, and the column's width
+   * (reader-layout PRD rule 4). The shell owns it, because it is read at boot and stored; one call per gesture.
+   */
+  side: ReaderSide;
+  onSide: (side: ReaderSide) => void;
 }) {
   const [doc, setDoc] = useState<Doc | null>(null);
   const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
@@ -833,7 +843,19 @@ export function Reader({
   const contents = Boolean(doc) && tall && headings.length >= 2;
   /** The tree is the reader's to draw only while the sidebar is not there to draw it. */
   const ownTree = folder !== null && !treeInSidebar;
-  const sideShown = (ownTree || contents) && (!narrow || overlay !== null);
+  // Wide, each section shows as the captain last left it; narrow, it is a peek over the text that changes nothing
+  // remembered (reader-layout PRD rules 2–3).
+  const filesState: SectionState = { name: "Files", offered: ownTree, narrow, shown: side.files, overlayOpen: overlay === "files" };
+  const contentsState: SectionState = { name: "Contents", offered: contents, narrow, shown: side.contents, overlayOpen: overlay === "contents" };
+  const filesPlace = sectionPlace(filesState);
+  const contentsPlace = sectionPlace(contentsState);
+  const sideShown = filesPlace !== null || contentsPlace !== null;
+  const toggle = (section: "files" | "contents") => () => {
+    if (narrow) setOverlay((o) => (o === section ? null : section));
+    else onSide({ ...side, [section]: !side[section] });
+  };
+  const filesButton = sectionButton(filesState);
+  const contentsButton = sectionButton(contentsState);
 
   const viewKind = doc ? viewKindOf(doc.render) : null;
   const noFile = doc ? null : "Open a file first";
@@ -859,8 +881,8 @@ export function Reader({
         onBack={goBack}
         view={viewKind ? views[viewKind] : null}
         onView={changeView}
-        files={narrow && ownTree ? { pressed: overlay === "files", onToggle: () => setOverlay((o) => (o === "files" ? null : "files")) } : null}
-        contents={narrow && contents ? { pressed: overlay === "contents", onToggle: () => setOverlay((o) => (o === "contents" ? null : "contents")) } : null}
+        files={filesButton && { ...filesButton, onToggle: toggle("files") }}
+        contents={contentsButton && { ...contentsButton, onToggle: toggle("contents") }}
         copyDisabledReason={!doc ? noFile : doc.render === "image" ? "Images can't be copied as text" : null}
         onCopy={() => void copy()}
         menu={menu}
@@ -877,13 +899,13 @@ export function Reader({
       <div className="reader-main" data-narrow={narrow ? "" : undefined}>
         {sideShown && (
           <div className="reader-side" data-overlay={narrow ? "" : undefined}>
-            {folder && ownTree && (!narrow || overlay === "files") && (
+            {folder && filesPlace && (
               <section className="reader-files" aria-label="Files">
                 <h2 className="reader-label">Files</h2>
                 <FileTree root={folder} selected={doc?.path ?? null} onOpen={(path) => void follow(path, null)} />
               </section>
             )}
-            {contents && (!narrow || overlay === "contents") && (
+            {contentsPlace && (
               <nav className="reader-contents" aria-label="Contents">
                 <h2 className="reader-label">Contents</h2>
                 <ol>

@@ -262,6 +262,16 @@ export interface UiPrefs {
   reader_width_pct: number;
   /** The accent as "#rrggbb", or null for the brand's own; applied at boot. */
   accent: string | null;
+  /** Whether Contents and Files show beside the text, and the side column's width; defaults when never set. */
+  reader_side: ReaderSide;
+}
+
+/** The reader's side column (reader-layout PRD rule 4): one set for the whole reader, never per file. */
+export interface ReaderSide {
+  contents: boolean;
+  files: boolean;
+  /** In px, 160–480. Drawn narrower when the text would get less than 320 px (reader/side.ts). */
+  width: number;
 }
 
 export const getUiPrefs = () => invoke<UiPrefs>("get_ui_prefs");
@@ -270,6 +280,8 @@ export const setShortcuts = (shortcuts: Record<string, string>) => invoke<void>(
 export const setSidebarVisible = (visible: boolean) => invoke<void>("set_sidebar_visible", { visible });
 /** Rejected outside 20–80 percent. */
 export const setReaderWidth = (pct: number) => invoke<void>("set_reader_width", { pct });
+/** Rejected outside 160–480 px. One call per gesture: a toggle's click, a drag's end, a double-click. */
+export const setReaderSide = (side: ReaderSide) => invoke<void>("set_reader_side", { side });
 
 // The reader (tasks/prd-kinas-open.md). Every command re-checks its path in Rust; a refusal arrives as ReaderError.
 

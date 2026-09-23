@@ -5,15 +5,19 @@ import { Menu, type MenuItem } from "../ui/Menu.tsx";
 
 export type View = "rendered" | "source";
 
-/** A header button that opens one of the reader's two overlays while it is narrow. */
-interface OverlayToggle {
+/**
+ * Files or Contents: wide, it hides and shows its section beside the text; narrow, it opens it over the text
+ * (reader/side.ts computes both, with the tooltip).
+ */
+interface SectionToggle {
   pressed: boolean;
+  title: string;
   onToggle: () => void;
 }
 
 /**
  * The reader's header (three-column shell §4): Back, the view toggle, the path and its badge, then Files and
- * Contents while the reader is narrow, Copy with its ▾ menu, Expand and Close.
+ * Contents whenever they are offered, Copy with its ▾ menu, Expand and Close.
  *
  * Presentation only — the reader owns every piece of state except whether the menu is open.
  */
@@ -45,8 +49,8 @@ export function Header({
   /** Null for a file with one way to be shown: source, and images. */
   view: View | null;
   onView: (view: View) => void;
-  files: OverlayToggle | null;
-  contents: OverlayToggle | null;
+  files: SectionToggle | null;
+  contents: SectionToggle | null;
   copyDisabledReason: string | null;
   onCopy: () => void;
   menu: MenuItem[];
@@ -83,12 +87,12 @@ export function Header({
       </span>
       {badge && <span className="reader-ext">{badge}</span>}
       {files && (
-        <button type="button" className="reader-button reader-icon-button" aria-label="Files" title="Files" aria-pressed={files.pressed} onClick={files.onToggle}>
+        <button type="button" className="reader-button reader-icon-button" aria-label="Files" title={files.title} aria-pressed={files.pressed} onClick={files.onToggle}>
           <FolderIcon />
         </button>
       )}
       {contents && (
-        <button type="button" className="reader-button reader-icon-button" aria-label="Contents" title="Contents" aria-pressed={contents.pressed} onClick={contents.onToggle}>
+        <button type="button" className="reader-button reader-icon-button" aria-label="Contents" title={contents.title} aria-pressed={contents.pressed} onClick={contents.onToggle}>
           <ListIcon />
         </button>
       )}

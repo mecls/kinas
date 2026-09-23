@@ -251,8 +251,8 @@ sidebar button and ← and →: they take you back and forward through everywher
     - It is one bar across the whole window, where the macOS title bar is today, `--chrome-h` tall, on `--bg`.
     - From the left: the traffic lights (the system's own), the sidebar button, ←, →. Nothing else: there is no
       title text, because each page names itself.
-    - It is still a title bar. Dragging it moves the window, and double-clicking it zooms the window, as the
-      standard bar does today (§7.2).
+    - It is still a title bar. Dragging it moves the window, and double-clicking it zooms the window (§7.2: always
+      zoom, whatever the Mac's own double-click setting says).
 27. **The bar is always there:**
     - on every page, with the sidebar shown or hidden, and with the reader expanded;
     - in full screen, where the traffic lights are gone and the three buttons start at the bar's left padding.
@@ -565,11 +565,12 @@ the plan fixture, which is tall and has at least two headings.
    - If Kinas's webview anchors the scroll natively, rule 10 costs nothing. If not, the reader does it.
    - **Decided by** measurement in Part 1's first slice, on the debug build. It is not the captain's call.
 2. **The drawn title bar, on the Mac.**
-   - Does a double-click follow the Mac's own "double-click a window's title bar to" setting (zoom or minimise),
-     as the standard bar does?
-   - Where do the traffic lights sit, and where do the buttons go in full screen?
-   - **Decided by** Gate 2, from the pinned Tauri version's documentation and a try on the debug build. If
-     double-click can only zoom, it zooms, and the smoke test says so.
+   - ~~Does a double-click follow the Mac's own "double-click a window's title bar to" setting?~~ **Answered at
+     Gate 2 (2026-09-23), from the pinned Tauri 2.11.5 source:** no. Its drag script sends a double-click to
+     `internal_toggle_maximize`, which zooms and never reads that setting. So the drawn bar always zooms, which is
+     this question's stated fallback, and the smoke test says so.
+   - Where do the traffic lights sit, and where do the buttons go in full screen? **Measured** on the debug build
+     in the title bar's slice.
 3. ~~**One file icon, or one per kind?**~~ **Answered 2026-09-23, at Gate 1's approval:** one file icon for every
    tab, the sidebar's.
 4. ~~**The 160, 480 and 320 px limits, 15 tabs, and 200 px per tab.**~~ **Answered 2026-09-23, at Gate 1's

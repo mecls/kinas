@@ -2,10 +2,11 @@
 
 The law for how Kinas looks, the way `keymap.md` is the law for keys. An agent building any surface reads this first, uses only what it defines, and adds to it before using anything it does not define.
 
-Version 1.3, 2026-09-23.
+Version 1.4, 2026-09-23.
 
 ## Changes
 
+- **1.4, 2026-09-23 (the first mate, written with its Gate 1 PRD, `tasks/first-mate/prd.md`).** Written to what Firstmate's contracts carry, read at its pin: a lane's header counts what runs instead of provider slots, which Firstmate does not publish, and a crew project is a client folder's lane by their shared GitHub repository (4 Lane); an inbox item shows evidence and a recommendation only when its source carries them, and gains the form for a held task answered in the first mate's pane (4 Inbox item); the status badge gains failed, paused, unknown and gone (4); the right panel holds one thing at a time (3.1); Home's "since" is defined on the Mac (5); the terminal chrome draws a badge only for a worker's pane (4); Settings groups its cards (5); the Work page's strip of lanes does not come with the crew (5).
 - **1.3, 2026-09-23 (folder views).** The sidebar loses its Reader row: a click on a file opens the reader, and with no file the row had nothing to show. Settings moves to the sidebar's foot, and Recent sits under the client folders (3.1). A client folder can be hidden (off the sidebar and Home), removed (off Settings' list too, restorable, never touched on disk) or added from any folder inside the projects folder (3.1, 5). The reader's ▾ menu becomes the library's Menu, which the client folders' right-click menu uses too (4).
 - **1.2, closed 2026-09-23.** Written down as built: the catalogue of components and their stories (4), the as-built notes on the gauge's reset, the metric row's missing bars, the terminal chrome, the reader header, Settings and the toast's placements (4), and each page as it shipped (5); the migration's status (10). `tokens.css` is named the source of truth in section 2's opening, and the brand's display face in 2.1 is Bricolage Grotesque, as 2.5 already said.
 - **1.2, 2026-09-22 (the design system build).** The law meets the code. The terminal follows the theme: `--term-bg` and `--term-fg` take a light value too, and the sixteen ANSI colours have a set per theme (2.2, 2.3). The type scale is written as pairs, `--fs-*` / `--lh-*`, because that is what `font-size` and `line-height` take (2.5). Two sub-grid spacing steps, `--space-0` 2 and `--space-1h` 6, for gaps inside a component (2.6). The display face is Bricolage Grotesque (OFL): Clash Display's license does not allow the files in a public repository (2.5, the open item closed). `--panel-w` is the panel's default share and the divider decides, down to `--pane-min` (2.6). Section 9 gains "Adding a surface", the procedure every later build follows, and names `app/src/styles/tokens.css` as the source of truth until `tokens.json` is needed for the phone. The gauge thresholds in 2.2 (80 %, 95 % used) replace the app's earlier ≤ 25 / ≤ 10 % left.
@@ -198,6 +199,8 @@ The window has three columns: the sidebar (`--sidebar-w`, `--bg`), the page (fil
 
 The sidebar holds, top to bottom: the wordmark, the navigation (Home, Work, Crew, Inbox with its count, Usage), what can be opened (Pinned, the open folder's files), the client folders with their category chips, Recent, the shell's last notice, one line for the VPS connection, and Settings, the last row. It collapses with the key defined in `keymap.md`. The proposed key is ⌘\, because ⌘S means save wherever the Reader edits.
 
+(1.4, the first mate.) The right panel holds one thing at a time: a task's detail or the reader. Selecting a task — a card on Crew, a row on Home — shows its detail; opening a file, a report or a brief shows the reader; × closes the panel.
+
 (1.3, folder views.) There is no Reader row: every file and folder row opens the reader, and × closes it. A client folder is **shown**, **hidden** (off the sidebar and Home, still in Settings' list with its In sidebar switch off) or **removed** (off Settings' list too, in its Removed list with Restore; nothing on disk is touched). A right-click on a client folder opens a Menu: Hide from sidebar, Add a client folder…, then Show for each hidden folder; on the heading, the same without Hide. An added folder is any folder inside the projects folder, git or not. Colours are seated over every folder, hidden and removed ones included, so hiding one never repaints another.
 
 ### 3.2 A page
@@ -272,6 +275,14 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | needs decision | ring | `--warn` |
 | PR open | ring | `--meter` |
 | ready | ring | `--ok` |
+| failed (1.4) | solid | `--danger` |
+| paused (1.4) | solid | `--stale` |
+| unknown (1.4) | solid | `--stale` |
+| gone (1.4) | cross | `--ink-3` |
+
+(1.4) The crew's tool health in Settings uses the same pill with its own words: installed (solid `--ok`), below floor (solid `--warn`), missing (solid `--danger`); for `gh`, signed in (solid `--ok`) or not signed in (solid `--danger`); an optional tool that is missing is missing in `--stale`.
+
+(1.4) The crew's states map to these words, first match wins: gone, done, failed, needs decision (a pending decision, parked, or held for a person), blocked, paused, ready (an open PR, not a draft, mergeable, at least one check and all green), CI red (any failing check), PR open, working, queued, unknown.
 
 When counting, the number comes first in mono ("4 done").
 
@@ -296,9 +307,11 @@ Selecting a row opens that folder's most important task in the right panel: the 
 - **Compact (Home):** the question in `--text-md` 500 with the folder chip, the recommendation in `--ink-2`, and the actions inline.
 - **Phone:** the actions pinned to the bottom of the screen at `--hit-touch`.
 
-**Lane.** A column on the Crew board with one lane per client folder. The header holds the folder name, its category chip, and the provider slots as "Claude 1/1 · Codex 1/2" in mono. Task cards follow. An empty lane shows one line of quiet text.
+(1.4, the first mate.) The evidence and the recommendation are drawn only when the item's source carries them; the crew's decisions carry a question alone (Firstmate's summary line), so they show the question, then a quiet line with the task's title, the key and the age. Approve sends at once; Answer and Deny open a text box with Send, and the item then reads `Sending…`, `Sent 15:02`, or `Not delivered — <reason>` in `--danger`. An item that cannot be answered from Kinas (a task held for the captain whose worker is gone) says "Answer in the first mate's pane" with one secondary button, Go to the first mate, and has no keys. A, R and D are bound in `keymap.md`.
 
-**Terminal chrome.** A `--chrome-h` bar above the pane in `--surface-2`. It holds the session name, a status badge, and the profile, with Detach and Copy on the right. The pane uses the terminal palette, and nothing else in the app does. (1.2, as built: a sibling above the pane, never around it, rendered from the first frame so the terminal is never remounted; the session is `default`, a debug build's test session, or a plain shell (badge stale, "plain shell"); Copy copies the pane's selection as a mouse copy does. Detach waits for a Herdr-CLI door.)
+**Lane.** A column on the Crew board with one lane per client folder. The header holds the folder name, its category chip, and the provider slots as "Claude 1/1 · Codex 1/2" in mono. Task cards follow. An empty lane shows one line of quiet text. (1.4, the first mate: the header counts in Firstmate's words — "2 in flight · 1 queued", the numbers in mono — because Firstmate publishes no slots; in flight is started and not finished, whatever the badge says. A crew project is a client folder's lane when both name the same GitHub repository; a project no folder matches has a lane under the repository's name with no chip, after the folders'. On the board a lane exists only while it has a task, so the empty line is for other callers.)
+
+**Terminal chrome.** A `--chrome-h` bar above the pane in `--surface-2`. It holds the session name, a status badge, and the profile, with Detach and Copy on the right. The pane uses the terminal palette, and nothing else in the app does. (1.2, as built: a sibling above the pane, never around it, rendered from the first frame so the terminal is never remounted; the session is `default`, a debug build's test session, or a plain shell (badge stale, "plain shell"); Copy copies the pane's selection as a mouse copy does. Detach waits for a Herdr-CLI door.) (1.4, the first mate: the session name is followed by the focused workspace's label — `default · firstmate`, `default · fm-<id>`; the badge is drawn only when the focused pane is a crew worker's, with its task's word; the profile is `claude` when Herdr reports it in the foreground, `plain shell` for the shell. Nothing is drawn from a guess.)
 
 **Reader header.** As built: file name, Rendered/Source toggle, Copy, the ▾ menu, Expand, and Close, in `--text-md` with `--ink-2` icons. (1.2: on the tokens, `--hit` tall, its six icons drawn on the 16 grid in `app/src/ui/icons.tsx`; it stays the reader's own, not a library component.) (1.3: its ▾ menu is the library's Menu.)
 
@@ -319,7 +332,7 @@ Selecting a row opens that folder's most important task in the right panel: the 
 - the provider, as a segmented control showing free slots ("Codex 1 of 2 free"), with full providers disabled;
 - "Ask for a plan before building", a switch that is on by default.
 
-It ends with one primary button, Launch task.
+It ends with one primary button, Launch task. (1.4: not with the first mate — tasks are asked of it in its pane.)
 
 **Switch (new, phone).** 51 × 31 pt. On is `--accent`, off is `--line-strong`.
 
@@ -338,6 +351,8 @@ It ends with one primary button, Launch task.
 
 *As built (1.2, 2026-09-23):* the waiting count button arrives with the Inbox (its count is zero until the crew). Overnight has no caption until an event log exists, and each folder says "No work overnight in this folder."; a row opens the folder in the reader. (1.3: only shown folders are listed; with every folder hidden, the empty state says Settings → Client folders shows them again.) Waiting on you is the empty state. Needs attention lists every reading at 80 % used or more, stale or dead, every configured reader in error (once, with its reason), and this Mac's memory or disk past 80 % — never a CPU; danger first. Launch task goes to the Work page with the terminal holding the keys.
 
+*1.4 (the first mate):* "the end of your last session" on the Mac is the last time the window had focus before a stretch of 60 minutes without it (Kinas notes the focus at most once a minute); the caption is capped at 24 hours. A folder's row counts the tasks of its lane with an event inside that window — done; working (queued, working, PR open, paused, unknown); waiting on a person (needs decision, ready); failed (failed, blocked, CI red) — and says "No work overnight in this folder." when there are none. Waiting on you shows the Inbox's items in the compact variant: Approve inline, Answer and Deny open the item on the Inbox page. The waiting count button is hidden at zero. Launch task goes to the first mate's pane when it runs.
+
 **Usage.** It answers: how much of what we pay for is left. It opens with a hero row of the three gauges, larger. Below that comes one section per provider, each with its plan name and a single freshness caption:
 
 - **Claude:** model usage as a chart.
@@ -350,15 +365,15 @@ Chart bars are colored by provider category and the legend lists providers only;
 
 *As built (1.2, 2026-09-23):* the hero is Claude's week and session and Ollama's first window. Ollama's other windows are metric rows and its requests per model a table per window. Convex's rows read "250,000 calls of 1,000,000 calls · 25% used", the window said once as the rows' title, today's figures and the metrics without an allowance in their own cards. The VPS is one card named for the machine (`hostname · plan · state`), its live state rows without bars and its month's traffic a figure. The chart and its Today and Month to date tables (per harness · model) sit in the Claude section, since the transcripts they read are the coding harnesses'.
 
-**Work.** The terminal pane fills the page under its chrome. The launch screen inside it keeps the wordmark and the situation panel, with labels following the type rules. The folder lanes and the review queue sit in a collapsible strip above the pane (`--strip-h`), hidden with the key in `keymap.md`. (1.2: the chrome is built; the strip arrives with the crew.)
+**Work.** The terminal pane fills the page under its chrome. The launch screen inside it keeps the wordmark and the situation panel, with labels following the type rules. The folder lanes and the review queue sit in a collapsible strip above the pane (`--strip-h`), hidden with the key in `keymap.md`. (1.2: the chrome is built; the strip arrives with the crew.) (1.4: the strip does not come with the crew — the Crew page and the Inbox are those lists, and a strip would need a key and a second copy of each; it waits for a reason of its own.)
 
-**Crew.** A board with one lane per client folder, cards inside, and the inbox count in the title row. Task detail opens in the right panel with the brief, the plan, the timeline, the PR checks, the report link, and the session button.
+**Crew.** A board with one lane per client folder, cards inside, and the inbox count in the title row. Task detail opens in the right panel with the brief, the plan, the timeline, the PR checks, the report link, and the session button. (1.4, the first mate: the title row holds the waiting count, hidden at zero, and First mate — Launch the first mate until it runs. Before setup the page is one empty state with the setup command and Copy, above the tool table; before the first launch, the tool table and Launch. A card holds the title, ship or scout, the badge, the elapsed time, the harness, the PR with its checks, and Open its pane. There is no plan in Firstmate's contracts, so the detail shows the ask as filed with Open the brief instead.)
 
-**Inbox.** Inbox items, newest first, with the count in the sidebar.
+**Inbox.** Inbox items, newest first, with the count in the sidebar. (1.4, the first mate: three groups — Decisions, Held for you, and Reconcile, whose lines are information with no actions and never count.)
 
 **Reader.** As built. Only the header follows the component above, and the body uses the type scale.
 
-**Settings.** Cards per group: Providers, Crew, Client folders (category colors), Shortcuts, Appearance (theme, accent field, fonts), and Advanced. The tool health list from the crew installer is a table with status badges. (1.2, as built: a card per existing group, in order — the Claude Code connection, Ollama, Convex, Hostinger, shortcuts, the global hotkey, Appearance with the Accent field, the menu bar, launch at login, the organisation, the projects folder, Client folders, the reader, the CLI; the grouping into Providers/Crew/Advanced comes with the crew.) (1.3: Client folders gives each folder an In sidebar switch beside Internal, both columns headed, and Remove; Add a folder… under the list; a Removed list with Restore when any folder is removed.)
+**Settings.** Cards per group: Providers, Crew, Client folders (category colors), Shortcuts, Appearance (theme, accent field, fonts), and Advanced. The tool health list from the crew installer is a table with status badges. (1.2, as built: a card per existing group, in order — the Claude Code connection, Ollama, Convex, Hostinger, shortcuts, the global hotkey, Appearance with the Accent field, the menu bar, launch at login, the organisation, the projects folder, Client folders, the reader, the CLI; the grouping into Providers/Crew/Advanced comes with the crew.) (1.4, the first mate: the groups are Providers — Claude Code, Ollama, Convex, Hostinger; Crew; Client folders — the projects folder and the folders; Shortcuts — the shortcuts and the global hotkey; Appearance; Advanced — the menu bar, launch at login, the organisation, the reader, the CLI.) (1.3: Client folders gives each folder an In sidebar switch beside Internal, both columns headed, and Remove; Add a folder… under the list; a Removed list with Restore when any folder is removed.)
 
 **Launch screen (CLI).** The one place `--font-display` and the block-letter wordmark appear. Its panel uses the same status words and freshness rule as the app.
 
@@ -427,4 +442,4 @@ Each step ships when its definition of done holds, not on a date. (1.2, 2026-09-
 
 - ~~Whether Clash Display's license permits bundling it in the open-source repo (2.5).~~ Closed 1.2: it does not; Bricolage Grotesque.
 - Whether the iPhone app is native Swift or web, which decides the token delivery (3.3).
-- Assumed: each folder under `clients/` is one Crew lane, and internal projects sit beside them marked "internal". Confirm.
+- ~~Assumed: each folder under `clients/` is one Crew lane, and internal projects sit beside them marked "internal". Confirm.~~ Closed 1.4: a lane is a client folder — any folder the sidebar lists, internal ones included, marked as they are there — matched to a crew project by their GitHub repository.

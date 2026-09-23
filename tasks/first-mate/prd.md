@@ -1,136 +1,442 @@
-# PRD · The first mate inside Kinas
+# The first mate inside Kinas — PRD (Build 3)
 
-*Saved 2026-09-22 from the `/agent-build-spec` invocation, verbatim. The build spec written from it is
-`tasks/first-mate/build-spec.md` (private; this PRD is tracked since 2026-09-22); where the two differ, the build spec wins (its §16 records why).*
+*Revised 2026-09-23 with the captain, and now the one current product document for Build 3. It takes in the draft
+of 2026-09-22 (in git history), the decisions recorded with the build spec that day, the captain's consolidated plan
+of 2026-09-23, a review of all three against the code at `1394be7` and against Firstmate itself at the pin, and the
+captain's five answers of 2026-09-23 (§7). Where this document and `build-spec.md` differ, **this one wins** until
+Gate 3 rewrites the spec; the review's detail (every field, argv and stale reference) is kept privately beside it for
+Gates 2 and 3.*
 
-Draft 2026-09-22, revised 2026-09-23 after the decision to run the first mate on Claude Code, and again the same day against Firstmate's architecture document (docs/architecture.md), which corrected how Kinas may read and mutate its state. Build 3 in the one-person plan. Follows the house process: questions first, then the task list, then the agent build spec, then the build.
+## 1. Objective
 
-## 1. What this is
-
-Kinas gains a crew: one conductor, the first mate, that Miguel talks to, and disposable workers the first mate launches, supervises, and tears down, each in its own isolated copy of a repo on its own branch, each visible in Kinas while it works. Miguel never has to talk to a worker, but he can watch any of them live and, when he types into a worker's pane, that is an order the first mate folds into its supervision.
-
-The conductor is Firstmate (kunchenguid/firstmate), running on Claude Code, on the Herdr backend, inside Kinas. Kinas does not reimplement it. Kinas installs it and its tools, gives it a home, and builds over its state the things a terminal-only conductor cannot give: the bridge page, the inbox, the order log, reconciliation you can see, and the usage numbers it dispatches on.
+Kinas gains a crew. The conductor is Firstmate (`github.com/kunchenguid/firstmate`), running on Claude Code, on
+Herdr, in a home under Kinas's data directory, pinned to one commit. The captain talks to it — the first mate — in a
+pane on the Work page, and it files tasks, launches disposable workers in their own worktrees, supervises them, asks
+the captain only what it must, merges and tears down. Kinas does not rebuild any of that. It installs Firstmate and
+its tools, launches it, reads its fleet through Firstmate's own published contracts into a mirror in Kinas's store,
+and shows what a terminal-only conductor cannot: a Crew page with every task live, a task detail in the right panel,
+an Inbox of everything waiting on the captain, the orders he typed into a worker's pane, mismatches it can see after
+a restart, the crew's night on Home, the waiting count in the sidebar and the menu bar, and the crew's in-progress
+features in `kinas context`. It replaces the Crew and Inbox pages' "arrives with Build 3" placeholders and Home's
+empty Overnight and Waiting on you sections. It is built now because the design system that the Crew page composes
+has shipped, and every later build (ops agents, the phone) reads the same Inbox.
 
 ## Announcement
 
-*Added 2026-09-22 by the process half-day (`tasks/_templates/prd.md` asks for it); the rest of this document is as saved.*
+Kinas now has a crew. Talk to the first mate in its pane on the Work page — Kinas opens on it every morning — and
+press ⌘3 to see everything it has running: one lane per client folder, one card per task, with its state, its PR and
+its checks, live. Click a card and the right panel shows what the worker was asked, everything that happened since,
+and the orders you typed into its pane. When something needs you, it is in the Inbox, counted in the sidebar, on Home
+and in the menu bar; one click approves it through Firstmate's own script, or you answer in a line, and the worker
+carries on. Home now says what the crew did while you were away, and a right-click on a client folder adds it to the
+crew.
 
-Kinas now has a crew. Press ⌘3 and the Crew page shows every worker the first mate has running: one lane per project, one card per task, with its state, its branch, its PR and its checks, live. Click a card and you are looking at what the worker was told to do and everything that happened since — including the orders you typed into its pane. When a worker needs a decision only you can make, it is in the inbox with the evidence; one click and a line of text answers it, through Firstmate's own script, and the worker carries on. You still talk to the first mate in its pane on the Work page, exactly as before; what changed is that you can see the whole fleet without asking.
+## 2. Business rules (invariants — never violate)
 
-## 2. The decision: adopt the conductor, build the bridge
+### The boundary with Firstmate
 
-The first mate runs on Claude Code because that is the subscription and the workflow, and Firstmate treats Claude Code as a co-primary harness with a verified turn-end guard: a tracked Stop hook re-arms the watcher at turn end and rewakes the session when the fleet needs it. That wake mechanism is the hardest part of a conductor and it already works; rebuilding it natively was the risk in the earlier draft, and it is gone.
+1. **Firstmate is the first mate; Kinas builds only the bridge.** Firstmate is installed as Kinas's own clone at
+   `<data dir>/firstmate` (the clone is the home), at commit `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540`, reviewed
+   monthly. The queue, briefs, spawning, supervision, wakes, decisions, merges, teardown and away mode are
+   Firstmate's; a feature Firstmate lacks is not built into Kinas (ADR 0014). The captain's own clone of Firstmate,
+   if one ever exists elsewhere, is never read by a session, a script or a fetch from Kinas.
+2. **Kinas never types into any pane.** No code path in Kinas sends a keystroke to its own terminal or to any Herdr
+   pane. Launching, focusing and asking about panes go through Herdr's command line with a fixed argument list
+   (`workspace create`, `workspace focus`, `pane run`, `pane process-info`, `api snapshot`). Because text typed at a
+   running Claude Code arrives as a prompt (`keymap.md`), the only keystrokes that ever reach a pane are the
+   captain's own (rule 17).
+3. **Kinas speaks to the first mate once, and only as a launch argument.** Add to crew (§4) starts the first mate
+   with one fixed sentence — *Add the project https://github.com/‹owner›/‹repo› to the crew: clone it from GitHub, not
+   from my desk, and ask me which mode it ships in.* — whose only variable part is a GitHub URL Kinas built from the
+   folder's `origin` and validated (letters, digits, `.`, `_`, `-` in the owner and the name, nothing else). Nothing
+   anyone typed and nothing read from a file enters that command. When the first mate is already running, Kinas
+   says nothing to it: the sentence goes on the clipboard and the first mate's pane is shown, because a second first
+   mate in one home is read-only (Firstmate's lock) and typing is rule 2.
+4. **Kinas writes nothing under Firstmate's home.** Not `data/`, `state/`, `config/` or `projects/`. The one file
+   ever written there is `config/backend` (`herdr`), once, by `kinas crew setup`, before any first mate exists.
+   Firstmate's status files are append-only, provenance-guarded event logs, and a foreign write fails toward a wake.
+5. **One Firstmate script changes anything, one at a time, on a click.** `fm-send.sh <task> --resolve-key <key>
+   <answer>` is the only mutating script Kinas runs, never two at once. Kinas never runs `fm-control.sh`,
+   `fm-teardown.sh`, `fm-spawn.sh`, `fm-bootstrap.sh`, `fm-tasks-axi.sh`, `fm-captain-hold.sh` (except its read-only
+   `open`) or `fm-afk-return.sh` (run bare, it ends away mode). Kinas never kills a session, deletes a worktree or
+   checks out a branch in the home.
+6. **Only exit 0 is "delivered".** A send that exits with anything else — including 3 (typed but unconfirmed) and 6
+   (lease refused) — leaves the item open with Firstmate's last error line. An item closes only when Firstmate's
+   snapshot stops listing its key; Kinas never closes a decision itself, because the close is Firstmate's own append.
+7. **A held task is answered from Kinas only through the worker it came from.** A captain-held task is its own
+   backlog task whose id is the decision's key. When the snapshot names the worker it came from and that worker is
+   still in the fleet, Answer runs `fm-send.sh <worker> --resolve-key <held id> <answer>`. Every other held task
+   says **Answer in the first mate's pane** with a button to the pane, because answering it needs
+   `fm-captain-hold.sh answer` with a decision file, which rule 5 keeps from Kinas (answer 2A).
+8. **Only Firstmate's contracts are read, and only what they carry is shown.** Kinas reads
+   `bin/fm-fleet-snapshot.sh --json` (schema `fm-fleet-snapshot.v1`), `state/home-summary.json` (schema
+   `fm-secondmate-home-summary.v1`), `fm-afk-contract.sh field <name>`, `fm-project-mode.sh <name>`, Herdr's
+   `api snapshot` and `pane process-info`, and `gh pr view`. The modification times of `data/backlog.md` and the
+   summary are triggers only. It never reads status logs, task metadata, pane captures, the away contract's words or
+   the backlog's contents. A contract whose schema changed is refused with one line and the last good reading stays
+   on screen (ADR 0004). Nothing is shown that the contracts do not carry: there is no recommendation, no evidence,
+   no branch, no start time and no provider slot in them (read at the pin, 2026-09-23), so none is drawn.
+9. **Quotas stay Kinas's own.** Kinas never runs `quota-axi` (it reads Claude Code's login and calls Anthropic) and
+   never reads under `~/.claude`. `quota-axi` is installed only because Firstmate runs it. The crew's line on Usage
+   counts tasks per harness; it is never a share of a quota.
+10. **Firstmate's home is never a project, and the desk is never the crew's.** The home is outside the projects
+    folder, so it is never a client folder, never in the sidebar and never in the context packet's Projects; the
+    reader opens a file under it only from a click (a report or a brief). Every repository has two copies by design:
+    the desk (the captain's folder) and the crew's clone (under the home). GitHub is where they meet. Firstmate is
+    never pointed at the desk, and Add to crew passes the GitHub URL, never the folder's path.
 
-| Firstmate provides | Kinas provides |
-|---|---|
-| The first mate session (Claude Code, `AGENTS.md` takes over on launch) | The launch: a Herdr session named `firstmate` in Firstmate's home, started from the Work page |
-| Workers and scouts in Herdr sessions, each in a treehouse worktree | Visibility: every session on the Crew page, with a button to it and, later, an embedded pane |
-| The task queue, briefs, reports, learnings (`data/`) | A read-only mirror in the store, fed by a collector that calls Firstmate's contracts (`fm-fleet-snapshot.sh --json`, `fm-crew-state.sh`, `state/home-summary.json`) and never parses its files; the reports opened in the reader |
-| Live state: windows, event logs, PRs, pending decisions (`state/`) | The fleet board and the inbox, read from those contracts; the order log, written by Kinas in Kinas's store only |
-| The watcher and the Stop hook (zero-token supervision, turn-end backstop) | Nothing; Kinas never touches the wake |
-| Project modes (`no-mistakes`, `direct-PR`, `local-only`, `+yolo`) in `data/projects.md`; away mode as a posture entered in the pane | Display only: modes on the Crew page, the away posture and the return brief when the record exists; changes are asked of the first mate in its pane |
-| Second mates, Relay | Available but off; Kinas shows a second mate as another conductor if one is created; Relay stays off |
-| `treehouse`, `no-mistakes`, `gh-axi`, `tasks-axi`, `quota-axi`, optional `chrome-devtools-axi`, `lavish-axi` | The installer: per-tool approval, pinned versions, health in Settings. `quota-axi` is installed because Firstmate's dispatch reads it; Kinas stays the display |
+### The mirror
 
-Two consequences worth naming. First, the store does not own crew state in this build; it mirrors it, which is the durability split the reference design already described for the collector: live facts from Herdr's socket, durable facts from Firstmate's files and git. Second, every mutation Kinas ever needs is a Firstmate script run as a process: `fm-send.sh --resolve-key` to answer a decision (it appends the closing line and delivers the answer to the worker), `fm-captain-hold.sh` to release a held item, `fm-control.sh` for interrupt, exit, and relaunch, `fm-tasks-axi.sh` for the queue. Status files are append-only, provenance-guarded event logs; a foreign write fails toward a wake, so Kinas writes nothing under `data/` or `state/`, ever.
+11. **The store mirrors the crew; it never owns it.** Kinas's crew rows are rebuilt from Firstmate's contracts. The
+    app is still the store's one writer (ADR 0001) and the CLI still opens it read-only.
+12. **The mirror never deletes.** A task the snapshot stops listing is marked gone, never removed; the timeline only
+    grows; a decision is closed, never erased. What is shown is a view: a done task for 7 days after it finished, a
+    gone task for 24 hours.
+13. **A task filed in the pane is a card within 5 seconds.** The snapshot runs when `data/backlog.md` or the summary
+    changes (after 500 ms of quiet), when the Crew or Inbox page opens, and every 60 s while the window is visible
+    (300 s hidden) — never twice within 5 s. Filing a task does not republish Firstmate's summary (it can lag 5
+    minutes), and the snapshot itself probes each task with `gh` and `no-mistakes` under 10 s limits.
+14. **A worker's pane is known only by the snapshot's `endpoint.target`**, split at its first colon into the session
+    and the pane id (a pane id contains a colon itself). Never by a tab's label, never by a folder.
+15. **Stale is said, not hidden.** Herdr's view older than 15 s disables Open its pane and says `pane state stale`;
+    the mirror older than 60 s reads `stale · as of 09:31:12` in the Crew page's caption; a Herdr that does not
+    answer makes only the live parts stale.
 
-## 3. Who does what
+### What the captain sees
 
-- **The captain.** Miguel. Talks to the first mate in its pane on the Work page. Decides merges, credentials, anything destructive, anything the project mode does not delegate. Can watch any worker; can type into one, which becomes an order.
-- **The first mate.** Firstmate on Claude Code. Takes the ask, picks the project, decides ship or scout and how it ships, files the task with the captain's words verbatim as acceptance criteria plus its own build spec, launches and supervises workers, answers their questions, decides what its mode allows, reports outcomes. Read-only over the projects except for its guarded operations (its hard rule 1); it keeps its own clones under its home, and the captain's checkouts under `~/SintraLabs` stay untouched.
-- **Workers.** One per task, disposable: a fresh Claude Code session in a treehouse worktree on its own branch; implement, run the project's checks, commit, push, PR through the project's mode, torn down after the merge.
-- **Scouts.** Same, with a report as the deliverable, at `data/<id>/report.md`, opened in the reader.
-- **Second mates.** Off in this build. If the captain creates one later, the Crew page shows it as a second conductor with its own fleet.
+16. **One waiting count, everywhere.** Waiting on the captain = the open keyed decisions plus the captain-held tasks,
+    minus the ones he has already answered with exit 0. Reconcile lines are information and never count. The
+    sidebar's Inbox row, the "N waiting on you" button on Home and on Crew, and the menu bar all show this one number
+    from the same reading; at 0 none of them shows a number.
+17. **An order is recorded, never generated.** A line the captain types into Kinas's terminal becomes an order on a
+    task only if, when he presses Enter, Herdr says the focused pane is that task's worker pane. Typed into the first
+    mate's pane or a plain shell, it is dropped without a row and without a log line. It is redacted (`Bearer …`,
+    `sk-ant-…`), stripped of NUL and capped at 2,000 characters, and kept in Kinas's store only; Firstmate sees the
+    typing as conversation, never as a record.
+18. **A client folder and a crew project are matched by their GitHub repository.** A project belongs to the client
+    folder whose `origin` names the same GitHub owner and repository (HTTPS or SSH form, `.git` dropped, case
+    ignored), never by name. A project no folder matches gets a lane under the repository's name, with no chip,
+    after the folders' lanes. A hidden folder keeps its lane on Crew (hiding is for the sidebar and Home); a removed
+    folder is forgotten, so its tasks fall into a repository-named lane.
+19. **A lane exists while its folder has a task on the board.** Its header counts in Firstmate's own words —
+    `2 in flight · 1 queued` — never provider slots, which Firstmate does not publish. "In flight" is any task
+    started and not finished, whatever its word (a task waiting on a decision is in flight, not working).
+20. **One word per task, first match wins:** gone → **gone**; finished → **done**; failed → **failed**; a pending
+    decision, parked, or held for the captain → **needs decision**; blocked → **blocked**; paused → **paused**; a PR
+    that is open, not a draft, mergeable and with at least one check, all green → **ready**; a failing check →
+    **CI red**; any PR → **PR open**; working → **working**; queued → **queued**; anything else → **unknown**.
+21. **Overnight means since you were last here.** Kinas notes when its window last had focus, at most once a minute.
+    Sixty minutes without focus end a session. Overnight runs from the end of the last session to now, capped at 24
+    hours, and says so: `since 23:40 yesterday, 9 h 20 m`. A folder's row counts the tasks of its lane with any
+    event in that window as done, working (queued, working, PR open, paused, unknown), waiting on you (needs
+    decision, ready) or failed (failed, blocked, CI red).
+22. **The Work pane opens on the first mate, once.** When Kinas starts and the attached Herdr session has a
+    `firstmate` workspace, Kinas focuses it, so the pane shows the first mate when the session attaches. After that
+    Kinas moves the pane only on a click (First mate, Open its pane, Launch task, Open in the terminal); the pane is
+    the captain's and never changes under his hands.
+23. **The launcher makes one first mate.** At most one `firstmate` workspace per session — Firstmate's own label for
+    its home workspace, so one it made itself is found too. `claude` runs there only when Herdr says `claude` is not
+    already its foreground program; a second click focuses it. A missing required tool, a home on a branch other
+    than `main` (a tangle), or no Herdr server is refused with one line, and nothing moves.
+24. **The terminal chrome says only what Kinas knows.** It shows the session and the focused workspace's label; a
+    status badge only when the focused pane is a worker's, with that task's word; the profile `claude` when Herdr
+    reports it as the pane's foreground program, `plain shell` for the shell. (The chrome's old badge said "working"
+    without reading anything.)
+25. **A status file gives two kinds of line and nothing else.** `kinas context` lists in-progress features from
+    `tasks/*/status.md` in the projects it already lists, reading only `- Gate N · <name>: <state>` and the
+    `- [ ]` / `- [x] Slice …` lines. A feature is in progress while any gate is not `APPROVED` or any slice is
+    unticked. A file that does not parse is listed as `status unreadable`, never guessed.
 
-## 4. How one task runs
+### Privacy, and the Mac
 
-Exactly as Firstmate runs it, with what Kinas adds in brackets.
+26. **Nothing about a task reaches the log or `kinas crew status --json`** beyond durations, counts, states and PR
+    numbers: no title, id, folder, path, URL, key, question, answer, order text or a script's error text. Every crew
+    test fixture carries a marker that the forbidden-strings check looks for in the log and in that output.
+27. **The webview gains no capability.** Every new door is a Rust command.
+28. **No test and no probe touches Herdr's `default` session.** The end-to-end tests use a throwaway Herdr session
+    and a fake Firstmate home (stub scripts over fixtures), and none starts `claude`. The slice-0 probe sets
+    `HERDR_SESSION` to its own session and proves its workers land there, because Firstmate falls back to `default`
+    when it is unset.
+29. **Every crew process gets the login shell's `PATH`, `FM_HOME`, no inherited Herdr variables, no input, and a time
+    limit:** snapshot 20 s, `fm-send.sh` 30 s, `gh` 10 s, the two Settings scripts 3 s, tool checks 5 s, Herdr 3 s.
+    An app started by launchd sees only `/usr/bin:/bin`, and `gh`, the node tools, `herdr` and `claude` live
+    elsewhere.
+30. **The terminal is never remounted.** The Crew and Inbox pages mount no terminal (ADR 0002); panes embedded in
+    Kinas are a later spec.
 
-1. The captain asks in the first mate's pane.
-2. The first mate files the task in its queue with the captain's words as acceptance criteria and its build spec as the brief. [The collector sees the new task within a second; the card appears on the fleet board as queued.]
-3. The first mate launches the worker: a treehouse worktree, a Herdr session named `fm-<task>`, a fresh Claude Code session with the brief. [The card turns working; the session is listed; the button to it appears.]
-4. The worker builds, runs checks, commits, pushes; on `no-mistakes` it runs the validation pipeline, then the PR and CI. [The PR and its checks appear on the card, read by Kinas through `gh`.]
-5. Firstmate's watcher sleeps on the fleet and wakes the first mate through the Stop hook when something needs it: finished, stuck, needs a decision, went quiet. Anything only the captain can decide goes to Firstmate's decision inventory with evidence and a recommendation. [The inbox mirrors the open-decisions fold from the fleet snapshot; approving in the inbox runs `fm-send.sh <task> --resolve-key <key> "<answer>"` as a process, which is how the actor that answers is meant to close a decision, never a file edit and never a pane.]
-6. CI green: one message in the pane with the PR link; the captain says merge; the first mate merges, tears down, refreshes its clone, starts the next queued item. [The card turns done; the session disappears from the list; teardown is visible.]
+## 3. Flows
 
-If the captain types into a worker's pane, Firstmate treats it as an order and reconciles. [Kinas records it on the task's timeline as an order, with the text and the time, because the app knows the keystrokes came from the webview.]
+**Setting up.** The Crew page, with nothing installed, says `Run this in the Work pane:` above `kinas crew setup` and
+a Copy button. The command prints each step before it runs it and asks `y/N` for each tool: the prerequisites (`git`,
+`gh`, `node`, `npm`, `jq`, `python3`, `herdr`, `claude`) and where to get a missing one; `gh auth status`; the clone at
+the pin (`already at f9f74a1` when it is; a changed clone is refused with `<home> has local changes; Kinas will not
+touch it`); `config/backend`; the tools at pinned versions (`npm install -g <tool>@<version>`, or a release tarball
+checked against its published checksum into `~/.local/bin` — never `curl | sh`); a line per tool's `setup hooks`
+step, printed and never run, because those write under `~/.claude`. It ends with a table, `ok 0.2.5` or `missing`
+per tool, and exits 0 only when every required tool is there and `gh` is signed in. A failed step is printed with what
+to do and the rest continue. The Crew page then asks **Start the first mate now?** above **Launch the first mate**.
 
-## 5. What Miguel sees
+**Launching.** Launch the first mate → the launcher (rule 23) finds or creates the `firstmate` workspace in the
+attached session, in the home, and runs `claude` there → the Work page shows with the terminal holding the keys →
+the first time, Claude Code asks whether to trust the folder; the captain answers once → Firstmate's session start
+runs. A second click, or **First mate** on Crew, or Launch task on Home, focuses the same workspace.
 
-The Crew page (⌘3) is the bridge, built for the one thing a chat-only conductor cannot give: visibility.
+**Every morning.** Open Kinas → the pane is focused on the first mate (rule 22) → Home shows Overnight with a row
+per client folder and Waiting on you with up to three items → the menu bar and the sidebar show the same waiting
+count.
 
-- **The fleet board.** One lane per project; in each lane, the workers and scouts as cards: title, kind, state (queued, working, blocked, needs decision, PR open, CI red, ready to merge, done), elapsed time, the branch and PR, the provider it runs on and the slot it occupies. Click a card for the task detail.
-- **The task detail.** The brief (acceptance criteria and build spec, read from Firstmate's task files), the live timeline (Firstmate's event log merged with the captain's orders), the PR and its checks, the report for scouts (in the reader), the decision if one is pending, and a button to the worker's session in the Work page. Embedded panes are the last slice.
-- **The inbox.** Every open decision from the fleet snapshot's fold, with the evidence and the recommendation; approve, deny, or answer; merges live here too. Every action runs the corresponding Firstmate script (`fm-send --resolve-key`, `fm-captain-hold`, the merge through the first mate), never a file edit and never a pane.
-- **The first mate's pane.** The Work page keeps the `firstmate` session as its default target; the Crew page has a button to it.
-- **The Usage page** gains the crew's share of each provider's window, read from the same numbers Firstmate dispatches on.
-- **The launch screen** lists crew and sessions from the mirror, which is what it was always meant to read.
+**A project.** In the pane: "add kinas, ship mode no-mistakes"; the first mate clones and registers it, and its lane
+appears once it has a task. Or right-click the client folder → **Add to crew**: with the first mate stopped, it
+launches with the one sentence of rule 3; with it running, the sentence is copied, the pane is shown, and the sidebar
+says `The ask is on the clipboard — paste it into the first mate's pane.` A folder with no GitHub remote, or already
+in the crew, shows the item disabled with the reason as its tooltip.
 
-**Screens** *(added 2026-09-22 by the process half-day; the mockups are Gate 1 work, empty until then)*:
-- `mockups/board.html` — the Crew page with the fleet board
-- `mockups/task-detail.html` — the task detail in the right panel
-- `mockups/inbox.html` — the inbox
+**A task, from ask to done.** Ask in the pane → a **queued** card in its folder's lane within 5 s (rule 13) → the
+worker starts in its own worktree and a `fm-<id>` tab → **working**, and **Open its pane** appears → it pushes →
+**PR open** with `PR #123 · checks 3/4 · 1 failing` (→ **CI red**) read through `gh` → green and mergeable →
+**ready** → the captain says "merge it" in the pane → **done**, the tab and the worktree gone, the timeline showing
+it. A scout ends with **Open the report** instead of a PR.
 
-## 6. What Kinas builds
+**A decision.** A worker asks something only the captain can decide → an item on the Inbox, with the count up by one
+everywhere → **Approve** sends `Approved — go ahead.` at once; **Answer** and **Deny** open a text box and **Send**
+sends it (a denial is sent as `Denied — <text>`) → Kinas runs `fm-send.sh` (rule 5) → exit 0: the item says
+`Sent 15:02`, the count drops at once, and the item leaves when the snapshot closes its key → the worker carries on.
+Exit nonzero: `Not delivered — <Firstmate's last error line>`, the controls come back, the count stays. The same item
+and actions sit in the task's detail.
 
-- **The installer.** `kinas crew setup`, and the same flow from the Crew page's empty state: clone Firstmate at a pinned commit into Kinas's data directory as its home (`FM_HOME`), set `backend=herdr`, install the helper tools with per-tool approval and pinned versions (`treehouse`, `no-mistakes`, `gh-axi`, `tasks-axi`, optionally `chrome-devtools-axi` and `lavish-axi`), verify `gh auth`, and show every tool's state and version in Settings. The app refuses to launch the first mate while a required tool is missing, with one line.
-- **The launcher.** One action that opens a Herdr session named `firstmate` in Firstmate's checkout (`FM_ROOT`) and starts `claude` there, through Herdr's CLI with a fixed argv, the way Open in the terminal works today. Nothing is typed. Before creating it, the launcher checks for an existing primary session (one per home; Firstmate holds a fleet lock) and attaches instead of duplicating. `config/backend` is set to `herdr` explicitly at install, and the session is never started inside tmux, because Firstmate's auto-detection is innermost-first.
-- **The collector.** A Rust service that watches `state/home-summary.json` (published atomically with a freshness epoch after every state change) and, on change or on a bounded cadence, runs `bin/fm-fleet-snapshot.sh --json` (schema `fm-fleet-snapshot.v1`) and, per task on demand, `bin/fm-crew-state.sh <id>`; Herdr's socket supplies live session state; `gh` supplies PR checks. It writes the mirror tables (`crew_tasks`, `crew_workers`, `crew_events`, `crew_decisions`) in the store, one writer as always, with the durability split stated: live state best-effort and stale-marked, durable facts from the snapshot and git. It never reads status logs, pane captures, or hashes itself: the doc is explicit that a log's last line is not its state, and the open-decisions fold is Firstmate's to compute.
-- **The Crew page.** Board, task detail, inbox, as above.
-- **The order log.** Keystrokes into a worker's pane, recorded as an order row on the task with the text and the time.
-- **Reconciliation you can see.** On every start, the collector compares Firstmate's state against Herdr's sessions and the worktrees on disk and lists every mismatch in the inbox, never repairing silently; Firstmate's own reconciliation runs when the first mate next starts, and Kinas shows what it did.
-- **Settings.** Display of project modes and `+yolo` from `data/projects.md`, the away posture when `state/.afk-contract` exists, the installed Firstmate commit against the pinned one (drift is shown, not fought, because `/updatefirstmate` fast-forwards from origin), and the tool health list. Changes to modes and the project registry are asked of the first mate in its pane; Kinas edits none of them.
+**A held task.** Held for the captain, with its worker still in the fleet → answered like a decision, through that
+worker (rule 7). Otherwise → `Answer in the first mate's pane` and **Go to the first mate**.
 
-## 7. What Kinas does not build
+**An order.** The captain clicks **Open its pane** and types into the worker → at Enter, an `order` row appears on
+the task's timeline within a second (rule 17) → the first mate reads it as conversation.
 
-The queue, the briefs, the watcher, the Stop hook, the turn-end guard, the decision fold, worktree creation and return (treehouse's pool and locks), the merge, teardown, away mode, second mates, Relay. Kinas never kills a session, deletes a worktree, or interrupts a worker; those are `fm-control.sh` and `fm-teardown.sh`, invoked by the first mate. All of that is Firstmate's, pinned. If Firstmate breaks the contract Kinas reads twice, Kinas vendors it, per the existing rule for every adopted tool.
+**A restart.** Kinas quits mid-task → the workers and the first mate carry on in Herdr → Kinas starts → the mirror
+still has every row → one snapshot → the Inbox's **Reconcile** group lists every mismatch, one line each, and repairs
+nothing: an in-flight task whose pane is dead or absent, an in-flight task whose worktree is gone, a task in flight in
+the backlog with no task record, an invalid summary (its reason), a pane Firstmate calls alive that Herdr does not
+have → the first mate's own reconciliation at its next start clears them, and the lines leave.
 
-## 8. Invariants (added to the ones the app already obeys)
+**A contract that moved.** `/updatefirstmate` fast-forwards the clone: Settings says `Firstmate 9296f9b — moved from
+f9f74a1 (/updatefirstmate)` and nothing else changes while the two schemas hold. If a schema moved, the Crew page
+says `Crew: unsupported snapshot contract <x>, expected fm-fleet-snapshot.v1 · showing the last reading`.
 
-- Kinas never types into any pane, including the first mate's. Wakes are Firstmate's watcher through its Herdr backend; decisions from the inbox go through Firstmate's files; the launcher uses Herdr's CLI with a fixed argv. A test asserts zero PTY writes from the app across the whole flow.
-- The captain typing into a pane is the one exception and is recorded as an order.
-- Kinas is read-only over Firstmate's home. It writes nothing under `data/`, `state/`, or `config/`; every mutation is a Firstmate script run as a process. Firstmate's checkout (`FM_ROOT`) is never opened as a project, never appears in the sidebar or the context packet, and nothing in Kinas ever checks out a branch in it (a named branch there is what Firstmate calls a tangle).
-- Kinas's own folder workspaces in Herdr never target Firstmate's home or its worktrees; Firstmate's Herdr backend owns task placement, including its disposable presentation workspaces, and the session list follows it.
-- The store mirrors crew state; it does not own it. The CLI stays read-only; no command channel is needed in this build.
-- Nothing about a task reaches the log or `crew status --json` except durations, counts, states, and PR numbers. Briefs, report paths, worktree paths, and PR URLs live in rows only; a new test adds them to the forbidden strings.
-- The captain's checkouts under `~/SintraLabs` are never touched by the crew; Firstmate's clones live under its own home. Two copies of each repository on disk is the design, not a defect: the desk is the captain's, the clones are the crew's, and GitHub is the meeting point (the captain pushes what the crew should build on and pulls what the crew merged). Firstmate is never pointed at the captain's checkout to avoid the duplicate; that would break the boundary and share `.git` with half-done work.
+**A tool goes missing.** Launch is disabled with `tasks-axi isn't installed — run kinas crew setup`, the tool's row in
+Settings turns red, and nothing else changes.
 
-## 9. Acceptance
+**Context for an agent.** `kinas context` prints its Crew section from the mirror when the mirror is under 5 minutes
+old (the launch screen too), else from the snapshot as today; and a **Features in progress** section after Projects:
+per project, each feature with its first gate that is not approved, or its first unticked slice.
 
-- AC-1: `kinas crew setup` installs Firstmate at the pinned commit and every required tool with per-tool approval; Settings shows each tool's version and health; a missing required tool blocks the launcher with one line.
-- AC-2: The launcher opens the `firstmate` Herdr session in `FM_ROOT` running Claude Code, through Herdr's CLI, with zero PTY writes from the app; a second launch attaches to the existing session instead of creating another.
-- AC-3: One ask in the first mate's pane produces a card on the fleet board within a second, with the captain's words as acceptance criteria in the task detail.
-- AC-4: A launched worker shows working, with its session listed and a button to it; its PR and checks appear on the card without a manual step.
-- AC-5: An open decision in the fleet snapshot appears in the inbox with evidence and recommendation; approving it in the inbox runs `fm-send --resolve-key`, the worker resumes, and a test proves Kinas wrote no file under Firstmate's home.
-- AC-6: Merge and teardown are visible on the board: the card turns done, the session leaves the list, the worktree is gone.
-- AC-7: Two independent tasks run in parallel in two lanes; a third waits when the provider slot is full, and the Usage page shows the crew's share.
-- AC-8: Typing into a worker's pane produces an order row on the task's timeline within a second.
-- AC-9: Killing the app mid-task and relaunching lists every mismatch in the inbox with no silent repair; the worker's session is still alive in Herdr; the first mate reconciles on its next start and Kinas shows what changed.
-- AC-10: No brief, report path, worktree path, or PR URL appears in the log or in `crew status --json`, proven by the forbidden-strings test.
-- AC-11: A fake worker (a script that writes Firstmate-shaped task and state files and opens no PR) drives AC-3 through AC-9 in e2e without Herdr's `default` session or a token of quota.
+## 4. Surfaces
 
-## 10. Open questions, to answer before the task list
+Every surface composes DESIGN.md §4 components. What DESIGN.md does not yet say is written into it before the code,
+as version 1.4 (the list at the end of this section); every binding is written into `keymap.md` first.
 
-1. **Which Firstmate commit is pinned**, and what is the upgrade cadence (the monthly rule, or on Firstmate's own release signal once it has one)?
-2. **Herdr backend readiness.** Firstmate's Herdr backend was verified against 0.7 and 0.8; the installed Herdr is 0.9. A two-hour probe comes first: two workers on a scratch repo, sessions visible, states tracking reality, clean teardown. If it fails, `tmux` is the fallback backend and the Work page shows tmux windows instead; decide now whether that fallback is acceptable.
-3. **Worktrees: treehouse or Orca?** Treehouse by default (the simpler tool, no new terminal); Orca only if the probe shows a reason.
-4. **Quota source. Decided: install `quota-axi`.** Dispatch profiles resolve arrays from that tool's output through Firstmate's own procedure; Kinas remains the display and does not impersonate it.
-5. **The decision contract. Decided: there is no file.** Answers run `fm-send.sh <task> --resolve-key <key>`; held items run `fm-captain-hold.sh`; lifecycle runs `fm-control.sh`. The inbox's remaining question is only the exact argv of each, read from the script headers.
-6. **The fleet snapshot contract. Decided: `fm-fleet-snapshot.v1` and `state/home-summary.json`.** Which fields the board relies on is read from the script header; anything not in the schema is not shown.
-7. **The captain's orders. Decided: Kinas records, in its own store only.** Firstmate keeps direct typing conversational and unmarked; it never becomes a status-log record, and Kinas never writes one.
-8. **Away mode. Decided: Firstmate's, entered in the pane.** The captain's away words are read back and recorded verbatim by design, so Kinas offers no form; it shows the posture and renders the return brief. The spend cap is Firstmate's.
-9. **Project allowlist. Decided: `data/projects.md`, displayed, not edited.** Adding a project is asked of the first mate.
-10. **Slices.** Proposed: (0) the Herdr probe and a read of Firstmate's contracts (fleet snapshot, decision file, event log); (1) the installer and the launcher; (2) the collector and the mirror tables, with the fake worker; (3) the fleet board and task detail with a link to the session; (4) the inbox and the decision write; (5) the order log; (6) reconciliation on start; (7) Settings for modes, away mode, and the allowlist; (8) the Usage page's crew share; (9) embedded panes, last. Confirm or reorder.
+- **Sidebar.** Crew gains ⌘3 and Inbox ⌘5 in their tooltips; Inbox shows the waiting count (rule 16). A client
+  folder's right-click Menu gains **Add to crew** after Hide from sidebar (Menu, disabled items with their reason).
+- **Crew page (⌘3).** Title row: "Crew", the **N waiting on you** button (hidden at 0, opens the Inbox), and
+  **First mate** — or **Launch the first mate** until it runs. Not installed: the setup line with Copy (EmptyState,
+  Button) and the tool table (Table, StatusBadge). Installed, not running: the tool table, the pin line and **Start
+  the first mate now?** with Launch, disabled with its one-line reason while a required tool is missing. Running: the
+  board — lanes (Lane, Chip) with cards (Card, StatusBadge): title as filed, `ship` or `scout`, the word (rule 20),
+  elapsed (`working 12 min`, `done in 41 min`, counted from when Kinas first saw it working, since Firstmate records
+  no start), the harness, the PR badge (`PR #123 · checks 3/4 · 1 failing`), **Open its pane** while Herdr has the
+  pane. No tasks: `No tasks — ask in the first mate's pane`. The caption `as of 09:31:12`, stale per rule 15; an
+  error in one line under the board with `showing the last reading`. Selecting a card opens its detail and marks the
+  card selected.
+- **Task detail (the right panel).** The panel holds one thing at a time: a task's detail or the reader. Opening a
+  card shows the detail; opening the report, the brief or any file shows the reader; × closes the panel. Header:
+  the folder's chip and name, the title, the word (PanelHeader). Body (PanelBody): Firstmate's state line verbatim
+  (`state: working · source: pane · …`), kind, mode, harness; **The ask** — the title and the first 240 characters of what was
+  filed, as Firstmate keeps them — with **Open the brief**; the decision (QuestionCard and the three actions) or
+  `No decision pending`; the PR (number, state, mergeable, review) and its checks (ChecksList), or `No PR yet`; the
+  timeline (Timeline: state changes, the PR, checks, Firstmate's last events, and orders with the order tag); the
+  worktree `present` or `gone`; **Open the report** for a scout, or `Report not written yet`. Footer (PanelFooter):
+  **Open its pane**. A task that left the snapshot says `No longer in the fleet snapshot` under its header.
+- **Inbox page (⌘5).** Title row "Inbox" with the count. **Decisions**, newest first: InboxItem with the folder's
+  chip, the question (Firstmate's summary line verbatim), a quiet line with the task's title, the key and the age
+  (`12 min ago`), and Deny / Answer / Approve; A, R and D when an item is focused. An open text box with **Send**
+  (one line of hint: `Sent to the worker with fm-send`), `Sending…`, `Sent 15:02`, or `Not delivered — …` in
+  `--danger`. **Held for you**: the same item, or `Answer in the first mate's pane` with **Go to the first mate**
+  (rule 7). **Reconcile**: one line each, no actions, not counted. Nothing waiting: `Nothing waiting on you.`
+- **Home.** Title row: **N waiting on you** (secondary, opens the Inbox, hidden at 0) and **Launch task** (primary,
+  goes to the first mate when it runs, else to the Work page as today). **Overnight**: SectionHeader with the
+  "since" caption (rule 21), one ProgressRow per shown client folder: chip, name, the latest event and its time,
+  the segmented bar, count badges, a chevron; selecting it opens that folder's most important task in the panel —
+  waiting on you first, then failed, then the latest; a folder with nothing says `No work overnight in this folder.`
+  and opens the folder in the reader, as today. **Waiting on you**: up to three compact InboxItems, newest first,
+  Approve inline and Answer or Deny opening the item on the Inbox page; `All 5 in Inbox` when there are more. Usage
+  and Needs attention are unchanged.
+- **Usage.** A **Crew** section last, after This Mac: a MetricRow per harness with a task in flight
+  (`claude · 4 in flight`) and one for the queue (`Queued · 1 task`); no bars, no quota. Not rendered when nothing
+  is in flight or queued; stale with the page's own rule.
+- **Work page.** The chrome (rule 24): `default · firstmate` with the profile `claude`; `default · fm-‹id›` with the
+  task's word and its harness; `plain shell`. Copy stays; no Detach.
+- **Settings.** Grouped as DESIGN.md §5 says, now that the crew gives the groups something to hold: **Providers**
+  (Claude Code, Ollama, Convex, Hostinger), **Crew** (new), **Client folders** (the projects folder, the client
+  folders), **Shortcuts** (shortcuts, the global hotkey), **Appearance**, **Advanced** (menu bar, launch at login,
+  the organisation, the reader, the CLI). The Crew card: `Firstmate f9f74a1 (pinned)` or `— moved from f9f74a1`;
+  `Home: ~/Library/Application Support/ai.sintralabs.kinas/firstmate`; `Backend: herdr`; the tools table (Table,
+  StatusBadge: `installed 0.2.5`, `missing`, `below floor`, `gh: signed in`); `Away since 22:10 · back 08:00` while
+  Firstmate's away record exists; the projects, one line each, `kinas · no-mistakes · yolo off`, or
+  `No projects registered — ask the first mate`. Nothing on the card edits Firstmate.
+- **Menu bar.** The title keeps its quota and adds the count: `58% · 2`. The menu's first line, `2 waiting on you`,
+  opens Kinas on the Inbox. Refreshed when the crew changes and on the existing minute.
+- **CLI.** `kinas crew setup [--dry-run] [--yes]` (the flow above; `--dry-run` prints every step as `would:` and
+  touches nothing; the CLI's read-only rule gains this dated exception, which writes only under Kinas's data
+  directory, `~/.local/bin` and npm's global prefix). `kinas crew status [--json]` from the store with the app
+  closed: installed, pin, tools, counts per word, one line per task with its word, elapsed and PR number — no ids,
+  titles, paths or URLs (rule 26). `kinas context`: the Crew section from the mirror, and Features in progress.
+- **Keys and the palette** (`keymap.md` first): ⌘3 → Crew, ⌘5 → Inbox, A / R / D on a focused inbox item; the
+  palette gains Go to Crew, Go to Inbox and Go to the first mate.
 
-## 11. Decisions taken
+**DESIGN.md 1.4, written with this PRD:** the Lane's header carries counts, not slots; an Inbox item's evidence and
+recommendation are shown only when the source carries them, it gains the "answered in the pane" form, and its keys
+are bound; four new badge words — **failed** (solid, `--danger`), **paused** (solid, `--stale`), **unknown** (solid,
+`--stale`) and **gone** (cross, `--ink-3`); the right panel holds one thing at a time; Home's "since" on the Mac;
+the terminal chrome shows a badge only for a worker's pane; the Work page's strip of lanes does not come with Build 3
+(§6).
 
-- The first mate is Firstmate on Claude Code, on the Herdr backend, in a home under Kinas's data directory, pinned. Kinas adopts the conductor and builds the bridge.
-- Kinas never types into a pane and never writes into Firstmate's home; wakes are Firstmate's Stop hook and watcher, decisions and lifecycle run Firstmate's scripts as processes, launches go through Herdr's CLI.
-- The store mirrors crew state through a collector; the CLI stays read-only; no command channel in this build.
-- Embedded panes are the last slice; the board links to the Work page until then.
-- The collector consumes contracts (`fm-fleet-snapshot.sh --json`, `fm-crew-state.sh`, `home-summary.json`) and never a log's last line, a pane capture, or a hash.
-- `quota-axi` is installed; away mode and project modes are Firstmate's and displayed, not edited; Firstmate's checkout is excluded from projects, the sidebar, and the context packet.
+**Screens:**
+- `mockups/board.html` — the Crew page: the running board with the detail closed; below it, the page before setup
+  and before launch
+- `mockups/task-detail.html` — a ship task's detail in the right panel, with a decision, checks and an order
+- `mockups/inbox.html` — the Inbox: decisions in each state, a held task, reconcile lines
+- `mockups/home.html` — Home with the crew's night, Waiting on you and the count
+- `mockups/settings-crew.html` — Settings grouped, with the Crew card
+- `mockups/work.html` — the Work page's chrome in its three forms, and the client folder's menu with Add to crew
+- `mockups/usage-and-menu-bar.html` — Usage's Crew section and the menu bar with the count
 
----
+## 5. Validation
 
-*Answered 2026-09-22 with Miguel, before the build spec (see `build-spec.md` §16):* Q1 → `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540`, reviewed monthly · Q2 → no tmux fallback; a failed probe stops the build · Q3 → treehouse · Q10 → reordered: probe, mirror, installer + launcher, board, inbox + orders, reconciliation + settings; embedded panes moved to a follow-up spec. Also: `quota-axi` is installed for Firstmate but **Kinas never runs it** (it reads Claude's credential and calls Anthropic, which Kinas's own rule forbids); the "session named `firstmate`" is a **workspace** labelled `firstmate` in the session Kinas's pane is attached to; the inbox holds what the contracts carry (keyed open decisions and captain-held tasks), answered by free text.
+Each case runs against the fake home in a throwaway Herdr session unless it says otherwise, and every one also passes
+the privacy check (AC-10).
+
+- **AC-1 · Setup.** `kinas crew setup --dry-run` prints seven steps with `would:` and creates nothing; `--yes` over
+  stub `git`/`npm`/`shasum` leaves the home at `f9f74a1` on `main`, `config/backend` = `herdr`, every tool `ok`, exit
+  0; with `tasks-axi` removed, Launch is disabled with `tasks-axi isn't installed — run kinas crew setup` and its row
+  in Settings reads `missing`.
+- **AC-2 · One first mate.** Launch twice, then with Herdr's server stopped: exactly one `firstmate` workspace, its
+  pane's folder the home, its foreground program the stand-in for `claude`; the Work page shows and the terminal has
+  the keys; Kinas's terminal pid is unchanged and nothing was typed into it; the second click logs `focused`; with no
+  server the sidebar says `Herdr isn't running; attach it first`.
+- **AC-3 · A filed task is a card within 5,000 ms**, measured in the page from the backlog's change, with its title
+  as filed in the detail.
+- **AC-4 · A working task** reads **working**, gets **Open its pane** (which focuses that pane's workspace), then
+  `PR #123 · checks 3/4 · 1 failing` and **CI red**, then **ready** — no click needed.
+- **AC-5 · A decision answered.** Approve on an item keyed `api-shape`: the stub `fm-send.sh` records exactly
+  `["<id>","--resolve-key","api-shape","Approved — go ahead."]`; the item says `Sent`; the count in the sidebar, on
+  Home, on Crew and in the menu bar drops by one within 1 s; an inventory of the fake home (path, size, time) differs
+  only in the stub's own record; the item leaves once a snapshot without the key arrives.
+- **AC-6 · Done and gone.** The card reads **done** with `done in 41 min`; Open its pane leaves; the detail says the
+  worktree is `gone`; after a snapshot that omits it, `No longer in the fleet snapshot`, and the row is still in the
+  store.
+- **AC-7 · Lanes by repository.** Tasks on two projects whose GitHub repositories match two client folders, and one
+  on a project matching none: two folder lanes in the sidebar's order with their chips, then one lane under the
+  repository's name with no chip; Usage's Crew section reads `claude · 2 in flight` and `Queued · 1 task`; with
+  every task done, the section is gone.
+- **AC-8 · Orders.** Typed into the worker's pane, `deploy the thing` + Enter is an order on its timeline within
+  1,000 ms; `hello` typed into the first mate's pane leaves no row; `token Bearer abc123` is stored as
+  `token [redacted]`.
+- **AC-9 · A restart lists and repairs nothing.** Two launches over one data directory: the Reconcile group lists
+  exactly the two lines for the task with a dead pane and a gone worktree, none for the healthy one; the fake home is
+  unchanged; both tasks' rows and timelines survived.
+- **AC-10 · Nothing leaks.** After every crew case, the log and `kinas crew status --json` contain no fixture marker,
+  and the JSON has no key named `id`, `title`, `path`, `url`, `worktree`, `home`, `key`, `summary` or `text`; the
+  app's capabilities are byte-identical to `main`.
+- **AC-11 · The fake drives everything.** Every crew case passes without `default` and without starting `claude`
+  (the `claude` processes before and after are the same).
+- **AC-12 · A failed send leaves the item open.** With the stub exiting 1 and printing `error: key api-shape is not
+  open in this home`: `Not delivered — error: key api-shape is not open in this home`, Send enabled again, the count
+  unchanged; a second Send with exit 0 succeeds.
+- **AC-13 · A moved contract is refused.** Schema `fm-fleet-snapshot.v2`: the error line with `showing the last
+  reading`, every card as before; an invalid summary adds one Reconcile line and no error.
+- **AC-14 · Held tasks.** A held task whose worker is in the snapshot: Answer records `["<worker>","--resolve-key",
+  "<held id>","<text>"]`. One without: `Answer in the first mate's pane`, and no script runs.
+- **AC-15 · Home's night.** With fixture events inside and outside the window: the caption reads `since <time>, <n h
+  n m>`; a folder's row shows only the in-window tasks in its bar and badges; selecting it opens the waiting task's
+  detail; a folder with nothing says `No work overnight in this folder.`; Waiting on you shows three items and
+  `All 5 in Inbox`.
+- **AC-16 · The pane opens on the first mate.** A `firstmate` workspace exists, unfocused; Kinas starts: Herdr reports
+  it focused; over the next 60 s with no click, Kinas focuses nothing else.
+- **AC-17 · Add to crew.** First mate stopped: the new workspace's pane runs the stand-in with exactly the sentence of
+  rule 3 as one argument. Running: the clipboard holds the sentence, the pane is shown, nothing was typed. A folder
+  with no GitHub remote: the item is disabled with `No GitHub remote`. An `origin` with a character outside the
+  allowed set: refused, nothing launched.
+- **AC-18 · The chrome.** A worker's pane focused: its word and harness; the first mate's: no badge, `claude`; a
+  plain shell: `plain shell`.
+- **AC-19 · Features in progress.** A fixture project with a status file at Gate 1 in progress is listed with that
+  gate; one with every gate approved and every slice ticked is not; a malformed one reads `status unreadable`; the
+  log names no feature.
+- **AC-20 · Nothing that worked broke.** The full end-to-end suite passes, run alone; every deliberate change to an
+  existing test is named in its PR (the palette's order, the command registry, the navigation's tooltips, ⌘3 and ⌘5
+  in the key contract, Settings' recorded screens after the regrouping); no test is skipped or loosened.
+- **AC-21 · Fast enough.** On the installed release build with the crew running against the real home, the warm open
+  of `plan-300.md` has a median under 200 ms over ten opens.
+- **AC-22 · It ships clean.** `bun run check` and the full suite green on `main`'s commit; merged by fast-forward;
+  the release binary holds none of the test seams; `/Applications/Kinas.app` built from that commit and running;
+  `kinas crew status --json` says `installed: true` with the pin.
+- **Needs the captain's eyes** (the smoke test): the first launch into his own `default` session, the trust prompt
+  answered once, the first real ask and its card, the first real decision answered from the Inbox and the worker
+  going on, Add to crew on a real folder, the morning after a night of crew work read from Home.
+
+## 6. Out of scope
+
+- **Panes embedded in the Crew page** — a later spec; it touches the rule that the terminal is never remounted.
+- **A tmux fallback** — if the slice-0 probe shows Firstmate's Herdr backend does not work on Herdr 0.9.0, the build
+  stops and reports; workers the Work page cannot show are not this product.
+- **The crew's share of a quota, and provider slots** — Firstmate publishes neither, and Kinas never runs
+  `quota-axi` (rule 9).
+- **Evidence and a recommendation on inbox items** — not in Firstmate's contracts; shown the day they are.
+- **The Work page's strip of lanes and the review queue above the pane** — the Crew page and the Inbox are those
+  lists, and a strip would need a key and a second copy of each; DESIGN.md 1.4 says so.
+- **Detach in the terminal chrome.**
+- **Editing Firstmate from Kinas** — project modes, the registry, away mode, bootstrap, interrupting, stopping,
+  relaunching or tearing down a worker: all asked of the first mate in its pane.
+- **Second mates and Relay** — a second mate, if one exists, is one line; nothing more.
+- **Launching the first mate from the CLI, and a command channel from the CLI to the app** — the Crew page launches;
+  every mutation is Firstmate's script.
+- **Writing `AGENTS.md` or anything else into a client folder** — the desk is the captain's; conventions reach the
+  crew through the projects' own files, which the captain or the first mate writes.
+- **The first mate on any harness but Claude Code; Orca instead of treehouse.**
+- **The phone, ⌘N and the launch form** — later builds.
+- **Splitting Kinas's own token counts between the captain and the crew.**
+
+## 7. Open questions
+
+For slice 0 (the probe and the read of Firstmate at the pin), before the task list:
+
+1. **Does Firstmate's Herdr backend work on Herdr 0.9.0?** It was verified on 0.7.1–0.8.0. The probe: two workers on a
+   scratch repository in a throwaway session — tabs visible, `endpoint.target` resolving to a pane there, the state
+   line tracking reality, teardown clean. A failure after one serious attempt and one alternative stops the build.
+2. **Does `claude '<the sentence>'` start Firstmate's session normally and take the sentence as the first ask?**
+   Nothing in Firstmate documents it. If not, Add to crew always uses the clipboard.
+3. **Where does the snapshot name a project's GitHub repository** (the backlog's `repo`, or only the clone's path)?
+   It decides where rule 18 reads it.
+4. **Does the snapshot name the worker a held task came from?** If not, every held task is answered in the pane.
+5. **Firstmate's newer `state/fleet-ledger.jsonl`** ("so outside tools can follow a fleet") exists only after the pin.
+   Answer 4A keeps the pin; slice 0 reads the ledger and says whether moving the pin is worth it (it would move
+   `quota-axi` to ≥ 0.1.51 and `tasks-axi` to ≥ 0.2.6).
+6. **The snapshot's wall time with 0, 1 and 2 tasks**, which confirms or changes rule 13's cadence.
+
+For Gate 2: whether **Open the brief** takes its path from a contract or from Firstmate's documented layout
+(`data/<id>/brief.md`, opened only on a click, never parsed).
+
+### Asked and answered
+
+*2026-09-22, the first draft's ten questions:* the pin is `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540`, reviewed
+monthly · no tmux fallback; a failed probe stops the build · treehouse · `quota-axi` installed for Firstmate, never
+run by Kinas · no decision file: answers run `fm-send.sh --resolve-key` · the snapshot `fm-fleet-snapshot.v1` and the
+home summary are the contracts · the captain's orders are recorded by Kinas in its own store only · away mode is
+Firstmate's, entered in the pane, displayed by Kinas · `data/projects.md` is displayed, not edited · the order:
+probe, mirror, installer and launcher, board, inbox and orders, reconciliation and settings; embedded panes later.
+
+*2026-09-23, after the review:*
+1. Where does the inbox live? **A — its own page**, with the sidebar count and Home's button; Crew keeps the board and
+   the task detail.
+2. A held task with no live worker? **A — shown in the Inbox with "Answer in the first mate's pane"**; ADR 0014
+   stands.
+3. Does Build 3 fill Home? **A — yes**: Overnight, Waiting on you and the waiting count.
+4. Which Firstmate? **A — stay at `f9f74a1`**; the fleet ledger is read in slice 0.
+5. The plan's additions — the first-run ask, Add to crew, the Work pane opening on the first mate, the count in the
+   menu bar, in-progress features in `kinas context`: **all inside Build 3.**

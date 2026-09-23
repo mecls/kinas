@@ -16,8 +16,9 @@ registers it (PRD rule 5). A binding in code that is not listed here is a bug.
 | ⌘K | Open the command palette |
 | ⌘1 | Go to the Home page (Usage until 2026-09-22, see below) |
 | ⌘2 | Go to the Work page |
-| ⌘3 | Reserved for the Crew page (Build 3); bound to nothing until then |
+| ⌘3 | Go to the Crew page (from Build 3; bound to nothing until it lands) |
 | ⌘4 | Go to the Usage page |
+| ⌘5 | Go to the Inbox page (from Build 3; bound to nothing until it lands) |
 | ⌘S | Hide or show the sidebar (remembered across launches) |
 | ⌘, | Open the Settings page (also the gear at the foot of the sidebar) |
 | ⌘W | Hide the window (the app, readers and terminal keep running) |
@@ -36,6 +37,11 @@ Home) is dropped when read, so the two actions never share a chord; a pair the c
 The sidebar's other entries — Crew, Inbox, Reader — are click-only and have no palette command (Reader is a panel,
 not a page; Crew and Inbox arrive with Build 3). The theme and the accent in Settings → Appearance have no key.
 Amended 2026-09-23 (folder views): the Reader row is gone; see Sidebar.
+Amended 2026-09-23 (the first mate, Gate 1 — these land with Build 3's code, `tasks/first-mate/prd.md`): ⌘3 goes to
+the Crew page and ⌘5 to the Inbox page. Both are defaults Settings can rebind, so the defaults are eight — ⌘K, ⌘1,
+⌘2, ⌘3, ⌘4, ⌘5, ⌘S and ⌘, — and the rules above hold for all eight. Crew and Inbox are no longer click-only. The
+palette gains three commands: Go to Crew, Go to Inbox, and Go to the first mate (the same as the Crew page's First
+mate button). ⌘5 sits after ⌘4 so Usage keeps the chord it took on 2026-09-22.
 
 ## Command palette
 
@@ -67,7 +73,7 @@ The only ⌘ chords the app handles in the pane:
 | ⌘K | Open the palette |
 | ⌘C | Copy the selection, if there is one; otherwise nothing |
 | ⌘V | Paste (bracketed when the running program enabled bracketed paste) |
-| ⌘1 / ⌘2 / ⌘4 | Switch pages |
+| ⌘1 / ⌘2 / ⌘4 | Switch pages (and ⌘3 / ⌘5 from Build 3) |
 | ⌘S | Hide or show the sidebar |
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |
@@ -80,6 +86,10 @@ The one key the app takes without ⌘:
 | Key | Action |
 |---|---|
 | ⌫ | With a selection on one row, the cursor's row, on the normal screen (so not inside Herdr, vim or lazygit): remove the selected text, by moving the cursor to its end and sending one ⌫ per character. Any other time, ⌫ goes to the PTY |
+
+Amended 2026-09-23 (the first mate, Gate 1 — from Build 3): when the focused Herdr pane is a crew worker's, the line
+the captain types there is recorded as an order on its task when he presses Enter. Recording takes no key: every
+keystroke still goes to the PTY exactly as above, and the record is made beside it, never instead of it.
 
 ## Settings page
 
@@ -146,6 +156,35 @@ folder's workspace — focusing the one that already carries the folder's label,
 is none — then shows the Work page and gives the terminal the keys. Nothing is typed into the pane, ever: when
 Claude Code or Pi has it, typed text would arrive as a prompt. If Herdr refuses, nothing moves and the reason is
 said in the reader's status line — or at the foot of the sidebar while the panel is closed.
+
+## Crew page and Inbox page (from Build 3)
+
+Added 2026-09-23 (the first mate, Gate 1 — land with Build 3's code). The Crew page's controls — a card, **Open its
+pane**, **First mate** / **Launch the first mate**, the waiting count, **Copy** on the setup line — are click-only,
+and reachable by Tab; the task detail's controls likewise. **Open its pane** and **First mate** move you the way
+**Open in the terminal** does: Kinas asks Herdr, through its CLI, to focus that workspace, then shows the Work page
+and gives the terminal the keys. Nothing is typed into any pane.
+
+An inbox item — on the Inbox page, or compact on Home — takes these keys while it has focus (Tab or a click on it),
+never while the terminal has focus:
+
+| Key, on a focused inbox item | Action |
+|---|---|
+| A | Approve: send the approval at once |
+| R | Answer: open the text box |
+| D | Deny: open the text box for the reason |
+| Tab / ⇧Tab | Move between items and their controls |
+
+| Key, in an item's open text box | Action |
+|---|---|
+| typing | The answer (A, R and D are letters here, not actions) |
+| Enter | Send |
+| ⇧Enter | A new line |
+| Esc | Close the box; nothing is sent |
+
+On Home's compact items, R and D open the item on the Inbox page with its box open. An item answered in the first
+mate's pane has no keys: its one button is click- and Tab-only. The client folders' right-click Menu gains **Add to
+crew** after **Hide from sidebar**, with the Menu's keys as under Sidebar.
 
 ## Launch screen (the Work pane at start, and `kinas` in any terminal)
 

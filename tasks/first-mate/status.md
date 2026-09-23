@@ -1,24 +1,47 @@
 # Status: The first mate inside Kinas (Build 3)
 
-- Gate 1 · Product: in progress
-  - Mockups: pending, one per screen (`mockups/board.html`, `mockups/task-detail.html`, `mockups/inbox.html` exist, empty)
-- Gate 2 · Architecture: in progress
-- Gate 3 · Program design: in progress
+- Gate 1 · Product: in progress — `prd.md` revised 2026-09-23 with the captain's answers, awaiting approval
+  - Mockups: seven, drawn 2026-09-23 on the library's own CSS, awaiting approval — `board`, `task-detail`,
+    `inbox`, `home`, `settings-crew`, `work`, `usage-and-menu-bar`
+- Gate 2 · Architecture: pending — `architecture.md` (private) not written; start from `review-2026-09-23.md`
+- Gate 3 · Program design: pending — `build-spec.md` (2026-09-22, base `592fcce`, 42 commits behind `1394be7`) is
+  rewritten at this gate, with the five sections it lacks
 - Gate 4 · Slice plan: pending
 
-## Slices
-- [ ] Slice 0 · ground, and the probe that decides whether there is a build (a real first mate in a throwaway Herdr session; if it fails, the build stops and reports)
+## Slices (proposed 2026-09-23; Gate 4 decides)
+- [ ] Slice 0 · the probe and the read at the pin — stops the build if Firstmate's Herdr backend fails on 0.9.0;
+  answers `prd.md` §7 1–6
 - [ ] Slice 1 · the mirror: migration 0005, the collector over the fake home, `kinas crew status`
-- [ ] Slice 2 · installed, launchable: `kinas crew setup`, tool health in Settings, the launcher, ⌘3 → ship point 1
-- [ ] Slice 3 · the board: lanes, cards, task detail, the PR and its checks, the crew section on Usage
-- [ ] Slice 4 · the inbox and the orders: answers through `fm-send.sh`, the order log
-- [ ] Slice 5 · reconciliation, Settings, the launch screen, the sweep → ship point 2
+- [ ] Slice 2 · installed and launchable: `kinas crew setup`, Settings grouped with the Crew card, the launcher, ⌘3 and
+  ⌘5, the Work pane opening on the first mate, the chrome → ship point 1
+- [ ] Slice 3 · the board, the task detail in the right panel, Usage's Crew section
+- [ ] Slice 4 · the Inbox page, answers through `fm-send.sh`, held tasks, the one waiting count (sidebar, Home, Crew,
+  menu bar), the order log
+- [ ] Slice 5 · Home: the crew's night and Waiting on you
+- [ ] Slice 6 · Add to crew
+- [ ] Slice 7 · reconciliation, the launch screen and `kinas context` from the mirror, Features in progress, the sweep
+  → ship point 2
 
 ## Notes for a fresh session
 
-- **Read `build-spec.md` §16 first** (the decisions log: everything settled with the captain on 2026-09-22 and every default). The build spec is private — `.gitignore` tracks only this file, `prd.md` and `mockups/` — so read it at its absolute path in the main checkout (`git worktree list` names it first): `tasks/first-mate/build-spec.md`. The PRD is tracked beside this file.
-- **Where each gate stands.** Gate 1: the PRD was written 2026-09-22 and its ten open questions answered (the trailing note in `prd.md`; `build-spec.md` §16); the announcement paragraph and the screens line were added 2026-09-22; the three mockups are empty and unapproved — nothing has yet been approved with "Approve Gate N, or what should change?". Gate 2: `build-spec.md` §9 is the architecture today; an `architecture.md` (Gate 2, private) is to be extracted from it — fit by file and line, the commands and tables, the flow, the externals by name. Gate 3: `build-spec.md` exists without §11's five sections (files, types and signatures, call stack, test plan, at least five least-confident decisions) — write them, then present Gate 3. Gate 4: `build-spec.md` §11 "Build order" (its six phases, the slices above) is the slice plan, unapproved; it becomes §12 when §11 is inserted.
-- **Gate 3 must reconcile the spec with `DESIGN.md`.** DESIGN.md (v1.1, 2026-09-22) arrived after the spec was written. The spec's §9 puts the Crew page's components in `app/src/crew/` with plain CSS in `crew.css`; DESIGN.md §9 says components live once in `app/src/ui/<Component>.tsx` with semantic tokens only, and §4 already names Lane, Card, Status badge, Timeline and Inbox item. Decide where the first mate's components go and how they take their tokens before writing §11.1 — and the mockups (Gate 1) are drawn with DESIGN.md's tokens, so the answer starts there.
-- The Firstmate pin is `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540` (its `origin/main` on 2026-09-22, reviewed monthly). Its home will be Kinas's own clone under the data directory (`docs/external/firstmate-home.md`); the captain's existing clone of Firstmate elsewhere on this Mac holds a session lock and is out of bounds — read-only, never a session, never a script, never a `git fetch`.
-- The probe (slice 0) stops the build if it fails: no tmux fallback, no mirror. Kinas never runs `quota-axi`; Kinas's own code writes nothing under Firstmate's home; the one mutating script is `fm-send.sh`, on a click.
-- The process this feature runs under is `AGENTS.md` at the repo root; the templates are in `tasks/_templates/`; the repository-wide decisions are `docs/adr/0001`–`0014` (0014 is this feature's).
+- **Read `prd.md` first.** It was revised on 2026-09-23 and is the current product document; where it and
+  `build-spec.md` differ, the PRD wins until Gate 3 rewrites the spec. Its §7 records the captain's answers of
+  2026-09-22 and 2026-09-23.
+- **The private documents** sit at their absolute paths in the main checkout (`git worktree list` names it first),
+  `tasks/first-mate/`:
+  - `build-spec.md` — 2026-09-22; its §16 decisions stand wherever the PRD does not change them.
+  - `review-2026-09-23.md` — Firstmate at the pin, field by field, with every argv and exit code; the build spec's 22
+    stale references to the code; what the design system had already decided. Gates 2 and 3 start here.
+  - `plan-2026-09-23.md` — the captain's consolidated plan, verbatim.
+  - `build_mockups.py` — generates the seven mockups from the template's tokens, `app/src/ui/*.css` and one body per
+    screen. Regenerate after a change rather than editing the HTML by hand.
+- **DESIGN.md 1.4 and `keymap.md`'s Build 3 amendments** were written with this PRD, in the same change.
+- **Firstmate.** The pin is `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540` (reviewed monthly; answer 4A keeps it, and slice
+  0 reads the newer `state/fleet-ledger.jsonl` on its `main`). The captain's old clone at `~/Documents/Projects/firstmate`,
+  which `build-spec.md` §0.7 reads from, no longer exists: read the pin from a scratch clone, and run none of its
+  scripts. Kinas's own clone will live under the data directory (`docs/external/firstmate-home.md`).
+- **Standing rules.** The probe stops the build if it fails: no tmux fallback. Kinas never runs `quota-axi`, writes
+  nothing under Firstmate's home, and runs one mutating script, `fm-send.sh`, on a click. No test or probe touches
+  Herdr's `default` session; set `HERDR_SESSION`, because Firstmate falls back to `default` without it.
+- The process is `AGENTS.md`; the templates are in `tasks/_templates/`; the repository-wide decisions are
+  `docs/adr/0001`–`0014` (0014 is this feature's).

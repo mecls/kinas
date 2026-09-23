@@ -151,7 +151,10 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
 - [x] Script, `onerror`, `javascript:` links and remote images in a file do nothing — `automated (reader.e2e.ts, AC-6)`
 - [x] Open in editor splits the focused Herdr pane with the editor on the file; with no Herdr it says so —
       `automated (reader-editor.e2e.ts, AC-7)`, in the throwaway session `kinas-e2e-editor`
-- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 27 ms**
+- [x] Release build: the median of the warm opens of `fixtures/reader/plan-300.md` is under 200 ms — **median 46 ms**
+      over 5 warm opens (36, 55, 46, 29, 97) on the design-system build installed 2026-09-23 (PR #24), the cold first
+      read 303 ms and excluded, another session loading the Mac (load 31 as it began) — `passed by agent`. Earlier:
+      **median 27 ms**
       over 5 warm opens (60, 28, 26, 26, 27) on the build from `6fc9bbe`, the cold first read 483 ms and excluded,
       with `other.md` steady at 20–21 ms and `read in 0 ms, watch in 0 ms` throughout — `passed by agent`
       2026-09-17, with the highlighter and the HTML preview in the build. (Previously **median 30 ms** over

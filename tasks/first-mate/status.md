@@ -3,8 +3,9 @@
 - Gate 1 · Product: APPROVED 2026-09-23 — `prd.md` revised that day with the captain's answers
   - Mockups: APPROVED 2026-09-23, seven, drawn on the library's own CSS — `board`, `task-detail`,
     `inbox`, `home`, `settings-crew`, `work`, `usage-and-menu-bar`
-- Gate 2 · Architecture: pending, next — `architecture.md` (private) not written; start from `review-2026-09-23.md`
-- Gate 3 · Program design: pending — `build-spec.md` (2026-09-22, base `592fcce`, 42 commits behind `1394be7`) is
+- Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private, main checkout), from three read passes
+  over the tree at `6214108`; its three PRD clarifications are marked in `prd.md`
+- Gate 3 · Program design: pending, next — `build-spec.md` (2026-09-22, base `592fcce`, 42 commits behind `1394be7`) is
   rewritten at this gate, with the five sections it lacks
 - Gate 4 · Slice plan: pending
 
@@ -29,7 +30,9 @@
   2026-09-22 and 2026-09-23.
 - **The private documents** sit at their absolute paths in the main checkout (`git worktree list` names it first),
   `tasks/first-mate/`:
-  - `build-spec.md` — 2026-09-22; its §16 decisions stand wherever the PRD does not change them.
+  - `architecture.md` — Gate 2: ten decisions, every touch-point by file and line, the commands, the tables and their
+    queries, the flows, the externals. Gate 3 writes the build spec from it.
+  - `build-spec.md` — 2026-09-22; its §16 decisions stand wherever the PRD and `architecture.md` do not change them.
   - `review-2026-09-23.md` — Firstmate at the pin, field by field, with every argv and exit code; the build spec's 22
     stale references to the code; what the design system had already decided. Gates 2 and 3 start here.
   - `plan-2026-09-23.md` — the captain's consolidated plan, verbatim.

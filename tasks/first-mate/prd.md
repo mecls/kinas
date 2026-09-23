@@ -76,6 +76,8 @@ crew.
    the backlog's contents. A contract whose schema changed is refused with one line and the last good reading stays
    on screen (ADR 0004). Nothing is shown that the contracts do not carry: there is no recommendation, no evidence,
    no branch, no start time and no provider slot in them (read at the pin, 2026-09-23), so none is drawn.
+   *(Clarified at Gate 2, 2026-09-23: `kinas context` also reads a scout report's first line, as it did before
+   Build 3 — a report is a deliverable meant for reading.)*
 9. **Quotas stay Kinas's own.** Kinas never runs `quota-axi` (it reads Claude Code's login and calls Anthropic) and
    never reads under `~/.claude`. `quota-axi` is installed only because Firstmate runs it. The crew's line on Usage
    counts tasks per harness; it is never a share of a quota.
@@ -133,7 +135,9 @@ crew.
 22. **The Work pane opens on the first mate, once.** When Kinas starts and the attached Herdr session has a
     `firstmate` workspace, Kinas focuses it, so the pane shows the first mate when the session attaches. After that
     Kinas moves the pane only on a click (First mate, Open its pane, Launch task, Open in the terminal); the pane is
-    the captain's and never changes under his hands.
+    the captain's and never changes under his hands. *(Clarified at Gate 2, 2026-09-23: "when Kinas starts" means
+    Herdr answered within 10 s of Kinas starting; when its server was not up yet, Kinas focuses nothing, then or
+    later.)*
 23. **The launcher makes one first mate.** At most one `firstmate` workspace per session — Firstmate's own label for
     its home workspace, so one it made itself is found too. `claude` runs there only when Herdr says `claude` is not
     already its foreground program; a second click focuses it. A missing required tool, a home on a branch other
@@ -225,7 +229,9 @@ Settings turns red, and nothing else changes.
 
 **Context for an agent.** `kinas context` prints its Crew section from the mirror when the mirror is under 5 minutes
 old (the launch screen too), else from the snapshot as today; and a **Features in progress** section after Projects:
-per project, each feature with its first gate that is not approved, or its first unticked slice.
+per project, each feature with its first gate that is not approved, or its first unticked slice. *(Clarified at
+Gate 2, 2026-09-23: after `## Projects` in `kinas context --agent`; the plain `kinas context` has no Projects
+section, so there it comes after the counts.)*
 
 ## 4. Surfaces
 
@@ -440,3 +446,7 @@ probe, mirror, installer and launcher, board, inbox and orders, reconciliation a
 4. Which Firstmate? **A — stay at `f9f74a1`**; the fleet ledger is read in slice 0.
 5. The plan's additions — the first-run ask, Add to crew, the Work pane opening on the first mate, the count in the
    menu bar, in-progress features in `kinas context`: **all inside Build 3.**
+
+*2026-09-23, at Gate 2:* the captain approved three clarifications the architecture read found — rule 8 lists the
+scout report's first line in `kinas context`; rule 22's "when Kinas starts" is Herdr answering within 10 s; Features
+in progress sits after the counts in the plain `kinas context`. Each is marked where it applies.

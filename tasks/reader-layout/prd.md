@@ -555,7 +555,7 @@ the plan fixture, which is tall and has at least two headings.
 - **Split view**, **pinning a tab** (Pinned stays in the sidebar), **reopening a closed tab**, and **tearing a tab
   off** into its own window (answer 5A).
 - **Folder tabs** (answer 3A).
-- **Per-kind tab icons** (markdown, image, code). A tab has the sidebar's file icon (§7.3).
+- **Per-kind tab icons** (markdown, image, code). A tab has the sidebar's file icon (§7.3, answered).
 - **A title in the title bar**, or anything in it beyond the three buttons.
 - **The page/reader divider and Expand** themselves.
 
@@ -570,10 +570,10 @@ the plan fixture, which is tall and has at least two headings.
    - Where do the traffic lights sit, and where do the buttons go in full screen?
    - **Decided by** Gate 2, from the pinned Tauri version's documentation and a try on the debug build. If
      double-click can only zoom, it zooms, and the smoke test says so.
-3. **One file icon, or one per kind?** The editor in the screenshot colours its tab icons by kind. This spec uses
-   the sidebar's one file icon. **The captain** decides on the mockup.
-4. **The 160, 480 and 320 px limits, 15 tabs, and 200 px per tab are my numbers**, except 15, which is Recent's.
-   Confirm them on the mockups and on the first build.
+3. ~~**One file icon, or one per kind?**~~ **Answered 2026-09-23, at Gate 1's approval:** one file icon for every
+   tab, the sidebar's.
+4. ~~**The 160, 480 and 320 px limits, 15 tabs, and 200 px per tab.**~~ **Answered 2026-09-23, at Gate 1's
+   approval:** kept as written.
 5. **One component for the two dividers?** The page/reader divider and the column's edge would look and behave
    alike. **Gate 3** decides whether they share code.
 

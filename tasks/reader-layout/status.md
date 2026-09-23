@@ -1,8 +1,10 @@
 # Status: The reader's layout, its tabs, and the window's top bar
 
-- Gate 1 · Product: in progress — `prd.md`, from two rounds of answers (2026-09-23): round 1 1A, 2A, 3A, 4A, 5A;
-  round 2 1A, 2A, 3A, 4A, 5A with dragging tabs to reorder brought into scope
-  - Mockups: pending — `mockups/window.html` (three states), `mockups/reader.html` (six states)
+- Gate 1 · Product: APPROVED 2026-09-23 — `prd.md`, from two rounds of answers: round 1 1A, 2A, 3A, 4A, 5A; round 2
+  1A, 2A, 3A, 4A, 5A with dragging tabs to reorder brought into scope; §7.3 and §7.4 answered at approval (one file
+  icon for every tab; the limits as written)
+  - Mockups: APPROVED 2026-09-23, with the gate — `mockups/window.html` (three states), `mockups/reader.html` (six
+    states)
 - Gate 2 · Architecture: pending — needed: the column's values touch Rust (`get_ui_prefs`), and the drawn title bar
   touches the window's Tauri configuration
 - Gate 3 · Program design: pending

@@ -1,0 +1,410 @@
+<!doctype html>
+<!--
+  A Gate 1 mockup: one plain HTML file per screen, throwaway by design — no framework, no build
+  step, no script tag. Style it with DESIGN.md's semantic tokens only (the <style> below opens with every
+  token of app/src/styles/tokens.css, written by `bun scripts/mockup-template.ts` — re-run it when a token
+  changes; do not add a raw hex, a raw px size or a raw spacing value).
+  Review it inside Kinas with `kinas open tasks/<feature-slug>/mockups/<screen>.html`: the reader
+  renders it in a sandbox that allows inline styles and nothing external, so keep no link tag, no
+  web font and no script tag — the brand fonts fall back to the system stack there. Iterate until
+  the captain says "yes, that"; where DESIGN.md and this file disagree, DESIGN.md wins and the
+  mockup is corrected before Gate 1 is approved. Nothing about a screen is decided in a component
+  before it was decided here. DESIGN.md's `--text-md 13/20` is `--fs-md` / `--lh-md` below.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tree changes · Sidebar tree</title>
+<style>
+/* ===== Tokens, generated from app/src/styles/tokens.css by scripts/mockup-template.ts — do not edit ===== */
+:root{
+  --brand-accent: #00549e;
+  --brand-font-ui: "Inter";
+  --brand-font-mono: "JetBrains Mono";
+  --brand-font-display: "Bricolage Grotesque";
+  --bg: #f4f2ec;
+  --surface: #ffffff;
+  --surface-2: #edeae2;
+  --line: #e3dfd5;
+  --line-strong: #cfc9bc;
+  --ink: #1b1f27;
+  --ink-2: #5b6170;
+  --ink-3: #8a8f9b;
+  --accent: var(--brand-accent);
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --meter: #5b6170;
+  --meter-track: #e9e5dc;
+  --ok: #2e8b57;
+  --warn: #b87a12;
+  --danger: #c4262e;
+  --stale: #7c818d;
+  --cat-1: #3e7c8a;
+  --cat-2: #7a62b0;
+  --cat-3: #8a6a4e;
+  --cat-4: #6b6f2a;
+  --cat-5: #a8527a;
+  --cat-6: #4e5f8c;
+  --shadow-float: 0 8px 24px rgb(20 23 30 / 0.12), 0 1px 3px rgb(20 23 30 / 0.08);
+  --scrim: rgb(10 20 32 / 0.3);
+  --term-bg: #f4f2ec;
+  --term-fg: #0a1420;
+  --term-selection: #ccddec;
+  --ansi-black: #e3dfd5;
+  --ansi-red: #a61b23;
+  --ansi-green: #1f6b47;
+  --ansi-yellow: #855c00;
+  --ansi-blue: #1d5f9e;
+  --ansi-magenta: #8a2a80;
+  --ansi-cyan: #0f6674;
+  --ansi-white: #3a4553;
+  --ansi-bright-black: #5b6170;
+  --ansi-bright-red: #c4262e;
+  --ansi-bright-green: #1d7a4f;
+  --ansi-bright-yellow: #6f4e00;
+  --ansi-bright-blue: #00549e;
+  --ansi-bright-magenta: #7b2f73;
+  --ansi-bright-cyan: #0b5561;
+  --ansi-bright-white: #0a1420;
+  --font-ui: var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: var(--brand-font-mono), "SF Mono", ui-monospace, Menlo, monospace;
+  --font-display: var(--brand-font-display), var(--font-ui);
+  --fs-xs: 11px;
+  --lh-xs: 16px;
+  --fs-sm: 12px;
+  --lh-sm: 18px;
+  --fs-md: 13px;
+  --lh-md: 20px;
+  --fs-lg: 15px;
+  --lh-lg: 22px;
+  --fs-xl: 20px;
+  --lh-xl: 28px;
+  --fs-num: 28px;
+  --lh-num: 32px;
+  --m-fs-sm: 13px;
+  --m-lh-sm: 18px;
+  --m-fs-body: 15px;
+  --m-lh-body: 22px;
+  --m-fs-title: 20px;
+  --m-lh-title: 26px;
+  --m-fs-large: 28px;
+  --m-lh-large: 34px;
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-1h: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --sidebar-w: 220px;
+  --panel-w: 360px;
+  --panel-w-min: 320px;
+  --pane-min: 280px;
+  --chrome-h: 32px;
+  --strip-h: 96px;
+  --page-max: 1120px;
+  --row-h: 36px;
+  --row-h-progress: 56px;
+  --hit: 28px;
+  --hit-touch: 44px;
+  --tabbar-h: 49px;
+  --focus-w: 2px;
+  --icon: 16px;
+  --icon-sm: 14px;
+  --dot: 7px;
+  --dot-ring: 1.75px;
+  --chip: 10px;
+  --bar-h: 4px;
+  --bar-h-inline: 2px;
+  --dur-fast: 150ms;
+  --dur-slow: 200ms;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]){
+    --bg: #14171e;
+    --surface: #1b1f27;
+    --surface-2: #232833;
+    --line: #2b3140;
+    --line-strong: #3a4152;
+    --ink: #edeef2;
+    --ink-2: #a1a7b4;
+    --ink-3: #6e7482;
+    --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+    --accent-ink: #0e1420;
+    --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --meter: #a1a7b4;
+    --meter-track: #2b3140;
+    --ok: #4fb37a;
+    --warn: #d9a03a;
+    --danger: #e5575e;
+    --stale: #7c818d;
+    --cat-1: #5fa3b2;
+    --cat-2: #9d88d6;
+    --cat-3: #b08e70;
+    --cat-4: #a3a85a;
+    --cat-5: #cf7aa0;
+    --cat-6: #7688b8;
+    --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --scrim: rgb(5 6 8 / 0.55);
+    --term-bg: #10192b;
+    --term-fg: #e7eef7;
+    --term-selection: #18406b;
+    --ansi-black: #2b3140;
+    --ansi-red: #e5575e;
+    --ansi-green: #4fb286;
+    --ansi-yellow: #dfae3c;
+    --ansi-blue: #3d8fd9;
+    --ansi-magenta: #c27ab8;
+    --ansi-cyan: #4ab3c2;
+    --ansi-white: #c9c6bf;
+    --ansi-bright-black: #a1a7b4;
+    --ansi-bright-red: #f06a70;
+    --ansi-bright-green: #7fd3a8;
+    --ansi-bright-yellow: #f0c96a;
+    --ansi-bright-blue: #72b0ea;
+    --ansi-bright-magenta: #dca2d4;
+    --ansi-bright-cyan: #7fd0db;
+    --ansi-bright-white: #e7eef7;
+    color-scheme:dark;
+  }
+}
+/* Set data-theme="dark" on <html> to check the other theme. */
+:root[data-theme="dark"]{
+  --bg: #14171e;
+  --surface: #1b1f27;
+  --surface-2: #232833;
+  --line: #2b3140;
+  --line-strong: #3a4152;
+  --ink: #edeef2;
+  --ink-2: #a1a7b4;
+  --ink-3: #6e7482;
+  --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+  --accent-ink: #0e1420;
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter: #a1a7b4;
+  --meter-track: #2b3140;
+  --ok: #4fb37a;
+  --warn: #d9a03a;
+  --danger: #e5575e;
+  --stale: #7c818d;
+  --cat-1: #5fa3b2;
+  --cat-2: #9d88d6;
+  --cat-3: #b08e70;
+  --cat-4: #a3a85a;
+  --cat-5: #cf7aa0;
+  --cat-6: #7688b8;
+  --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --scrim: rgb(5 6 8 / 0.55);
+  --term-bg: #10192b;
+  --term-fg: #e7eef7;
+  --term-selection: #18406b;
+  --ansi-black: #2b3140;
+  --ansi-red: #e5575e;
+  --ansi-green: #4fb286;
+  --ansi-yellow: #dfae3c;
+  --ansi-blue: #3d8fd9;
+  --ansi-magenta: #c27ab8;
+  --ansi-cyan: #4ab3c2;
+  --ansi-white: #c9c6bf;
+  --ansi-bright-black: #a1a7b4;
+  --ansi-bright-red: #f06a70;
+  --ansi-bright-green: #7fd3a8;
+  --ansi-bright-yellow: #f0c96a;
+  --ansi-bright-blue: #72b0ea;
+  --ansi-bright-magenta: #dca2d4;
+  --ansi-bright-cyan: #7fd0db;
+  --ansi-bright-white: #e7eef7;
+  color-scheme:dark;
+}
+/* ===== End of the generated tokens ===== */
+
+/* ===== Base ===== */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 var(--fs-md)/var(--lh-md) var(--font-ui);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.ink2,.unit{color:var(--ink-2)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+/* ===== This screen (semantic tokens only) ===== */
+.frame{display:flex;gap:var(--space-6);align-items:flex-start;flex-wrap:wrap;padding:var(--space-5)}
+.cap{margin:0 0 var(--space-2);color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm)}
+.note{max-width:var(--page-max);margin:0 0 var(--space-5);color:var(--ink-2)}
+h1{margin:0 0 var(--space-2);font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600}
+h2{margin:0 0 var(--space-3);font-size:var(--fs-lg);line-height:var(--lh-lg);font-weight:600}
+
+/* The sidebar, as shell.css draws it */
+.sidebar{width:var(--sidebar-w);min-height:calc(var(--row-h) * 17);display:flex;flex-direction:column;padding:var(--space-3) var(--space-2);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-md)}
+.wordmark{margin:0 var(--space-2) var(--space-3);font-family:var(--font-display);font-size:var(--fs-lg);line-height:var(--lh-lg);font-weight:600}
+.nav-row{display:flex;align-items:center;gap:var(--space-2);height:var(--hit);padding:0 var(--space-2);border-radius:var(--radius-sm);color:var(--ink-2);font-size:var(--fs-md)}
+.nav-ic{width:var(--icon);height:var(--icon);border:var(--dot-ring) solid var(--ink-3);border-radius:var(--space-1)}
+.section{margin-top:var(--space-4)}
+.head{display:flex;align-items:center;gap:var(--space-1)}
+.label{flex:1;min-width:0;margin:0 0 0 var(--space-2);color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act{display:grid;place-items:center;width:var(--hit);height:var(--hit);border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ink-2);padding:0}
+.act svg{width:var(--icon-sm);height:var(--icon-sm)}
+.act.hover-only{opacity:0}
+.head:hover .act.hover-only{opacity:1}
+.act:hover{background:var(--surface-2);color:var(--ink)}
+.since{margin:0 0 var(--space-1) var(--space-2);color:var(--ink-2);font-size:var(--fs-xs);line-height:var(--lh-xs)}
+
+/* The tree, as reader.css draws it, plus the marks */
+.tree{margin:0;padding:0;list-style:none}
+.tree .tree{padding-left:var(--space-3)}
+.row{display:flex;align-items:center;gap:var(--space-1);width:100%;border:0;border-radius:calc(var(--radius-sm) - var(--space-0));padding:var(--space-1) var(--space-1h);background:transparent;color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm);text-align:left}
+.row:hover{color:var(--ink)}
+.row[aria-current="true"]{background:var(--line);color:var(--ink)}
+.caret{flex:none;width:var(--space-3);color:var(--ink-2)}
+.name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gone .name{text-decoration:line-through}
+.mark{flex:none;display:inline-flex;align-items:center;gap:var(--space-1)}
+.dot{width:var(--dot);height:var(--dot);border-radius:50%;background:var(--c)}
+.letter{min-width:var(--space-3);color:var(--ink-2);font-family:var(--font-mono);font-size:var(--fs-xs);line-height:var(--lh-xs);text-align:right;font-variant-numeric:tabular-nums}
+.add{--c:var(--ok)} .mod{--c:var(--warn)} .del{--c:var(--danger)}
+.chip{width:var(--chip);height:var(--chip);border-radius:calc(var(--radius-sm) / 2);background:var(--c);flex:none}
+.foot{margin-top:auto;padding-top:var(--space-3)}
+
+/* The states table */
+.states{border-collapse:collapse;font-size:var(--fs-sm);line-height:var(--lh-sm)}
+.states th{padding:0 var(--space-3) var(--space-2) 0;color:var(--ink-2);font-weight:500;text-align:left;border-bottom:1px solid var(--line)}
+.states td{padding:var(--space-2) var(--space-3) var(--space-2) 0;border-bottom:1px solid var(--line);vertical-align:middle}
+.states td.cell{width:var(--sidebar-w);background:var(--bg)}
+.states .words{color:var(--ink-2)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4)}
+</style>
+</head>
+<body>
+<div class="frame" style="padding-bottom:0">
+  <div>
+    <h1>Tree changes · the sidebar</h1>
+    <p class="note">Files is open on <span class="mono">kinas</span>, first shown at 14:02. Since then an agent added
+      <span class="mono">docs/new-note.md</span> and the folder <span class="mono">research/</span>, rewrote
+      <span class="mono">docs/overview.md</span> (open in the reader) and two files under <span class="mono">app/</span>,
+      and deleted <span class="mono">docs/old-plan.md</span>. Point at a tree row or the Files header to see its hover
+      buttons. Client folders and Recent carry no marks (answer 5C).</p>
+  </div>
+</div>
+
+<div class="frame">
+  <!-- 1. The sidebar with marks -->
+  <div>
+    <p class="cap">With changes</p>
+    <nav class="sidebar" aria-label="Sidebar">
+      <div class="wordmark">Kinas</div>
+      <div class="nav-row"><span class="nav-ic"></span>Home</div>
+      <div class="nav-row"><span class="nav-ic"></span>Work</div>
+      <div class="nav-row"><span class="nav-ic"></span>Usage</div>
+
+      <section class="section" aria-label="Files">
+        <div class="head">
+          <h2 class="label" style="margin-bottom:0" title="~/…/apps/kinas">kinas</h2>
+          <button class="act" aria-label="Refresh kinas" title="Refresh kinas: clear its changes and start counting again">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg>
+          </button>
+          <button class="act hover-only" aria-label="Open this folder in the terminal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7l2 1.5L5 10M8.5 10.5H11"/></svg></button>
+          <button class="act hover-only" aria-label="Pin this folder"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h4l-.5 4 2 2v1h-7v-1l2-2z"/><path d="M8 9.5V14"/></svg></button>
+        </div>
+        <p class="since">6 changes since 14:02</p>
+        <ul class="tree">
+          <li><button class="row" aria-expanded="false" title="app, 2 changes inside since 14:02"><span class="caret">▸</span><span class="name">app</span><span class="mark mod"><span class="dot"></span><span class="letter">2</span></span></button></li>
+          <li><button class="row" aria-expanded="true" title="docs, 3 changes inside since 14:02"><span class="caret">▾</span><span class="name">docs</span><span class="mark del"><span class="dot"></span><span class="letter">3</span></span></button>
+            <ul class="tree">
+              <li><button class="row" aria-expanded="false"><span class="caret">▸</span><span class="name">adr</span></button></li>
+              <li><button class="row" title="new-note.md, added since 14:02"><span class="name">new-note.md</span><span class="mark add"><span class="dot"></span><span class="letter">A</span></span></button></li>
+              <li><button class="row gone" title="old-plan.md, deleted since 14:02"><span class="name">old-plan.md</span><span class="mark del"><span class="dot"></span><span class="letter">D</span></span></button></li>
+              <li><button class="row" aria-current="true" title="overview.md, modified since 14:02"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></button></li>
+              <li><button class="row"><span class="name">smoke-test.md</span></button></li>
+            </ul>
+          </li>
+          <li><button class="row" aria-expanded="false"><span class="caret">▸</span><span class="name">e2e</span></button></li>
+          <li><button class="row" aria-expanded="false" title="research, added since 14:02"><span class="caret">▸</span><span class="name">research</span><span class="mark add"><span class="dot"></span><span class="letter">A</span></span></button></li>
+          <li><button class="row" aria-expanded="false"><span class="caret">▸</span><span class="name">scripts</span></button></li>
+          <li><button class="row"><span class="name">AGENTS.md</span></button></li>
+          <li><button class="row"><span class="name">DESIGN.md</span></button></li>
+          <li><button class="row"><span class="name">README.md</span></button></li>
+        </ul>
+      </section>
+
+      <section class="section" aria-label="Client folders">
+        <h2 class="label">Client folders</h2>
+        <div class="nav-row"><span class="chip" style="--c:var(--cat-1)"></span>kinas</div>
+        <div class="nav-row"><span class="chip" style="--c:var(--cat-2)"></span>site</div>
+      </section>
+
+      <div class="foot"><div class="nav-row"><span class="nav-ic"></span>Settings</div></div>
+    </nav>
+  </div>
+
+  <!-- 2. The same tree after Refresh -->
+  <div>
+    <p class="cap">After ↻ Refresh (or a window reload)</p>
+    <nav class="sidebar" aria-label="Sidebar after refresh">
+      <div class="wordmark">Kinas</div>
+      <div class="nav-row"><span class="nav-ic"></span>Home</div>
+      <div class="nav-row"><span class="nav-ic"></span>Work</div>
+      <div class="nav-row"><span class="nav-ic"></span>Usage</div>
+      <section class="section" aria-label="Files">
+        <div class="head">
+          <h2 class="label" style="margin-bottom:0">kinas</h2>
+          <button class="act hover-only" aria-label="Refresh kinas"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg></button>
+          <button class="act hover-only" aria-label="Open this folder in the terminal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7l2 1.5L5 10M8.5 10.5H11"/></svg></button>
+          <button class="act hover-only" aria-label="Pin this folder"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h4l-.5 4 2 2v1h-7v-1l2-2z"/><path d="M8 9.5V14"/></svg></button>
+        </div>
+        <ul class="tree" style="margin-top:var(--space-1)">
+          <li><button class="row"><span class="caret">▸</span><span class="name">app</span></button></li>
+          <li><button class="row"><span class="caret">▾</span><span class="name">docs</span></button>
+            <ul class="tree">
+              <li><button class="row"><span class="caret">▸</span><span class="name">adr</span></button></li>
+              <li><button class="row"><span class="name">new-note.md</span></button></li>
+              <li><button class="row" aria-current="true"><span class="name">overview.md</span></button></li>
+              <li><button class="row"><span class="name">smoke-test.md</span></button></li>
+            </ul>
+          </li>
+          <li><button class="row"><span class="caret">▸</span><span class="name">e2e</span></button></li>
+          <li><button class="row"><span class="caret">▸</span><span class="name">research</span></button></li>
+          <li><button class="row"><span class="caret">▸</span><span class="name">scripts</span></button></li>
+          <li><button class="row"><span class="name">AGENTS.md</span></button></li>
+          <li><button class="row"><span class="name">DESIGN.md</span></button></li>
+          <li><button class="row"><span class="name">README.md</span></button></li>
+        </ul>
+      </section>
+      <section class="section" aria-label="Client folders">
+        <h2 class="label">Client folders</h2>
+        <div class="nav-row"><span class="chip" style="--c:var(--cat-1)"></span>kinas</div>
+        <div class="nav-row"><span class="chip" style="--c:var(--cat-2)"></span>site</div>
+      </section>
+      <div class="foot"><div class="nav-row"><span class="nav-ic"></span>Settings</div></div>
+    </nav>
+  </div>
+
+  <!-- 3. Every row state, with its words -->
+  <div class="panel">
+    <h2>Every row state</h2>
+    <table class="states">
+      <thead><tr><th>Row, at the sidebar's width</th><th>Words: tooltip and accessible name</th></tr></thead>
+      <tbody>
+        <tr><td class="cell"><div class="row"><span class="name">notes.md</span></div></td><td class="words">notes.md</td></tr>
+        <tr><td class="cell"><div class="row"><span class="name">new-note.md</span><span class="mark add"><span class="dot"></span><span class="letter">A</span></span></div></td><td class="words">new-note.md, added since 14:02</td></tr>
+        <tr><td class="cell"><div class="row"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></td><td class="words">overview.md, modified since 14:02</td></tr>
+        <tr><td class="cell"><div class="row gone"><span class="name">old-plan.md</span><span class="mark del"><span class="dot"></span><span class="letter">D</span></span></div></td><td class="words">old-plan.md, deleted since 14:02 — opens on what it said</td></tr>
+        <tr><td class="cell"><div class="row" aria-current="true"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></td><td class="words">open in the reader, and modified</td></tr>
+        <tr><td class="cell"><div class="row"><span class="caret">▸</span><span class="name">research</span><span class="mark add"><span class="dot"></span><span class="letter">A</span></span></div></td><td class="words">research, added since 14:02 — so is everything in it</td></tr>
+        <tr><td class="cell"><div class="row gone"><span class="caret"></span><span class="name">drafts</span><span class="mark del"><span class="dot"></span><span class="letter">D</span></span></div></td><td class="words">drafts, deleted since 14:02 — no caret, does not expand</td></tr>
+        <tr><td class="cell"><div class="row"><span class="caret">▸</span><span class="name">app</span><span class="mark mod"><span class="dot"></span><span class="letter">2</span></span></div></td><td class="words">app, 2 changes inside since 14:02 — strongest is modified</td></tr>
+        <tr><td class="cell"><div class="row"><span class="caret">▸</span><span class="name">docs</span><span class="mark del"><span class="dot"></span><span class="letter">3</span></span></div></td><td class="words">docs, 3 changes inside since 14:02 — one is a deletion</td></tr>
+        <tr><td class="cell"><div class="row"><span class="caret">▸</span><span class="name">generated</span><span class="mark add"><span class="dot"></span><span class="letter">99+</span></span></div></td><td class="words">generated, 150 changes inside since 14:02</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

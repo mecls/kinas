@@ -21,6 +21,8 @@
 - Worktree `.claude/worktrees/tree-changes`, branch `feat/tree-changes`, on `origin/main` at `dd21e35` (2026-09-23;
   the Gate documents were first written on `docs/tree-changes-gate-1` from `1394be7`, PR #31). Its Rust target is an
   APFS clone of a warm target at the same base (`cp -Rc`): a cold one costs 6–8 GB and the disk is near full.
+- The build's draft PR is #32 (`feat/tree-changes` → `main`); it holds the Gate commits too, so #31 can close for it.
+  Next: slice 1, the tracer bullet — `build-spec.md` §12.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's two screenshots did not reach the session that wrote Gate 1; the "reload" they showed was read as

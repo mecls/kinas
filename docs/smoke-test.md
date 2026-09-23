@@ -317,16 +317,17 @@ same checks run over `DESIGN.md`'s tokens (`--bg`, `--surface`, `--ink`, …) wi
 
 ## Folder views
 
-Hide, show, add and remove client folders; the sidebar's shape (2026-09-23, `tasks/folder-views/prd.md`).
+Hide, show, add and remove client folders; the sidebar's shape (2026-09-23, `tasks/folder-views/prd.md`). The full
+e2e suite ran green alone with them: 21 specs, 120 cases.
 
-- [ ] The sidebar lists Home, Work, Crew, Inbox and Usage with no Reader row, then Pinned, Files, Client folders and
+- [x] The sidebar lists Home, Work, Crew, Inbox and Usage with no Reader row, then Pinned, Files, Client folders and
       Recent in that order, with Settings as its last row under the VPS line — `automated (shell.e2e.ts)`
-- [ ] A right-click on a client folder offers Hide from sidebar and Add a client folder…, then Show for each hidden
+- [x] A right-click on a client folder offers Hide from sidebar and Add a client folder…, then Show for each hidden
       folder; a hidden folder leaves the sidebar and Home, and no other folder's colour changes —
       `automated (folders.e2e.ts; shell/folders.test.ts)`
-- [ ] Settings → Client folders: the In sidebar switch hides and shows, Remove moves a folder to the Removed list,
+- [x] Settings → Client folders: the In sidebar switch hides and shows, Remove moves a folder to the Removed list,
       Restore brings it back shown; nothing on disk changes — `automated (folders.e2e.ts; projects.rs)`
-- [ ] Add a client folder… takes any folder inside the projects folder, git or not, lists an already listed one
+- [x] Add a client folder… takes any folder inside the projects folder, git or not, lists an already listed one
       once, and refuses the projects folder itself and anything outside it — `automated (folders.e2e.ts; projects.rs)`
 - [ ] The right-click menu at the pointer in both themes, and no WebKit menu anywhere on a folder row; the Finder
       window opens in the projects folder and can make a new folder — `outstanding — needs Miguel`

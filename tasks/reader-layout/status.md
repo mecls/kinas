@@ -9,7 +9,7 @@
   `tasks/reader-layout/architecture.md`), written 2026-09-23; it answers PRD §7.2 (the drawn bar always zooms)
 - Gate 3 · Program design: APPROVED 2026-09-23 — `build-spec.md` §11 (private, beside `architecture.md` in the main
   checkout)
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12, written 2026-09-23: eleven slices, three ship points
+- Gate 4 · Slice plan: APPROVED 2026-09-23 — `build-spec.md` §12: eleven slices, three ship points
 
 ## Slices
 - [ ] Slice 0 · ground: `feat/reader-layout` from `docs/reader-layout-gate-1`, rebased; the baselines

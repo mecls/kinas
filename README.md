@@ -110,10 +110,15 @@ Amended 2026-09-22 (design system). The sidebar lists Home, Work, Crew, Inbox, U
 client folders — every git repository up to three levels under the projects folder, each with a colour chip that
 stays with it (Settings → Client folders picks the colour and marks a folder internal, which lists it last with a
 tag; a click opens the folder in the reader, and the row offers the terminal and pin buttons every folder row has) —
-and, at the foot, the VPS connection when one is configured: connected, stale or error, the Hostinger reader's own word. **Home** (⌘1) is the first page: the night's progress per
+and, at the foot, the VPS connection when one is configured: connected, stale or error, the Hostinger reader's own word.
+Amended 2026-09-23 (folder views): the navigation is Home, Work, Crew, Inbox and Usage — a file's row opens the
+reader, so there is no Reader row — with Settings as the sidebar's last row, and Recent under the client folders.
+Right-click a client folder to hide it from the sidebar and Home, to show a hidden one, or to add any folder inside
+the projects folder, git or not; Settings → Client folders does the same and also removes a folder from Kinas —
+restorable there, and never touched on disk. **Home** (⌘1) is the first page: the night's progress per
 client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
 **Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** and
-**Inbox** wait for Build 3 and say so. **Reader** reopens the last document in the panel. Every surface is built
+**Inbox** wait for Build 3 and say so. Every surface is built
 from `DESIGN.md`'s tokens and components (`app/src/ui/`); a test refuses any raw colour, size or spacing outside
 `app/src/styles/tokens.css`.
 

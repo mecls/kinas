@@ -35,6 +35,7 @@ Settings before that day that now equals another action's default (a saved ⌘1 
 Home) is dropped when read, so the two actions never share a chord; a pair the captain bound on purpose is kept.
 The sidebar's other entries — Crew, Inbox, Reader — are click-only and have no palette command (Reader is a panel,
 not a page; Crew and Inbox arrive with Build 3). The theme and the accent in Settings → Appearance have no key.
+Amended 2026-09-23 (folder views): the Reader row is gone; see Sidebar.
 
 ## Command palette
 
@@ -130,6 +131,15 @@ Work, Usage and Settings have the chords above; **Crew**, **Inbox** and **Reader
 last document in the panel, or says at the foot of the sidebar that there is nothing to reopen. The **Client folders**
 rows and the VPS row at the foot are click-only too: a folder row opens that folder in the reader, as its tree row
 does. Selecting a folder's colour or marking it internal happens in Settings → Client folders, by click.
+
+Amended 2026-09-23 (folder views): the navigation lists Home, Work, Crew, Inbox and Usage. The **Reader** row is
+gone: a file's or a folder's row opens the reader, and × closes it. **Settings** is the sidebar's last row, at its
+foot, with its chord unchanged. A right-click on a client folder (a two-finger tap, or Ctrl-click) opens its menu —
+**Hide from sidebar**, **Add a client folder…**, then **Show** for each hidden folder; on the Client folders
+heading, the same without Hide. The menu has no chord and no palette command. While it is open it takes the keys
+exactly as the reader's ▾ menu does (the table under Reader, dividers skipped like unusable items), and when it
+closes focus goes back where it was, to the terminal if the terminal had it. Hiding, showing, adding, removing and
+restoring a folder are also in Settings → Client folders, by click.
 
 **Open in the terminal** is the one sidebar action that moves you. Kinas asks Herdr, through its CLI, for that
 folder's workspace — focusing the one that already carries the folder's label, creating it in that folder if there

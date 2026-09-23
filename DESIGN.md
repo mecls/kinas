@@ -2,10 +2,11 @@
 
 The law for how Kinas looks, the way `keymap.md` is the law for keys. An agent building any surface reads this first, uses only what it defines, and adds to it before using anything it does not define.
 
-Version 1.2, 2026-09-22; closed 2026-09-23.
+Version 1.3, 2026-09-23.
 
 ## Changes
 
+- **1.3, 2026-09-23 (folder views).** The sidebar loses its Reader row: a click on a file opens the reader, and with no file the row had nothing to show. Settings moves to the sidebar's foot, and Recent sits under the client folders (3.1). A client folder can be hidden (off the sidebar and Home), removed (off Settings' list too, restorable, never touched on disk) or added from any folder inside the projects folder (3.1, 5). The reader's ▾ menu becomes the library's Menu, which the client folders' right-click menu uses too (4).
 - **1.2, closed 2026-09-23.** Written down as built: the catalogue of components and their stories (4), the as-built notes on the gauge's reset, the metric row's missing bars, the terminal chrome, the reader header, Settings and the toast's placements (4), and each page as it shipped (5); the migration's status (10). `tokens.css` is named the source of truth in section 2's opening, and the brand's display face in 2.1 is Bricolage Grotesque, as 2.5 already said.
 - **1.2, 2026-09-22 (the design system build).** The law meets the code. The terminal follows the theme: `--term-bg` and `--term-fg` take a light value too, and the sixteen ANSI colours have a set per theme (2.2, 2.3). The type scale is written as pairs, `--fs-*` / `--lh-*`, because that is what `font-size` and `line-height` take (2.5). Two sub-grid spacing steps, `--space-0` 2 and `--space-1h` 6, for gaps inside a component (2.6). The display face is Bricolage Grotesque (OFL): Clash Display's license does not allow the files in a public repository (2.5, the open item closed). `--panel-w` is the panel's default share and the divider decides, down to `--pane-min` (2.6). Section 9 gains "Adding a surface", the procedure every later build follows, and names `app/src/styles/tokens.css` as the source of truth until `tokens.json` is needed for the phone. The gauge thresholds in 2.2 (80 %, 95 % used) replace the app's earlier ≤ 25 / ≤ 10 % left.
 - **1.1, 2026-09-22.** Scope set to an engineering tool for the team, with no agency pages. Added the Home page (overnight progress per client folder, plus usage), iPhone layouts for approving and launching, and a two-layer token model so the open-source build can swap accent and fonts. Added a categorical palette for folders and providers, layout tokens, and a complete dark theme. Fixed the contrast values that failed: `--stale`, `--warn`, and the dark `--accent-ink`. Removed the accent from gauge bars, removed the crew's use of `--warn`, and removed `--info`. Migration steps now end on a definition of done instead of a duration.
@@ -195,7 +196,9 @@ Amended 1.2 (2026-09-22): in the Mac app a **background never transitions**. WKW
 
 The window has three columns: the sidebar (`--sidebar-w`, `--bg`), the page (fills, `--bg`), and the right panel (`--panel-w`, `--surface`, holding the reader or a task detail). Column boundaries are `--line`. The page never scrolls sideways.
 
-The sidebar holds, top to bottom: the wordmark, the navigation (Home, Work, Crew, Inbox with its count, Usage, Reader, Settings), the client folders with their category chips, and one line for the VPS connection. It collapses with the key defined in `keymap.md`. The proposed key is ⌘\, because ⌘S means save wherever the Reader edits.
+The sidebar holds, top to bottom: the wordmark, the navigation (Home, Work, Crew, Inbox with its count, Usage), what can be opened (Pinned, the open folder's files), the client folders with their category chips, Recent, the shell's last notice, one line for the VPS connection, and Settings, the last row. It collapses with the key defined in `keymap.md`. The proposed key is ⌘\, because ⌘S means save wherever the Reader edits.
+
+(1.3, folder views.) There is no Reader row: every file and folder row opens the reader, and × closes it. A client folder is **shown**, **hidden** (off the sidebar and Home, still in Settings' list with its In sidebar switch off) or **removed** (off Settings' list too, in its Removed list with Restore; nothing on disk is touched). A right-click on a client folder opens a Menu: Hide from sidebar, Add a client folder…, then Show for each hidden folder; on the heading, the same without Hide. An added folder is any folder inside the projects folder, git or not. Colours are seated over every folder, hidden and removed ones included, so hiding one never repaints another.
 
 ### 3.2 A page
 
@@ -296,7 +299,9 @@ Selecting a row opens that folder's most important task in the right panel: the 
 
 **Terminal chrome.** A `--chrome-h` bar above the pane in `--surface-2`. It holds the session name, a status badge, and the profile, with Detach and Copy on the right. The pane uses the terminal palette, and nothing else in the app does. (1.2, as built: a sibling above the pane, never around it, rendered from the first frame so the terminal is never remounted; the session is `default`, a debug build's test session, or a plain shell (badge stale, "plain shell"); Copy copies the pane's selection as a mouse copy does. Detach waits for a Herdr-CLI door.)
 
-**Reader header.** As built: file name, Rendered/Source toggle, Copy, the ▾ menu, Expand, and Close, in `--text-md` with `--ink-2` icons. (1.2: on the tokens, `--hit` tall, its six icons drawn on the 16 grid in `app/src/ui/icons.tsx`; it stays the reader's own, not a library component.)
+**Reader header.** As built: file name, Rendered/Source toggle, Copy, the ▾ menu, Expand, and Close, in `--text-md` with `--ink-2` icons. (1.2: on the tokens, `--hit` tall, its six icons drawn on the 16 grid in `app/src/ui/icons.tsx`; it stays the reader's own, not a library component.) (1.3: its ▾ menu is the library's Menu.)
+
+**Menu (1.3).** A `--surface` sheet with a 1 px `--line` border, `--radius-md` and `--shadow-float`, one item per action in `--fs-md` `--ink`; the focused or pointed item sits on `--line`, and an item that cannot be used stays in place in `--ink-2` with the reason as its tooltip. A divider is 1 px `--line` and the arrows skip it. It takes focus when it opens and gives it back when it closes, so nothing typed at an open menu reaches the terminal (keys in `keymap.md`). Its place is the caller's: under the reader's ▾, at the pointer for the client folders' right-click.
 
 **Palette.** A floating layer with a single input and a list. Matches show in `--accent`, and it has `--shadow-float`.
 
@@ -330,7 +335,7 @@ It ends with one primary button, Launch task.
 - **Waiting on you:** up to three compact inbox items, newest first, with "All 5 in Inbox" when there are more.
 - **Usage:** the three gauges that decide the day, compact. Below them is a "Needs attention" list of metric rows for anything in `--warn`, `--danger`, or stale across Convex, the Hostinger VPS, Ollama, and this Mac. When nothing needs attention, one line says "Everything else is within limits." The caption is "as of" the oldest reading shown.
 
-*As built (1.2, 2026-09-23):* the waiting count button arrives with the Inbox (its count is zero until the crew). Overnight has no caption until an event log exists, and each folder says "No work overnight in this folder."; a row opens the folder in the reader. Waiting on you is the empty state. Needs attention lists every reading at 80 % used or more, stale or dead, every configured reader in error (once, with its reason), and this Mac's memory or disk past 80 % — never a CPU; danger first. Launch task goes to the Work page with the terminal holding the keys.
+*As built (1.2, 2026-09-23):* the waiting count button arrives with the Inbox (its count is zero until the crew). Overnight has no caption until an event log exists, and each folder says "No work overnight in this folder."; a row opens the folder in the reader. (1.3: only shown folders are listed; with every folder hidden, the empty state says Settings → Client folders shows them again.) Waiting on you is the empty state. Needs attention lists every reading at 80 % used or more, stale or dead, every configured reader in error (once, with its reason), and this Mac's memory or disk past 80 % — never a CPU; danger first. Launch task goes to the Work page with the terminal holding the keys.
 
 **Usage.** It answers: how much of what we pay for is left. It opens with a hero row of the three gauges, larger. Below that comes one section per provider, each with its plan name and a single freshness caption:
 
@@ -352,7 +357,7 @@ Chart bars are colored by provider category and the legend lists providers only;
 
 **Reader.** As built. Only the header follows the component above, and the body uses the type scale.
 
-**Settings.** Cards per group: Providers, Crew, Client folders (category colors), Shortcuts, Appearance (theme, accent field, fonts), and Advanced. The tool health list from the crew installer is a table with status badges. (1.2, as built: a card per existing group, in order — the Claude Code connection, Ollama, Convex, Hostinger, shortcuts, the global hotkey, Appearance with the Accent field, the menu bar, launch at login, the organisation, the projects folder, Client folders, the reader, the CLI; the grouping into Providers/Crew/Advanced comes with the crew.)
+**Settings.** Cards per group: Providers, Crew, Client folders (category colors), Shortcuts, Appearance (theme, accent field, fonts), and Advanced. The tool health list from the crew installer is a table with status badges. (1.2, as built: a card per existing group, in order — the Claude Code connection, Ollama, Convex, Hostinger, shortcuts, the global hotkey, Appearance with the Accent field, the menu bar, launch at login, the organisation, the projects folder, Client folders, the reader, the CLI; the grouping into Providers/Crew/Advanced comes with the crew.) (1.3: Client folders gives each folder an In sidebar switch beside Internal, both columns headed, and Remove; Add a folder… under the list; a Removed list with Restore when any folder is removed.)
 
 **Launch screen (CLI).** The one place `--font-display` and the block-letter wordmark appear. Its panel uses the same status words and freshness rule as the app.
 

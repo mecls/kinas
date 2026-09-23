@@ -1,0 +1,110 @@
+{
+  "light": {
+    "section[data-page=\"settings\"] .hook-line": {
+      "background-color": "rgb(237, 234, 226)",
+      "border-radius": "6px"
+    },
+    "section[data-page=\"settings\"] .problem": {
+      "color": "rgb(196, 38, 46)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-help": {
+      "color": "rgb(91, 97, 112)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-section": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(227, 223, 213)",
+      "padding-top": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-section h2": {
+      "color": "rgb(27, 31, 39)",
+      "font-size": "15px",
+      "font-weight": "600",
+      "line-height": "22px"
+    },
+    "section[data-page=\"settings\"] .shortcut-chord": {
+      "border-top-color": "rgb(207, 201, 188)",
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .ui-button[data-kind=\"primary\"]": {
+      "background-color": "rgb(0, 84, 158)",
+      "color": "rgb(255, 255, 255)",
+      "height": "28px"
+    },
+    "section[data-page=\"settings\"] .ui-button[data-kind=\"secondary\"]": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-top-color": "rgb(207, 201, 188)",
+      "color": "rgb(27, 31, 39)"
+    },
+    "section[data-page=\"settings\"] .ui-input": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "6px",
+      "border-top-color": "rgb(207, 201, 188)",
+      "height": "28px"
+    },
+    "section[data-page=\"settings\"] .ui-titlerow h1": {
+      "color": "rgb(27, 31, 39)",
+      "font-size": "20px",
+      "font-weight": "600"
+    }
+  },
+  "dark": {
+    "section[data-page=\"settings\"] .hook-line": {
+      "background-color": "rgb(35, 40, 51)",
+      "border-radius": "6px"
+    },
+    "section[data-page=\"settings\"] .problem": {
+      "color": "rgb(229, 87, 94)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-help": {
+      "color": "rgb(161, 167, 180)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-section": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(43, 49, 64)",
+      "padding-top": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-section h2": {
+      "color": "rgb(237, 238, 242)",
+      "font-size": "15px",
+      "font-weight": "600",
+      "line-height": "22px"
+    },
+    "section[data-page=\"settings\"] .shortcut-chord": {
+      "border-top-color": "rgb(58, 65, 82)",
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .ui-button[data-kind=\"primary\"]": {
+      "background-color": "oklab(0.623875 -0.027266 -0.090197)",
+      "color": "rgb(14, 20, 32)",
+      "height": "28px"
+    },
+    "section[data-page=\"settings\"] .ui-button[data-kind=\"secondary\"]": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-top-color": "rgb(58, 65, 82)",
+      "color": "rgb(237, 238, 242)"
+    },
+    "section[data-page=\"settings\"] .ui-input": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "6px",
+      "border-top-color": "rgb(58, 65, 82)",
+      "height": "28px"
+    },
+    "section[data-page=\"settings\"] .ui-titlerow h1": {
+      "color": "rgb(237, 238, 242)",
+      "font-size": "20px",
+      "font-weight": "600"
+    }
+  }
+}

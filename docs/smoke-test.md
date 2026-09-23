@@ -66,8 +66,8 @@ Herdr 0.9.0 · macOS 26 · 2026-09-14.
 - [x] A shortcut rebound in Settings (⌘B for the sidebar) works, its old chord does nothing, and a chord that is
       already taken is refused with whose it is — `automated (settings.e2e.ts)`
 - [ ] The sidebar (220 px since 2026-09-18; since 2026-09-22 the wordmark, Home · Work · Crew · Inbox · Usage ·
-      Reader · Settings, the client folders with their chips, the VPS row at the foot), the gear and the Settings page
-      look right; at the window's minimum width, 820 px, the page and the reader each still have their 280 px —
+      Reader · Settings, the client folders with their chips, the VPS row at the foot) and the Settings page look
+      right; at the window's minimum width, 820 px, the page and the reader each still have their 280 px —
       `outstanding — needs Miguel`
 - [ ] The same with a physical keyboard — `outstanding — needs Miguel`
 
@@ -248,7 +248,7 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
 Settings → Appearance: Follow macOS, Light or Dark. One stylesheet, two grounds; the window's appearance chooses.
 Amended 2026-09-22 (design system): the token names below are the old set's; from slice 1 of the design system the
 same checks run over `DESIGN.md`'s tokens (`--bg`, `--surface`, `--ink`, …) with the accent as well — see the
-"Design system" section that slice adds.
+"Design system" section below.
 
 - [x] The two grounds are the same set of names; on warm white and on a white panel every colour that draws text
       reaches 4.5:1 and every chart series 3:1; four ANSI slots equal their tokens on both; no rule holds a colour
@@ -276,9 +276,41 @@ same checks run over `DESIGN.md`'s tokens (`--bg`, `--surface`, `--ink`, …) wi
       launch screen is right — `outstanding — needs Miguel`
 - [ ] With a Mermaid document open, a switch redraws each diagram where it stands and the page does not jump;
       Print as PDF from each ground gives the same sheet — `outstanding — needs Miguel`
-- [ ] By eye, on the light ground: how much blue the labels add; gold as a fill (the stale dot, a gauge at ≤ 25 %);
-      `--line` round the text fields; the Usage chart's series and its no-data hatch — `outstanding — needs Miguel`
+- [ ] By eye, on the light ground: how much blue the labels add; the warn fill (a bar past 80 % used, amended
+      2026-09-23 — the old ≤ 25 % left rule is gone); `--line` round the text fields; the Usage chart's providers and
+      its no-data hatch — `outstanding — needs Miguel`
 - [ ] The HTML preview stays on white under both — `outstanding — needs Miguel`
+
+## Design system
+
+`DESIGN.md` is the law, `app/src/styles/tokens.css` its one implementation, `app/src/ui/` its components, and
+`design/preview.html` the mockup every screen came from (2026-09-22/23, the design-system build).
+
+- [x] `DESIGN.md` §2, `tokens.css`, the preview's token blocks and `tasks/_templates/mockup.html` hold the same values in
+      both themes; §4's catalogue is the stories as built; no old token name is declared or read anywhere —
+      `automated (styles/design.test.ts, styles/preview.test.ts, ui/stories.test.ts, styles/tokens.test.ts)`
+- [x] No raw colour, font size or spacing outside `tokens.css` (one sheet on a ratchet: `reader.css`, the document's
+      prose rhythm, 29); no background transition; every text pair at its floor in both themes and at every accent
+      swatch — `automated (styles/guard.test.ts, styles/tokens.test.ts)`
+- [x] Every component renders every state in both themes and holds its style contract
+      (`fixtures/screens/stories.json`) — `automated (stories.e2e.ts)`; the pages hold theirs
+      (`fixtures/screens/{home,usage,settings}.json`) — `automated (screens.e2e.ts)`
+- [x] Home lands, lists the client folders with their chips, says nothing waits, and holds the one danger reading;
+      ⌘4 and ⌘1 move between it and Usage with the PTY untouched — `automated (home.e2e.ts)`
+- [x] An accent chosen in Settings is painted at once, stored, derived for the dark theme, and the PTY never notices —
+      `automated (appearance.e2e.ts)`
+- [ ] Home against `docs/design/screens/home-light.png` and `home-dark.png`, on your screen with your folders —
+      `outstanding — needs Miguel`
+- [ ] Usage against `docs/design/screens/usage-light.png` and `usage-dark.png`, scrolled through every provider —
+      `outstanding — needs Miguel`
+- [ ] Settings against `docs/design/screens/settings-light.png` and `settings-dark.png`, every card —
+      `outstanding — needs Miguel`
+- [ ] The components against `docs/design/screens/stories-{light,dark}-*.png` (a debug build, `#stories`) —
+      `outstanding — needs Miguel`
+- [ ] The Work page: the chrome above the pane names `default` with the working badge, Copy copies a selection, and
+      the pane in your `default` session looks as it did — `outstanding — needs Miguel`
+- [ ] The accent you want, and whether the six category colours suit your folders (Settings → Client folders) —
+      `outstanding — needs Miguel`
 
 ## Throughput, page switch, renderer
 

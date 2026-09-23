@@ -1,0 +1,108 @@
+{
+  "light": {
+    "section[data-page=\"usage\"] .chart-wrap": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(227, 223, 213)"
+    },
+    "section[data-page=\"usage\"] .legend li": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"usage\"] .ui-gauge": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(227, 223, 213)",
+      "padding-top": "16px"
+    },
+    "section[data-page=\"usage\"] .ui-gauge .ui-num": {
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "28px",
+      "line-height": "32px"
+    },
+    "section[data-page=\"usage\"] .ui-section-head h2": {
+      "color": "rgb(27, 31, 39)",
+      "font-size": "15px",
+      "font-weight": "600"
+    },
+    "section[data-page=\"usage\"] .ui-table th": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px",
+      "height": "36px"
+    },
+    "section[data-page=\"usage\"] .ui-titlerow h1": {
+      "color": "rgb(27, 31, 39)",
+      "font-size": "20px",
+      "font-weight": "600"
+    },
+    "section[data-page=\"usage\"] .usage-note": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"usage\"] [data-section=\"convex-month\"] .ui-metric-row": {
+      "border-top-color": "rgb(27, 31, 39)",
+      "height": "36px"
+    },
+    "section[data-page=\"usage\"] [data-section=\"convex-month\"] .ui-rows-title": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"usage\"] [data-section=\"hostinger\"] .ui-card-title": {
+      "color": "rgb(27, 31, 39)",
+      "font-weight": "500"
+    }
+  },
+  "dark": {
+    "section[data-page=\"usage\"] .chart-wrap": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(43, 49, 64)"
+    },
+    "section[data-page=\"usage\"] .legend li": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"usage\"] .ui-gauge": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(43, 49, 64)",
+      "padding-top": "16px"
+    },
+    "section[data-page=\"usage\"] .ui-gauge .ui-num": {
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "28px",
+      "line-height": "32px"
+    },
+    "section[data-page=\"usage\"] .ui-section-head h2": {
+      "color": "rgb(237, 238, 242)",
+      "font-size": "15px",
+      "font-weight": "600"
+    },
+    "section[data-page=\"usage\"] .ui-table th": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px",
+      "height": "36px"
+    },
+    "section[data-page=\"usage\"] .ui-titlerow h1": {
+      "color": "rgb(237, 238, 242)",
+      "font-size": "20px",
+      "font-weight": "600"
+    },
+    "section[data-page=\"usage\"] .usage-note": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"usage\"] [data-section=\"convex-month\"] .ui-metric-row": {
+      "border-top-color": "rgb(237, 238, 242)",
+      "height": "36px"
+    },
+    "section[data-page=\"usage\"] [data-section=\"convex-month\"] .ui-rows-title": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"usage\"] [data-section=\"hostinger\"] .ui-card-title": {
+      "color": "rgb(237, 238, 242)",
+      "font-weight": "500"
+    }
+  }
+}

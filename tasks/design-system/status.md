@@ -14,7 +14,7 @@
 - [x] Slice 4 · Usage on the primitives (2026-09-22, committed locally) → ship point 2: full e2e alone 2026-09-22 (18/19 in the run; `appearance` lost its first ⌘, on the coldest launch, now retried, 10/10 alone); **waiting for the captain's word on the push** — nothing pushed
 - [x] Slice 5 · Home (2026-09-23, committed locally): Overnight per client folder, Waiting on you, the three gauges and Needs attention from one shared usage poller; check green, home/shell/settings/usage/staleness green alone — nothing pushed
 - [x] Slice 6 · Settings cards, the reader header, palette and toasts, the terminal chrome, the alias block removed (2026-09-23, committed locally): check green, full e2e alone 19/19 — nothing pushed
-- [ ] Slice 7 · DESIGN.md finished, the preview updated, screenshots, the smoke test → ship point 3
+- [x] Slice 7 · DESIGN.md as built, the preview and the mockup template held to tokens.css, the screens, the smoke test (2026-09-23, committed locally) → ship point 3: full e2e alone 20/20 (114 cases); release build clean (AC-11); **waiting for the captain's word on the push** — nothing pushed
 
 ## Notes for a fresh session
 

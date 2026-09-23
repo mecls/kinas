@@ -1,0 +1,112 @@
+{
+  "light": {
+    "section[data-page=\"home\"] .ui-gauge": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(227, 223, 213)"
+    },
+    "section[data-page=\"home\"] .ui-gauge .ui-num": {
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "28px",
+      "font-weight": "500"
+    },
+    "section[data-page=\"home\"] .ui-plist": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(227, 223, 213)"
+    },
+    "section[data-page=\"home\"] .ui-progress-event": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"home\"] .ui-progress-row": {
+      "color": "rgb(27, 31, 39)",
+      "min-height": "56px"
+    },
+    "section[data-page=\"home\"] .ui-rows-title": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px",
+      "font-weight": "500"
+    },
+    "section[data-page=\"home\"] .ui-titlerow .ui-button[data-kind=\"primary\"]": {
+      "background-color": "rgb(0, 84, 158)",
+      "border-radius": "6px",
+      "color": "rgb(255, 255, 255)",
+      "height": "28px"
+    },
+    "section[data-page=\"home\"] .ui-titlerow h1": {
+      "color": "rgb(27, 31, 39)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "20px",
+      "font-weight": "600",
+      "line-height": "28px"
+    },
+    "section[data-page=\"home\"] [data-section=\"usage\"] .ui-caption": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"home\"] [data-section=\"waiting\"] .ui-empty": {
+      "background-color": "rgb(255, 255, 255)",
+      "border-top-style": "dashed",
+      "color": "rgb(91, 97, 112)"
+    },
+    "section[data-page=\"home\"] [data-tone=\"danger\"] .ui-bar i": {
+      "background-color": "rgb(196, 38, 46)"
+    }
+  },
+  "dark": {
+    "section[data-page=\"home\"] .ui-gauge": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(43, 49, 64)"
+    },
+    "section[data-page=\"home\"] .ui-gauge .ui-num": {
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "28px",
+      "font-weight": "500"
+    },
+    "section[data-page=\"home\"] .ui-plist": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-radius": "10px",
+      "border-top-color": "rgb(43, 49, 64)"
+    },
+    "section[data-page=\"home\"] .ui-progress-event": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"home\"] .ui-progress-row": {
+      "color": "rgb(237, 238, 242)",
+      "min-height": "56px"
+    },
+    "section[data-page=\"home\"] .ui-rows-title": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px",
+      "font-weight": "500"
+    },
+    "section[data-page=\"home\"] .ui-titlerow .ui-button[data-kind=\"primary\"]": {
+      "background-color": "oklab(0.623875 -0.027266 -0.090197)",
+      "border-radius": "6px",
+      "color": "rgb(14, 20, 32)",
+      "height": "28px"
+    },
+    "section[data-page=\"home\"] .ui-titlerow h1": {
+      "color": "rgb(237, 238, 242)",
+      "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
+      "font-size": "20px",
+      "font-weight": "600",
+      "line-height": "28px"
+    },
+    "section[data-page=\"home\"] [data-section=\"usage\"] .ui-caption": {
+      "color": "rgb(161, 167, 180)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"home\"] [data-section=\"waiting\"] .ui-empty": {
+      "background-color": "rgb(27, 31, 39)",
+      "border-top-style": "dashed",
+      "color": "rgb(161, 167, 180)"
+    },
+    "section[data-page=\"home\"] [data-tone=\"danger\"] .ui-bar i": {
+      "background-color": "rgb(229, 87, 94)"
+    }
+  }
+}

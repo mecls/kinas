@@ -29,6 +29,10 @@ tauri-plugin-wdio-webdriver = { version = "=1.4.0", optional = true }
 portable-pty = "=0.9.0"
 jiff = "=0.2.37"
 notify = "=8.2.0"
+# The reader's Changes view (tree changes): a line diff with a deadline, so a diff that would take longer than 500 ms
+# is refused rather than drawn coarse. Default features (std, text) pull in no other crate, and it moves no existing
+# pin — measured with `cargo tree -p similar` before it was chosen over a hand-written Myers (2026-09-23).
+similar = "=3.2.0"
 sysinfo = "=0.39.6"
 # native-tls uses macOS's Security framework instead of compiling aws-lc-rs; blocking suits the readers'
 # plain polling threads.

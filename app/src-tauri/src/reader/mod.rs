@@ -251,6 +251,19 @@ fn reads_as_text(real: &Path) -> bool {
     }
 }
 
+/// Whether the tree lists an entry of this name at all (R8): no dot-names — so nothing under `.git` — and no build
+/// output. The one place the rule lives: `list_dir` asks it of every entry, and the tree's change marks (tree changes
+/// rule 5) ask it of every component of a changed path, so a file the tree hides can never be marked.
+pub fn listable_name(name: &str) -> bool {
+    !name.starts_with('.') && !SKIPPED_NAMES.contains(&name)
+}
+
+/// Whether the tree lists this file (R8), judged by its real path: an image by its extension, anything else by its
+/// head. The sniff reads at most `SNIFF_BYTES`; call it last, after every cheap filter.
+pub fn listable_file(real: &Path) -> bool {
+    access::is_image(real) || reads_as_text(real)
+}
+
 /// One folder for the tree (R35, R8): everything the reader can open, no dot-names or build output, folders first,
 /// symlinks followed only to where the reader may go.
 ///
@@ -261,7 +274,7 @@ pub fn list_dir(dir: &Path, permitted: &dyn Fn(&Path) -> bool, cap: usize) -> st
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(dir)?.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') || SKIPPED_NAMES.contains(&name.as_str()) {
+        if !listable_name(&name) {
             continue;
         }
         let Ok((real, kind)) = access::resolve(&entry.path()) else {
@@ -273,7 +286,7 @@ pub fn list_dir(dir: &Path, permitted: &dyn Fn(&Path) -> bool, cap: usize) -> st
         // The sniff comes last, after every cheap filter, so most entries never cost a read. An image answers by
         // its extension, so a folder of screenshots reads nothing. Only the head is read: reading whole files to
         // list a folder would be absurd, and this runs inside `off_main`, never on the main thread.
-        if kind == Kind::File && !access::is_image(&real) && !reads_as_text(&real) {
+        if kind == Kind::File && !listable_file(&real) {
             continue;
         }
         entries.push(DirEntry { name, path: real.display().to_string(), kind });
@@ -507,6 +520,16 @@ mod tests {
 
         let capped = list_dir(&root, &permitted, 2).unwrap();
         assert_eq!((capped.entries.len(), capped.more), (2, 4));
+    }
+
+    #[test]
+    fn listable_name_is_the_dot_rule_and_skipped_names() {
+        for hidden in [".env", ".git", ".hidden.md", "node_modules", "target", "dist", "build"] {
+            assert!(!listable_name(hidden), "{hidden} must not be listed");
+        }
+        for shown in ["README.md", "src", "builds", "Target", "dist.md", "a.b"] {
+            assert!(listable_name(shown), "{shown} must be listed");
+        }
     }
 
     #[test]

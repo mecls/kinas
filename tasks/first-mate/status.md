@@ -6,9 +6,9 @@
 - Gate 2 · Architecture: APPROVED 2026-09-23 — `architecture.md` (private, main checkout), from three read passes
   over the tree at `6214108`; its three PRD clarifications are marked in `prd.md`
 - Gate 3 · Program design: APPROVED 2026-09-23 — `build-spec.md` rewritten that day; §11 is the program design
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12, written 2026-09-23, awaiting approval
+- Gate 4 · Slice plan: APPROVED 2026-09-23 — `build-spec.md` §12; the build starts at slice 0
 
-## Slices (build-spec.md §12; proposed, Gate 4 decides)
+## Slices (build-spec.md §12, approved 2026-09-23)
 - [ ] Slice 0 · ground, and the probe that decides whether there is a build (answers `prd.md` §7 q1–q6; stops the
   build if Firstmate's Herdr backend fails on 0.9.0)
 - [ ] Slice 1 · tracer bullet: a task in the fake home is a card on the Crew page
@@ -23,6 +23,8 @@
 
 ## Notes for a fresh session
 
+- **Next: slice 0**, in a new worktree `feat/crew` from `origin/main` (`build-spec.md` §16), which must hold the
+  gate documents — pushed 2026-09-23. Read `build-spec.md` §0 before anything else.
 - **Read `prd.md` first.** It was revised on 2026-09-23 and is the current product document; where it and
   `build-spec.md` differ, the PRD wins until Gate 3 rewrites the spec. Its §7 records the captain's answers of
   2026-09-22 and 2026-09-23.

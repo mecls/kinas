@@ -1,9 +1,11 @@
 /* Gauge (DESIGN.md §4; preview 164–173): a title in --ink-2, the number in --fs-num mono with its unit beside it,
    a bar below, one line of detail. A stale reading mutes the number and draws the bar in --stale; a dead one says
    "No reading" and draws no fill. Three abreast in a hero row. */
+/* Three across while three fit, then two and one (2026-09-23): `repeat(3, 1fr)` kept three however narrow the page,
+   and beside a wide reader panel the row ran out of the page. 136 px holds a gauge's number, unit and detail. */
 .ui-gauges {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(136px, 100%), 1fr));
   gap: var(--space-3);
 }
 .ui-gauge {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UsageSnapshot } from "../api.ts";
 import { Table } from "../ui/index.ts";
-import { buildChart, periodRows, type PeriodRow } from "./chartModel.ts";
+import { axisLabelDays, buildChart, periodRows, type PeriodRow } from "./chartModel.ts";
 import { compactTokens } from "./format.ts";
 
 // Model usage by day (R38): the last 30 Europe/Lisbon days, stacked columns by provider in its category colour
@@ -30,8 +30,9 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    // The content box, not clientWidth: the frame's padding is not the chart's to draw in.
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(260, Math.floor(entry!.contentRect.width))));
+    // The content box, not clientWidth: the frame's padding is not the chart's to draw in. No floor beyond a plot of
+    // a few pixels: a 260 px floor ran the chart out of its card in a page beside a wide reader panel (2026-09-23).
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(PAD.left + PAD.right + 30, Math.floor(entry!.contentRect.width))));
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
@@ -48,6 +49,7 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
   const y = (v: number) => baseline - (v / top) * plotH;
   const firstDataIndex = model.days.findIndex((d) => !d.noData);
   const hovered = hover === null ? null : model.days[hover];
+  const labelled = new Set(axisLabelDays(model.days.length, slotW));
 
   return (
     <>
@@ -116,8 +118,8 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
 
           <line className="chart-baseline" x1={PAD.left} x2={width - PAD.right} y1={baseline} y2={baseline} />
           {model.days.map((day, i) =>
-            // Every seventh day, and the last one unless a weekly label sits too close to it to read.
-            i % 7 === 0 || (i === model.days.length - 1 && i % 7 >= 3) ? (
+            // Every seventh day, spaced wider when the days are narrow (chartModel.ts, axisLabelDays).
+            labelled.has(i) ? (
               <text key={day.date} className="chart-tick" x={PAD.left + i * slotW + slotW / 2} y={HEIGHT - 6} textAnchor="middle">
                 {shortDate(day.date)}
               </text>
@@ -145,7 +147,7 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
           <div
             className="tooltip"
             role="status"
-            style={{ left: Math.min(width - 200, Math.max(0, PAD.left + hover * slotW + slotW / 2 - 90)), top: 0 }}
+            style={{ left: Math.max(0, Math.min(width - 200, PAD.left + hover * slotW + slotW / 2 - 90)), top: 0 }}
           >
             <div className="tooltip-date">
               {hovered.date} · {hovered.noData ? "no data" : `${compactTokens(hovered.total)} tokens`}

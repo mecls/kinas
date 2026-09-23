@@ -89,6 +89,45 @@ describe("the Usage page", () => {
     expect({ scrolls: seen.narrow.scrolls, overflowX: seen.narrow.overflowX }).toEqual({ scrolls: true, overflowX: "auto" });
   });
 
+  it("beside a wide reader panel the page never scrolls sideways: the gauges wrap, the chart and every row fit", async () => {
+    // 2026-09-23: at a 300 px page the gauges held three across and ran 105 px out of the page, the chart kept a
+    // 260 px floor and spilled out of its card, a metric row's value ran past its card, and Convex's Add deploy key
+    // stuck out of its empty state. 280 px is the page's floor (--pane-min); these are widths the divider reaches.
+    for (const px of [420, 300]) {
+      await browser.execute((w: number) => {
+        const content = document.querySelector<HTMLElement>(".content")!;
+        content.style.flex = `0 0 ${w}px`;
+        content.style.minWidth = "0";
+      }, px);
+      // The chart redraws when its ResizeObserver reports, after this script: wait for the page to settle.
+      await browser.waitUntil(
+        () => browser.execute(() => {
+          const page = document.querySelector<HTMLElement>('section[data-page="usage"]')!;
+          return page.scrollWidth <= page.clientWidth + 1;
+        }),
+        { timeout: 5000, interval: 100, timeoutMsg: `the Usage page scrolls sideways at ${px} px` },
+      );
+      const fit = await browser.execute(() => {
+        const page = document.querySelector<HTMLElement>('section[data-page="usage"]')!;
+        const wrap = document.querySelector<HTMLElement>(".chart-wrap")!;
+        const svg = document.querySelector<SVGSVGElement>(".chart-svg")!.getBoundingClientRect();
+        const inner = wrap.getBoundingClientRect().right - parseFloat(getComputedStyle(wrap).paddingRight);
+        // A card whose contents stick out of it: the rows' label, bar and value, an empty state's sentence and action.
+        const over = (card: string, parts: string) =>
+          [...page.querySelectorAll<HTMLElement>(card)].filter((c) =>
+            [...c.querySelectorAll<HTMLElement>(parts)].some((p) => p.getBoundingClientRect().right > c.getBoundingClientRect().right + 1),
+          ).length;
+        return { chartFits: svg.right <= inner + 1, rowsOver: over(".ui-rows", ".ui-metric-row > *"), emptyOver: over(".ui-empty", ".ui-empty > *") };
+      });
+      expect({ px, ...fit }).toEqual({ px, chartFits: true, rowsOver: 0, emptyOver: 0 });
+    }
+    await browser.execute(() => {
+      const content = document.querySelector<HTMLElement>(".content")!;
+      content.style.flex = "";
+      content.style.minWidth = "";
+    });
+  });
+
   it("shows this Mac, with disk space in Finder's GB", async () => {
     // Three metric rows under one "as of" caption since the design system.
     for (const metric of ["cpu", "memory", "disk"]) await $(`section[data-page="usage"] [data-section="host"] [data-metric="${metric}"]`).waitForExist({ timeout: 30000 });

@@ -26,12 +26,18 @@ export function MetricRow({
   );
 }
 
-/** The card the rows stack in, with an optional small title ("Needs attention"). */
+/**
+ * The card the rows stack in, with an optional small title ("Needs attention"). It sits in a box its rows can ask
+ * the width of (a CSS container, MetricRow.css): a card too narrow for a label, a 96 px bar and a value side by side —
+ * the page beside a wide reader panel — gives the value room to wrap instead of running out of the card.
+ */
 export function Rows({ title, children, ...rest }: { title?: ReactNode; children: ReactNode } & HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className="ui-rows" {...rest}>
-      {title && <h3 className="ui-rows-title">{title}</h3>}
-      {children}
+    <div className="ui-rows-box">
+      <div className="ui-rows" {...rest}>
+        {title && <h3 className="ui-rows-title">{title}</h3>}
+        {children}
+      </div>
     </div>
   );
 }

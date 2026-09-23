@@ -57,6 +57,25 @@ export function rowValue(row: UsageDay, includeCache: boolean): number {
 }
 
 /** Clean ticks from 0 to at least `max`: steps of 1, 2 or 5 × 10^n, about four intervals. */
+/** How wide a date label on the x axis is ("09-22" in --fs-xs mono) with room either side, in CSS pixels. */
+export const AXIS_LABEL_W = 40;
+
+/**
+ * Which days the x axis names, by index: every seventh day, and the last one unless the label before it sits too close
+ * to read. When the days are too narrow for a label every week — the page beside a wide reader panel — every second
+ * week, then every fourth, so no two labels ever overlap.
+ */
+export function axisLabelDays(days: number, slotW: number): number[] {
+  const step = [7, 14, 28].find((s) => s * slotW >= AXIS_LABEL_W) ?? 28;
+  // At a full width a week is 150 px and three days is the rule that kept the last two labels apart; narrower, the gap
+  // is however many days a label needs.
+  const gap = Math.max(Math.ceil((step * 3) / 7), Math.ceil(AXIS_LABEL_W / slotW));
+  const last = days - 1;
+  const out: number[] = [];
+  for (let i = 0; i < days; i++) if (i % step === 0 || (i === last && i % step >= gap)) out.push(i);
+  return out;
+}
+
 export function niceTicks(max: number): number[] {
   if (!(max > 0)) return [0];
   const raw = max / 4;

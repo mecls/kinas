@@ -20,6 +20,9 @@
   border: 0;
   border-top: 1px solid var(--line);
   color: inherit;
+  /* The folder's name in --text-md (DESIGN.md §4); the row set no size, and took the page's default 16 px. */
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .ui-progress-row:first-child {
   border-top: 0;

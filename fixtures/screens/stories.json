@@ -97,7 +97,7 @@
       "font-size": "12px"
     },
     "[data-story=\"SectionHeader/reading\"] .ui-section-action": {
-      "color": "rgb(27, 31, 39)"
+      "color": "rgb(0, 84, 158)"
     },
     "[data-story=\"SectionHeader/reading\"] h2": {
       "font-size": "15px",
@@ -237,7 +237,7 @@
       "font-size": "12px"
     },
     "[data-story=\"SectionHeader/reading\"] .ui-section-action": {
-      "color": "rgb(237, 238, 242)"
+      "color": "oklab(0.623875 -0.027266 -0.090197)"
     },
     "[data-story=\"SectionHeader/reading\"] h2": {
       "font-size": "15px",

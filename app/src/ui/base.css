@@ -9,10 +9,14 @@
   box-sizing: border-box;
 }
 
-[class^="ui-"] button,
-[class^="ui-"] input,
-[class^="ui-"] textarea,
-[class^="ui-"] select {
+/* A control takes its type and colour from where it sits, unless its component says otherwise. Inside :where(), so
+   this rule weighs nothing (2026-09-23): as `[class^="ui-"] button` it outranked every component's own class, and a
+   button inside another component — a Button in a card, the progress row in its list, the section header's action,
+   the menu's items — lost its size to the page's default 16 px, and the action its accent. */
+:where([class^="ui-"]) button,
+:where([class^="ui-"]) input,
+:where([class^="ui-"]) textarea,
+:where([class^="ui-"]) select {
   font: inherit;
   color: inherit;
 }

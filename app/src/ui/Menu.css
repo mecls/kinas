@@ -1,9 +1,9 @@
 /* DESIGN.md §4 Menu (1.3): the sheet and its items, tokens only. Where it sits is the caller's — `.reader-menu` under
    the ▾ (reader.css), `.sidebar-menu` at the pointer (shell.css).
 
-   The type is set on the sheet, not the items: base.css gives every button inside a ui- component `font: inherit`,
-   and that rule outranks `.ui-menu-item`, so a size set on the item never applied — the items took the page's body
-   size, a step above the sidebar rows (found 2026-09-23, the day the menu joined the library). */
+   The type is set on the sheet and the items inherit it. It was moved here when base.css's `font: inherit` for
+   buttons inside ui- components outranked `.ui-menu-item`, and the items took the page's body size (2026-09-23);
+   that rule now sits in :where() and outranks nothing, and the sheet is still the one place the menu's type lives. */
 .ui-menu {
   min-width: calc(var(--sidebar-w) - var(--space-6));
   font-family: var(--font-ui);

@@ -167,6 +167,26 @@ describe("the component stories (a debug build, #stories)", () => {
         return value;
       });
       expect(seen[name]['[data-story="Button/secondary"] .ui-button']!["color"]).toBe(ink);
+      // A component's own type and colour hold wherever it sits (2026-09-23): base.css's rule for controls inside ui-
+      // components used to outrank their classes, so a Button in a card, a progress row in its list and a section
+      // header's action took the page's 16 px — and the action lost its accent.
+      const nested = await browser.execute(() => {
+        const size = (sel: string) => getComputedStyle(document.querySelector(sel)!).fontSize;
+        const probe = document.createElement("span");
+        probe.style.color = "var(--accent)";
+        document.body.appendChild(probe);
+        const accent = getComputedStyle(probe).color;
+        probe.remove();
+        return {
+          alone: size('[data-story="Button/primary"] .ui-button'),
+          inCard: size('[data-story="InboxItem/plan"] .ui-button'),
+          progressName: size('[data-story="ProgressRow/list"] .ui-progress-name'),
+          // Text that names no size of its own is the page's --text-md, as the preview's body sets it — not 16 px.
+          metricLabel: size('[data-story="MetricRow/rows"] .ui-metric-label'),
+          action: getComputedStyle(document.querySelector('[data-story="SectionHeader/reading"] .ui-section-action')!).color === accent,
+        };
+      });
+      expect(nested).toEqual({ alone: "13px", inCard: "13px", progressName: "13px", metricLabel: "13px", action: true });
       await screenshots(`stories-${name}`);
     }
     if (!recorded.light) {

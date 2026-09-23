@@ -210,6 +210,14 @@ body,
   overflow: hidden;
 }
 
+/* The page's own type, as design/preview.html's body sets it: anything that names no size of its own is --text-md,
+   not the browser's 16 px (2026-09-23 — the metric rows, the settings folder names and every other unsized text read a
+   step too large). On body, not html, so a rem stays the browser's 16 px. */
+body {
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

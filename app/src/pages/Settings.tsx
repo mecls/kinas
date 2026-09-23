@@ -23,7 +23,7 @@ import { HostingerSection } from "../settings/HostingerSection.tsx";
 import { AccentField } from "../ui/AccentField.tsx";
 import { seatFolders } from "../shell/folders.ts";
 import { CATEGORIES } from "../ui/category.ts";
-import { Chip, Switch, TitleRow } from "../ui/index.ts";
+import { Button, Card, Chip, Switch, TitleRow } from "../ui/index.ts";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 
 // Settings (PRD §3.9, amended 2026-09-15): a page, opened from the gear at the foot of the sidebar or ⌘,. It stays
@@ -159,23 +159,22 @@ export function SettingsPage({
     <div className="settings" ref={root} tabIndex={-1} onKeyDown={onKeyDown} data-recording={recording ? "true" : undefined}>
       <TitleRow title="Settings" />
       {!settings ? (
-        <p className="muted">{loadError ?? "Reading settings…"}</p>
+        <p className="settings-help">{loadError ?? "Reading settings…"}</p>
       ) : (
         <>
-          <section className="settings-section" data-section="claude">
+          <Card className="settings-section" data-section="claude">
             <h2>Claude Code connection</h2>
-            <p className="muted" data-testid="hook-status">
+            <p className="settings-help" data-testid="hook-status">
               Status: {HOOK_STATE[settings.claude_hook.state]}
               {settings.claude_hook.minutes_ago !== null && settings.claude_hook.state === "last_seen" && ` ${settings.claude_hook.minutes_ago} min ago`}
             </p>
-            <p className="muted">
+            <p className="settings-help">
               Add these lines to <code>~/.claude/statusline-command.sh</code>, directly after <code>input=$(cat)</code>. Kinas never edits that file.
             </p>
             {CLAUDE_HOOK_LINES.map((line, i) => (
               <div className="hook-line" key={i}>
                 <code>{line}</code>
-                <button
-                  type="button"
+                <Button
                   className="button"
                   onClick={() =>
                     void navigator.clipboard.writeText(line).then(() => {
@@ -185,12 +184,12 @@ export function SettingsPage({
                   }
                 >
                   {copied === i ? "Copied" : "Copy"}
-                </button>
+                </Button>
               </div>
             ))}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="ollama">
+          <Card className="settings-section" data-section="ollama">
             <h2>Ollama Cloud API key</h2>
             <form
               className="row"
@@ -205,76 +204,75 @@ export function SettingsPage({
             >
               <input
                 type="password"
-                className="field"
+                className="ui-input field"
                 autoComplete="off"
                 aria-label="Ollama Cloud API key"
                 placeholder={settings.ollama_key_saved ? "A key is saved" : "No key saved"}
                 value={key}
                 onChange={(e) => setKey(e.currentTarget.value)}
               />
-              <button type="submit" className="button" disabled={saving || key.trim() === ""}>
+              <Button type="submit" kind="primary" className="button" disabled={saving || key.trim() === ""}>
                 {saving ? "Saving…" : "Save"}
-              </button>
+              </Button>
               {settings.ollama_key_saved && (
-                <button type="button" className="button" onClick={() => void act("ollama", () => removeOllamaKey(), "Removed")}>
+                <Button className="button" onClick={() => void act("ollama", () => removeOllamaKey(), "Removed")}>
                   Remove
-                </button>
+                </Button>
               )}
             </form>
             {note("ollama")}
-          </section>
+          </Card>
 
           <ConvexSection settings={settings} act={act} note={note} />
 
           <HostingerSection settings={settings} act={act} note={note} />
 
-          <section className="settings-section" data-section="shortcuts">
+          <Card className="settings-section" data-section="shortcuts">
             <h2>Keyboard shortcuts</h2>
-            <p className="muted">Each one includes ⌘, so none of them takes a key from the terminal. Press Change, then the new chord; Esc cancels.</p>
+            <p className="settings-help">Each one includes ⌘, so none of them takes a key from the terminal. Press Change, then the new chord; Esc cancels.</p>
             <ul className="shortcut-list">
               {SHORTCUT_ACTIONS.map((action) => (
                 <ShortcutRow key={action} id={action} title={SHORTCUT_TITLES[action]} chord={shortcuts[action]} {...recorder(action)} />
               ))}
             </ul>
             {note("shortcuts")}
-            <button
-              type="button"
+            <Button
               className="button"
               disabled={SHORTCUT_ACTIONS.every((action) => shortcuts[action] === DEFAULT_SHORTCUTS[action])}
               onClick={() => void act("shortcuts", () => onShortcutsChange(DEFAULT_SHORTCUTS), "Defaults restored")}
             >
               Restore defaults
-            </button>
-          </section>
+            </Button>
+          </Card>
 
-          <section className="settings-section" data-section="hotkey">
+          <Card className="settings-section" data-section="hotkey">
             <h2>Global hotkey</h2>
-            <p className="muted">Works from any app, even when Kinas is hidden.</p>
+            <p className="settings-help">Works from any app, even when Kinas is hidden.</p>
             <ul className="shortcut-list">
               <ShortcutRow id="hotkey" title="Bring Kinas forward and open the palette" chord={settings.global_hotkey} {...recorder("hotkey")} />
             </ul>
             {settings.hotkey_error && <p className="problem">hotkey unavailable: {settings.hotkey_error}</p>}
             {note("hotkey")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="appearance">
+          <Card className="settings-section" data-section="appearance">
             <h2>Appearance</h2>
-            <p className="muted">Warm white with royal blue, or the dark ground. The title bar follows.</p>
-            <select className="field" aria-label="Appearance" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
+            <p className="settings-help">Warm white with royal blue, or the dark ground. The title bar follows.</p>
+            <select className="ui-input field" aria-label="Appearance" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
               {APPEARANCE_CHOICES.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
             </select>
-            <p className="muted">The accent: the selected nav row, primary buttons and a selected card's edge. A shade that would not read in either ground is not saved.</p>
+            <p className="settings-help">The accent: the selected nav row, primary buttons and a selected card's edge. A shade that would not read in either ground is not saved.</p>
             <AccentField value={settings.accent} onChange={(hex) => void act("appearance", () => setAccent(hex))} />
             {note("appearance")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="menu-bar">
+          <Card className="settings-section" data-section="menu-bar">
             <h2>Menu bar</h2>
-            <select className="field" aria-label="Menu bar quota" value={settings.menu_bar_quota} onChange={(e) => void act("menu-bar", () => setMenuBarQuota(e.currentTarget.value))}>
+            <select className="ui-input field" aria-label="Menu bar quota" value={settings.menu_bar_quota} onChange={(e) => void act("menu-bar", () => setMenuBarQuota(e.currentTarget.value))}>
               {MENU_BAR_CHOICES.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -282,9 +280,9 @@ export function SettingsPage({
               ))}
             </select>
             {note("menu-bar")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="login">
+          <Card className="settings-section" data-section="login">
             <h2>Launch at login</h2>
             <label className="row">
               <input type="checkbox" checked={settings.launch_at_login} onChange={(e) => void act("login", () => setLaunchAtLogin(e.currentTarget.checked))} />
@@ -292,12 +290,12 @@ export function SettingsPage({
             </label>
             {settings.autostart_error && <p className="problem">launch at login unavailable: {settings.autostart_error}</p>}
             {note("login")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="org">
+          <Card className="settings-section" data-section="org">
             <h2>Organisation name</h2>
             <input
-              className="field"
+              className="ui-input field"
               aria-label="Organisation name"
               defaultValue={settings.org_name}
               onBlur={(e) => {
@@ -306,15 +304,15 @@ export function SettingsPage({
               }}
             />
             {note("org")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="projects">
+          <Card className="settings-section" data-section="projects">
             <h2>Projects folder</h2>
-            <p className="muted">
+            <p className="settings-help">
               Where `kinas open` looks: a bare name is searched for under this folder, and anything inside it opens without a flag. The CLI reads this too.
             </p>
             <input
-              className="field"
+              className="ui-input field"
               aria-label="Projects folder"
               defaultValue={settings.projects_root}
               spellCheck={false}
@@ -326,24 +324,24 @@ export function SettingsPage({
             />
             {settings.projects_root_from_env && <p className="problem">KINAS_ROOT is set in the environment, so it wins over this field.</p>}
             {note("projects")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="folders">
+          <Card className="settings-section" data-section="folders">
             <h2>Client folders</h2>
-            <p className="muted">Every git repository up to three levels under the projects folder, as the sidebar lists it. The chip is the folder's colour on every page; click it for the next of the six. An internal folder is listed last, with the tag.</p>
+            <p className="settings-help">Every git repository up to three levels under the projects folder, as the sidebar lists it. The chip is the folder's colour on every page; click it for the next of the six. An internal folder is listed last, with the tag.</p>
             {projects.length === 0 ? (
-              <p className="muted">No repositories under the projects folder yet.</p>
+              <p className="settings-help">No repositories under the projects folder yet.</p>
             ) : (
               <ClientFolderRows projects={projects} onCategory={(name, cat) => void act("folders", () => setFolderCategory(name, cat).then(onProjectsChange))} onInternal={(name, internal) => void act("folders", () => setFolderInternal(name, internal).then(onProjectsChange))} />
             )}
             {note("folders")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="reader">
+          <Card className="settings-section" data-section="reader">
             <h2>Reader</h2>
-            <p className="muted">Open in editor splits Herdr&apos;s focused pane and runs this command with the file.</p>
+            <p className="settings-help">Open in editor splits Herdr&apos;s focused pane and runs this command with the file.</p>
             <input
-              className="field"
+              className="ui-input field"
               aria-label="Editor for Open in editor"
               defaultValue={settings.reader_editor}
               spellCheck={false}
@@ -353,14 +351,14 @@ export function SettingsPage({
               }}
             />
             {note("reader")}
-          </section>
+          </Card>
 
-          <section className="settings-section" data-section="cli">
+          <Card className="settings-section" data-section="cli">
             <h2>kinas CLI</h2>
-            <p className={settings.cli_link.state === "conflict" ? "problem" : "muted"} data-testid="cli-link">
+            <p className={settings.cli_link.state === "conflict" ? "problem" : "settings-help"} data-testid="cli-link">
               {linkText(settings.cli_link)}
             </p>
-          </section>
+          </Card>
         </>
       )}
     </div>
@@ -384,8 +382,7 @@ function ShortcutRow({
     <li className="shortcut" data-shortcut={id} data-recording={recording ? "true" : undefined}>
       <span className="shortcut-title">{title}</span>
       <kbd className="shortcut-chord">{recording ? "Press a chord…" : chordLabel(chord)}</kbd>
-      <button
-        type="button"
+      <Button
         className="button"
         onClick={(e) => {
           // WebKit does not focus a button on click, and the recorder hears the chord through focus.
@@ -395,7 +392,7 @@ function ShortcutRow({
         onBlur={() => recording && onRecording(false)}
       >
         {recording ? "Cancel" : "Change"}
-      </button>
+      </Button>
     </li>
   );
 }

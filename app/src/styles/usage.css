@@ -186,32 +186,3 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-
-/* Shared until slice 6 restyles Settings and the reader on the components: the quiet line and the old button that
-   Settings, its Convex and Hostinger sections and the reader still use. Moved here from the old page, on tokens. */
-.muted {
-  color: var(--ink-2);
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.button {
-  align-self: flex-start;
-  margin-top: var(--space-1);
-  appearance: none;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--line);
-  color: var(--white);
-  font-family: var(--font-ui);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  line-height: 1;
-  padding: var(--space-1h) var(--space-2);
-  cursor: default;
-}
-
-.button:hover {
-  background: var(--button-hover);
-}

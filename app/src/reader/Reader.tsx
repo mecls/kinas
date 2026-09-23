@@ -33,6 +33,7 @@ import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
+import { Button } from "../ui/index.ts";
 
 // The reader (tasks/prd-kinas-open.md): the file `kinas open` named, in the panel on the right of the window. It only
 // reads. Opening, reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one
@@ -904,12 +905,12 @@ export function Reader({
               <p className="reader-confirm-title">Open a file outside {confirm.root}?</p>
               <code className="reader-confirm-path">{confirm.path}</code>
               <div className="reader-confirm-actions">
-                <button type="button" className="button" onClick={() => void openConfirmed()}>
+                <Button kind="primary" className="button" onClick={() => void openConfirmed()}>
                   Open
-                </button>
-                <button type="button" className="button" onClick={dismiss}>
+                </Button>
+                <Button className="button" onClick={dismiss}>
                   Dismiss
-                </button>
+                </Button>
               </div>
             </div>
           )}

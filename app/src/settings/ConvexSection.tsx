@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { removeConvexKey, saveConvexKey, setConvexDeployment, setConvexPlan, type SettingsView } from "../api.ts";
+import { Button, Card } from "../ui/index.ts";
 
 // Settings → Convex (prd-convex-usage.md §3 Configure). The key form is the Ollama one: a password input whose
 // *placeholder* says whether a key is saved — never its value — and which clears on submit.
@@ -24,9 +25,9 @@ export function ConvexSection({ settings, act, note }: Props) {
   const [saving, setSaving] = useState(false);
 
   return (
-    <section className="settings-section" data-section="convex">
+    <Card className="settings-section" data-section="convex">
       <h2>Convex usage</h2>
-      <p className="muted">
+      <p className="settings-help">
         Mint the deploy key in the deployment&apos;s Settings with <strong>only</strong> <code>deployment:usage:view</code>. So scoped it cannot deploy,
         read or write data, run functions, or read environment variables — and Kinas only ever reads.
       </p>
@@ -44,7 +45,7 @@ export function ConvexSection({ settings, act, note }: Props) {
       >
         <input
           type="password"
-          className="field"
+          className="ui-input field"
           autoComplete="off"
           aria-label="Convex deploy key"
           placeholder={settings.convex_key_saved ? "A key is saved" : "No key saved"}
@@ -54,13 +55,13 @@ export function ConvexSection({ settings, act, note }: Props) {
         {/* Labelled, because there is more than one "Save" on this page and a text selector would match the
             first — which is Ollama's. The embedded driver refuses a text selector mixed with CSS, so an
             aria-label is the only way for a test to name this button unambiguously. */}
-        <button type="submit" className="button" aria-label="Save Convex deploy key" disabled={saving || key.trim() === ""}>
+        <Button type="submit" kind="primary" className="button" aria-label="Save Convex deploy key" disabled={saving || key.trim() === ""}>
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
         {settings.convex_key_saved && (
-          <button type="button" className="button" onClick={() => void act("convex", () => removeConvexKey(), "Removed")}>
+          <Button className="button" onClick={() => void act("convex", () => removeConvexKey(), "Removed")}>
             Remove
-          </button>
+          </Button>
         )}
       </form>
 
@@ -69,7 +70,7 @@ export function ConvexSection({ settings, act, note }: Props) {
             settings reload cannot fight what is being typed. Empty disconnects the deployment: no requests. */}
         <input
           type="url"
-          className="field"
+          className="ui-input field"
           autoComplete="off"
           aria-label="Convex deployment URL"
           placeholder="https://your-deployment.convex.cloud"
@@ -83,13 +84,13 @@ export function ConvexSection({ settings, act, note }: Props) {
       </div>
 
       <div className="row">
-        <label className="muted" htmlFor="convex-plan">
+        <label className="settings-help" htmlFor="convex-plan">
           Plan
         </label>
         {/* The tier only chooses which published allowances the gauges divide by (R6). */}
         <select
           id="convex-plan"
-          className="field"
+          className="ui-input field"
           aria-label="Convex plan"
           value={settings.convex_plan === "professional" ? "professional" : "starter"}
           onChange={(e) => void act("convex", () => setConvexPlan(e.currentTarget.value), "Plan saved")}
@@ -99,10 +100,10 @@ export function ConvexSection({ settings, act, note }: Props) {
         </select>
       </div>
 
-      <p className="muted">
+      <p className="settings-help">
         One deployment, and per-deployment figures rather than team-wide ones. Storage, file storage, backups and seats are not in this API at all.
       </p>
       {note("convex")}
-    </section>
+    </Card>
   );
 }

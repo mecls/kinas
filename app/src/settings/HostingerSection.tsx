@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { hostingerListVms, removeHostingerToken, saveHostingerToken, setHostingerVm, type SettingsView, type VpsChoice } from "../api.ts";
+import { Button, Card } from "../ui/index.ts";
 
 // Settings → Hostinger (prd-hostinger-usage.md §3 Configure). The token form is the Convex one; the difference
 // is the picker, because the machine is chosen from the account rather than typed as a numeric id (R4).
@@ -18,9 +19,9 @@ export function HostingerSection({ settings, act, note }: Props) {
   const [listing, setListing] = useState(false);
 
   return (
-    <section className="settings-section" data-section="hostinger">
+    <Card className="settings-section" data-section="hostinger">
       <h2>Hostinger VPS</h2>
-      <p className="muted">
+      <p className="settings-help">
         Create the token in hPanel under Account → API, and <strong>give it an expiry</strong>. Hostinger has no read-only scope — its tokens carry
         the owning account&apos;s permissions — so &ldquo;watch-only&rdquo; here is a property of Kinas, which only ever sends GET requests and has
         tests proving it, rather than of the token itself.
@@ -39,7 +40,7 @@ export function HostingerSection({ settings, act, note }: Props) {
       >
         <input
           type="password"
-          className="field"
+          className="ui-input field"
           autoComplete="off"
           aria-label="Hostinger API token"
           placeholder={settings.hostinger_key_saved ? "A token is saved" : "No token saved"}
@@ -47,20 +48,19 @@ export function HostingerSection({ settings, act, note }: Props) {
           onChange={(e) => setToken(e.currentTarget.value)}
         />
         {/* Labelled for the same reason as Convex's: several buttons on this page say "Save". */}
-        <button type="submit" className="button" aria-label="Save Hostinger API token" disabled={saving || token.trim() === ""}>
+        <Button type="submit" kind="primary" className="button" aria-label="Save Hostinger API token" disabled={saving || token.trim() === ""}>
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
         {settings.hostinger_key_saved && (
-          <button type="button" className="button" onClick={() => void act("hostinger", () => removeHostingerToken(), "Removed")}>
+          <Button className="button" onClick={() => void act("hostinger", () => removeHostingerToken(), "Removed")}>
             Remove
-          </button>
+          </Button>
         )}
       </form>
 
       <div className="row">
         {/* The list is fetched on demand and stored nowhere: only the chosen id is written. */}
-        <button
-          type="button"
+        <Button
           className="button"
           aria-label="List Hostinger VPS"
           disabled={!settings.hostinger_key_saved || listing}
@@ -70,18 +70,18 @@ export function HostingerSection({ settings, act, note }: Props) {
           }}
         >
           {listing ? "Listing…" : "List my VPS"}
-        </button>
-        {settings.hostinger_vm_label !== "" && <span className="muted">Watching {settings.hostinger_vm_label}</span>}
+        </Button>
+        {settings.hostinger_vm_label !== "" && <span className="settings-help">Watching {settings.hostinger_vm_label}</span>}
       </div>
 
       {vms !== null && (
         <div className="row">
-          <label className="muted" htmlFor="hostinger-vm">
+          <label className="settings-help" htmlFor="hostinger-vm">
             VPS
           </label>
           <select
             id="hostinger-vm"
-            className="field"
+            className="ui-input field"
             aria-label="Hostinger VPS"
             value={settings.hostinger_vm_id ?? ""}
             onChange={(e) => {
@@ -106,8 +106,8 @@ export function HostingerSection({ settings, act, note }: Props) {
         </div>
       )}
 
-      <p className="muted">One machine, resource usage only. Snapshots, backups, firewall rules and Docker containers are not shown.</p>
+      <p className="settings-help">One machine, resource usage only. Snapshots, backups, firewall rules and Docker containers are not shown.</p>
       {note("hostinger")}
-    </section>
+    </Card>
   );
 }

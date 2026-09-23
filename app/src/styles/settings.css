@@ -1,7 +1,12 @@
-/* The Settings page: one column of sections, in the Usage page's instrument-panel character. */
+/* The Settings page (DESIGN.md §4 Settings field; build-spec §4 Settings): one column of cards, each a group with its
+   title, its controls and its help in --ink-2. The cards, buttons, inputs and switches are the components'
+   (app/src/ui/); this is where they sit, and the few parts only this page has — the hook lines and the shortcut
+   rows. The old class names (.row, .field, .problem, .settings-message, .shortcut-chord…) stay as hooks the specs
+   and the sections find things by. Tokens only. */
 
 .settings {
-  max-width: 760px;
+  /* A form reads best narrow: two panels' width, not the page's. */
+  max-width: calc(var(--panel-w) * 2);
   padding: var(--space-5) var(--space-6) var(--space-7);
   outline: none;
 }
@@ -10,7 +15,136 @@
   margin-bottom: var(--space-3);
 }
 
-/* Client folders (design-system slice 3; the card comes in slice 6): the chip, the name, the internal switch. */
+.settings-section + .settings-section {
+  margin-top: var(--space-3);
+}
+
+.settings-section h2 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+}
+
+.settings-help {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.settings-section code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* A line that went wrong: the reader's or the system's own words, in --danger. */
+.settings .problem {
+  margin: var(--space-1h) 0 0;
+  padding: 0;
+  color: var(--danger);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.settings-message {
+  margin: var(--space-2) 0 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* A control and its buttons on one line. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
+.row .settings-help {
+  margin: 0;
+}
+
+.field {
+  min-width: calc(var(--sidebar-w) + var(--space-5));
+}
+
+.settings-section > .field,
+.settings-section > .ui-accent {
+  margin-top: var(--space-1);
+}
+
+/* The Claude hook: each line of shell to paste, with its Copy. */
+.hook-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-1h) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.hook-line code {
+  flex: 1;
+}
+
+/* Shortcuts: what it does, the chord, Change. */
+
+.shortcut-list {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row-h);
+}
+
+.shortcut + .shortcut {
+  border-top: 1px solid var(--line);
+}
+
+.shortcut-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
+/* The chord as the Kbd component draws one. */
+.shortcut-chord {
+  padding: var(--space-0) var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  text-align: center;
+}
+
+.shortcut[data-recording] .shortcut-chord {
+  border-color: var(--warn);
+  color: var(--ink);
+}
+
+/* Client folders: the chip (click for the next colour), the name, the internal switch. */
 .settings-folders {
   margin: 0;
   padding: 0;
@@ -50,122 +184,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.settings-section {
-  padding: 16px 0;
-  border-top: 1px solid var(--line);
-}
-
-.settings-section h2 {
-  margin: 0 0 10px;
-  color: var(--label);
-  font: 500 11px/1 var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.settings-section > .muted {
-  margin: 0 0 8px;
-}
-
-.settings-section code {
-  font: 11px/1.5 var(--mono);
-  color: var(--white);
-  overflow-wrap: anywhere;
-}
-
-.settings .problem {
-  padding: 0;
-}
-
-.settings-message {
-  margin: 8px 0;
-  color: var(--white);
-  font: 12px/1.4 var(--mono);
-}
-
-.hook-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 6px 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--ground);
-}
-
-.hook-line code {
-  flex: 1;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0;
-  color: var(--white);
-  font: 13px/1.3 var(--sans);
-}
-
-.field {
-  min-width: 220px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--ground);
-  color: var(--white);
-  font: 13px/1.2 var(--sans);
-}
-
-/* Shortcuts: what it does, the chord, Change. */
-
-.shortcut-list {
-  margin: 0 0 10px;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-}
-
-.shortcut {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 10px 8px 14px;
-}
-
-.shortcut + .shortcut {
-  border-top: 1px solid var(--line);
-}
-
-.shortcut-title {
-  flex: 1;
-  min-width: 0;
-  color: var(--white);
-  font: 13px/1.3 var(--sans);
-}
-
-.shortcut-chord {
-  min-width: 56px;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--ground);
-  color: var(--white);
-  font: 12px/1.2 var(--mono);
-  text-align: center;
-}
-
-.shortcut[data-recording] .shortcut-chord {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.shortcut .button {
-  min-width: 68px;
-  margin-top: 0;
-  align-self: center;
 }

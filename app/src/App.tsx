@@ -524,7 +524,7 @@ export function App() {
             <HomePage usage={usage.snapshot} usageError={usage.error} projects={projects} folder={nav.folder} onOpen={openFromSidebar} onGo={goTo} onLaunch={launchTask} />
           </section>
           <section className="page" data-page="crew" hidden={page !== "crew"}>
-            <CrewPage crew={crew} />
+            <CrewPage crew={crew} active={page === "crew"} />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
             <InboxPage />

@@ -114,6 +114,7 @@ pub fn run() {
             commands::refresh_readings,
             crew::crew_snapshot,
             crew::set_crew_visible,
+            crew::crew_settings,
             commands::ollama_key_status,
             commands::save_ollama_key,
             commands::remove_ollama_key,

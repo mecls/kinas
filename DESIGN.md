@@ -242,6 +242,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 |---|---|
 | Button | primary, secondary, text, hint, disabled |
 | StatusBadge | queued, working, blocked, red, done, stale, dead, decision, pr, ready, counted |
+| HealthBadge | installed, below-floor, missing, optional, signed-in, not-signed-in |
 | Dot | solid, ring, cross |
 | Chip | cat-1, cat-2, cat-3, cat-4, cat-5, cat-6 |
 | Tag | internal, order |

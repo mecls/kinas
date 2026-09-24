@@ -16,7 +16,15 @@ pub(crate) const FALLBACK_PATH: &str = "~/.local/bin:/opt/homebrew/bin:/usr/loca
 static LOGIN_PATH: OnceLock<String> = OnceLock::new();
 
 pub(crate) fn login_path() -> &'static str {
-    LOGIN_PATH.get_or_init(|| probe().unwrap_or_else(|| expand(FALLBACK_PATH, &home())))
+    LOGIN_PATH.get_or_init(|| {
+        // e2e: the stub tools and the system's own folders, and nothing of the captain's, so a tool the spec removes
+        // from the stub folder is missing even though it is installed on this Mac (build spec §9's seam).
+        #[cfg(debug_assertions)]
+        if let Some(dir) = std::env::var("KINAS_E2E_TOOL_DIR").ok().filter(|d| d.starts_with('/')) {
+            return format!("{dir}:/usr/bin:/bin:/usr/sbin:/sbin");
+        }
+        probe().unwrap_or_else(|| expand(FALLBACK_PATH, &home()))
+    })
 }
 
 fn probe() -> Option<String> {
@@ -32,12 +40,17 @@ fn probe() -> Option<String> {
     accepted(ran.exit, &ran.stdout)
 }
 
-/// A `PATH` is taken only from a clean exit, and only when it is one line of absolute folders — a profile that
-/// prints a banner would otherwise become the crew's `PATH`.
+/// A `PATH` is taken only from a clean exit and only when it is one line — a profile that prints a banner would
+/// otherwise become the crew's `PATH`. Folders that are not absolute are dropped: a profile's literal `~/.dotnet/tools`
+/// is never expanded by `exec` anyway, and refusing the whole line for it would lose nvm's node, where the crew's npm
+/// tools live (found on this Mac, 2026-09-24).
 fn accepted(exit: Exit, stdout: &str) -> Option<String> {
     let path = stdout.trim();
-    let ok = exit == Exit::Code(0) && !path.is_empty() && !path.contains('\n') && path.split(':').filter(|d| !d.is_empty()).all(|d| d.starts_with('/'));
-    ok.then(|| path.to_string())
+    if exit != Exit::Code(0) || path.contains('\n') {
+        return None;
+    }
+    let folders: Vec<&str> = path.split(':').filter(|d| d.starts_with('/')).collect();
+    (!folders.is_empty()).then(|| folders.join(":"))
 }
 
 fn home() -> std::path::PathBuf {
@@ -55,12 +68,13 @@ mod tests {
     #[test]
     fn only_a_clean_single_line_of_absolute_folders_is_taken() {
         assert_eq!(accepted(Exit::Code(0), "/opt/homebrew/bin:/usr/bin:/bin"), Some("/opt/homebrew/bin:/usr/bin:/bin".into()));
-        assert_eq!(accepted(Exit::Code(0), "  /usr/bin::/bin\n"), Some("/usr/bin::/bin".into()));
+        assert_eq!(accepted(Exit::Code(0), "  /usr/bin::/bin\n"), Some("/usr/bin:/bin".into()));
         assert_eq!(accepted(Exit::Code(1), "/usr/bin"), None);
         assert_eq!(accepted(Exit::TimedOut, "/usr/bin"), None);
         assert_eq!(accepted(Exit::Code(0), ""), None);
         assert_eq!(accepted(Exit::Code(0), "Welcome back!\n/usr/bin"), None);
-        assert_eq!(accepted(Exit::Code(0), "relative/bin:/usr/bin"), None);
+        assert_eq!(accepted(Exit::Code(0), "relative/bin:/usr/bin:~/.dotnet/tools:/opt/n/bin"), Some("/usr/bin:/opt/n/bin".into()));
+        assert_eq!(accepted(Exit::Code(0), "~/bin:relative"), None);
     }
 
     #[test]

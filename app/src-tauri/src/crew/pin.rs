@@ -32,3 +32,32 @@ pub const TOOLS: &[Tool] = &[
   Tool { name: "lavish-axi",          version: "0.1.76", floor: "0.1.46", required: false, source: Source::Npm },
 ];
 pub const PREREQS: &[&str] = &["git", "gh", "node", "npm", "jq", "python3", "herdr", "claude"];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, Value};
+
+    /// The CLI spells the same list out in `packages/commands/src/crew-tools.ts`; this fixture holds the two equal.
+    #[test]
+    fn equals_the_shared_fixture() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/crew-tools.json");
+        let fixture: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(
+            fixture["firstmate"],
+            json!({ "repo": FIRSTMATE_REPO, "pin": FIRSTMATE_PIN, "home_dir": HOME_DIR, "workspace_label": WORKSPACE_LABEL })
+        );
+        let tools: Vec<Value> = TOOLS
+            .iter()
+            .map(|t| {
+                let source = match &t.source {
+                    Source::Npm => json!("npm"),
+                    Source::GithubRelease { repo, asset, sha256 } => json!({ "repo": repo, "asset": asset, "sha256": sha256 }),
+                };
+                json!({ "name": t.name, "version": t.version, "floor": t.floor, "required": t.required, "source": source })
+            })
+            .collect();
+        assert_eq!(fixture["tools"], Value::Array(tools));
+        assert_eq!(fixture["prereqs"], json!(PREREQS));
+    }
+}

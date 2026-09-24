@@ -380,6 +380,17 @@ The side column and the text, the reader's tabs, and the window's title bar (202
 - [ ] Both themes: the column edge's accent while dragged, the showing tab joined to the header, and a ← or → with
       nowhere to go drawn in `--ink-3` — `outstanding — needs Miguel`
 
+## The crew: setup
+
+`kinas crew setup` and the crew's tools (2026-09-24, `tasks/first-mate/prd.md`, slice 2).
+
+- [ ] `kinas crew setup --dry-run` in the Work pane prints every step as `would: …` and changes nothing —
+      `automated (crew-setup.test.ts)`; on this Mac — `passed by agent` once slice 2 records it
+- [ ] `kinas crew setup` asks y/N before each tool, prints the `setup hooks` lines without running them, and ends with
+      the table and exit 0 — `outstanding — needs Miguel` for the prompts in the pane
+- [ ] Settings → Crew shows Firstmate at `f9f74a1 (pinned)`, backend `herdr`, every tool `installed`, `gh` signed in —
+      `automated (crew-settings.e2e.ts)` over stub tools; on the real install — `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

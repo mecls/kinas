@@ -71,6 +71,10 @@ for (const spec of specs) {
   // no root of its own gets an empty one here rather than Miguel's real folder.
   mkdirSync(join(dataDir, "root"), { recursive: true });
   env.KINAS_ROOT = join(dataDir, "root");
+  // The crew's tool health looks only in this (empty) folder and the system's own, never at the tools installed on this
+  // Mac (login_path.rs); a crew spec's setup points it at its stub tools instead.
+  mkdirSync(join(dataDir, "empty", "tools"), { recursive: true });
+  env.KINAS_E2E_TOOL_DIR = join(dataDir, "empty", "tools");
 
   const setupFile = join(specsDir, spec.replace(/\.e2e\.ts$/, ".setup.ts"));
   const hooks: SpecSetup = existsSync(setupFile) ? ((await import(setupFile)) as SpecSetup) : {};

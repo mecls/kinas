@@ -1,9 +1,14 @@
-import type { CrewSnapshot, CrewTask, CrewWord } from "../api.ts";
-import { Card, EmptyState, Lane, Section, SectionHeader, StatusBadge, TitleRow, type BadgeState } from "../ui/index.ts";
+import { useEffect, useState } from "react";
+import { getCrewSettings, type CrewSettings, type CrewSnapshot, type CrewTask, type CrewWord } from "../api.ts";
+import { ToolTable } from "../crew/ToolTable.tsx";
+import { writeClipboard } from "../terminal/clipboard.ts";
+import { Button, Card, EmptyState, Lane, Section, SectionHeader, StatusBadge, TitleRow, type BadgeState } from "../ui/index.ts";
 
 // Crew (build spec §4; DESIGN.md §5; mockup board.html): the first mate's fleet as Kinas mirrors it, one card per task
-// Firstmate knows. This is the tracer bullet's board (slice 1): one lane per project, a card's title and its word. The
-// board by repository, the PR line and the task detail arrive with slice 4, the launcher with slice 3.
+// Firstmate knows. Three states: not installed (how to set up, and the tools), installed (Start the first mate now?, the
+// pin, the tools — and the fleet below when there is one, since workers outlive a stopped first mate), and running.
+// The board is slice 1's (one lane per project, a card's title and its word); lanes by repository, the PR line and the
+// task detail arrive with slice 4, the launcher and the running state with slice 3.
 
 /** The badge for each word that has one; the four DESIGN.md 1.4 adds (failed, paused, unknown, gone) come with slice 4. */
 const BADGE_OF: Partial<Record<CrewWord, BadgeState>> = {
@@ -46,12 +51,68 @@ function TaskCard({ task }: { task: CrewTask }) {
   );
 }
 
-export function CrewPage({ crew }: { crew: CrewSnapshot | null }) {
+/** Before the first launch: the question, the pin, the tools, and what blocks the launch (§4 Crew page, Installed). */
+function StartFirstMate({ settings, blocked }: { settings: CrewSettings; blocked: string | null }) {
+  const pin = settings.pin.state === "pinned" || settings.pin.state === "moved" ? settings.pin.short : null;
   return (
-    <div className="page-in crew" data-crew={crew?.page}>
-      <TitleRow title="Crew" />
-      {crew?.page === "uninstalled" && <EmptyState>Set up the crew — run this in the Work pane: kinas crew setup</EmptyState>}
-      {crew && crew.page !== "uninstalled" && (
+    <div className="crew-start" data-testid="crew-start">
+      <p className="crew-start-q">Start the first mate now?</p>
+      <dl className="crew-kv">
+        <dt>Firstmate</dt>
+        <dd>{pin ? <><span className="crew-mono">{pin}</span>{settings.pin.state === "pinned" ? " (pinned)" : " (moved from the pin)"}</> : "not a clone"}</dd>
+      </dl>
+      <ToolTable settings={settings} />
+      {blocked && <p className="crew-blocked">{blocked}</p>}
+    </div>
+  );
+}
+
+export function CrewPage({ crew, active, onLaunch }: { crew: CrewSnapshot | null; active: boolean; onLaunch?: () => void }) {
+  const [settings, setSettings] = useState<CrewSettings | null>(null);
+  const [copied, setCopied] = useState(false);
+  const page = crew?.page;
+  // The tools are read when the page shows before the first mate runs; the snapshot carries only what blocks Launch.
+  useEffect(() => {
+    if (!active || (page !== "uninstalled" && page !== "installed")) return;
+    void getCrewSettings().then(setSettings, () => {});
+  }, [active, page]);
+  const blocked = settings?.blocked ?? crew?.blocked ?? null;
+  return (
+    <div className="page-in crew" data-crew={page}>
+      <TitleRow title="Crew">
+        {page === "installed" && (
+          <Button
+            kind="primary"
+            aria-disabled={blocked ? "true" : undefined}
+            title={blocked ?? undefined}
+            onClick={() => {
+              if (!blocked) onLaunch?.();
+            }}
+          >
+            Launch the first mate
+          </Button>
+        )}
+      </TitleRow>
+      {page === "uninstalled" && (
+        <>
+          <EmptyState
+            data-testid="crew-setup"
+            action={{
+              label: copied ? "Copied" : "Copy",
+              onClick: () =>
+                void writeClipboard("kinas crew setup").then((ok) => {
+                  setCopied(ok);
+                  if (ok) window.setTimeout(() => setCopied(false), 1500);
+                }),
+            }}
+          >
+            Set up the crew — run this in the Work pane: <span className="crew-mono">kinas crew setup</span>
+          </EmptyState>
+          {settings && <ToolTable settings={settings} />}
+        </>
+      )}
+      {page === "installed" && settings && <StartFirstMate settings={settings} blocked={blocked} />}
+      {crew && page !== "uninstalled" && (page === "running" || crew.tasks.length > 0 || crew.reader.state === "error") && (
         <Section>
           <SectionHeader title="Fleet" caption={asOf(crew.generated, crew.now) ?? undefined} source="Firstmate's fleet snapshot" />
           {crew.reader.state === "error" && crew.reader.last_error && (

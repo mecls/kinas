@@ -15,8 +15,17 @@
   margin-bottom: var(--space-3);
 }
 
-.settings-section + .settings-section {
-  margin-top: var(--space-3);
+/* Six groups, each a section with its header (DESIGN.md §5 Settings, 1.4); inside one, the cards are --space-3 apart.
+   (Until 2026-09-24 the cards were one column, spaced by a sibling rule here.) */
+.settings-group {
+  display: grid;
+  gap: var(--space-3);
+}
+.settings-group > .ui-section-head {
+  margin-bottom: 0;
+}
+.settings .ui-titlerow + .settings-group {
+  margin-top: 0;
 }
 
 .settings-section h2 {

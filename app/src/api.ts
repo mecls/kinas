@@ -179,7 +179,33 @@ export interface CrewError {
   code: string;
   message: string;
 }
+export type PinState =
+  | { state: "pinned"; short: string }
+  | { state: "moved"; short: string; from: string }
+  | { state: "tangle"; branch: string }
+  | { state: "missing" };
+export interface ToolState {
+  name: string;
+  /** The pinned version; "—" for a prerequisite. */
+  pinned: string;
+  installed: string | null;
+  state: "installed" | "below_floor" | "missing";
+  required: boolean;
+}
+export interface CrewSettings {
+  pin: PinState;
+  home_display: string;
+  backend: string | null;
+  tools: ToolState[];
+  prereqs: ToolState[];
+  gh_signed_in: boolean | null;
+  away: { entered: string; expected_return: string | null } | null;
+  projects: { name: string; mode: string; yolo: boolean }[];
+  installed: boolean;
+  blocked: string | null;
+}
 export const getCrew = () => invoke<CrewSnapshot>("crew_snapshot");
+export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");
 export const setCrewVisible = (visible: boolean) => invoke<void>("set_crew_visible", { visible });
 export const onCrewChanged = (handler: () => void): Promise<UnlistenFn> => listen("crew_changed", handler);
 

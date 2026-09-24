@@ -16,7 +16,7 @@ export function makeFakeHome(dataDir: string, snapshot: string): string {
   const home = join(dataDir, "firstmate");
   cpSync(join(here, "bin"), join(home, "bin"), { recursive: true });
   for (const dir of ["data", "state", "config", "fixtures", "projects"]) mkdirSync(join(home, dir), { recursive: true });
-  for (const script of ["fm-fleet-snapshot.sh"]) chmodSync(join(home, "bin", script), 0o755);
+  for (const script of ["fm-fleet-snapshot.sh", "fm-project-mode.sh", "fm-afk-contract.sh"]) chmodSync(join(home, "bin", script), 0o755);
   writeFileSync(join(home, "config", "backend"), "herdr\n");
   writeFileSync(join(home, "data", "backlog.md"), "# Backlog\n\n## In flight\n\n## Queued\n\n## Done\n");
   setSnapshot(home, snapshot);

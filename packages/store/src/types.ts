@@ -58,6 +58,36 @@ export interface UsageRow {
   messages: number;
 }
 
+/** A crew task as the app's mirror holds it (migration 5), with the columns the word rule reads. */
+export interface CrewTaskRow {
+  state: string | null;
+  backlog_state: string | null;
+  pending_decision: number;
+  captain_actionable: number;
+  blocked_event: number;
+  pr_url: string | null;
+  pr_number: number | null;
+  pr_state: string | null;
+  pr_draft: number | null;
+  pr_mergeable: string | null;
+  pr_checks_total: number | null;
+  pr_checks_failed: number | null;
+  first_working_at: number | null;
+  done_at: number | null;
+  gone_at: number | null;
+}
+
+/** The crew's reads (schema 5): empty on an older store, never a failure. */
+export interface CrewStore {
+  schemaVersion(): number;
+  /** Every task inside the board's retention: done within 7 days, gone within 24 h. */
+  getCrewTasks(now: number): CrewTaskRow[];
+  /** Open decisions: the one waiting count (build spec §6.12). */
+  getCrewWaiting(): number;
+  /** What the app last saw of the crew's install (the `crew_health` setting), or null. */
+  getCrewHealth(): unknown;
+}
+
 export interface StorageAdapter {
   schemaVersion(): number;
   getQuotas(): QuotaRow[];

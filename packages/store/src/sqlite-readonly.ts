@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_VERSION } from "./schema-version.ts";
-import type { HostRow, ModelRequests, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "./types.ts";
+import type { CrewStore, CrewTaskRow, HostRow, ModelRequests, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "./types.ts";
 
 export const DB_FILE = "kinas.sqlite";
 
@@ -78,7 +78,7 @@ export function parseModels(stored: string | null): ModelRequests[] {
   }
 }
 
-export class SqliteReadOnlyStore implements StorageAdapter {
+export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
   private org: string | undefined;
 
   constructor(private readonly db: Database) {}
@@ -147,6 +147,40 @@ export class SqliteReadOnlyStore implements StorageAdapter {
          GROUP BY date, harness, provider, model ORDER BY harness, provider, model`,
       )
       .all(this.orgId(), date) as UsageRow[];
+  }
+
+  /** Migration 5 added the crew's mirror; a store the app has not migrated yet has no crew. */
+  private get hasCrew(): boolean {
+    return this.schemaVersion() >= 5;
+  }
+
+  getCrewTasks(now: number): CrewTaskRow[] {
+    if (!this.hasCrew) return [];
+    return this.db
+      .query(
+        `SELECT state, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_number, pr_state, pr_draft,
+                pr_mergeable, pr_checks_total, pr_checks_failed, first_working_at, done_at, gone_at
+         FROM crew_tasks
+         WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3)
+         ORDER BY first_seen_at DESC, id`,
+      )
+      .all(this.orgId(), now - 86_400_000, now - 7 * 86_400_000) as CrewTaskRow[];
+  }
+
+  getCrewWaiting(): number {
+    if (!this.hasCrew) return 0;
+    const row = this.db.query("SELECT count(*) AS n FROM crew_decisions WHERE org_id = ?1 AND closed_at IS NULL").get(this.orgId()) as { n: number };
+    return row.n;
+  }
+
+  getCrewHealth(): unknown {
+    const row = this.db.query("SELECT value FROM settings WHERE org_id = ?1 AND key = 'crew_health'").get(this.orgId()) as { value: string } | null;
+    if (!row) return null;
+    try {
+      return JSON.parse(row.value);
+    } catch {
+      return null;
+    }
   }
 }
 

@@ -13,6 +13,8 @@ export interface CommandContext {
   getContext?: () => Promise<string>;
   /** CLI only: the lines that point at the file being opened. */
   openFile?: () => Promise<string[]>;
+  /** CLI only: `kinas crew setup` or `kinas crew status`, run by the door with its arguments; its exit code. */
+  crew?: () => Promise<number>;
   /** Palette only. */
   navigate?: (page: "home" | "usage" | "work" | "crew") => void;
   refresh?: () => Promise<void>;
@@ -28,6 +30,8 @@ export interface CommandOutput {
   /** Preformatted text, printed as is. */
   text?: string;
   result?: StatusResult;
+  /** The exit code of a command that decides its own (`crew`). */
+  exit?: number;
 }
 
 export interface Command {
@@ -75,6 +79,17 @@ export const commands: readonly Command[] = [
     doors: ["cli"],
     async run(ctx) {
       return { lines: await need(ctx.openFile, "open")() };
+    },
+  },
+  {
+    // The crew (the first mate, build spec §4 The CLI): `kinas crew setup` installs Firstmate and its tools, asking y/N
+    // before each step; `kinas crew status` reads the app's mirror. Setup writes, so there is no palette door.
+    id: "crew",
+    title: "Crew",
+    cliName: "crew",
+    doors: ["cli"],
+    async run(ctx) {
+      return { exit: await need(ctx.crew, "crew")() };
     },
   },
   {
@@ -168,3 +183,5 @@ export function paletteMatches(query: string): Command[] {
 }
 
 export * from "./status.ts";
+export * from "./crew-status.ts";
+export * from "./crew-words.ts";

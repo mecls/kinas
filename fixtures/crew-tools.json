@@ -1,0 +1,19 @@
+{
+  "about": "What installed means for the crew (build spec §9): Firstmate's repository, pin and home folder, the tools at their exact versions with Firstmate's floors, and the prerequisites. app/src-tauri/src/crew/pin.rs and packages/commands/src/crew-tools.ts each spell these out, and a test on each side holds them equal to this file.",
+  "firstmate": {
+    "repo": "https://github.com/kunchenguid/firstmate",
+    "pin": "f9f74a1d91cc7e105ec3df2249eda4e07f9ba540",
+    "home_dir": "firstmate",
+    "workspace_label": "firstmate"
+  },
+  "tools": [
+    { "name": "treehouse", "version": "2.3.0", "floor": "lease", "required": true, "source": { "repo": "kunchenguid/treehouse", "asset": "treehouse-v2.3.0-darwin-arm64.tar.gz", "sha256": "1cb09bcfa830b4eec5e54beeaa71589adb9c5d828573dda0f5150e2d80cf13d5" } },
+    { "name": "no-mistakes", "version": "1.79.0", "floor": "1.46.0", "required": true, "source": { "repo": "kunchenguid/no-mistakes", "asset": "no-mistakes-v1.79.0-darwin-arm64.tar.gz", "sha256": "80c2f4b9b3d01cb5d60ca294226b41d7331408e6e5cf0400a576cf3ec25166d7" } },
+    { "name": "gh-axi", "version": "0.1.35", "floor": "0.1.29", "required": true, "source": "npm" },
+    { "name": "tasks-axi", "version": "0.2.5", "floor": "0.2.4", "required": true, "source": "npm" },
+    { "name": "quota-axi", "version": "0.1.49", "floor": "0.1.29", "required": true, "source": "npm" },
+    { "name": "chrome-devtools-axi", "version": "0.1.35", "floor": "0", "required": true, "source": "npm" },
+    { "name": "lavish-axi", "version": "0.1.76", "floor": "0.1.46", "required": false, "source": "npm" }
+  ],
+  "prereqs": ["git", "gh", "node", "npm", "jq", "python3", "herdr", "claude"]
+}

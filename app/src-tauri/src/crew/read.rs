@@ -72,14 +72,14 @@ pub struct DecisionRow {
 }
 
 /// The Crew page's reading. `installed` and `generated` are known outside the guard: whether the home's snapshot
-/// script exists, and the last good snapshot's time. Until the launcher lands (slice 3), an installed crew reads as
-/// running.
+/// script exists, and the last good snapshot's time. An installed crew is `installed` until the launcher's Herdr view
+/// can tell that the first mate runs (slice 3).
 pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: bool, generated: Option<String>) -> rusqlite::Result<CrewSnapshot> {
     Ok(CrewSnapshot {
         now,
         generated,
         reader: reader(conn, org)?,
-        page: if installed { "running" } else { "uninstalled" },
+        page: if installed { "installed" } else { "uninstalled" },
         blocked: None,
         tasks: tasks(conn, org, now)?,
         decisions: Vec::new(),
@@ -187,7 +187,7 @@ mod tests {
 
         cycle(&store, "working", T0);
         let view = snapshot_view(&store.conn(), store.org_id(), T0 + 1, true, Some("g".into())).unwrap();
-        assert_eq!((view.page, view.generated.as_deref(), view.reader.state.as_str()), ("running", Some("g"), "ok"));
+        assert_eq!((view.page, view.generated.as_deref(), view.reader.state.as_str()), ("installed", Some("g"), "ok"));
         let task = &view.tasks[0];
         assert_eq!((task.word, task.kind.as_str(), task.project_name.as_deref()), ("working", "ship", Some("shop-9c2e")));
         assert_eq!(task.title.as_deref(), Some("Add a health check to the shop 9c2e"));

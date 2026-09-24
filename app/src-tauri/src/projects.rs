@@ -118,7 +118,7 @@ pub fn names_for(root: &Path, repos: &[PathBuf]) -> Vec<String> {
 }
 
 /// `~/…` under the home folder, the path itself otherwise.
-fn display_of(path: &Path, home: &Path) -> String {
+pub(crate) fn display_of(path: &Path, home: &Path) -> String {
     match path.strip_prefix(home) {
         Ok(rel) if !rel.as_os_str().is_empty() => format!("~/{}", rel.to_string_lossy()),
         _ => path.display().to_string(),

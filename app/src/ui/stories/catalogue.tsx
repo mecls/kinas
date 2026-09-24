@@ -54,6 +54,7 @@ import {
   SectionHeader,
   SegBar,
   StatusBadge,
+  HealthBadge,
   Switch,
   Table,
   TabStrip,
@@ -142,6 +143,17 @@ export const STORIES: Story[] = [
   {
     component: "StatusBadge",
     states: [...STATES.map((state) => ({ name: state as string, node: <StatusBadge state={state} /> })), { name: "counted", node: <StatusBadge state="done" count={4} /> }],
+  },
+  {
+    component: "HealthBadge",
+    states: [
+      { name: "installed", node: <HealthBadge state="installed" /> },
+      { name: "below-floor", node: <HealthBadge state="below_floor" /> },
+      { name: "missing", node: <HealthBadge state="missing" /> },
+      { name: "optional", node: <HealthBadge state="missing" optional /> },
+      { name: "signed-in", node: <HealthBadge state="signed_in" /> },
+      { name: "not-signed-in", node: <HealthBadge state="signed_out" /> },
+    ],
   },
   {
     component: "Dot",

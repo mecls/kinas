@@ -23,7 +23,9 @@
   the baseline (0.2) taken alone 2026-09-24: check green, 21 e2e specs and 122 cases green*
 - [x] Slice 1 · tracer bullet: a task in the fake home is a card on the Crew page — *2026-09-24: a filed task is a card
   in 558–638 ms (AC-3); check green, the crew-collector, shell, palette, keyboard, settings and stories specs green alone*
-- [ ] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card
+- [x] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card — *2026-09-24: the real
+  setup ran on this Mac (Firstmate at f9f74a1, backend herdr); check green; crew-collector, crew-settings, settings,
+  stories, screens and shell green alone*
 - [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1
 - [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
 - [ ] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
@@ -35,7 +37,7 @@
 
 ## Notes for a fresh session
 
-- **Next: slice 2, installed (`tasks.md` 2.0).** The work is in the worktree
+- **Next: slice 3, launchable (`tasks.md` 3.0) — ship point 1.** The work is in the worktree
   `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1), local commits only — nothing
   pushed. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;

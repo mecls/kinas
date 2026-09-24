@@ -35,3 +35,78 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
+
+/* Settings → Crew and the Crew page before the first launch (build spec §4; mockup settings-crew.html). */
+.crew-kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+.crew-kv dt {
+  color: var(--ink-2);
+}
+.crew-kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.crew-mono {
+  font-family: var(--font-mono);
+}
+
+.crew-problem,
+.crew-blocked {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.crew-problem-inline {
+  color: var(--danger);
+}
+.crew-quiet-inline {
+  color: var(--ink-2);
+}
+
+.crew-subhead {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  font-weight: 500;
+}
+
+.crew-projects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.crew-projects li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--row-h);
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.crew-projects li:first-child {
+  border-top: 0;
+}
+.crew-after {
+  margin-top: var(--space-2);
+}
+
+/* Before the first launch: the question, the pin and the tools, above the fleet when there is one. */
+.crew-start {
+  margin-bottom: var(--space-4);
+}
+.crew-start-q {
+  margin: 0 0 var(--space-2);
+  font-weight: 500;
+}

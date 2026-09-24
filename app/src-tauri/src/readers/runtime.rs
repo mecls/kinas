@@ -93,6 +93,9 @@ impl ReaderControl {
         let _ = self.convex.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
         let _ = self.hostinger.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
         let _ = self.crew.lock().unwrap_or_else(|p| p.into_inner()).send(CrewWake::Manual);
+        // The crew's tool health and project modes are asked again on their next read.
+        crate::crew::tools::clear();
+        crate::crew::config::clear();
     }
 }
 

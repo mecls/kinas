@@ -7,6 +7,14 @@
 //   kinas context --agent    the whole context packet as markdown, for the start of an agent session
 //   kinas status [--json]    the Usage page as text or JSON
 //   kinas open [<path>]      any text file, image or folder in the Kinas reader; no path reopens the last one (open.ts)
+//   kinas crew setup         install the crew: Firstmate at its pin and the tools, asking y/N before each (crew-setup.ts)
+//   kinas crew status [--json]  the crew as the app last mirrored it: counts and words, never a task's name (crew.ts)
+//
+// Amended 2026-09-24 (the first mate): `kinas crew setup` is the one exception to "read, never written". With the
+// captain's yes for each step it clones Firstmate at its pin into the data directory, writes the clone's
+// config/backend, and installs the crew's tools into ~/.local/bin and npm's global prefix — nothing else, and nothing
+// under the app's store. It is also the one command besides the launch screen that reads the keyboard: a line per
+// y/N question (confirm.ts), and only on a terminal.
 //
 // Only the launch screen reads keys, and only on a terminal: it holds until Enter, q or Ctrl+C and ignores every
 // other key, Tab included (hold.ts, keymap.md). Every other command prints and exits.
@@ -24,6 +32,7 @@ import { colorEnabled, paint, polarityFromEnv } from "@kinas/commands/theme";
 import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, renderAgentPacket, renderOperator, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
+import { crew, CREW_USAGE } from "./crew.ts";
 import { ask, LAUNCH_TIMEOUT_MS, launchAndAsk, OPEN_EXIT, type OpenRequest, outcome, resolveTarget } from "./open.ts";
 
 // 0, 1, 65, 66 and 77 come from open.ts, which owns `kinas open`'s codes.
@@ -49,6 +58,7 @@ function usage(): string {
     "  open [<path>]       open a file or folder in the Kinas reader; no path reopens the last one",
     "    --anywhere        ask Kinas to open a path outside the projects root",
     "    --launch          start Kinas first when it is not running",
+    ...CREW_USAGE,
   ].join("\n");
 }
 
@@ -274,6 +284,7 @@ async function main(argv: string[]): Promise<number> {
   if (!cliCommand(name)) return usageError(`kinas: unknown command "${name}"`);
   if (name === "context") return context(rest);
   if (name === "open") return open(rest);
+  if (name === "crew") return (await cliCommand("crew")!.run({ now: Date.now(), crew: () => crew(rest) })).exit ?? EXIT.error;
   return status(rest);
 }
 

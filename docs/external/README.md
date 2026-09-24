@@ -12,5 +12,7 @@ One file per thing outside this repository that an agent needs to know exists: w
 | `claude-statusline-hook.md` | The three lines in Claude Code's status-line script that hand Kinas its plan limits |
 | `kinas-cli-link.md` | `~/.local/bin/kinas` and the never-clobber rule |
 | `herdr-default-session.md` | Herdr's `default` session, which tests never touch, and the throwaway sessions they use instead |
+| `crew-tools.md` | The crew's tools at their pinned versions, where `kinas crew setup` puts them, and the `setup hooks` it never runs |
+| `github-cli.md` | `gh`, signed in as the captain: what Kinas asks it, and that Kinas stores no token |
 
 When a feature adds something outside the repository — a token, a hook, a path, a dashboard — it adds a file here in the same shape: What it is · Where · Who reads it · What it can do · Never.

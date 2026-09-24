@@ -6,7 +6,8 @@ import { setSnapshot } from "../fake-firstmate/make.ts";
 
 // The crew's collector, end to end (build spec AC-3, slice 1's tracer bullet): Firstmate files a task — the spec swaps
 // the fake home's snapshot and touches data/backlog.md, as Firstmate's own writes do — and the Crew page shows it as a
-// card within 5 s, timed in the page. The log carries the count and never the task.
+// card within 5 s, timed in the page. The log carries the count and never the task. (Amended 2026-09-24, slice 2: until
+// the launcher knows whether the first mate runs, an installed crew reads as installed, with its fleet below.)
 
 const TITLE = "Add a health check to the shop 9c2e";
 
@@ -15,7 +16,7 @@ async function waitInPage(condition: () => boolean, timeoutMsg: string, timeout 
 }
 
 describe("the crew's collector", () => {
-  it("shows the empty fleet on the Crew page", async () => {
+  it("before the first launch and the first task: the question, the tools, and no board", async () => {
     await $('section[data-page="home"]').waitForDisplayed({ timeout: 60000 });
     // A click in the page: the sidebar's Crew row.
     await browser.execute(() => {
@@ -23,9 +24,15 @@ describe("the crew's collector", () => {
       row!.click();
     });
     await waitInPage(
-      () => document.querySelector('section[data-page="crew"] .crew[data-crew="running"] .ui-empty')?.textContent?.includes("No tasks") === true,
-      "the Crew page never showed the empty fleet",
+      () => document.querySelector('section[data-page="crew"] .crew[data-crew="installed"] [data-testid="crew-start"]')?.textContent?.includes("Start the first mate now?") === true,
+      "the Crew page never asked to start the first mate",
     );
+    const page = await browser.execute(() => {
+      const crew = document.querySelector('section[data-page="crew"] .crew')!;
+      const launch = [...crew.querySelectorAll<HTMLButtonElement>(".ui-titlerow button")].find((b) => b.textContent === "Launch the first mate");
+      return { board: crew.querySelector(".crew-board") !== null, launch: launch?.getAttribute("aria-disabled") ?? "enabled", tools: crew.querySelectorAll("table.crew-tools tbody tr").length };
+    });
+    expect(page).toEqual({ board: false, launch: "enabled", tools: 8 });
     const title = await browser.execute(() => [...document.querySelectorAll(".sidebar-nav button")].find((b) => b.textContent?.trim() === "Crew")?.getAttribute("title"));
     expect(title).toBe("Crew (⌘3)");
   });

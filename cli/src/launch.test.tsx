@@ -89,12 +89,14 @@ describe("the launch screen", () => {
 });
 
 describe("the keyboard contract", () => {
-  test("hold.ts is the only CLI source that reads keys", () => {
+  test("hold.ts and confirm.ts are the only CLI sources that read keys", () => {
+    // Amended 2026-09-24 (the first mate): `kinas crew setup` asks y/N through confirm.ts, a line at a time.
     const dir = import.meta.dir;
     const readers = readdirSync(dir)
       .filter((f) => /\.tsx?$/.test(f) && !f.includes(".test."))
-      .filter((f) => /setRawMode|useInput|usePaste|useFocus|readline/.test(readFileSync(join(dir, f), "utf8")));
-    expect(readers).toEqual(["hold.ts"]);
+      .filter((f) => /setRawMode|useInput|usePaste|useFocus|readline/.test(readFileSync(join(dir, f), "utf8")))
+      .sort();
+    expect(readers).toEqual(["confirm.ts", "hold.ts"]);
   });
 
   test("the background refresh re-runs this CLI the way it was started", () => {

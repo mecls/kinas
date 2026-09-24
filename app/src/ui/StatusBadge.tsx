@@ -35,6 +35,28 @@ export function StatusBadge({ state, count }: { state: BadgeState; count?: numbe
   );
 }
 
+/** The crew's tool health (DESIGN.md 1.4): the same pill with its own words. */
+export type HealthState = "installed" | "below_floor" | "missing" | "signed_in" | "signed_out";
+
+const HEALTH: Record<HealthState, { word: string; color: string }> = {
+  installed: { word: "installed", color: "--ok" },
+  below_floor: { word: "below floor", color: "--warn" },
+  missing: { word: "missing", color: "--danger" },
+  signed_in: { word: "signed in", color: "--ok" },
+  signed_out: { word: "not signed in", color: "--danger" },
+};
+
+/** A tool's health in Settings → Crew and on the Crew page; an optional tool that is missing is missing in --stale. */
+export function HealthBadge({ state, optional = false }: { state: HealthState; optional?: boolean }) {
+  const h = HEALTH[state];
+  return (
+    <span className="ui-badge" data-health={state}>
+      <Dot color={optional && state === "missing" ? "--stale" : h.color} />
+      {h.word}
+    </span>
+  );
+}
+
 /** A row of badges, right-aligned, as the progress row and the phone's folder rows use them. */
 export function Badges({ children }: { children: ReactNode }) {
   return <span className="ui-badges">{children}</span>;

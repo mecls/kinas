@@ -416,7 +416,7 @@ export const STORIES: Story[] = [
         ),
       },
       {
-        // The four drawn beyond the preview's sprite, for the sidebar's folder rows (icons.tsx): refresh since 1.5.
+        // The four drawn beyond the preview's sprite, for the sidebar's folder rows (icons.tsx): refresh since 1.6.
         name: "folder-icons",
         node: (
           <div style={{ display: "flex", gap: "var(--space-4)", color: "var(--ink-2)" }}>

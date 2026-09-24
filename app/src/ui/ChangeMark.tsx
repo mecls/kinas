@@ -1,7 +1,7 @@
 import { Dot } from "./Dot.tsx";
 import "./ChangeMark.css";
 
-// DESIGN.md §4 Change mark (1.5): what changed in a file tree since the tree was first shown. The Dot carries the
+// DESIGN.md §4 Change mark (1.6): what changed in a file tree since the tree was first shown. The Dot carries the
 // colour and the letter says it in a word (§7), so the colour is never alone. On a folder the letter becomes the count
 // of changes beneath it, and the dot the strongest of them. The mark is hidden from assistive technology: its words are
 // the row's accessible name, and here only its tooltip.

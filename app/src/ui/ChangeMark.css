@@ -1,4 +1,4 @@
-/* Change mark (DESIGN.md §4, 1.5): at the right end of a tree row, before the folder actions. The Dot in a status
+/* Change mark (DESIGN.md §4, 1.6): at the right end of a tree row, before the folder actions. The Dot in a status
    colour, then the letter — or a folder's count — in mono --ink-2: status colours are never text (§2.2). */
 .ui-change-mark {
   display: inline-flex;

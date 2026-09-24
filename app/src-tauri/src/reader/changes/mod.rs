@@ -417,10 +417,8 @@ fn start(root: &Path, tx: Sender<PathBuf>, rx: Receiver<PathBuf>, on_burst: impl
     let filter_root = root.to_path_buf();
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
         if let Ok(event) = event {
-            for path in event.paths {
-                if compare::listable_path(&filter_root, &path) {
-                    let _ = tx.send(path);
-                }
+            for path in heard(&filter_root, event) {
+                let _ = tx.send(path);
             }
         }
     })?;
@@ -430,6 +428,18 @@ fn start(root: &Path, tx: Sender<PathBuf>, rx: Receiver<PathBuf>, on_burst: impl
         .spawn(move || debounce_paths(&rx, DEBOUNCE, BURST_CEILING, on_burst))
         .map_err(notify::Error::io)?;
     Ok(watcher)
+}
+
+/// What the watch passes on from one event: the paths the tree could list — and the root itself when FSEvents says it
+/// dropped events (notify's rescan flag), which asks the burst to look at everything again (`apply_burst`). The root
+/// is never passed on for an event of its own: `listable_path` refuses it.
+fn heard(root: &Path, event: notify::Event) -> Vec<PathBuf> {
+    let rescan = event.need_rescan();
+    let mut paths: Vec<PathBuf> = event.paths.into_iter().filter(|p| compare::listable_path(root, p)).collect();
+    if rescan {
+        paths.push(root.to_path_buf());
+    }
+    paths
 }
 
 fn error_kind(e: &notify::Error) -> &'static str {
@@ -481,24 +491,46 @@ fn install_baseline(state: &ChangesState, root: &Path, generation: u64, mut take
 
 /// One burst for one root. Returns the summary to emit, or None when the root is no longer watched, its baseline is
 /// not in yet (the paths wait for it), or nothing in the burst is something the tree lists.
+///
+/// A burst that names the root itself is a rescan: events were dropped, so nobody can say which paths changed, and
+/// every path is judged — each the baseline had, each the walk finds now, and each already marked.
 fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTreeSet<PathBuf>) -> Option<TreeChanges> {
-    let paths: BTreeSet<PathBuf> = paths.into_iter().filter(|p| compare::listable_path(root, p)).collect();
-    if paths.is_empty() {
+    let rescan = paths.contains(root);
+    let mut paths: BTreeSet<PathBuf> = paths.into_iter().filter(|p| compare::listable_path(root, p)).collect();
+    if paths.is_empty() && !rescan {
         return None;
     }
     let (baseline, before) = {
         let mut changes = state.lock();
         let record = changes.roots.get_mut(root)?;
         let Some(baseline) = record.baseline.clone() else {
+            // The rescan waits with the paths, and goes back through the burst thread with them.
             record.queued.extend(paths);
+            if rescan {
+                record.queued.insert(root.to_path_buf());
+            }
             return None;
         };
-        let before: BTreeMap<PathBuf, (Kind, Mark)> = paths.iter().filter_map(|p| record.marks.get(p).map(|&m| (p.clone(), m))).collect();
+        let before: BTreeMap<PathBuf, (Kind, Mark)> = if rescan {
+            record.marks.clone()
+        } else {
+            paths.iter().filter_map(|p| record.marks.get(p).map(|&m| (p.clone(), m))).collect()
+        };
         (baseline, before)
     };
 
     // The disk, with no guard held.
+    let started = Instant::now();
+    if rescan {
+        paths.extend(baseline.entries.keys().cloned());
+        paths.extend(baseline::walk_root(root).entries.into_iter().map(|(p, _)| p));
+        paths.extend(before.keys().cloned());
+    }
     let judged = judge_all(&baseline, git, &paths, &before);
+    if rescan {
+        // Counts and a duration, never a path.
+        log::info!("tree changes: rescanned {} entries in {} ms", judged.len(), started.elapsed().as_millis());
+    }
     let touched: BTreeSet<PathBuf> = judged.keys().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
 
     let mut changes = state.lock();
@@ -829,6 +861,61 @@ mod tests {
     }
 
     #[test]
+    fn the_watch_passes_on_listable_paths_and_the_root_for_a_rescan() {
+        let root = Path::new("/p/kinas");
+        let event = notify::Event::new(notify::EventKind::Any).add_path(root.join("a.md")).add_path(root.join("node_modules/x.md")).add_path(root.to_path_buf());
+        assert_eq!(heard(root, event), [root.join("a.md")], "the root is never passed on for an event of its own");
+        // FSEvents dropped events: notify's rescan flag, on an event that names nothing.
+        let dropped = notify::Event::new(notify::EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        assert_eq!(heard(root, dropped), [root.to_path_buf()]);
+    }
+
+    #[test]
+    fn a_rescan_judges_every_path_without_being_told_which() {
+        let (_dir, root, state) = watched(&[("a.md", b"# A\n"), ("docs/b.md", b"# B\n"), ("docs/c.md", b"# C\n")], 1024);
+        // Marked A by a burst that named it, then removed while events were being dropped: its A has to go as well.
+        std::fs::write(root.join("brief.md"), "# Brief\n").unwrap();
+        assert_eq!(marked(&burst(&state, &root, &["brief.md"]), &root), ["A brief.md"]);
+        std::fs::remove_file(root.join("brief.md")).unwrap();
+        std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
+        std::fs::remove_file(root.join("docs/b.md")).unwrap();
+        std::fs::write(root.join("docs/new.md"), "# New\n").unwrap();
+
+        let answer = apply_burst(&state, &root, None, BTreeSet::from([root.clone()])).expect("a summary to emit");
+        assert_eq!(marked(&answer, &root), ["M a.md", "D docs/b.md", "A docs/new.md"]);
+        assert!(answer.touched.contains(&root.join("docs").display().to_string()), "the folder re-lists: {:?}", answer.touched);
+        // Nothing changed since: a second rescan says the same.
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])).unwrap().entries, answer.entries);
+    }
+
+    #[test]
+    fn a_rescan_before_the_baseline_waits_for_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::write(root.join("a.md"), "# A\n").unwrap();
+        let state = ChangesState::default();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
+
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])), None);
+        let (_, queued, _) = install_baseline(&state, &root, 0, baseline::take(&root, None, 1024, &|_| false)).unwrap();
+        assert_eq!(queued, BTreeSet::from([root.clone()]), "the rescan goes back through the burst thread with the paths");
+        std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
+        assert_eq!(marked(&apply_burst(&state, &root, None, queued).unwrap(), &root), ["M a.md"]);
+    }
+
+    #[test]
+    fn a_symlink_made_after_the_baseline_makes_no_mark_even_on_a_rescan() {
+        let (_dir, root, state) = watched(&[("a.md", b"# A\n")], 1024);
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("secret.md"), "# Outside\n").unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.join("link")).unwrap();
+        std::os::unix::fs::symlink(outside.path().join("secret.md"), root.join("link.md")).unwrap();
+        assert_eq!(burst(&state, &root, &["link", "link.md"]).entries, vec![]);
+        // The rescan walks the whole root, and not through a link either (rule 6).
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])).unwrap().entries, vec![]);
+    }
+
+    #[test]
     fn the_window_budget_is_shared_and_a_late_baseline_gives_back_what_no_longer_fits() {
         let (_dir, _root, state) = watched(&[("a.md", &[b'a'; 100])], 1024);
         assert_eq!(state.lock().budget_used, 100);
@@ -972,6 +1059,26 @@ mod tests {
         std::fs::remove_file(root.join("notes.md")).unwrap();
         std::fs::remove_file(root.join("logo.png")).unwrap();
         assert_eq!(marked(&git_burst(&state, &root, &g, &["notes.md", "logo.png"]), &root), ["D logo.png", "D notes.md"]);
+    }
+
+    #[test]
+    fn a_nested_repository_answers_for_its_own_files_in_a_burst() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        git::tests::repo_with(&root, &[(".gitignore", b"inner/\n"), ("outer.md", b"# Outer\n")]);
+        let inner = root.join("inner");
+        std::fs::create_dir(&inner).unwrap();
+        git::tests::repo_with(&inner, &[("inside.md", b"# Inside\n")]);
+        let g = Git::find().expect("git is installed");
+        let state = ChangesState::default();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
+        install_baseline(&state, &root, 0, baseline::take(&root, Some(&g), 1024, &|_| false)).unwrap();
+
+        // Saved unchanged, the inner repository's own blob says it is what it was; changed, it is M.
+        std::fs::write(inner.join("inside.md"), "# Inside\n").unwrap();
+        assert_eq!(git_burst(&state, &root, &g, &["inner/inside.md"]).entries, vec![]);
+        std::fs::write(inner.join("inside.md"), "# Inside, edited\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["inner/inside.md"]), &root), ["M inner/inside.md"]);
     }
 
     const EVERYWHERE: &dyn Fn(&Path) -> bool = &|_| true;

@@ -29,10 +29,12 @@
 - The build's draft PR is **#34** (`feat/tree-changes-2` → `main`). The captain chose a new branch over a force-push:
   #32 (`feat/tree-changes`, the pre-rebase tip, also kept locally as `tree-changes-before-rebase`) is closed for it,
   and #31 (the Gate documents on their first base) is still open — #34 holds those commits too.
-- Ship point 1 is on `main` at `cbab8be` (2026-09-24), not installed. Slices 5 and 6 (the Changes view, deleted files) are on
-  `feat/tree-changes-2`, ahead of `main`; next is slice 7, the edges and the record. Ship point 2's draft PR is #35. DESIGN.md's entry is 1.6: the
-  reader's layout took 1.5. #31 (the Gate documents on their first base) is still open, and everything in it is on
-  `main` now.
+- Ship point 1 is on `main` at `cbab8be` (2026-09-24), not installed. Slices 5 and 6 (the Changes view, deleted files)
+  went up as draft PR #35 from `feat/tree-changes-2`. DESIGN.md's entry is 1.6: the reader's layout took 1.5. #31 (the
+  Gate documents on their first base) is still open, and everything in it is on `main` now.
+- **Ship point 2 follows the reader's layout's** (the captain's order, 2026-09-24): this build is rebased onto its
+  ship point 2 (`6b754ee`, tabs) as **`feat/tree-changes-3`**, a new branch as at ship point 1; its draft PR is **#37**, and #35 is closed for it.
+  The six conflicts and the one decision they needed — a deleted file gets a tab — are in the build spec's §17.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's two screenshots did not reach the session that wrote Gate 1; the "reload" they showed was read as

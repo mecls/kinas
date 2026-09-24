@@ -402,3 +402,16 @@ repository with committed `README.md` and `docs/old.md`, and an ignored `notes/`
 6. What does the diff compare against? — **A**, the same moment the marks count from, with Kinas keeping the old text
    (from git where it can, copies otherwise). (B was git's last commit; C was the first open in the reader; D was no
    diff for now.)
+
+---
+
+**Built, 2026-09-24** (a trailing note; the text above is as approved). Ship point 1, the marks, is on `main` at
+`cbab8be`; ship point 2, the Changes view and deleted files, follows the reader's layout's tabs. Where the build
+differs from this text:
+- DESIGN.md's entry is 1.6, not 1.5: the reader's layout took 1.5 first.
+- The diff's two tints are tokens, `--ok-soft` and `--danger-soft`, with their contrast measured in DESIGN.md §2.4 in
+  both themes.
+- A deleted file opened from its row gets a tab like any file the reader shows. While its D stands, the tab reopens
+  what it said then.
+- Rule 29's first paint and the Kinas repository's copies are measured on the installed build, which waits for the
+  captain's install; `docs/smoke-test.md` holds them until then.

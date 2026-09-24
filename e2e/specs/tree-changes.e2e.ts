@@ -1,6 +1,7 @@
 import { browser, expect } from "@wdio/globals";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { hook, openReaderMenu, runReaderMenuItem, typeLine, waitForShell } from "../helpers.ts";
 import { OLD_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
@@ -20,6 +21,15 @@ const OLD = `old-${TOKEN}.md`;
 const CEILING = 2000;
 /** Set it to keep the proof: `KINAS_E2E_SHOTS=<folder> bun e2e/run.ts tree-changes`. */
 const SHOTS = process.env.KINAS_E2E_SHOTS;
+const LOG = join(homedir(), "Library/Logs/ai.sintralabs.kinas/kinas.log");
+/** Every line tree changes may write (rule 26): counts, durations and an error's kind — never a path, never text. */
+const COUNT_LINES = [
+  /^tree changes: baseline taken in \d+ ms, \d+ copies, \d+ bytes$/,
+  /^tree changes: rescanned \d+ entries in \d+ ms$/,
+  /^tree changes: a slow walk, \d+ entries in \d+ ms$/,
+  /^tree changes: exported \d+ bytes in \d+ ms$/,
+  /^tree changes: could not watch a folder \([a-z ]+\)$/,
+];
 
 function kinas(...args: string[]) {
   const result = spawnSync(CLI, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 20000 });
@@ -130,8 +140,11 @@ async function openInFiles(folder: string, name: string) {
 describe("Tree changes", () => {
   /** The terminal pane's process at step 1: nothing here may restart it (ADR 0002). */
   let pid = 0;
+  /** Where the log stood when the spec began: step 11 reads only what this run wrote. */
+  let logFrom = 0;
 
   before(async () => {
+    logFrom = existsSync(LOG) ? statSync(LOG).size : 0;
     await waitForShell();
   });
 
@@ -266,6 +279,39 @@ describe("Tree changes", () => {
     await openInFiles("repo", README);
   });
 
+  it("the timing (rule 7): the median from a write on disk to its mark on screen, over 10 writes, is under 1 s", async () => {
+    // Stamped in the page, as the DOM change that draws each mark lands — never by the driver's polling, which costs
+    // more than what it would measure, and not at an animation frame, which WebKit does not run for a window that is
+    // off screen, as the e2e window may be. Date.now on both sides: the spec and the page share the Mac's clock.
+    await browser.execute(() => {
+      const seen: Record<string, number> = {};
+      (window as unknown as { __markSeen: Record<string, number> }).__markSeen = seen;
+      new MutationObserver(() => {
+        const at = Date.now();
+        for (const row of document.querySelectorAll<HTMLElement>(".sidebar .reader-files .tree-row[data-mark]")) {
+          const path = row.querySelector<HTMLButtonElement>(".tree-item")?.title;
+          if (path && !(path in seen)) seen[path] = at;
+        }
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-mark"] });
+    });
+    const written: Record<string, number> = {};
+    for (let i = 1; i <= 10; i++) {
+      const path = join(repo, `timed-${i}-${TOKEN}.md`);
+      written[path] = Date.now();
+      writeFileSync(path, `# Timed ${i} ${TOKEN}\n`);
+      await until(async () => (await rows()).some((r) => r.path === path && r.mark === "A"), `timed-${i} marked A`);
+      // Apart, so each write is a burst of its own and not a ride on the one before.
+      await browser.pause(300);
+    }
+    const seen = (await browser.execute(() => (window as unknown as { __markSeen: Record<string, number> }).__markSeen)) as Record<string, number>;
+    expect(Object.keys(written).filter((path) => !(path in seen))).toEqual([]);
+    const took = Object.entries(written).map(([path, at]) => seen[path]! - at);
+    const median = [...took].sort((a, b) => a - b).slice(4, 6).reduce((a, b) => a + b, 0) / 2;
+    console.log(`tree changes timing: write to mark ${took.join(", ")} ms; median ${median} ms`);
+    expect(took.filter((ms) => ms < 0)).toEqual([]);
+    expect(median).toBeLessThan(1000);
+  });
+
   it("7: ↻ clears the tree — marks, caption, deleted rows — and a later write counts from the refresh", async () => {
     const button = () =>
       browser.execute(() => {
@@ -298,7 +344,7 @@ describe("Tree changes", () => {
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
 
-  it("13, last: a window reload clears every record; the folder shown again is unmarked, from a new baseline", async () => {
+  it("13: a window reload clears every record; the folder shown again is unmarked, from a new baseline", async () => {
     expect((await marked()).length).toBeGreaterThan(0);
     await browser.execute(() => location.reload());
     // Past the old page, whose hooks would otherwise answer for the new one.
@@ -312,5 +358,21 @@ describe("Tree changes", () => {
     await until(async () => (await row(`after-reload-${TOKEN}.md`))?.mark === "A", "a write after the reload marked A");
     expect([clock(reloaded - 60_000), clock(reloaded), clock(reloaded + 60_000)]).toContain(await since());
     expect(await marked()).toEqual([`after-reload-${TOKEN}.md A A`]);
+  });
+
+  it("11, after the rest: the log holds counts alone — none of the fixture's names, none of its text", async () => {
+    const all = existsSync(LOG) ? readFileSync(LOG) : Buffer.alloc(0);
+    // A log that filled during the run was rotated, and starts again from nothing.
+    const written = (all.length >= logFrom ? all.subarray(logFrom) : all).toString("utf8");
+    // Every name in the fixture carries the token, and so does every text but these.
+    const found = [TOKEN, "The committed text.", "A line from the pane.", "A line of a long file.", "A folder that is not a repository."].filter((needle) => written.includes(needle));
+    expect(found).toEqual([]);
+    const ours = written
+      .split("\n")
+      .filter((line) => line.includes("tree changes:"))
+      .map((line) => line.slice(line.indexOf("tree changes:")).trimEnd());
+    expect(ours.filter((line) => !COUNT_LINES.some((shape) => shape.test(line)))).toEqual([]);
+    expect(ours.some((line) => line.startsWith("tree changes: baseline taken"))).toBe(true);
+    expect(ours.some((line) => line.startsWith("tree changes: exported"))).toBe(true);
   });
 });

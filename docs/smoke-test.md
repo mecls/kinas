@@ -337,17 +337,27 @@ e2e suite ran green alone with them: 21 specs, 120 cases.
 ## Tree changes
 
 Every file tree marks what changed since it was first shown, and the reader's Changes view diffs against that moment
-(2026-09-23, `tasks/tree-changes/prd.md`). Being built; each line says how it is proved once it is.
+(2026-09-23, `tasks/tree-changes/prd.md`). Built 2026-09-24; the steps named are `tree-changes.e2e.ts`'s.
 
-- [ ] A write, an edit and a delete under an open folder mark A, M and D within a second; a collapsed folder shows the
-      strongest change's dot and the count — `outstanding — automated in tree-changes.e2e.ts`
-- [ ] An edit put back, and a file made then removed, leave no mark and no row — `outstanding — automated`
-- [ ] A marked file opens on Changes; a deleted one shows what it said, and Copy and Download take that text —
-      `outstanding — automated`
-- [ ] ↻, Refresh files and a window reload clear every mark — `outstanding — automated`
-- [ ] Nothing about changes reaches the log but counts — `outstanding — automated`
-- [ ] Median from a write on disk to its mark, over 10 writes: under 1 s — `outstanding — measured`
-- [ ] A folder's first paint in Files within 10 % of 46 ms — `outstanding — measured`
+- [x] A write, an edit and a delete under an open folder mark A, M and D within a second; a collapsed folder shows the
+      strongest change's dot and the count — `automated (tree-changes.e2e.ts, steps 2–4, 2 s ceilings)`
+- [x] An edit put back, and a file made then removed, leave no mark and no row — `automated (steps 5 and 6; the
+      README is put back through git's blob, not a kept copy)`
+- [x] A marked file opens on Changes; a deleted one shows what it said, and Copy and Download take that text —
+      `automated (step 3's view, step 4's click; the real clipboard, saved and put back)`
+- [x] ↻, Refresh files and a window reload clear every mark — `automated (steps 7 and 13; palette.e2e.ts for Refresh
+      files with no folder)`
+- [x] With git out of reach, or the watch refused, the tree still lists and says so — `automated
+      (tree-changes-no-git.e2e.ts, tree-changes-watch-fail.e2e.ts)`
+- [x] Nothing about changes reaches the log but counts — `automated (step 11: none of the fixture's names or text in
+      what the run wrote, and every "tree changes:" line one of the count shapes)`
+- [x] Median from a write on disk to its mark, over 10 writes: under 1 s — **median 100 ms** (94, 107, 93, 99, 95,
+      100, 106, 102, 100, 102), stamped in the page as each mark reached the DOM, on the debug e2e build 2026-09-24
+      19:52, run alone — `automated (tree-changes.e2e.ts, the timing case, which fails at 1 s)`
+- [ ] A folder's first paint in Files within 10 % of 46 ms (the installed build's warm open) — `outstanding — measured
+      on the installed build, which waits for the captain's install after the first mate's`
+- [ ] The Kinas repository opened in Files: its copies, their bytes and the time the baseline took, from the log's
+      `tree changes: baseline taken` line — `outstanding — measured on the installed build, as above`
 - [ ] A real agent's session read by eye: marks, roll-ups, the Changes view on markdown and code, both themes —
       `outstanding — needs Miguel`
 

@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use super::git::Git;
 use super::Millis;
@@ -113,6 +113,9 @@ impl Baseline {
     }
 }
 
+/// A walk that takes longer is logged as slow: a huge folder opened as a root (Gate 2, the risks). Nothing is refused.
+pub const SLOW_WALK: Duration = Duration::from_secs(10);
+
 pub struct Walked {
     /// Every listable path, breadth first.
     pub entries: Vec<(PathBuf, Stat)>,
@@ -149,6 +152,21 @@ pub fn walk(root: &Path) -> Walked {
         }
     }
     walked
+}
+
+/// `walk`, timed, for a whole root — the baseline's, and a rescan's. One past `SLOW_WALK` is logged.
+pub fn walk_root(root: &Path) -> Walked {
+    let started = Instant::now();
+    let walked = walk(root);
+    if let Some(line) = slow_walk(walked.entries.len(), started.elapsed()) {
+        log::warn!("{line}");
+    }
+    walked
+}
+
+/// The slow walk's log line: a count and a duration, never where.
+fn slow_walk(entries: usize, took: Duration) -> Option<String> {
+    (took > SLOW_WALK).then(|| format!("tree changes: a slow walk, {entries} entries in {} ms", took.as_millis()))
 }
 
 /// A repository reaching into the root, with what its HEAD vouches for there.
@@ -194,7 +212,7 @@ fn clean_blob(repos: &[Repo], path: &Path) -> Option<BaseText> {
 /// breadth first. `changed` says whether a path had an event since the watch started: such a file gets no copy,
 /// because the copy might already hold the change. Without `git`, every listed text file is copied.
 pub fn take(root: &Path, git: Option<&Git>, budget_left: u64, changed: &dyn Fn(&Path) -> bool) -> Baseline {
-    let walked = walk(root);
+    let walked = walk_root(root);
     let repos = git.map(|g| repositories(root, &walked.repo_tops, g)).unwrap_or_default();
     let mut baseline = Baseline::default();
     for (path, stat) in walked.entries {
@@ -262,6 +280,12 @@ mod tests {
         let (_dir, root) = tree(&[("b.md", b"b"), ("a/deep/c.md", b"c"), ("a/z.md", b"z"), (".git/HEAD", b"ref"), ("node_modules/x.md", b"x"), (".env", b"KEY=1")]);
         let walked: Vec<String> = walk(&root).entries.into_iter().map(|(p, _)| p.strip_prefix(&root).unwrap().display().to_string()).collect();
         assert_eq!(walked, ["a", "b.md", "a/deep", "a/z.md", "a/deep/c.md"]);
+    }
+
+    #[test]
+    fn a_walk_over_ten_seconds_is_logged_by_its_count_and_time_alone() {
+        assert_eq!(slow_walk(120_000, Duration::from_secs(10)), None);
+        assert_eq!(slow_walk(120_000, Duration::from_millis(10_450)).as_deref(), Some("tree changes: a slow walk, 120000 entries in 10450 ms"));
     }
 
     #[test]

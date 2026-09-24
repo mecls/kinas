@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { type ChangeEntry, type FolderRollup, type Mark, onTreeChanged, type ReaderKind, type TreeChanges, treeChangesWatch } from "../api.ts";
+import { type ChangeEntry, type FolderRollup, type Mark, onTreeChanged, type ReaderKind, type TreeChanges, treeChangesRefresh, treeChangesWatch } from "../api.ts";
 
 // Tree changes in the webview (tasks/tree-changes/prd.md): Rust decides every mark and sends a root's whole summary
 // after each burst; this module keeps the latest summary per root and hands the trees what to draw. Memory only, and
@@ -117,6 +117,8 @@ export function createChangesStore() {
   const summaries = new Map<string, TreeChanges>();
   const realOf = new Map<string, string>();
   const seqs = new Map<string, number>();
+  /** Per root, how many times it was refreshed: every folder of a refreshed root re-lists. */
+  const epochs = new Map<string, number>();
   const listeners = new Set<() => void>();
   const changed = () => {
     for (const listener of listeners) listener();
@@ -137,11 +139,19 @@ export function createChangesStore() {
       if (!summaries.has(summary.root)) summaries.set(summary.root, summary);
       changed();
     },
+    /** A refresh's answer: the root starts again, its summary replaced whatever arrived before it. */
+    reset(asked: string, summary: TreeChanges) {
+      realOf.set(asked, summary.root);
+      summaries.set(summary.root, summary);
+      epochs.set(summary.root, (epochs.get(summary.root) ?? 0) + 1);
+      changed();
+    },
     summaryOf(asked: string | null): TreeChanges | null {
       if (asked === null) return null;
       return summaries.get(realOf.get(asked) ?? asked) ?? null;
     },
     touchedSeq: (dir: string) => seqs.get(dir) ?? 0,
+    epochOf: (root: string) => epochs.get(root) ?? 0,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -167,6 +177,18 @@ export function watchRoot(root: string): void {
   );
 }
 
+/**
+ * Refresh (rule 15): the root's marks, deleted rows and caption go, and its expanded folders re-list. A root that is
+ * not watched has nothing to clear.
+ */
+export async function refreshRoot(root: string): Promise<void> {
+  try {
+    store.reset(root, await treeChangesRefresh(root));
+  } catch {
+    // Not watched, or no longer readable: there is nothing of it on screen to clear.
+  }
+}
+
 function useSummary(root: string | null): TreeChanges | null {
   return useSyncExternalStore(store.subscribe, () => store.summaryOf(root));
 }
@@ -176,8 +198,14 @@ export function useTreeChanges(root: string | null): TreeSummary | null {
   return useMemo(() => (summary ? { total: summary.total, since: sinceLabel(summary.since_ms), watching: summary.watching } : null), [summary]);
 }
 
-/** A new object with every summary, so the tree re-renders — and each expanded folder re-reads its `touchedSeq`. */
+/**
+ * A new object with every summary, so the tree re-renders — and each expanded folder re-reads its `touchedSeq`, which
+ * also grows when its root is refreshed. Both only grow, so their sum does too.
+ */
 export function useFolderMarks(root: string): FolderMarks {
   const summary = useSummary(root);
-  return useMemo(() => folderMarksOf(summary, store.touchedSeq), [summary]);
+  return useMemo(() => {
+    const epoch = summary ? store.epochOf(summary.root) : 0;
+    return folderMarksOf(summary, (dir) => store.touchedSeq(dir) + epoch);
+  }, [summary]);
 }

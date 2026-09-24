@@ -160,7 +160,15 @@ pub fn run() {
             reader::pins::reader_pin,
             reader::pins::reader_unpin,
             reader::changes::tree_changes_watch,
+            reader::changes::tree_changes_refresh,
         ])
+        // A reload of the window (WebKit's right-click Reload) starts every file tree afresh: no record of what changed
+        // survives it (tree changes rule 17). `Started`, so the records are gone before the new page asks for them.
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
+                reader::changes::on_page_load(webview.app_handle());
+            }
+        })
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).
             if let WindowEvent::CloseRequested { api, .. } = event {

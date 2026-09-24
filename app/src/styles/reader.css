@@ -268,6 +268,20 @@
   border-top: 1px solid var(--line);
 }
 
+/* The reader's own Files label with its ↻ beside it (tree changes rule 15). */
+.reader-files-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.reader-files-head .reader-label {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 /* A quiet sentence-case label in --ink-2, as DESIGN.md §6 writes labels — no all-caps mono (retired in slice 6). */
 .reader-label {
   margin: 0 0 var(--space-2) var(--space-1);

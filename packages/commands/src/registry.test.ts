@@ -8,6 +8,7 @@ describe("the registry (R36, CLI v0)", () => {
       ["context", ["cli"]],
       ["open", ["cli"]],
       ["refresh", ["palette"]],
+      ["files.refresh", ["palette"]],
       ["go.home", ["palette"]],
       ["go.usage", ["palette"]],
       ["go.work", ["palette"]],
@@ -22,9 +23,10 @@ describe("the registry (R36, CLI v0)", () => {
   });
 
   test("palette filtering by title", () => {
-    expect(paletteMatches("").map((c) => c.id)).toEqual(["status", "refresh", "go.home", "go.usage", "go.work", "sidebar", "settings"]);
+    expect(paletteMatches("").map((c) => c.id)).toEqual(["status", "refresh", "files.refresh", "go.home", "go.usage", "go.work", "sidebar", "settings"]);
     expect(paletteMatches("go to").map((c) => c.id)).toEqual(["go.home", "go.usage", "go.work"]);
-    expect(paletteMatches("REFR").map((c) => c.id)).toEqual(["refresh"]);
+    expect(paletteMatches("REFR").map((c) => c.id)).toEqual(["refresh", "files.refresh"]);
+    expect(paletteMatches("files").map((c) => c.id)).toEqual(["files.refresh"]);
     expect(paletteMatches("sidebar").map((c) => c.id)).toEqual(["sidebar"]);
     expect(paletteMatches("nothing like this")).toEqual([]);
   });
@@ -33,6 +35,14 @@ describe("the registry (R36, CLI v0)", () => {
     await expect(commands.find((c) => c.id === "refresh")!.run({ now: 0 })).rejects.toThrow("refresh is not available here");
     await expect(cliCommand("context")!.run({ now: 0 })).rejects.toThrow("context is not available here");
     await expect(cliCommand("open")!.run({ now: 0 })).rejects.toThrow("open is not available here");
+  });
+
+  test("files.refresh is palette-only and says so with no folder", async () => {
+    const command = commands.find((c) => c.id === "files.refresh")!;
+    expect([...command.doors]).toEqual(["palette"]);
+    expect(await command.run({ now: 0, refreshFiles: async () => false })).toEqual({ lines: ["No folder in Files to refresh"] });
+    expect(await command.run({ now: 0, refreshFiles: async () => true })).toEqual({});
+    await expect(command.run({ now: 0 })).rejects.toThrow("refreshing files is not available here");
   });
 
   test("context and open return what their door supplies", async () => {

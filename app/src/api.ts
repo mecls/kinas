@@ -432,6 +432,8 @@ export interface TreeChanges {
 
 /** Starts following a folder's tree, or answers with what it already follows: the first showing is the baseline. */
 export const treeChangesWatch = (root: string) => invoke<TreeChanges>("tree_changes_watch", { root });
+/** Clears one root's marks and starts its baseline again, now. Refused for a root not watched. */
+export const treeChangesRefresh = (root: string) => invoke<TreeChanges>("tree_changes_refresh", { root });
 export const onTreeChanged = (handler: (c: TreeChanges) => void): Promise<UnlistenFn> => listen<TreeChanges>("tree_changed", (e) => handler(e.payload));
 
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);

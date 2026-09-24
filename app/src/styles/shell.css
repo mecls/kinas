@@ -169,6 +169,13 @@
   color: var(--ink);
 }
 
+/* A tree's ↻ (tree changes rule 15): hover-only like the rest, but always there while the tree has marks to clear. The
+   reader's own Files label is a head too. */
+.tree-refresh[data-marked],
+.reader-files-head:hover .sidebar-row-action {
+  opacity: 1;
+}
+
 /* A folder's row in Recent or the client folders: the row, and what can be done to the folder beside it. */
 .sidebar-entry {
   display: flex;

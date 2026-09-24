@@ -56,6 +56,48 @@ const contentsState = () =>
     };
   });
 
+/**
+ * Drags the column's edge in the page, as reader.e2e.ts drags the divider: synthetic pointer events sent in one script,
+ * released `to` px from the column's left edge (the reader's main row's left).
+ */
+const dragEdgeTo = (to: number) =>
+  browser.execute((target: number) => {
+    const edge = document.querySelector<HTMLElement>(".reader-side-edge")!;
+    const main = document.querySelector<HTMLElement>("aside.reader .reader-main")!.getBoundingClientRect();
+    const at = edge.getBoundingClientRect();
+    const send = (type: string, x: number) =>
+      edge.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: at.top + 200, pointerId: 1, button: 0, isPrimary: true }));
+    const from = at.left + at.width / 2;
+    const end = main.left + target;
+    send("pointerdown", from);
+    for (let i = 1; i <= 10; i++) send("pointermove", from + ((end - from) * i) / 10);
+    send("pointerup", end);
+  }, to);
+
+/** The column as drawn, and as the edge reports it. */
+const column = () =>
+  browser.execute(() => ({
+    width: Math.round(document.querySelector("aside.reader .reader-side")?.getBoundingClientRect().width ?? -1),
+    valueNow: Number(document.querySelector(".reader-side-edge")?.getAttribute("aria-valuenow") ?? -1),
+    main: Math.round(document.querySelector("aside.reader .reader-main")!.getBoundingClientRect().width),
+  }));
+
+async function waitForColumn(width: number) {
+  await browser
+    .waitUntil(async () => (await column()).width === width, { timeout: 10000, interval: 250 })
+    .catch(async () => {
+      throw new Error(`the column never became ${width} px: ${JSON.stringify(await column())}`);
+    });
+}
+
+async function waitForStored(side: { contents: boolean; files: boolean; width: number }) {
+  await browser
+    .waitUntil(async () => JSON.stringify(storedSide()) === JSON.stringify(side), { timeout: 10000, interval: 250 })
+    .catch(() => {
+      throw new Error(`reader_side is ${JSON.stringify(storedSide())}, not ${JSON.stringify(side)}`);
+    });
+}
+
 describe("the reader's side column", () => {
   let pid = 0;
 
@@ -88,6 +130,36 @@ describe("the reader's side column", () => {
     await opened("second.md");
     expect(await contentsState()).toEqual({ button: { pressed: "false", title: "Show Contents" }, side: null });
     expect(storedSide()).toEqual({ contents: false, files: true, width: 220 });
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("the edge drags the column 100 px wider, stores it once the drag ends, and a double-click puts back 220", async () => {
+    await clickLabelled("Contents");
+    await waitInPage(() => document.querySelector(".reader-side-edge") !== null, "the column's edge never showed");
+    await waitForColumn(220);
+    await waitForStored({ contents: true, files: true, width: 220 });
+
+    await dragEdgeTo(320);
+    await waitForColumn(320);
+    expect((await column()).valueNow).toBe(320);
+    await waitForStored({ contents: true, files: true, width: 320 });
+    // The drag has ended: nothing is left in its dragging state.
+    expect(await browser.execute(() => document.querySelector("aside.reader .reader-main")!.hasAttribute("data-dragging"))).toBe(false);
+
+    await browser.execute(() => document.querySelector<HTMLElement>(".reader-side-edge")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    await waitForColumn(220);
+    await waitForStored({ contents: true, files: true, width: 220 });
+  });
+
+  it("the edge stops at 160 on the left, and on the right at 480 or where the text would get less than 320", async () => {
+    await dragEdgeTo(0);
+    await waitForColumn(160);
+    await waitForStored({ contents: true, files: true, width: 160 });
+
+    await dragEdgeTo(5000);
+    const limit = Math.min(480, (await column()).main - 320);
+    await waitForColumn(limit);
+    await waitForStored({ contents: true, files: true, width: limit });
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
 });

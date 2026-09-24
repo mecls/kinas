@@ -197,13 +197,52 @@
   min-height: 0;
 }
 
+/* Beside the text the width is the one remembered, set inline from reader/side.ts as --reader-side-w; its line counts
+   in it, so a 320 px column is 320 px on screen. */
 .reader-side {
   display: flex;
-  flex: 0 0 var(--sidebar-w);
+  box-sizing: border-box;
+  flex: 0 0 var(--reader-side-w, var(--sidebar-w));
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--line);
   background: var(--surface);
+}
+
+/* The column's edge (reader-layout PRD rule 5), drawn as the page/reader divider is (shell.css .stage-divider): a grip
+   --space-1h wide over the column's line whose margins net it no width, a 2 px accent line while pointed at or
+   dragged. */
+.reader-side-edge {
+  position: relative;
+  flex: 0 0 var(--space-1h);
+  margin: 0 calc(var(--space-1h) / -2);
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.reader-side-edge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--space-0);
+  border-left: 1px solid transparent;
+}
+
+.reader-side-edge:hover::after,
+.reader-main[data-dragging] .reader-side-edge::after {
+  border-left: 2px solid var(--accent);
+}
+
+/* While dragging, nothing selects text, and a rendered HTML page's frame cannot take the pointer. */
+.reader-main[data-dragging] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.reader-main[data-dragging] .reader-scroll {
+  pointer-events: none;
 }
 
 /* Narrow reader: the side column opens over the document from the header's Files and Contents buttons. */

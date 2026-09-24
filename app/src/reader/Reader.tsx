@@ -32,7 +32,7 @@ import { cachedSvg, diagramsNeedRedrawing, renderDiagram } from "./mermaid.ts";
 import { PREVIEW_SANDBOX, renderPreview } from "./preview.ts";
 import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
-import { sectionButton, sectionPlace, type SectionState } from "./side.ts";
+import { drawnWidth, edgeDrag, sectionButton, sectionPlace, SIDE_DEFAULT, SIDE_MAX_PX, SIDE_MIN_PX, type SectionState } from "./side.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
 import { Button } from "../ui/index.ts";
@@ -266,10 +266,15 @@ export function Reader({
   const [back, setBack] = useState<{ path: string; scrollTop: number }[]>([]);
   const [tall, setTall] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  /** The reader's width, for the column's: the text keeps 320 px of it (reader-layout PRD rule 6). */
+  const [readerWidth, setReaderWidth] = useState(0);
+  /** The column's width while its edge is dragged; null otherwise, when the stored width decides. */
+  const [liveWidth, setLiveWidth] = useState<number | null>(null);
   const [overlay, setOverlay] = useState<"files" | "contents" | null>(null);
   const [currentSlug, setCurrentSlug] = useState<string | null>(null);
 
   const frame = useRef<HTMLDivElement>(null);
+  const main = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const article = useRef<HTMLElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -651,6 +656,7 @@ export function Reader({
     const measure = () => {
       setTall(sc.scrollHeight > sc.clientHeight + 1);
       setNarrow(box.clientWidth > 0 && box.clientWidth < NARROW_PX);
+      setReaderWidth(box.clientWidth);
     };
     const observer = new ResizeObserver(measure);
     observer.observe(sc);
@@ -658,6 +664,26 @@ export function Reader({
     observer.observe(box);
     return () => observer.disconnect();
   }, []);
+
+  // The column's edge (reader-layout PRD rule 5). The controller outlives renders, so it saves through refs to the
+  // current side and callback: a drag that starts on one render ends on another.
+  const sideNow = useRef(side);
+  sideNow.current = side;
+  const onSideNow = useRef(onSide);
+  onSideNow.current = onSide;
+  const edge = useRef<ReturnType<typeof edgeDrag> | null>(null);
+  edge.current ??= edgeDrag({ live: setLiveWidth, save: (width) => onSideNow.current({ ...sideNow.current, width }) });
+  const edgeMove = (clientX: number) => {
+    const box = main.current?.getBoundingClientRect();
+    if (box) edge.current!.move(clientX - box.left, box.width);
+  };
+  const edgeRelease = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Already released, or a synthetic pointer (the e2e) that never had capture.
+    }
+  };
 
   const frameRequest = useRef(0);
   const onScroll = () => {
@@ -856,6 +882,7 @@ export function Reader({
   };
   const filesButton = sectionButton(filesState);
   const contentsButton = sectionButton(contentsState);
+  const columnWidth = liveWidth ?? drawnWidth(side.width, readerWidth);
 
   const viewKind = doc ? viewKindOf(doc.render) : null;
   const noFile = doc ? null : "Open a file first";
@@ -896,9 +923,14 @@ export function Reader({
           {status.text}
         </p>
       )}
-      <div className="reader-main" data-narrow={narrow ? "" : undefined}>
+      <div className="reader-main" ref={main} data-narrow={narrow ? "" : undefined} data-dragging={liveWidth !== null ? "" : undefined}>
         {sideShown && (
-          <div className="reader-side" data-overlay={narrow ? "" : undefined}>
+          <div
+            className="reader-side"
+            data-overlay={narrow ? "" : undefined}
+            // Narrow, the overlay is 220 px whatever wide remembers (PRD rule 3), so the width is set only beside the text.
+            style={narrow ? undefined : ({ "--reader-side-w": `${columnWidth}px` } as React.CSSProperties)}
+          >
             {folder && filesPlace && (
               <section className="reader-files" aria-label="Files">
                 <h2 className="reader-label">Files</h2>
@@ -911,7 +943,8 @@ export function Reader({
                 <ol>
                   {headings.map((heading) => (
                     <li key={heading.slug} data-level={heading.level}>
-                      <button type="button" aria-current={heading.slug === currentSlug ? "true" : undefined} onClick={() => scrollToId(heading.slug)}>
+                      {/* The whole heading on hover: a narrower column cuts more of them short (PRD rule 8). */}
+                      <button type="button" title={heading.text} aria-current={heading.slug === currentSlug ? "true" : undefined} onClick={() => scrollToId(heading.slug)}>
                         {heading.text}
                       </button>
                     </li>
@@ -920,6 +953,39 @@ export function Reader({
               </nav>
             )}
           </div>
+        )}
+        {sideShown && !narrow && (
+          <div
+            className="reader-side-edge"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the reader's side column"
+            aria-valuemin={SIDE_MIN_PX}
+            aria-valuemax={SIDE_MAX_PX}
+            aria-valuenow={columnWidth}
+            title="Drag to resize; double-click for the default width"
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                // A synthetic pointer (the e2e) has no capture; its move and up events still reach the edge.
+              }
+              edge.current!.down(columnWidth);
+            }}
+            onPointerMove={(e) => edgeMove(e.clientX)}
+            onPointerUp={(e) => {
+              edgeRelease(e);
+              edgeMove(e.clientX);
+              edge.current!.end();
+            }}
+            onPointerCancel={(e) => {
+              edgeRelease(e);
+              edge.current!.end();
+            }}
+            onDoubleClick={() => onSide({ ...side, width: SIDE_DEFAULT.width })}
+          />
         )}
         <div className="reader-scroll" ref={scroller} onClickCapture={onClickCapture} onScroll={onScroll}>
           {confirm && (

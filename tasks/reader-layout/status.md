@@ -16,7 +16,8 @@
   check green in 136 s; the full e2e alone, 21 specs and 122 cases green in 45 m 51 s — both in `build-spec.md` §19)
 - [x] Slice 1 · tracer bullet: the Contents button at every width, hiding the column, stored in `reader_side`
   (2026-09-23; WebKit measured not to keep the place, so slice 3 builds the anchor)
-- [ ] Slice 2 · the column's edge: drag 160–480, the text keeps 320, double-click for 220, one save per drag
+- [x] Slice 2 · the column's edge: drag 160–480, the text keeps 320, double-click for 220, one save per drag
+  (2026-09-24)
 - [ ] Slice 3 · prose fills the reader, and the place survives every reflow → ship point 1
 - [ ] Slice 4 · tracer bullet: every opened file gets a tab, and a click switches to it where it was left
 - [ ] Slice 5 · fifteen at most, closing, the reader's × keeps the tabs, a gone file, names told apart

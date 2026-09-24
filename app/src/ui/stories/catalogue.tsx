@@ -5,6 +5,7 @@ import {
   Bar,
   Button,
   Card,
+  ChangeMark,
   CheckIcon,
   ChecksList,
   Chip,
@@ -72,6 +73,12 @@ export interface Story {
 
 const noop = () => {};
 const STATES = Object.keys(BADGE) as BadgeState[];
+// A tree row's name and its mark, as the file tree lays them out: the name takes the row, the mark sits at its end.
+const withMark = (name: string, mark: ReactNode) => (
+  <span style={{ display: "inline-flex", alignItems: "center", width: "var(--sidebar-w)", justifyContent: "space-between" }}>
+    {name} {mark}
+  </span>
+);
 const withChip = (cat: 1 | 2 | 3 | 4 | 5 | 6, name: string) => (
   <span style={{ display: "inline-flex", gap: "var(--space-2)", alignItems: "center" }}>
     <Chip cat={cat} /> {name}
@@ -117,6 +124,16 @@ export const STORIES: Story[] = [
     states: [
       { name: "internal", node: <Tag>internal</Tag> },
       { name: "order", node: <Tag>order</Tag> },
+    ],
+  },
+  {
+    component: "ChangeMark",
+    states: [
+      { name: "added", node: withMark("new-note.md", <ChangeMark mark="A" words="new-note.md, added since 14:02" />) },
+      { name: "modified", node: withMark("overview.md", <ChangeMark mark="M" words="overview.md, modified since 14:02" />) },
+      { name: "deleted", node: withMark("old-plan.md", <ChangeMark mark="D" words="old-plan.md, deleted since 14:02" />) },
+      { name: "rollup", node: withMark("docs", <ChangeMark mark="D" count={3} words="docs, 3 changes inside since 14:02" />) },
+      { name: "rollup-many", node: withMark("app", <ChangeMark mark="M" count={150} words="app, 150 changes inside since 14:02" />) },
     ],
   },
   {

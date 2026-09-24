@@ -3,6 +3,7 @@ import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
 import type { Page } from "../App.tsx";
 import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
+import { ChangesCaption } from "../reader/treeHead.tsx";
 import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
 import {
   ChevronDownIcon,
@@ -150,6 +151,7 @@ export function Sidebar({
                 {folderPinned ? <PinOffIcon size="sm" /> : <PinIcon size="sm" />}
               </button>
             </div>
+            <ChangesCaption root={folder} name={baseName(folder)} />
             <FileTree root={folder} selected={selected} onOpen={onOpen} folderActions={folderActions} />
           </section>
         )}

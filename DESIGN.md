@@ -234,6 +234,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | Dot | solid, ring, cross |
 | Chip | cat-1, cat-2, cat-3, cat-4, cat-5, cat-6 |
 | Tag | internal, order |
+| ChangeMark | added, modified, deleted, rollup, rollup-many |
 | Gauge | fine, warn, danger, stale, dead |
 | Bar | fine, warn, danger, stale, inline, segmented |
 | MetricRow | rows, attention |

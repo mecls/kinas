@@ -393,6 +393,13 @@ export interface ChangeEntry {
   mark: Mark;
 }
 
+/** A folder that existed at both moments, with changes beneath it: their count and the strongest of them. */
+export interface FolderRollup {
+  path: string;
+  count: number;
+  strongest: Mark;
+}
+
 /** One root's whole summary, sent after every burst: it replaces the last one, never patches it. */
 export interface TreeChanges {
   /** The root's real path. */
@@ -401,9 +408,13 @@ export interface TreeChanges {
   since_ms: number;
   /** False when the watch could not start: the tree works as today, without marks. */
   watching: boolean;
+  /** The baseline has been taken; until then nothing is marked. */
+  ready: boolean;
+  /** Changed entries under the root, an added or deleted folder counting once. */
   total: number;
   entries: ChangeEntry[];
-  /** Folders whose direct children changed in this burst. */
+  folders: FolderRollup[];
+  /** Folders whose direct children changed in this burst: an expanded one re-lists. */
   touched: string[];
 }
 

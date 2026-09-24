@@ -1,18 +1,20 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { type DirEntry, type DirListing, readerListDir } from "../api.ts";
 import { ChangeMark } from "../ui/index.ts";
-import { type FolderMarks, useFolderMarks, watchRoot, wordsFor } from "./changes.ts";
+import { type FolderMarks, type Gone, mergeDeleted, useFolderMarks, watchRoot, wordsFor } from "./changes.ts";
 
 // The folder tree (reader R35): one folder at a time from Rust, children loaded when a folder is expanded. It starts at
 // the folder that was opened and cannot go above it.
 //
 // Every mount follows its root's changes (tree changes rule 12): a changed row carries a Change mark beside its button,
-// and the mark's words become the button's accessible name. The button's text and title never change — specs find
-// rows by them.
+// and the mark's words become the button's accessible name; a deleted entry stays where it was, struck through, until
+// a refresh or a reload; an expanded folder re-lists when a burst changes something in it. The button's text and title
+// never change — specs find rows by them.
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
 type Listing = "loading" | { error: true } | DirListing;
+type Row = DirEntry | Gone;
 
 /** What to draw beside a folder's row — the sidebar's pin and terminal buttons. The tree itself knows nothing of them. */
 export type FolderActions = (path: string, name: string) => ReactNode;
@@ -30,18 +32,20 @@ export function FileTree({ root, ...rest }: Omit<TreeProps, "marks"> & { root: s
   const marks = useFolderMarks(root);
   return (
     <ul className="tree">
-      <Folder path={root} {...rest} marks={marks} top />
+      {/* Keyed by the root, so another folder starts from "Loading…" rather than showing the last one's rows. */}
+      <Folder key={root} path={root} {...rest} marks={marks} top />
     </ul>
   );
 }
 
 function Folder({ path, top = false, ...rest }: TreeProps & { path: string; top?: boolean }) {
-  const { selected, onOpen, marks } = rest;
+  const { marks } = rest;
   const [listing, setListing] = useState<Listing>("loading");
+  const seq = marks.touchedSeq(path);
 
+  // A re-list keeps the rows on screen until the new listing is in: a burst must not blink the tree.
   useEffect(() => {
     let live = true;
-    setListing("loading");
     readerListDir(path).then(
       (l) => live && setListing(l),
       () => live && setListing({ error: true }),
@@ -49,31 +53,28 @@ function Folder({ path, top = false, ...rest }: TreeProps & { path: string; top?
     return () => {
       live = false;
     };
-  }, [path]);
+  }, [path, seq]);
 
   if (listing === "loading") return <li className="tree-note">Loading…</li>;
   if ("error" in listing) return <li className="tree-note">Could not read this folder</li>;
-  if (top && listing.entries.length === 0) return <li className="tree-note">Nothing to open in {baseName(path)}</li>;
+  const rows: Row[] = mergeDeleted(listing.entries, marks.deletedIn(path));
+  if (top && rows.length === 0) return <li className="tree-note">Nothing to open in {baseName(path)}</li>;
   return (
     <>
-      {listing.entries.map((entry) =>
-        entry.kind === "dir" ? (
-          <FolderNode key={entry.path} entry={entry} {...rest} />
-        ) : (
-          <FileRow key={entry.path} entry={entry} selected={selected} onOpen={onOpen} marks={marks} />
-        ),
-      )}
+      {rows.map((row) => (row.kind === "dir" ? <FolderNode key={row.path} entry={row} {...rest} /> : <FileRow key={row.path} entry={row} {...rest} />))}
       {listing.more > 0 && <li className="tree-note">{listing.more} more not shown</li>}
     </>
   );
 }
 
-function FileRow({ entry, selected, onOpen, marks }: Pick<TreeProps, "selected" | "onOpen" | "marks"> & { entry: DirEntry }) {
-  const change = marks.entryOf(entry.path);
-  const words = wordsFor(entry.name, change, marks.since);
+const isGone = (row: Row): row is Gone => "gone" in row;
+
+function FileRow({ entry, selected, onOpen, marks }: TreeProps & { entry: Row }) {
+  const mark = marks.markOf(entry.path);
+  const words = wordsFor(entry.name, mark, null, marks.since);
   return (
     <li>
-      <div className="tree-row" data-mark={change?.mark}>
+      <div className="tree-row" data-mark={mark ?? undefined} data-gone={isGone(entry) ? "" : undefined}>
         <button
           type="button"
           className="tree-item tree-file"
@@ -84,28 +85,45 @@ function FileRow({ entry, selected, onOpen, marks }: Pick<TreeProps, "selected" 
         >
           {entry.name}
         </button>
-        {change && words && <ChangeMark mark={change.mark} words={words} />}
+        {mark && words && <ChangeMark mark={mark} words={words} />}
       </div>
     </li>
   );
 }
 
-function FolderNode({ entry, ...rest }: TreeProps & { entry: DirEntry }) {
+function FolderNode({ entry, ...rest }: TreeProps & { entry: Row }) {
   const [expanded, setExpanded] = useState(false);
+  const { marks } = rest;
+  const mark = marks.markOf(entry.path);
+  // A folder that existed at both moments carries a roll-up instead of a letter (rule 10).
+  const rollup = mark ? null : marks.rollupOf(entry.path);
+  const words = wordsFor(entry.name, mark, rollup, marks.since);
+  // A deleted folder is one struck-through row: Kinas does not know all it held, so it does not open (rule 9).
+  const gone = isGone(entry);
+  const open = expanded && !gone;
   return (
     <li>
       {/* The row is always there, actions or not, so the tree has one shape wherever it is mounted. The nested list
           stays the row's sibling: `.tree .tree` indents it, and a list inside the row would sit beside the name. */}
-      <div className="tree-row">
-        <button type="button" className="tree-item tree-dir" aria-expanded={expanded} title={entry.path} onClick={() => setExpanded((e) => !e)}>
+      <div className="tree-row" data-mark={mark ?? undefined} data-rollup={rollup?.count} data-gone={gone ? "" : undefined}>
+        <button
+          type="button"
+          className="tree-item tree-dir"
+          aria-expanded={gone ? undefined : open}
+          aria-label={words ?? undefined}
+          title={entry.path}
+          onClick={() => !gone && setExpanded((e) => !e)}
+        >
           <span className="tree-caret" aria-hidden="true">
-            {expanded ? "▾" : "▸"}
+            {gone ? "" : open ? "▾" : "▸"}
           </span>
           {entry.name}
         </button>
-        {rest.folderActions?.(entry.path, entry.name)}
+        {mark && words && <ChangeMark mark={mark} words={words} />}
+        {rollup && words && <ChangeMark mark={rollup.strongest} count={rollup.count} words={words} />}
+        {!gone && rest.folderActions?.(entry.path, entry.name)}
       </div>
-      {expanded && (
+      {open && (
         <ul className="tree">
           <Folder path={entry.path} {...rest} />
         </ul>

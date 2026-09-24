@@ -154,6 +154,12 @@ export const CodeIcon = (p: Props) => (
     <path d="m11.5 5 3 3-3 3M4.5 5l-3 3 3 3M9.5 3l-3 10" />
   </Icon>
 );
+/* Tree changes (1.6): the reader's Changes view, ± — a plus above a minus. */
+export const ChangesIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M8 2.5v6M5 5.5h6M5 12.5h6" />
+  </Icon>
+);
 export const ExpandIcon = (p: Props) => (
   <Icon {...p}>
     <path d="M10 2.5h3.5V6M6 13.5H2.5V10M13.5 2.5l-4 4M2.5 13.5l4-4" />

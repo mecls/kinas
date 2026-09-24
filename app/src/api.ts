@@ -434,6 +434,39 @@ export interface TreeChanges {
 export const treeChangesWatch = (root: string) => invoke<TreeChanges>("tree_changes_watch", { root });
 /** Clears one root's marks and starts its baseline again, now. Refused for a root not watched. */
 export const treeChangesRefresh = (root: string) => invoke<TreeChanges>("tree_changes_refresh", { root });
+
+export type DiffRowKind = "context" | "add" | "remove";
+
+/** One line of a diff: 1-based line numbers, one-sided for an added or removed line; `fold` for a hidden one. */
+export interface DiffRow {
+  kind: DiffRowKind;
+  old: number | null;
+  new: number | null;
+  text: string;
+  fold: number | null;
+}
+
+/** A changed file against its text at the baseline (reader/changes/diff.rs). */
+export interface DiffView {
+  path: string;
+  display_path: string;
+  root: string;
+  ext: string;
+  since_ms: number;
+  mark: Mark;
+  added: number;
+  removed: number;
+  rows: DiffRow[];
+  folds: { id: number; lines: number }[];
+  /** A deleted file's old text, which Copy copies; null otherwise. */
+  baseline_text: string | null;
+}
+
+/**
+ * The Changes view of a changed file. Refused as `not_watched` for a path no watched root marks, `no_baseline` when
+ * Kinas kept no text to compare (the reason is the message), `too_many_changes` past the diff's 500 ms.
+ */
+export const treeChangesDiff = (path: string) => invoke<DiffView>("tree_changes_diff", { path });
 export const onTreeChanged = (handler: (c: TreeChanges) => void): Promise<UnlistenFn> => listen<TreeChanges>("tree_changed", (e) => handler(e.payload));
 
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);

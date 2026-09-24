@@ -1,0 +1,112 @@
+/* Diff (DESIGN.md §4, 1.6): the reader's Changes view. The summary, then one grid row per line — the two numbers and
+   the sign in --fs-xs mono --ink-2, the line in the source view's mono, wrapped: a diff is for reading. An added line
+   on --ok-soft, a removed one on --danger-soft, each always with its sign (§2.2). */
+.ui-diff {
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
+.ui-diff-summary {
+  margin: 0 0 var(--space-3);
+}
+
+.ui-diff-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.ui-diff-since,
+.ui-diff-lead,
+.ui-diff-refusal {
+  color: var(--ink-2);
+}
+
+.ui-diff-lead,
+.ui-diff-refusal {
+  margin: 0 0 var(--space-3);
+}
+
+.ui-diff-rows {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.ui-diff-row {
+  display: grid;
+  grid-template-columns: 5ch 5ch 2ch minmax(0, 1fr);
+  align-items: start;
+}
+
+.ui-diff-row[hidden] {
+  display: none;
+}
+
+.ui-diff-row[data-kind="add"] {
+  background: var(--ok-soft);
+}
+
+.ui-diff-row[data-kind="remove"] {
+  background: var(--danger-soft);
+}
+
+.ui-diff-no,
+.ui-diff-sign {
+  padding: 0 var(--space-1);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  text-align: right;
+  user-select: none;
+}
+
+.ui-diff-sign {
+  text-align: center;
+}
+
+/* Two classes deep, so the reader's own `.reader-body pre` — a bordered, padded block — never frames a single line. */
+.ui-diff .ui-diff-row pre {
+  min-height: var(--lh-sm);
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  padding: 0 var(--space-2) 0 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ui-diff .ui-diff-row code {
+  padding: 0;
+  background: none;
+  font: inherit;
+}
+
+/* A folded run of unchanged lines: one row between hairlines, which opens in place. */
+.ui-diff-fold {
+  display: block;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  text-align: left;
+  cursor: default;
+}
+
+.ui-diff-fold:hover {
+  color: var(--ink);
+}

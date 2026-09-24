@@ -73,6 +73,8 @@ Status (state only)
 --warn          #B87A12
 --danger        #C4262E
 --stale         #7C818D
+--ok-soft       color-mix(in oklab, var(--ok) 12%, var(--surface))       the Diff's added line (1.6)
+--danger-soft   color-mix(in oklab, var(--danger) 12%, var(--surface))   the Diff's removed line (1.6)
 
 Category (identity only: folders, providers)
 --cat-1         #3E7C8A   teal
@@ -96,7 +98,7 @@ Floating layers only
 Rules:
 
 - **Accent** marks the interactive and the selected. It is never a bar fill, a status, or a category.
-- **Status colors** appear as dots, bars, and segments. They are never text, with one exception: `--danger` for an error message (5.7:1 on `--surface`). (1.6, tree changes: and, in the Diff only, a faint tint behind a whole line — `--ok` for an added line, `--danger` for a removed one, mixed into `--surface` — always with the line's + or − beside it, so the sign says in a word what the tint says in colour. The contrast of `--ink` on both tints is measured into 2.4 when the Diff is built.)
+- **Status colors** appear as dots, bars, and segments. They are never text, with one exception: `--danger` for an error message (5.7:1 on `--surface`). (1.6, tree changes: and, in the Diff only, a faint tint behind a whole line — `--ok` for an added line, `--danger` for a removed one, mixed into `--surface` — always with the line's + or − beside it, so the sign says in a word what the tint says in colour. They are `--ok-soft` and `--danger-soft`, 12 % light and 18 % dark, as `--accent-soft` is mixed; the line's text and its numbers on them are measured in 2.4.)
 - **Category colors** appear as a chip or a chart series, always next to the name they stand for. Each client folder and provider gets one in Settings, and it stays stable. Past six, colors repeat and the name disambiguates.
 - **Bars** fill with `--meter` when fine, `--warn` past 80 %, `--danger` past 95 %, and `--stale` when the reading is older than its window. (1.2: these replace the app's earlier ≤ 25 / ≤ 10 % *left* rule; a dead reading draws no bar.)
 - **The brand's gold and crimson** appear only as `--warn` and `--danger`.
@@ -113,6 +115,8 @@ Same token names, swapped values. Never a second stylesheet.
 --accent-soft  color-mix(in oklab, var(--accent) 18%, var(--surface))
 --meter #A1A7B4  --meter-track #2B3140
 --ok #4FB37A   --warn #D9A03A   --danger #E5575E   --stale #7C818D
+--ok-soft      color-mix(in oklab, var(--ok) 18%, var(--surface))
+--danger-soft  color-mix(in oklab, var(--danger) 18%, var(--surface))
 --cat-1 #5FA3B2  --cat-2 #9D88D6  --cat-3 #B08E70  --cat-4 #A3A85A  --cat-5 #CF7AA0  --cat-6 #7688B8
 --shadow-float 0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3)
 ```
@@ -131,6 +135,8 @@ Same token names, swapped values. Never a second stylesheet.
 | `--warn` dot on `--bg` | 3.2:1 | 3 |
 | `--stale` bar on `--bg` | 3.5:1 | 3 |
 | `--ink-3` on `--bg` | 2.9:1 | non-essential only |
+| `--ink` on `--ok-soft` / `--danger-soft` (1.6) | 14.3:1 / 13.9:1 (dark 10.8:1 / 11.4:1) | 4.5 |
+| `--ink-2` on `--ok-soft` / `--danger-soft` (1.6) | 5.4:1 / 5.2:1 (dark 5.2:1 / 5.5:1) | 4.5 |
 
 The contrast test (section 9) checks every pair in both themes and at the current brand accent.
 
@@ -248,6 +254,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | ProgressRow | list, quiet |
 | InboxItem | plan |
 | Timeline | task |
+| Diff | modified, deleted, no-copy, too-many |
 | Toast | success, error |
 | EmptyState | with-action, plain |
 | TerminalChrome | working, shell |

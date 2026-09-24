@@ -74,6 +74,25 @@ async function since(): Promise<string> {
 }
 
 /** Files on `folder`, once its tree lists `name` — by path: `repo` and `plain` both hold a README of that name. */
+/** The reader's Changes view, as drawn: whether it shows, its summary, its rows as `kind sign text`, its refusal. */
+const changes = () =>
+  browser.execute(() => {
+    const doc = document.querySelector<HTMLElement>("aside.reader .reader-doc");
+    return {
+      showing: doc?.dataset.view === "changes",
+      summary: doc?.querySelector(".ui-diff-summary")?.textContent ?? null,
+      rows: [...(doc?.querySelectorAll<HTMLElement>(".ui-diff-row:not([hidden])") ?? [])].map(
+        (r) => `${r.dataset.kind} ${r.querySelector(".ui-diff-sign")?.textContent ?? ""} ${r.querySelector("code")?.textContent ?? ""}`,
+      ),
+      refusal: doc?.querySelector(".ui-diff-refusal")?.textContent ?? null,
+      views: [...document.querySelectorAll<HTMLButtonElement>("aside.reader .reader-view .reader-view-button")].map((b) => `${b.getAttribute("aria-label")}${b.getAttribute("aria-pressed") === "true" ? "*" : ""}`),
+    };
+  });
+
+/** Clicks a row of the sidebar's Files by its button's title (the path). */
+const clickRow = (path: string) =>
+  browser.execute((p: string) => [...document.querySelectorAll<HTMLButtonElement>(".sidebar .reader-files .tree-item")].find((b) => b.title === p)!.click(), path);
+
 /** Local HH:MM, as the caption says it. */
 const clock = (ms: number) => {
   const at = new Date(ms);
@@ -128,6 +147,23 @@ describe("Tree changes", () => {
     expect(await caption()).toBe(`2 changes since ${await since()}`);
   });
 
+  it("3 (the view): the marked row opens the reader on Changes — +1 −0, the new line with its + — and the toggle switches", async () => {
+    await clickRow(join(repo, README));
+    await until(async () => (await changes()).showing && (await changes()).summary !== null, "the reader on Changes", 10000);
+    const at = await since();
+    const view = await changes();
+    expect(view.summary).toBe(`+1 −0 since ${at}`);
+    expect(view.rows).toEqual([`context  # Repo ${TOKEN}`, "context  ", "context  The committed text.", "add + A line from the pane."]);
+    expect(view.views).toEqual(["Rendered", "Source", "Changes*"]);
+    // Rendered leaves Changes; Changes comes back to it.
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('aside.reader .reader-view-button[aria-label="Rendered"]')!.click());
+    await until(async () => !(await changes()).showing, "the reader back on Rendered", 5000);
+    expect((await changes()).views).toEqual(["Rendered*", "Source", "Changes"]);
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('aside.reader .reader-view-button[aria-label="Changes"]')!.click());
+    await until(async () => (await changes()).showing, "the reader on Changes again", 5000);
+    if (SHOTS) await browser.saveScreenshot(join(SHOTS, "tree-changes-slice-5.png"));
+  });
+
   it("4 (marks and roll-up): a file deleted in a collapsed folder rolls up as a red 1; expanded, it is struck through with D", async () => {
     rmSync(join(repo, "docs", OLD));
     await until(async () => (await row("docs"))?.rollup === "1", "docs rolled up");
@@ -143,10 +179,16 @@ describe("Tree changes", () => {
     if (SHOTS) await browser.saveScreenshot(join(SHOTS, "tree-changes-slice-2.png"));
   });
 
-  it("5: the file written back to its old text loses its M within 2 s", async () => {
+  it("5: the file written back to its old text loses its M within 2 s, and the reader drops to its usual view", async () => {
+    expect((await changes()).showing).toBe(true);
+    const at = await since();
     writeFileSync(join(repo, README), README_TEXT);
     await until(async () => (await row(README))?.mark === null, `${README} unmarked`);
     expect(await caption()).toBe(`2 changes since ${await since()}`);
+    await until(async () => !(await changes()).showing, "the reader off Changes", 5000);
+    expect((await changes()).views).toEqual(["Rendered*", "Source"]);
+    const said = await hook<string>("readerStatusLog");
+    expect(said.split("\n")).toContain(`No changes since ${at} any more`);
   });
 
   it("6: made and removed while Files showed another folder is no row; the deletion is still there", async () => {
@@ -168,6 +210,20 @@ describe("Tree changes", () => {
     await until(async () => (await row(`after-${TOKEN}.md`))?.mark === "A", "the control file marked A");
     // Folders first, as the tree sorts; docs is collapsed again, since Files was on plain in between.
     expect(await marked()).toEqual(["docs D 1", `after-${TOKEN}.md A A`]);
+  });
+
+  it("AC-5 (a big file): Kinas kept no copy of a file over 4 MB, so its Changes view says why instead of a diff", async () => {
+    await openInFiles("plain", `big-${TOKEN}.md`);
+    const big = join(root, "plain", `big-${TOKEN}.md`);
+    writeFileSync(big, `# Big ${TOKEN}, now small\n`);
+    await until(async () => (await rows()).some((r) => r.path === big && r.mark === "M"), "the big file marked M");
+    await clickRow(big);
+    await until(async () => (await changes()).refusal !== null, "the big file's refusal", 10000);
+    const plainSince = await since();
+    expect(await changes()).toMatchObject({ showing: true, summary: null, rows: [] });
+    expect((await changes()).refusal).toBe(`Kinas kept no copy of this file from ${plainSince}, so there is nothing to compare — it is larger than 4 MB`);
+    expect((await rows()).find((r) => r.path === big)?.mark).toBe("M");
+    await openInFiles("repo", README);
   });
 
   it("7: ↻ clears the tree — marks, caption, deleted rows — and a later write counts from the refresh", async () => {

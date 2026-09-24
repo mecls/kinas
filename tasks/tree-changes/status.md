@@ -29,7 +29,7 @@
   #32 (`feat/tree-changes`, the pre-rebase tip, also kept locally as `tree-changes-before-rebase`) is closed for it,
   and #31 (the Gate documents on their first base) is still open — #34 holds those commits too.
 - Ship point 1 is on `main` at `cbab8be` (2026-09-24), not installed. Slice 5 (the Changes view) is on
-  `feat/tree-changes-2`, ahead of `main`; next is slice 6, deleted files. Ship point 2 gets its own PR. DESIGN.md's entry is 1.6: the
+  `feat/tree-changes-2`, ahead of `main`; next is slice 6, deleted files. Ship point 2's draft PR is #35. DESIGN.md's entry is 1.6: the
   reader's layout took 1.5. #31 (the Gate documents on their first base) is still open, and everything in it is on
   `main` now.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and

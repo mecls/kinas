@@ -1,14 +1,14 @@
 //! The baseline (rule 20): how a root looked when its tree was first shown. A stat walk first — `read_dir` and
-//! `symlink_metadata`, no reads — then a copy of every listed text file, breadth first, until the window's budget runs
-//! out. A file left without a copy keeps its reason, which its Changes view will say (rule 23).
-//!
-//! Slice 2 copies every text file; slice 3 lets git answer for the files that match HEAD.
+//! `symlink_metadata`, no reads — then git, per repository: a file that matches HEAD is not copied, because HEAD's blob
+//! is its text. Then a copy of every other listed text file, breadth first, until the window's budget runs out. A file
+//! left without a copy keeps its reason, which its Changes view will say (rule 23).
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
+use super::git::Git;
 use super::Millis;
 use crate::reader::access::{self, Kind};
 use crate::reader::{listable_file, listable_name};
@@ -51,9 +51,20 @@ pub enum NoCopy {
     Image,
 }
 
+/// A repository's HEAD at the baseline, shared by every file it vouches for.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Head {
+    /// The repository's top: the root's own (which may be above the root), or a folder beneath it holding a `.git`.
+    pub repo: PathBuf,
+    pub commit: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BaseText {
     Copy(Arc<[u8]>),
+    /// It matched HEAD: its text is the blob, read from git when it is needed. Never read at the baseline, so whether
+    /// it is a binary is judged when it changes (rule 5, Gate 2).
+    Blob { head: Arc<Head>, blob: String },
     /// Not something the tree lists: a binary. A folder carries this too; it has no text.
     NotText,
     NoCopy(NoCopy),
@@ -102,40 +113,98 @@ impl Baseline {
     }
 }
 
+pub struct Walked {
+    /// Every listable path, breadth first.
+    pub entries: Vec<(PathBuf, Stat)>,
+    /// The walked folders holding a `.git` (a folder or, for a worktree or a submodule, a file), the root included.
+    pub repo_tops: Vec<PathBuf>,
+}
+
 /// Every listable path beneath `root`, breadth first, with its kind, size and modification time. No file is read and
 /// no symlink followed. A folder that cannot be read is listed with nothing beneath it.
-pub fn walk(root: &Path) -> Vec<(PathBuf, Stat)> {
-    let mut walked = Vec::new();
+pub fn walk(root: &Path) -> Walked {
+    let mut walked = Walked { entries: Vec::new(), repo_tops: Vec::new() };
     let mut folders = VecDeque::from([root.to_path_buf()]);
     while let Some(dir) = folders.pop_front() {
         let Ok(read) = std::fs::read_dir(&dir) else { continue };
-        let mut here: Vec<(PathBuf, Stat)> = read
-            .flatten()
-            .filter(|entry| listable_name(&entry.file_name().to_string_lossy()))
-            .filter_map(|entry| Stat::of(&entry.path()).map(|stat| (entry.path(), stat)))
-            .collect();
+        let mut here = Vec::new();
+        for entry in read.flatten() {
+            let name = entry.file_name();
+            if name == ".git" {
+                walked.repo_tops.push(dir.clone());
+            }
+            if listable_name(&name.to_string_lossy()) {
+                if let Some(stat) = Stat::of(&entry.path()) {
+                    here.push((entry.path(), stat));
+                }
+            }
+        }
         // A stable order, so the budget falls on the same files every time.
-        here.sort_by(|a, b| a.0.cmp(&b.0));
+        here.sort_by(|a: &(PathBuf, Stat), b| a.0.cmp(&b.0));
         for (path, stat) in here {
             if stat.kind == Kind::Dir {
                 folders.push_back(path.clone());
             }
-            walked.push((path, stat));
+            walked.entries.push((path, stat));
         }
     }
     walked
 }
 
-/// The walk, then a copy of every listed text file that fits in `budget_left`, breadth first. `changed` says whether
-/// a path had an event since the watch started: such a file gets no copy, because the copy might already hold the
-/// change.
-pub fn take(root: &Path, budget_left: u64, changed: &dyn Fn(&Path) -> bool) -> Baseline {
+/// A repository reaching into the root, with what its HEAD vouches for there.
+struct Repo {
+    head: Arc<Head>,
+    /// The files under the root that match HEAD — tracked, and not dirty — with their blobs. Empty when it has no commit.
+    clean: HashMap<PathBuf, String>,
+}
+
+/// The root's own repository and every one beneath it, deepest first, so a file asks the nearest. A repository git
+/// cannot read is left out, and its files are copied like any others.
+fn repositories(root: &Path, tops: &[PathBuf], git: &Git) -> Vec<Repo> {
+    let mut all: Vec<PathBuf> = git.toplevel(root).into_iter().chain(tops.iter().cloned()).collect();
+    all.sort();
+    all.dedup();
+    let mut repos: Vec<Repo> = all
+        .into_iter()
+        .filter_map(|top| {
+            let head = git.head(&top).ok()?;
+            let clean = match &head {
+                None => HashMap::new(),
+                Some(commit) => {
+                    let dirty = git.dirty(&top, commit).ok()?;
+                    let mut blobs = git.tree_blobs(&top, commit).ok()?;
+                    blobs.retain(|path, _| path.starts_with(root) && !dirty.contains(path));
+                    blobs
+                }
+            };
+            Some(Repo { head: Arc::new(Head { repo: top, commit: head.unwrap_or_default() }), clean })
+        })
+        .collect();
+    repos.sort_by_key(|r| std::cmp::Reverse(r.head.repo.components().count()));
+    repos
+}
+
+/// HEAD's blob for a file its nearest repository vouches for.
+fn clean_blob(repos: &[Repo], path: &Path) -> Option<BaseText> {
+    let repo = repos.iter().find(|r| path.starts_with(&r.head.repo))?;
+    repo.clean.get(path).map(|blob| BaseText::Blob { head: repo.head.clone(), blob: blob.clone() })
+}
+
+/// The walk, then git per repository, then a copy of every other listed text file that fits in `budget_left`,
+/// breadth first. `changed` says whether a path had an event since the watch started: such a file gets no copy,
+/// because the copy might already hold the change. Without `git`, every listed text file is copied.
+pub fn take(root: &Path, git: Option<&Git>, budget_left: u64, changed: &dyn Fn(&Path) -> bool) -> Baseline {
+    let walked = walk(root);
+    let repos = git.map(|g| repositories(root, &walked.repo_tops, g)).unwrap_or_default();
     let mut baseline = Baseline::default();
-    for (path, stat) in walk(root) {
-        let text = if stat.kind == Kind::Dir {
-            BaseText::NotText
-        } else {
-            copy(&path, stat, budget_left.saturating_sub(baseline.copy_bytes), changed)
+    for (path, stat) in walked.entries {
+        let text = match stat.kind {
+            Kind::Dir => BaseText::NotText,
+            // An image is never copied, git or not: it has no Changes view.
+            Kind::File => match clean_blob(&repos, &path) {
+                Some(blob) if !access::is_image(&path) => blob,
+                _ => copy(&path, stat, budget_left.saturating_sub(baseline.copy_bytes), changed),
+            },
         };
         if let BaseText::Copy(bytes) = &text {
             baseline.copy_bytes += bytes.len() as u64;
@@ -191,7 +260,7 @@ mod tests {
     #[test]
     fn the_walk_is_breadth_first_and_lists_only_what_the_tree_would() {
         let (_dir, root) = tree(&[("b.md", b"b"), ("a/deep/c.md", b"c"), ("a/z.md", b"z"), (".git/HEAD", b"ref"), ("node_modules/x.md", b"x"), (".env", b"KEY=1")]);
-        let walked: Vec<String> = walk(&root).into_iter().map(|(p, _)| p.strip_prefix(&root).unwrap().display().to_string()).collect();
+        let walked: Vec<String> = walk(&root).entries.into_iter().map(|(p, _)| p.strip_prefix(&root).unwrap().display().to_string()).collect();
         assert_eq!(walked, ["a", "b.md", "a/deep", "a/z.md", "a/deep/c.md"]);
     }
 
@@ -201,14 +270,14 @@ mod tests {
         let (_dir, root) = tree(&[("in.md", b"# in")]);
         std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
         std::os::unix::fs::symlink(outside.join("secret.md"), root.join("link.md")).unwrap();
-        let walked: Vec<PathBuf> = walk(&root).into_iter().map(|(p, _)| p).collect();
+        let walked: Vec<PathBuf> = walk(&root).entries.into_iter().map(|(p, _)| p).collect();
         assert_eq!(walked, [root.join("in.md")]);
     }
 
     #[test]
     fn every_listed_text_file_is_copied_outside_git() {
         let (_dir, root) = tree(&[("README.md", b"# Read me\n"), ("docs/old.md", b"# Old\n"), ("photo.png", b"\x89PNG"), ("blob.bin", b"\x00\x01\x02")]);
-        let baseline = take(&root, 1024, NOTHING_CHANGED);
+        let baseline = take(&root, None, 1024, NOTHING_CHANGED);
         let text = |name: &str| baseline.entries[&root.join(name)].text.clone();
         assert_eq!(text("README.md"), BaseText::Copy(Arc::from(&b"# Read me\n"[..])));
         assert_eq!(text("docs/old.md"), BaseText::Copy(Arc::from(&b"# Old\n"[..])));
@@ -224,7 +293,7 @@ mod tests {
         let shallow = vec![b'a'; 600];
         let deep = vec![b'b'; 600];
         let (_dir, root) = tree(&[("z-shallow.md", &shallow), ("a/deep.md", &deep)]);
-        let baseline = take(&root, 1024, NOTHING_CHANGED);
+        let baseline = take(&root, None, 1024, NOTHING_CHANGED);
         // The deeper file sorts first by name, but the shallow one's turn comes first.
         assert!(matches!(baseline.entries[&root.join("z-shallow.md")].text, BaseText::Copy(_)));
         assert_eq!(baseline.entries[&root.join("a/deep.md")].text, BaseText::NoCopy(NoCopy::Budget));
@@ -235,7 +304,7 @@ mod tests {
     fn a_file_over_4_mb_is_not_copied() {
         let big = vec![b'a'; (access::MAX_TEXT_BYTES + 1) as usize];
         let (_dir, root) = tree(&[("big.md", &big)]);
-        let baseline = take(&root, 64 * 1024 * 1024, NOTHING_CHANGED);
+        let baseline = take(&root, None, 64 * 1024 * 1024, NOTHING_CHANGED);
         assert_eq!(baseline.entries[&root.join("big.md")].text, BaseText::NoCopy(NoCopy::TooLarge));
         assert_eq!(baseline.copy_bytes, 0);
     }
@@ -243,7 +312,7 @@ mod tests {
     #[test]
     fn a_binary_is_noted_not_copied_even_past_the_budget() {
         let (_dir, root) = tree(&[("a.bin", b"\x00\x01\x02\x03"), ("b.bin", &[0u8; 2048])]);
-        let baseline = take(&root, 8, NOTHING_CHANGED);
+        let baseline = take(&root, None, 8, NOTHING_CHANGED);
         assert_eq!(baseline.entries[&root.join("a.bin")].text, BaseText::NotText);
         assert_eq!(baseline.entries[&root.join("b.bin")].text, BaseText::NotText);
     }
@@ -252,7 +321,7 @@ mod tests {
     fn a_file_named_by_an_event_before_its_copy_gets_none() {
         let (_dir, root) = tree(&[("busy.md", b"# half written"), ("calm.md", b"# calm")]);
         let busy = root.join("busy.md");
-        let baseline = take(&root, 1024, &|p: &Path| p == busy);
+        let baseline = take(&root, None, 1024, &|p: &Path| p == busy);
         assert_eq!(baseline.entries[&busy].text, BaseText::NoCopy(NoCopy::ChangedDuringCopy));
         assert!(matches!(baseline.entries[&root.join("calm.md")].text, BaseText::Copy(_)));
     }
@@ -260,7 +329,7 @@ mod tests {
     #[test]
     fn a_trim_gives_back_the_deepest_copies_first() {
         let (_dir, root) = tree(&[("a.md", &[b'a'; 100]), ("d/b.md", &[b'b'; 100]), ("d/e/c.md", &[b'c'; 100])]);
-        let mut baseline = take(&root, 1024, NOTHING_CHANGED);
+        let mut baseline = take(&root, None, 1024, NOTHING_CHANGED);
         assert_eq!(baseline.copy_bytes, 300);
         baseline.trim_to(150);
         assert_eq!(baseline.copy_bytes, 100);
@@ -269,10 +338,81 @@ mod tests {
         assert_eq!(baseline.entries[&root.join("d/e/c.md")].text, BaseText::NoCopy(NoCopy::Budget));
     }
 
+    use super::super::git::tests::{git, repo_with};
+
+    fn blob_of(root: &Path, rel: &str) -> String {
+        git(root, &["rev-parse", &format!("HEAD:{rel}")])
+    }
+
+    #[test]
+    fn a_clean_tracked_file_is_not_copied_and_its_blob_is_recorded() {
+        let (_dir, root) = tree(&[]);
+        repo_with(&root, &[("README.md", b"# Read me\n"), ("docs/old.md", b"# Old\n")]);
+        let g = Git::find().expect("git is installed");
+        let baseline = take(&root, Some(&g), 1024, NOTHING_CHANGED);
+        let head = Arc::new(Head { repo: root.clone(), commit: git(&root, &["rev-parse", "HEAD"]) });
+        assert_eq!(baseline.entries[&root.join("README.md")].text, BaseText::Blob { head: head.clone(), blob: blob_of(&root, "README.md") });
+        assert_eq!(baseline.entries[&root.join("docs/old.md")].text, BaseText::Blob { head, blob: blob_of(&root, "docs/old.md") });
+        assert_eq!(baseline.copy_bytes, 0);
+    }
+
+    #[test]
+    fn dirty_untracked_and_ignored_files_are_copied() {
+        let (_dir, root) = tree(&[]);
+        repo_with(&root, &[(".gitignore", b"tasks/\n"), ("README.md", b"# Read me\n"), ("clean.md", b"# Clean\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        std::fs::write(root.join("untracked.md"), "# New\n").unwrap();
+        std::fs::create_dir(root.join("tasks")).unwrap();
+        std::fs::write(root.join("tasks/plan.md"), "# Plan\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let baseline = take(&root, Some(&g), 1024, NOTHING_CHANGED);
+        let text = |name: &str| baseline.entries[&root.join(name)].text.clone();
+        assert_eq!(text("README.md"), BaseText::Copy(Arc::from(&b"# Read me, edited\n"[..])));
+        assert_eq!(text("untracked.md"), BaseText::Copy(Arc::from(&b"# New\n"[..])));
+        assert_eq!(text("tasks/plan.md"), BaseText::Copy(Arc::from(&b"# Plan\n"[..])));
+        assert!(matches!(text("clean.md"), BaseText::Blob { .. }));
+    }
+
+    #[test]
+    fn a_nested_repository_answers_for_its_own_files() {
+        let (_dir, root) = tree(&[]);
+        repo_with(&root, &[(".gitignore", b"inner/\n"), ("outer.md", b"# Outer\n")]);
+        let inner = root.join("inner");
+        std::fs::create_dir(&inner).unwrap();
+        repo_with(&inner, &[("inside.md", b"# Inside\n")]);
+        std::fs::write(inner.join("loose.md"), "# Untracked in inner\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let baseline = take(&root, Some(&g), 1024, NOTHING_CHANGED);
+        let BaseText::Blob { head, blob } = baseline.entries[&inner.join("inside.md")].text.clone() else { panic!("inside.md is clean in its own repository") };
+        assert_eq!((head.repo.clone(), head.commit.clone(), blob), (inner.clone(), git(&inner, &["rev-parse", "HEAD"]), blob_of(&inner, "inside.md")));
+        assert!(matches!(&baseline.entries[&root.join("outer.md")].text, BaseText::Blob { head, .. } if head.repo == root));
+        assert_eq!(baseline.entries[&inner.join("loose.md")].text, BaseText::Copy(Arc::from(&b"# Untracked in inner\n"[..])));
+    }
+
+    #[test]
+    fn a_root_inside_a_repository_asks_the_repository_above_it() {
+        let (_dir, top) = tree(&[]);
+        repo_with(&top, &[("docs/guide.md", b"# Guide\n"), ("other/far.md", b"# Far\n")]);
+        let root = top.join("docs");
+        let g = Git::find().expect("git is installed");
+        let baseline = take(&root, Some(&g), 1024, NOTHING_CHANGED);
+        assert!(matches!(&baseline.entries[&root.join("guide.md")].text, BaseText::Blob { head, .. } if head.repo == top));
+        assert_eq!(baseline.entries.len(), 1, "nothing outside the root is kept");
+    }
+
+    #[test]
+    fn an_unborn_repository_copies_everything() {
+        let (_dir, root) = tree(&[("draft.md", b"# Draft\n")]);
+        git(&root, &["init", "-q"]);
+        let g = Git::find().expect("git is installed");
+        let baseline = take(&root, Some(&g), 1024, NOTHING_CHANGED);
+        assert_eq!(baseline.entries[&root.join("draft.md")].text, BaseText::Copy(Arc::from(&b"# Draft\n"[..])));
+    }
+
     #[test]
     fn beneath_is_everything_under_a_folder_and_nothing_beside_it() {
         let (_dir, root) = tree(&[("docs/a.md", b"a"), ("docs/sub/b.md", b"b"), ("docs-old.md", b"c"), ("docsx/d.md", b"d")]);
-        let baseline = take(&root, 1024, NOTHING_CHANGED);
+        let baseline = take(&root, None, 1024, NOTHING_CHANGED);
         let docs = root.join("docs");
         let under: Vec<&PathBuf> = baseline.beneath(&docs).map(|(p, _)| p).collect();
         assert_eq!(under, [&docs.join("a.md"), &docs.join("sub"), &docs.join("sub/b.md")]);

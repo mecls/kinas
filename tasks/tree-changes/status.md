@@ -19,7 +19,11 @@
   `bun run check` green (600 bun, 250 Rust); `tree-changes` 12 of 12, every reader spec and `stories` green, run alone
 - [x] Slice 6 · deleted files: the record's text, Copy and Download, the disabled menu items — 2026-09-24,
   `bun run check` green (600 bun, 252 Rust); `tree-changes` 13 of 13, every reader spec green, run alone
-- [ ] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2
+- [x] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2 — 2026-09-24, rebased onto
+  `6b754ee` (the reader's layout's ship point 2, landed first on the captain's word): `bun run check` green (601 bun,
+  258 Rust); `tree-changes` 15 of 15, the write-to-mark median 100 ms. **Ship point 2 verified on `dae41eb`**: the full
+  e2e alone, all 26 specs green (19:52–20:37). Draft PR #37. `main` waits for the captain's word; not installed — the
+  captain installs after the first mate's build
 
 ## Notes for a fresh session
 

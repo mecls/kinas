@@ -190,7 +190,8 @@ describe("kinas open and the reader", () => {
         throw new Error(`#part is not in view: ${JSON.stringify(await fragmentView())}`);
       });
 
-    await $('button[aria-label="Back"]').click();
+    // The reader's own Back: the title bar's ← carries the same name and takes over in slice 9 (reader-layout §13 item 3).
+    await $('aside.reader button[aria-label="Back"]').click();
     await waitForHeader("plan-300.md");
     await browser.waitUntil(async () => Math.abs((await scrollTop()) - before) <= 2, { timeout: 5000, timeoutMsg: "Back did not restore the scroll position" });
   });

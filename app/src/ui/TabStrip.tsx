@@ -40,6 +40,13 @@ export function TabStrip({
           data-path={tab.key}
           title={tab.title}
           onClick={() => tab.key !== selected && onSelect(tab.key)}
+          // A middle-click closes, as in any editor's strip; the strip's mousedown already kept WebKit from
+          // autoscrolling or pasting.
+          onAuxClick={(e) => {
+            if (e.button !== 1) return;
+            e.preventDefault();
+            onClose(tab.key);
+          }}
         >
           <FileIcon size="sm" />
           <span className="ui-tab-name">

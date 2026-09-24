@@ -1,9 +1,9 @@
 import { browser, $, expect } from "@wdio/globals";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { hook, waitForShell } from "../helpers.ts";
+import { hook, runReaderMenuItem, waitForShell } from "../helpers.ts";
 
 // The reader's tabs (tasks/reader-layout/prd.md §5, Part 2): every file the reader shows has a tab, in the order it
 // was first opened; a click shows a tab where it was left, through the same click door as the sidebar; a link
@@ -47,6 +47,28 @@ const strip = () =>
 
 const clickTab = (name: string) =>
   browser.execute((n: string) => document.querySelector<HTMLElement>(`aside.reader .ui-tab[data-path$="/${n}"]`)!.click(), name);
+
+/** Presses a tab's ×. */
+const closeTabNamed = (name: string) =>
+  browser.execute((n: string) => document.querySelector<HTMLButtonElement>(`aside.reader .ui-tab[data-path$="/${n}"] .ui-tab-close`)!.click(), name);
+
+/** A middle-click on a tab, as the pointer sends it: a press and an auxclick with button 1. */
+const middleClick = (name: string) =>
+  browser.execute((n: string) => {
+    const tab = document.querySelector<HTMLElement>(`aside.reader .ui-tab[data-path$="/${n}"]`)!;
+    tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 1 }));
+    tab.dispatchEvent(new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }));
+  }, name);
+
+async function waitForStrip(expected: { tabs: string[]; selected: string | null }) {
+  // Compared as a pair: the driver hands the object back with its keys in its own order.
+  const same = (s: { tabs: (string | null)[]; selected: string | null }) => JSON.stringify([s.tabs, s.selected]) === JSON.stringify([expected.tabs, expected.selected]);
+  await browser
+    .waitUntil(async () => same(await strip()), { timeout: 10000, interval: 250 })
+    .catch(async () => {
+      throw new Error(`the strip is ${JSON.stringify(await strip())}, not ${JSON.stringify(expected)}`);
+    });
+}
 
 /** Where tab-01's 20th heading sits against the scroller's top. */
 const twentieth = () =>
@@ -134,6 +156,79 @@ describe("the reader's tabs", () => {
     expect(renderedLines()).toBe(before);
     expect(await hook<boolean>("terminalFocused")).toBe(true);
     expect((await strip()).selected).toBe(TAB(4));
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("sixteen files make fifteen tabs: the ones shown longest ago go, never the one showing", async () => {
+    for (let n = 1; n <= 16; n++) {
+      expect(kinasOpen(TAB(n))).toBe(0);
+      await opened(TAB(n));
+    }
+    // Before: tab-01, linker, tab-02, tab-04, shown in the order tab-04, linker, tab-02, tab-01. Opening 01 to 14
+    // brings the known ones forward and adds the rest; 15 then pushes out linker, shown longest ago, and 16 tab-01.
+    const expected = [2, 4, 3, ...Array.from({ length: 12 }, (_, i) => i + 5)].map(TAB);
+    await waitForStrip({ tabs: expected, selected: TAB(16) });
+  });
+
+  it("a tab closes with its × or a middle-click, and closing the showing tab shows the one shown before it", async () => {
+    await closeTabNamed(TAB(5));
+    await waitForStrip({ tabs: [2, 4, 3, ...Array.from({ length: 11 }, (_, i) => i + 6)].map(TAB), selected: TAB(16) });
+
+    await middleClick(TAB(6));
+    await waitForStrip({ tabs: [2, 4, 3, ...Array.from({ length: 10 }, (_, i) => i + 7)].map(TAB), selected: TAB(16) });
+
+    await closeTabNamed(TAB(16));
+    await opened(TAB(15));
+    await waitForStrip({ tabs: [2, 4, 3, ...Array.from({ length: 9 }, (_, i) => i + 7)].map(TAB), selected: TAB(15) });
+  });
+
+  it("AC-4: a tab whose file has gone shows Rust's words under the strip, stays until closed, and touches no other tab", async () => {
+    const before = (await strip()).tabs;
+    rmSync(join(root, TAB(3)));
+    await clickTab(TAB(3));
+    await waitInPage(() => document.querySelector("aside.reader .reader-problem") !== null, "the gone file's tab showed no problem");
+    const page = await browser.execute(() => ({
+      problem: document.querySelector("aside.reader .reader-problem")?.textContent ?? "",
+      doc: !document.querySelector<HTMLElement>("aside.reader .reader-doc")!.hidden,
+    }));
+    expect(page.problem.startsWith("No such file: ")).toBe(true);
+    expect(page.problem.endsWith(TAB(3))).toBe(true);
+    // Nothing of the file shown before it is left under the selected tab.
+    expect(page.doc).toBe(false);
+    expect(await strip()).toEqual({ tabs: before, selected: TAB(3) });
+
+    await closeTabNamed(TAB(3));
+    await opened(TAB(15));
+    await waitForStrip({ tabs: before.filter((t) => t !== TAB(3)), selected: TAB(15) });
+  });
+
+  it("the header's × hides the panel and keeps every tab; a pin brings it back with them, plus the pin's", async () => {
+    // A pinned file with no tab: pinned from the reader, then its tab closed.
+    expect(kinasOpen(TAB(1))).toBe(0);
+    await opened(TAB(1));
+    await runReaderMenuItem("Pin");
+    await waitInPageWith(
+      (n: string) => [...document.querySelectorAll(".sidebar-pinned .sidebar-row-name")].some((r) => r.textContent === n),
+      TAB(1),
+      "the pin never reached the sidebar",
+    );
+    await closeTabNamed(TAB(1));
+    await opened(TAB(15));
+    const before = (await strip()).tabs;
+    expect(before).not.toContain(TAB(1));
+
+    await browser.execute(() => document.querySelector<HTMLButtonElement>(".reader-close")!.click());
+    await waitInPage(() => document.querySelector<HTMLElement>("aside.reader")!.hidden, "the header's × did not hide the panel");
+    // Hidden, not emptied: the tabs are all still there.
+    expect((await strip()).tabs).toEqual(before);
+
+    await browser.execute(
+      (n: string) => [...document.querySelectorAll<HTMLButtonElement>(".sidebar-pinned .sidebar-row")].find((b) => b.querySelector(".sidebar-row-name")?.textContent === n)!.click(),
+      TAB(1),
+    );
+    await waitInPage(() => !document.querySelector<HTMLElement>("aside.reader")!.hidden, "the pin did not bring the panel back");
+    await opened(TAB(1));
+    expect(await strip()).toEqual({ tabs: [...before, TAB(1)], selected: TAB(1) });
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
 });

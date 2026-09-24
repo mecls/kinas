@@ -114,7 +114,7 @@ export function Header({
       >
         {expanded ? <CollapseIcon /> : <ExpandIcon />}
       </button>
-      <button type="button" className="reader-button reader-icon-button reader-close" onClick={onClose} aria-label="Close the reader" title="Close">
+      <button type="button" className="reader-button reader-icon-button reader-close" onClick={onClose} aria-label="Close the reader" title="Hide the reader; the tabs stay">
         <CloseIcon />
       </button>
     </header>

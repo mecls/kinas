@@ -252,7 +252,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | Panel | task-detail |
 | Nav | sidebar, folder-icons, reader-icons, connection-states |
 | Menu | plain, disabled, divider |
-| TabStrip | plain |
+| TabStrip | plain, many, same-name |
 | Field | text, secret, switch, accent |
 | Section | usage |
 | Badges | row |

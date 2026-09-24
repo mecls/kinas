@@ -379,8 +379,11 @@ export function Reader({
    */
   const leaveTab = () => {
     const leaving = docRef.current;
-    const scrollTop = scroller.current?.scrollTop ?? 0;
-    return (t: Tabs) => (leaving ? rememberScroll(t, leaving.path, scrollTop) : t);
+    const sc = scroller.current;
+    // A hidden panel's scroller reads 0: its tab keeps the place it was given when × hid it.
+    if (!leaving || !sc || sc.clientHeight === 0) return (t: Tabs) => t;
+    const scrollTop = sc.scrollTop;
+    return (t: Tabs) => rememberScroll(t, leaving.path, scrollTop);
   };
   /** Every route in makes a tab, or brings the file's tab forward: keyed on the real path `reader_open` returned. */
   const toTab = (path: string, displayPath: string) => {
@@ -389,7 +392,10 @@ export function Reader({
   };
 
   const show = useCallback(
-    async function show(path: string, opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number }): Promise<void> {
+    async function show(
+      path: string,
+      opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number; pageProblem?: boolean },
+    ): Promise<void> {
       const gen = ++generation.current;
       const timer = window.setTimeout(() => {
         if (gen === generation.current && !docRef.current) setOpening(baseName(path));
@@ -459,7 +465,11 @@ export function Reader({
         setOpening(null);
         // `not_markdown` joins these: a binary clicked in the tree must say so and stay said. A six-second status
         // line that vanishes would leave the reader blank with no explanation of why.
-        if (error.code === "too_large" || error.code === "not_utf8" || error.code === "not_markdown") {
+        // A tab's file that has gone takes the page too (PRD rule 24): the tab is selected, so what shows under it must
+        // be about it, not the file that was showing before.
+        if (error.code === "too_large" || error.code === "not_utf8" || error.code === "not_markdown" || opts.pageProblem) {
+          const leave = leaveTab();
+          setTabs(leave);
           docRef.current = null;
           setDoc(null);
           setProblem({ displayPath: path, message: error.message });
@@ -498,17 +508,24 @@ export function Reader({
   }
 
   const follow = useCallback(
-    async (path: string, fragment: string | null, scrollTop?: number) => {
+    async (path: string, fragment: string | null, scrollTop?: number, asTab = false) => {
       try {
         const target = await readerAllowClick(path);
         if (target.kind === "dir") await openFolder(target.path);
-        else await show(target.path, { push: true, fragment, scrollTop });
+        else await show(target.path, { push: true, fragment, scrollTop, pageProblem: asTab });
       } catch (e) {
         const message = readerErrorOf(e).message;
         // A click in the sidebar can open the panel with nothing in it yet — a pin whose file has since gone, say.
         // A status line that fades after six seconds would leave an open, empty panel with no explanation, so the
-        // reason takes the page instead. With something already showing, it stays and the status line says why.
-        if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message });
+        // reason takes the page instead. With something already showing, it stays and the status line says why —
+        // unless the click was on a tab: that tab is selected now, and the page is about it (PRD rule 24).
+        if (asTab) {
+          const leave = leaveTab();
+          setTabs(leave);
+          docRef.current = null;
+          setDoc(null);
+          setProblem({ displayPath: tabsRef.current.list.find((t) => t.path === path)?.displayPath ?? baseName(path), message });
+        } else if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message });
         else say(message);
       }
     },
@@ -835,16 +852,13 @@ export function Reader({
     }
   };
 
+  // × hides the panel and keeps what it holds — the document, the folder, every tab (PRD rule 18): opening any file
+  // brings the panel back with them. Only the watcher stops, since nothing is showing to reload.
   const close = () => {
     generation.current++;
+    setTabs(leaveTab());
     void readerClose().catch(() => {});
-    docRef.current = null;
-    setDoc(null);
-    setFolder(null);
-    setBack([]);
-    setTabs(NO_TABS);
     setConfirm(null);
-    setProblem(null);
     setStatus(null);
     setOverlay(null);
     // The shell gives the terminal the keys afterwards, when the Work page is showing (App.tsx, closeReader).
@@ -857,7 +871,7 @@ export function Reader({
     const tab = tabsRef.current.list.find((t) => t.path === path);
     if (!tab) return;
     setTabs((t) => ({ ...t, showing: path }));
-    void follow(path, null, tab.scrollTop);
+    void follow(path, null, tab.scrollTop, true);
   };
 
   // Closing the showing tab shows the one shown before it; closing the last closes the panel (PRD rule 17).
@@ -867,7 +881,7 @@ export function Reader({
     setTabs(next);
     if (before.showing !== path) return;
     const successor = next.list.find((t) => t.path === next.showing);
-    if (successor) void follow(successor.path, null, successor.scrollTop);
+    if (successor) void follow(successor.path, null, successor.scrollTop, true);
     else close();
   };
 

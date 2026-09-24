@@ -521,6 +521,39 @@ export const STORIES: Story[] = [
           </div>
         ),
       },
+      {
+        // Fifteen, the most there can be: the strip scrolls sideways inside its box and the page does not.
+        name: "many",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)" }}>
+            <TabStrip
+              label="Open files"
+              tabs={Array.from({ length: 15 }, (_, i) => ({ key: `/r/notes-${i + 1}.md`, name: `notes-${i + 1}.md`, detail: null, title: `notes-${i + 1}.md` }))}
+              selected="/r/notes-3.md"
+              onSelect={noop}
+              onClose={noop}
+            />
+          </div>
+        ),
+      },
+      {
+        name: "same-name",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)" }}>
+            <TabStrip
+              label="Open files"
+              tabs={[
+                { key: "/r/tasks/first-mate/prd.md", name: "prd.md", detail: "first-mate", title: "tasks/first-mate/prd.md" },
+                { key: "/r/tasks/reader-layout/prd.md", name: "prd.md", detail: "reader-layout", title: "tasks/reader-layout/prd.md" },
+                { key: "/r/tasks/reader-layout/status.md", name: "status.md", detail: null, title: "tasks/reader-layout/status.md" },
+              ]}
+              selected="/r/tasks/reader-layout/prd.md"
+              onSelect={noop}
+              onClose={noop}
+            />
+          </div>
+        ),
+      },
     ],
   },
   {

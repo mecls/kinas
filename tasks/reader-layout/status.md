@@ -25,7 +25,8 @@
   (2026-09-24)
 - [x] Slice 5 · fifteen at most, closing, the reader's × keeps the tabs, a gone file, names told apart (2026-09-24)
 - [x] Slice 6 · drag a tab to reorder the strip (2026-09-24)
-- [ ] Slice 7 · Recent leaves the sidebar → ship point 2
+- [ ] Slice 7 · Recent leaves the sidebar → ship point 2 (code and its checks green 2026-09-24, `5586c14`, rebased onto
+  `cbab8be`; ship point 2's full e2e run and the captain's word pending — build spec §17 has the state)
 - [ ] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
 - [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes
 - [ ] Slice 10 · ship point 3, and the hand-off

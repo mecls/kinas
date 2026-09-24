@@ -31,6 +31,7 @@ import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx"
 import { SIDE_DEFAULT } from "./reader/side.ts";
 import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
+import { back, canBack, canForward, EMPTY_HISTORY, forward, type History, patchScroll, type Place, readerAtOf, record, samePlace } from "./shell/history.ts";
 import { addedLine } from "./shell/folders.ts";
 import type { Notice } from "./shell/notice.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
@@ -74,6 +75,23 @@ export function App() {
   const [side, setSide] = useState<ReaderSide>(SIDE_DEFAULT);
   /** What the reader has open, mirrored for the sidebar. The reader owns it; this is only what it last reported. */
   const [nav, setNav] = useState<ReaderNav>({ doc: null, folder: null });
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  const readerOpen = useRef(reader.open);
+  readerOpen.current = reader.open;
+  /** The places ← and → walk (shell/history.ts): in memory only, like the tabs, and gone on quit. */
+  const [history, setHistory] = useState<History<Page>>(EMPTY_HISTORY);
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  /**
+   * A reader request, or a ← or →, on its way. Nothing is recorded meanwhile: the steps between — the new page beside
+   * the old file, the panel reopening on what it held — are no places (build spec §11.5, decision 2). It ends when the
+   * reader says the request is carried out (`seq`), or, for ← and →, when the place asked for shows. `leaving` is the
+   * place ← or → left, which the file the reader leaves on the way belongs to.
+   */
+  const pending = useRef<{ seq: number | null; target: Place<Page> | null; leaving: number | null } | null>(null);
+  /** Bumped when a request settles, so the place it landed on is recorded even if nothing else changed. */
+  const [settledTick, setSettledTick] = useState(0);
   /** Stored, by an explicit click, and nothing else about what Miguel reads is (reader/pins.rs). */
   const [pins, setPins] = useState<PinView[]>([]);
   /** The client folders (projects.rs): the sidebar lists them, Settings colours them. */
@@ -204,7 +222,9 @@ export function App() {
     const stop = onReaderShow((event) => {
       const had = document.activeElement;
       const inTerminal = had instanceof HTMLElement && terminalHasFocus();
-      setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "show", ...event, seq: ++readerSeq.current } }));
+      const seq = ++readerSeq.current;
+      pending.current = { seq, target: null, leaving: null };
+      setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "show", ...event, seq } }));
       if (inTerminal) {
         // Bringing the window forward can move focus when the app activates, after this frame; put it back then too.
         const restore = () => {
@@ -258,8 +278,22 @@ export function App() {
   }, []);
 
   // Stable, because the reader's reporting effect is keyed on it. What was merely opened is the reader's tabs now,
-  // kept in memory there (reader/tabs.ts); the sidebar only mirrors what is open.
-  const onNav = useCallback((next: ReaderNav) => setNav(next), []);
+  // kept in memory there (reader/tabs.ts); the sidebar only mirrors what is open. A file the reader left keeps its
+  // scroll on the place it was left from, for ← to come back to (reader-layout PRD rule 30).
+  const onNav = useCallback((next: ReaderNav) => {
+    const left = next.left;
+    if (left) {
+      const index = pending.current?.leaving ?? null;
+      setHistory((h) => patchScroll(h, left.path, left.scrollTop, index ?? h.at));
+    }
+    setNav(next);
+  }, []);
+
+  const onSettled = useCallback((seq: number) => {
+    if (pending.current?.seq !== seq) return;
+    pending.current = null;
+    setSettledTick((n) => n + 1);
+  }, []);
 
   // The pins, at launch — and again whenever the window comes forward, because a pinned file can vanish or come
   // back while Kinas sits in the background, and a row that lies about that is worse than no row.
@@ -344,8 +378,62 @@ export function App() {
   // tree takes — and never as a made-up `kinas open`, which would clear the open folder, skip the human-click door
   // and add a line to the log the 200 ms gate counts (three-column shell §6.14). It opens the panel if it is closed.
   const openFromSidebar = useCallback((path: string, view?: "changes") => {
-    setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current, view } }));
+    const seq = ++readerSeq.current;
+    pending.current = { seq, target: null, leaving: null };
+    setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq, view } }));
   }, []);
+
+  // A place is the page showing and what the reader shows (reader-layout PRD rule 29): recorded whenever either
+  // changes, except while a request or a ← or → is on its way, and never for a file that could not be shown.
+  const placeNow: Place<Page> = { page, reader: readerAtOf(nav, reader.open) };
+  const placeKey = `${page} ${placeNow.reader.kind} ${placeNow.reader.kind === "none" ? "" : placeNow.reader.path}`;
+  useEffect(() => {
+    const going = pending.current;
+    if (going) {
+      if (going.target && samePlace(going.target, placeNow)) pending.current = null;
+      return;
+    }
+    if (nav.problem) return;
+    setHistory((h) => record(h, placeNow));
+    // The key is the place without its scroll: a scroll is never a place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeKey, settledTick, nav.problem]);
+
+  // ← and → (rule 30): the page as its chord would show it, then the reader — closed, left as it is, or asked for the
+  // file or folder at the place, through the same door as a click.
+  const walk = useCallback(
+    (step: typeof back) => {
+      const h = historyRef.current;
+      const r = step(h);
+      if (!r) return;
+      const to = r.place;
+      setHistory(r.history);
+      const now: Place<Page> = { page: pageRef.current, reader: readerAtOf(navRef.current, readerOpen.current) };
+      if (to.page !== pageRef.current) {
+        // Reached by ← or →, a page behaves as reached by its chord (rule 31): the Work page gives the terminal the
+        // keys, after the commit that shows it, as Launch task does.
+        if (to.page === "work") {
+          wantTerminalFocus.current = true;
+          setFocusTick((n) => n + 1);
+        }
+        goTo(to.page);
+      }
+      const holds = samePlace({ page: to.page, reader: now.reader }, to);
+      if (to.reader.kind === "none" || holds) {
+        // Nothing to ask the reader for: the place shows as soon as the page and the panel do.
+        pending.current = samePlace(now, to) ? null : { seq: null, target: to, leaving: h.at };
+        if (to.reader.kind === "none") closeReader();
+        return;
+      }
+      const seq = ++readerSeq.current;
+      pending.current = { seq, target: to, leaving: h.at };
+      const reader = to.reader;
+      setReader((prev) => ({ open: true, expanded: prev.open && prev.expanded, request: { type: "place", reader, seq } }));
+    },
+    [goTo, closeReader],
+  );
+  const goBack = useCallback(() => walk(back), [walk]);
+  const goForward = useCallback(() => walk(forward), [walk]);
 
   // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane, so this is the
   // Work page with the terminal holding the keys — the way Open in terminal hands them over, after the page shows.
@@ -389,15 +477,15 @@ export function App() {
   return (
     <div className="shell" data-sidebar={sidebar ? "shown" : "hidden"} data-panel={!reader.open ? "closed" : reader.expanded ? "expanded" : "open"}>
       {/* The window's title bar (reader-layout PRD rules 26–28): a static sibling, first, so nothing above the terminal
-          moves. Its sidebar button is ⌘S by click; ← and → have nowhere to go until the places are recorded. */}
+          moves. Its sidebar button is ⌘S by click; ← and → walk the places recorded below. */}
       <TitleBar
         sidebarShown={sidebar}
         sidebarChord={chordLabel(shortcuts.sidebar)}
         onSidebar={() => run("sidebar")}
-        canBack={false}
-        canForward={false}
-        onBack={() => {}}
-        onForward={() => {}}
+        canBack={canBack(history)}
+        canForward={canForward(history)}
+        onBack={goBack}
+        onForward={goForward}
         fullscreen={fullscreen}
       />
       <Sidebar
@@ -451,6 +539,7 @@ export function App() {
             expanded={reader.expanded}
             onExpand={setExpanded}
             onNav={onNav}
+            onSettled={onSettled}
             treeInSidebar={sidebar}
             pinned={isPinned(nav.doc?.path)}
             onPin={pin}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BackIcon, ChangesIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../ui/icons.tsx";
+import { ChangesIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../ui/icons.tsx";
 import { extBadge, splitDisplayPath } from "./labels.ts";
 import { Menu, type MenuItem } from "../ui/Menu.tsx";
 
@@ -17,8 +17,9 @@ interface SectionToggle {
 }
 
 /**
- * The reader's header (three-column shell §4): Back, the view toggle, the path and its badge, then Files and
- * Contents whenever they are offered, Copy with its ▾ menu, Expand and Close.
+ * The reader's header (three-column shell §4): the view toggle, the path and its badge, then Files and Contents
+ * whenever they are offered, Copy with its ▾ menu, Expand and Close. Back went to the title bar's ←, which walks
+ * every place (reader-layout PRD rule 32): two Backs side by side would be tripped over.
  *
  * Presentation only — the reader owns every piece of state except whether the menu is open.
  */
@@ -26,8 +27,6 @@ export function Header({
   displayPath,
   title,
   showBadge,
-  canGoBack,
-  onBack,
   views,
   view,
   onView,
@@ -47,8 +46,6 @@ export function Header({
   title: string;
   /** Only a file has a kind worth a badge; a folder's name may contain a dot without meaning anything by it. */
   showBadge: boolean;
-  canGoBack: boolean;
-  onBack: () => void;
   /** What the toggle offers, in order; null for a file with one way to be shown — unmarked source, and images. */
   views: readonly View[] | null;
   view: View | null;
@@ -74,9 +71,6 @@ export function Header({
 
   return (
     <header className="reader-head">
-      <button type="button" className="reader-button reader-icon-button" onClick={onBack} disabled={!canGoBack} aria-label="Back" title="Back">
-        <BackIcon />
-      </button>
       {views && views.length > 0 && (
         <div className="reader-view" role="group" aria-label="View">
           {views.includes("rendered") && (

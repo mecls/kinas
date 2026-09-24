@@ -639,6 +639,15 @@ export const STORIES: Story[] = [
         ),
       },
       {
+        // Somewhere to go both ways: the captain has gone back from a later place.
+        name: "back-and-forward",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+            <TitleBar sidebarShown sidebarChord="⌘S" onSidebar={noop} canBack canForward onBack={noop} onForward={noop} fullscreen={false} />
+          </div>
+        ),
+      },
+      {
         name: "sidebar-hidden",
         node: (
           <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>

@@ -112,8 +112,8 @@ panel on the **right** of the window, beside whichever page is showing (`tasks/t
       relaunch, and double-click restores 45 % (55 % until the sidebar grew to 220 px, 2026-09-18) —
       `automated (reader.e2e.ts)`; the drag by hand with a real mouse is
       `outstanding — needs Miguel`
-- [x] A relative link lands on its fragment and Back returns to the same scroll position —
-      `automated (reader.e2e.ts, AC-3)`
+- [x] A relative link lands on its fragment and Back returns to the same scroll position (the title bar's ← since
+      2026-09-24, the reader's layout) — `automated (reader.e2e.ts, AC-3)`
 - [x] An append is on screen in under 1 s without redrawing the diagram; a growing file stays at the bottom; a
       rename over the file and a removal are followed — `automated (reader.e2e.ts, AC-2)`
 - [x] `kinas open fixtures/reader/binary.bin` → 65 with one line (`~/.zshrc` used to be the 65 case and now opens:

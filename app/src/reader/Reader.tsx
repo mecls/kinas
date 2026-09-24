@@ -42,6 +42,7 @@ import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
 import { markNow, sinceLabel, useMarkOf } from "./changes.ts";
 import { renderDiff, renderRefusal } from "./diff.ts";
 import { Button, openFold, TabStrip } from "../ui/index.ts";
+import type { ReaderAt } from "../shell/history.ts";
 
 // The reader (tasks/prd-kinas-open.md): the file `kinas open` named, in the panel on the right of the window. It only
 // reads. Opening, reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one
@@ -56,8 +57,13 @@ import { Button, openFold, TabStrip } from "../ui/index.ts";
  *   the open folder and carries no `received_at_ms`, so it adds no line to the log the 200 ms gate counts. A click
  *   must never be dressed up as a `show` (three-column shell §6.14). With `view: "changes"` — a click on a marked row
  *   of a file tree — the file opens on its Changes view (tree changes rule 24).
+ * - `place`: ← or → in the title bar (reader-layout PRD rule 30): a file, through the same door, at the scroll it was
+ *   left at — or a folder with no file. A file that has gone takes the page, as a tab's does (rule 24).
  */
-export type ReaderRequest = ({ type: "show" } & ReaderShow & { seq: number }) | { type: "follow"; path: string; seq: number; view?: "changes" };
+export type ReaderRequest =
+  | ({ type: "show" } & ReaderShow & { seq: number })
+  | { type: "follow"; path: string; seq: number; view?: "changes" }
+  | { type: "place"; reader: Exclude<ReaderAt, { kind: "none" }>; seq: number };
 
 interface Doc {
   path: string;
@@ -126,7 +132,6 @@ interface Pending {
 
 const STATUS_MS = NOTICE_MS;
 const OPENING_AFTER_MS = 150;
-const BACK_CAP = 50;
 const NARROW_PX = 640;
 const FOLLOW_TAIL_PX = 48;
 
@@ -268,10 +273,17 @@ function FrontmatterCard({ view }: { view: FrontmatterView }) {
   );
 }
 
-/** What the reader is showing, for the shell's sidebar: the open file, and the folder opened with `kinas open <dir>`. */
+/**
+ * What the reader is showing, for the shell: the open file, and the folder opened with `kinas open <dir>` — the
+ * sidebar mirrors them, and ← and → record them as places (shell/history.ts).
+ */
 export interface ReaderNav {
   doc: { path: string; displayPath: string } | null;
   folder: string | null;
+  /** The file just left and where it was scrolled, so ← comes back there. Null when no file was left. */
+  left?: { path: string; scrollTop: number } | null;
+  /** A file that could not be shown has the page (a gone tab or place): that is no place of its own. */
+  problem?: boolean;
 }
 
 export function Reader({
@@ -280,6 +292,7 @@ export function Reader({
   expanded,
   onExpand,
   onNav,
+  onSettled,
   treeInSidebar,
   pinned,
   onPin,
@@ -294,10 +307,17 @@ export function Reader({
   expanded: boolean;
   onExpand: (expanded: boolean) => void;
   /**
-   * Told whenever the open file or folder changes. The reader stays the single owner of what is open — the back
-   * stack, the generation counter, the folder — and the sidebar only mirrors it. Must be referentially stable.
+   * Told whenever the open file or folder changes. The reader stays the single owner of what is open — the tabs, the
+   * generation counter, the folder — and the shell only mirrors it. Must be referentially stable.
    */
   onNav: (nav: ReaderNav) => void;
+  /**
+   * A request has been carried out, or has failed, and the report of where the reader landed has gone first: the
+   * shell records no place while one is on its way, since the steps between are none (build spec §11.5), and stops
+   * waiting for the place ← or → asked for even when the reader landed elsewhere — a folder with a README now.
+   * Called with the request's `seq`.
+   */
+  onSettled?: (seq: number) => void;
   /**
    * The sidebar is showing, so the file tree lives there and the reader draws neither it nor a Files button. With
    * the sidebar hidden (⌘S) the tree comes back here, or a folder with no README would show "Choose a file" and
@@ -327,7 +347,10 @@ export function Reader({
   const [picks, setPicks] = useState<{ paths: string[]; root: string } | null>(null);
   const [status, setStatus] = useState<{ text: string; sticky: boolean } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
-  const [back, setBack] = useState<{ path: string; scrollTop: number }[]>([]);
+  /** The last request carried out: the shell is told after the report of where it landed (below). */
+  const [settled, setSettled] = useState<number | null>(null);
+  /** The file last left and where it was scrolled, read as it stopped showing (`leaveTab`). */
+  const leftAt = useRef<{ path: string; scrollTop: number } | null>(null);
   /** Every file shown this session, one tab each (reader/tabs.ts). In memory only: never stored, gone on quit. */
   const [tabs, setTabs] = useState<Tabs>(NO_TABS);
   const tabsRef = useRef(tabs);
@@ -418,6 +441,7 @@ export function Reader({
     // A hidden panel's scroller reads 0: its tab keeps the place it was given when × hid it.
     if (!leaving || !sc || sc.clientHeight === 0) return (t: Tabs) => t;
     const scrollTop = sc.scrollTop;
+    leftAt.current = { path: leaving.path, scrollTop };
     return (t: Tabs) => rememberScroll(t, leaving.path, scrollTop);
   };
   /** Every route in makes a tab, or brings the file's tab forward: keyed on the real path `reader_open` returned. */
@@ -429,7 +453,7 @@ export function Reader({
   const show = useCallback(
     async function show(
       path: string,
-      opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number; pageProblem?: boolean; changes?: boolean },
+      opts: { fragment?: string | null; scrollTop?: number; receivedAt?: number; pageProblem?: boolean; changes?: boolean },
     ): Promise<void> {
       const gen = ++generation.current;
       const timer = window.setTimeout(() => {
@@ -441,10 +465,6 @@ export function Reader({
         // An image before the no-text check: `reader_open` sends an image's mode and no text, and without this
         // every `.png` named on the command line would open the file tree instead of the image.
         if (opened.kind === "file" && opened.render === "image") {
-          const previous = docRef.current;
-          if (opts.push && previous && previous.path !== opened.path) {
-            setBack((b) => [...b, { path: previous.path, scrollTop: scroller.current?.scrollTop ?? 0 }].slice(-BACK_CAP));
-          }
           toTab(opened.path, opened.display_path);
           pending.current = { mode: "new", fragment: null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
           const next: Doc = {
@@ -470,11 +490,6 @@ export function Reader({
         if (opened.kind === "dir" || !opened.text) {
           await openFolder(opened.path);
           return;
-        }
-        const previous = docRef.current;
-        if (opts.push && previous && previous.path !== opened.path) {
-          const scrollTop = scroller.current?.scrollTop ?? 0;
-          setBack((b) => [...b, { path: previous.path, scrollTop }].slice(-BACK_CAP));
         }
         toTab(opened.path, opened.display_path);
         pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
@@ -534,7 +549,7 @@ export function Reader({
       const readme =
         listing.entries.find((e) => e.kind === "file" && e.name === "README.md") ?? listing.entries.find((e) => e.kind === "file" && e.name.toLowerCase() === "readme.md");
       if (readme) {
-        await show(readme.path, { push: true });
+        await show(readme.path, {});
       } else {
         generation.current++;
         const leave = leaveTab();
@@ -576,8 +591,6 @@ export function Reader({
         next = { path, displayPath: baseName(path), root: "", hash: "deleted", lines: 0, render: "source", ext: "", text: "", rendered: renderRefusal(error.message), deleted: true };
         setChangesOn(markNow(path)?.since ?? "");
       }
-      const previous = docRef.current;
-      if (previous && previous.path !== next.path) setBack((b) => [...b, { path: previous.path, scrollTop: scroller.current?.scrollTop ?? 0 }].slice(-BACK_CAP));
       // A file the reader shows has a tab, a deleted one too (reader-layout rule 12); before `docRef` moves on.
       toTab(next.path, next.displayPath);
       pending.current = { mode: "new", fragment: null, scrollTop };
@@ -597,7 +610,7 @@ export function Reader({
       try {
         const target = await readerAllowClick(path);
         if (target.kind === "dir") await openFolder(target.path);
-        else await show(target.path, { push: true, fragment, scrollTop, pageProblem: asTab, changes: view === "changes" });
+        else await show(target.path, { fragment, scrollTop, pageProblem: asTab, changes: view === "changes" });
       } catch (e) {
         const message = readerErrorOf(e).message;
         // A click in the sidebar can open the panel with nothing in it yet — a pin whose file has since gone, say.
@@ -775,24 +788,35 @@ export function Reader({
   // A request from the shell: a `kinas open`, or a click on a file outside the reader.
   useEffect(() => {
     if (!request) return;
+    const settle = () => setSettled(request.seq);
     if (request.type === "follow") {
-      void follow(request.path, null, undefined, false, request.view);
+      void follow(request.path, null, undefined, false, request.view).finally(settle);
+      return;
+    }
+    if (request.type === "place") {
+      const to = request.reader;
+      // A file this reader still holds, hidden by ×, was never left: its tab has where it was, and the hidden
+      // scroller has since been reset (WebKit), so the file is shown again at the tab's place.
+      const scrollTop = to.kind === "file" ? ((docRef.current?.path === to.path ? tabsRef.current.list.find((t) => t.path === to.path)?.scrollTop : undefined) ?? to.scrollTop) : undefined;
+      void follow(to.path, null, scrollTop, to.kind === "file").finally(settle);
       return;
     }
     if (request.pick && request.pick.length > 0) {
       setPicks({ paths: request.pick, root: request.root });
+      settle();
       return;
     }
     setPicks(null);
     if (request.confirm) {
       setConfirm({ path: request.path, root: request.root });
+      settle();
       return;
     }
     if (request.kind === "dir") {
-      void openFolder(request.path);
+      void openFolder(request.path).finally(settle);
     } else {
       setFolder(null);
-      void show(request.path, { push: true, receivedAt: request.received_at_ms });
+      void show(request.path, { receivedAt: request.received_at_ms }).finally(settle);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
@@ -847,9 +871,24 @@ export function Reader({
   // The shell's sidebar mirrors what is open. One effect, keyed on what it reports, so a reload tells it nothing.
   const docPath = doc?.path ?? null;
   const docDisplayPath = doc?.displayPath ?? null;
+  const hasProblem = problem !== null;
+  const reportedDoc = useRef<string | null>(null);
   useEffect(() => {
-    onNav({ doc: docPath !== null && docDisplayPath !== null ? { path: docPath, displayPath: docDisplayPath } : null, folder });
-  }, [onNav, docPath, docDisplayPath, folder]);
+    // The file just left, with where it was when it stopped showing — or, for a tab closed while it showed, where its
+    // tab had it — so the place it was left from keeps that scroll (reader-layout PRD rule 30).
+    const was = reportedDoc.current;
+    reportedDoc.current = docPath;
+    const left =
+      was !== null && was !== docPath
+        ? { path: was, scrollTop: leftAt.current?.path === was ? leftAt.current.scrollTop : (tabsRef.current.list.find((t) => t.path === was)?.scrollTop ?? 0) }
+        : null;
+    onNav({ doc: docPath !== null && docDisplayPath !== null ? { path: docPath, displayPath: docDisplayPath } : null, folder, left, problem: hasProblem });
+  }, [onNav, docPath, docDisplayPath, folder, hasProblem]);
+
+  // After the report above, in the same commit or a later one: the shell has heard where a request landed.
+  useEffect(() => {
+    if (settled !== null) onSettled?.(settled);
+  }, [settled, onSettled]);
 
   // The Files overlay belongs to the reader's own tree; when the tree moves to the sidebar it has nothing to show.
   useEffect(() => {
@@ -933,13 +972,6 @@ export function Reader({
     else if (target.kind === "file") void follow(target.path, target.fragment);
   };
 
-  const goBack = () => {
-    const last = back.at(-1);
-    if (!last) return;
-    setBack((b) => b.slice(0, -1));
-    void show(last.path, { push: false, scrollTop: last.scrollTop });
-  };
-
   // R37: a new Herdr pane with the editor; on success the keys go to the terminal, where that pane now is.
   const openInEditor = async () => {
     const current = docRef.current;
@@ -991,7 +1023,7 @@ export function Reader({
     setConfirm(null);
     try {
       await readerConfirm(pendingPath, true);
-      await show(pendingPath, { push: true });
+      await show(pendingPath, {});
     } catch (e) {
       say(readerErrorOf(e).message);
     }
@@ -1054,7 +1086,7 @@ export function Reader({
     const current = docRef.current;
     // A deleted file whose D went — it is back, or its tree was refreshed: the file as it is now, if it is there.
     if (current?.deleted) {
-      if (openMark?.mark !== "D") void show(current.path, { push: false, changes: openMark !== null });
+      if (openMark?.mark !== "D") void show(current.path, { changes: openMark !== null });
       return;
     }
     if (openMark || since === null || !current) return;
@@ -1201,8 +1233,6 @@ export function Reader({
         displayPath={doc?.displayPath ?? problem?.displayPath ?? (folder ? baseName(folder) : "")}
         title={doc?.path ?? folder ?? ""}
         showBadge={Boolean(doc)}
-        canGoBack={back.length > 0}
-        onBack={goBack}
         views={offered.length > 0 ? offered : null}
         view={changes !== null ? "changes" : viewKind ? views[viewKind] : offered.length > 0 ? "source" : null}
         onView={changeView}
@@ -1318,7 +1348,7 @@ export function Reader({
                       title={path}
                       onClick={() => {
                         setPicks(null);
-                        void show(path, { push: true });
+                        void show(path, {});
                       }}
                     >
                       {path.startsWith(`${picks.root}/`) ? path.slice(picks.root.length + 1) : path}

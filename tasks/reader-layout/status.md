@@ -31,7 +31,8 @@
 - [x] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
   (2026-09-24, on `5df4b7d`; the traffic lights, the drag, the zoom and full screen checked by the captain's eye on
   the debug build)
-- [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes
+- [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes (code, docs and specs written 2026-09-24;
+  its checks, and the green light's full screen on a regular launch, wait for the machine — build spec §17)
 - [ ] Slice 10 · ship point 3, and the hand-off
 
 ## Notes for a fresh session

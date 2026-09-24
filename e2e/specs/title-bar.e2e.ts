@@ -1,15 +1,20 @@
 import { browser, $, expect } from "@wdio/globals";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { hook, waitForShell } from "../helpers.ts";
 
 // The window's title bar (tasks/reader-layout/prd.md §5, Part 3; build spec AC-7): Kinas draws it, one bar across the
-// window above the columns; its sidebar button is ⌘S by click; ← and → start with nowhere to go. Dragging the bar and
+// window above the columns; its sidebar button is ⌘S by click; ← and → start with nowhere to go, then walk the places
+// visited, pages and files alike (AC-6: the PRD's walk, read from the page). Dragging the bar and
 // double-clicking it are the captain's to check (docs/smoke-test.md): a script cannot hold the mouse down on a window.
 // Reads are one script in the page; the sidebar button takes the driver's own click, which proves the driver can
 // click inside the bar (the build spec's stop rule).
 
 const db = join(process.env.KINAS_DATA_DIR!, "kinas.sqlite");
+const root = realpathSync(process.env.KINAS_ROOT!);
+const CLI = join(process.cwd(), "app/src-tauri/binaries/kinas-cli-aarch64-apple-darwin");
+const kinasOpen = (name: string) => spawnSync(CLI, ["open", name], { cwd: root, env: process.env, encoding: "utf8", timeout: 20000 }).status;
 const setting = (key: string) => execFileSync("/usr/bin/sqlite3", [db, `SELECT value FROM settings WHERE key = '${key}'`], { encoding: "utf8" }).trim();
 
 /** The bar as the captain sees it: where it sits, and each button's name, tooltip and whether it can act. */
@@ -28,6 +33,32 @@ const bar = () =>
       buttons: [...(header?.querySelectorAll("button") ?? [])].map((b) => [b.getAttribute("aria-label"), b.title, b.getAttribute("aria-disabled") === "true"]),
     };
   });
+
+/** The place showing, as the captain sees it: the page, and the reader's file — null while the panel is closed. */
+const place = () =>
+  browser.execute(() => {
+    const page = document.querySelector<HTMLElement>("section.page:not([hidden])")?.dataset.page ?? null;
+    const reader = document.querySelector<HTMLElement>("aside.reader");
+    if (!reader || reader.hidden) return [page, null];
+    const rendered = document.querySelector(".reader-doc[data-rendered]") !== null;
+    return [page, rendered ? (document.querySelector(".reader-path")?.textContent ?? "") : "(opening)"];
+  });
+
+async function waitForPlace(page: string, file: string | null) {
+  const at = (p: (string | null)[]) => p[0] === page && (file === null ? p[1] === null : (p[1] ?? "").endsWith(file));
+  await browser.waitUntil(async () => at(await place()), { timeout: 15000, interval: 250 }).catch(async () => {
+    throw new Error(`the place is ${JSON.stringify(await place())}, not ${JSON.stringify([page, file])}`);
+  });
+}
+
+/** ← or →, by the driver's own click; a button that cannot act does nothing. */
+const press = (label: "Back" | "Forward") => $(`.ui-titlebar button[aria-label="${label}"]`).click();
+/** Whether ← and → can act. */
+const arrows = () =>
+  browser.execute(() => ["Back", "Forward"].map((l) => document.querySelector(`.ui-titlebar button[aria-label="${l}"]`)?.getAttribute("aria-disabled") !== "true"));
+
+const scrollTop = () => browser.execute(() => Math.round(document.querySelector<HTMLElement>("aside.reader .reader-scroll")!.scrollTop));
+const strip = () => browser.execute(() => [...document.querySelectorAll("aside.reader .ui-tab .ui-tab-name")].map((n) => n.textContent));
 
 describe("the window's title bar", () => {
   let pid = 0;
@@ -71,6 +102,80 @@ describe("the window's title bar", () => {
     expect(b.buttons[0]).toEqual(["Hide the sidebar", "Hide the sidebar (⌘S)", false]);
     // ← and → did not move.
     expect(b.buttons.slice(1).map((x) => x[2])).toEqual([true, true]);
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  let aTop = 0;
+
+  it("AC-6: ← walks back through pages and files, to where each file was left", async () => {
+    // Home → Usage → A → B → Settings.
+    await browser.keys(["Meta", "4"]);
+    await waitForPlace("usage", null);
+    expect(kinasOpen("place-a.md")).toBe(0);
+    await waitForPlace("usage", "place-a.md");
+    // A is left scrolled to its twelfth heading, so coming back has somewhere to come back to.
+    aTop = await browser.execute(() => {
+      const scroller = document.querySelector<HTMLElement>("aside.reader .reader-scroll")!;
+      const heading = document.querySelectorAll(".reader-body h2")[11] as HTMLElement;
+      scroller.scrollTop = heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      return Math.round(scroller.scrollTop);
+    });
+    expect(aTop).toBeGreaterThan(200);
+    expect(kinasOpen("place-b.md")).toBe(0);
+    await waitForPlace("usage", "place-b.md");
+    await browser.keys(["Meta", ","]);
+    await waitForPlace("settings", "place-b.md");
+    expect(await arrows()).toEqual([true, false]);
+
+    await press("Back");
+    await waitForPlace("usage", "place-b.md");
+    await press("Back");
+    await waitForPlace("usage", "place-a.md");
+    await browser.waitUntil(async () => Math.abs((await scrollTop()) - aTop) <= 2, { timeout: 5000, timeoutMsg: "A did not come back where it was left" });
+    await press("Back");
+    await waitForPlace("usage", null);
+    await press("Back");
+    await waitForPlace("home", null);
+    expect(await arrows()).toEqual([false, true]);
+  });
+
+  it("AC-6: → undoes ←, back to the file at its place", async () => {
+    await press("Forward");
+    await waitForPlace("usage", null);
+    await press("Forward");
+    await waitForPlace("usage", "place-a.md");
+    await browser.waitUntil(async () => Math.abs((await scrollTop()) - aTop) <= 2, { timeout: 5000, timeoutMsg: "A did not come back where it was left" });
+    expect(await arrows()).toEqual([true, true]);
+  });
+
+  it("AC-6: opening C after ← drops the places ahead, and → has nowhere to go", async () => {
+    expect(kinasOpen("place-c.md")).toBe(0);
+    await waitForPlace("usage", "place-c.md");
+    expect(await arrows()).toEqual([true, false]);
+  });
+
+  it("a place whose tab has closed opens its file again, as a tab at the right end", async () => {
+    expect(await strip()).toEqual(["place-a.md", "place-b.md", "place-c.md"]);
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('aside.reader .ui-tab[data-path$="/place-a.md"] .ui-tab-close')!.click());
+    await browser.waitUntil(async () => JSON.stringify(await strip()) === JSON.stringify(["place-b.md", "place-c.md"]), { timeout: 5000, timeoutMsg: "A's tab did not close" });
+    await waitForPlace("usage", "place-c.md");
+    await press("Back");
+    await waitForPlace("usage", "place-a.md");
+    expect(await strip()).toEqual(["place-b.md", "place-c.md", "place-a.md"]);
+  });
+
+  it("← onto the Work page gives the terminal the keys, as ⌘2 does, and the terminal is the one it was", async () => {
+    await browser.keys(["Meta", "2"]);
+    await waitForPlace("work", "place-a.md");
+    await browser.keys(["Meta", "1"]);
+    await waitForPlace("home", "place-a.md");
+    // Whatever WebKit does with the focus of a page it hides, the keys are taken from the terminal here, so it is
+    // the ← that gives them back.
+    await browser.execute(() => (document.activeElement as HTMLElement | null)?.blur());
+    expect(await hook<boolean>("terminalFocused")).toBe(false);
+    await press("Back");
+    await waitForPlace("work", "place-a.md");
+    await browser.waitUntil(async () => hook<boolean>("terminalFocused"), { timeout: 10000, timeoutMsg: "the terminal never got the keys" });
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
 });

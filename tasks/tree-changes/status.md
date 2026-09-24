@@ -9,7 +9,7 @@
 ## Slices
 - [x] Slice 0 · ground: branch, `similar` pinned, `listable_name`/`listable_file` split out, docs first — 2026-09-23, `bun run check` green (564 bun, 188 Rust, 0 clippy warnings, 55 s)
 - [x] Slice 1 · tracer bullet: save a file, see an M (watch, stub burst, event, ChangeMark, caption) — 2026-09-24, `bun run check` green (575 bun, 194 Rust); `tree-changes.e2e.ts` and the four row-matching specs green, run alone
-- [ ] Slice 2 · the real marks outside git: baseline walk and copies, rule 3, deleted rows, roll-ups, live re-list
+- [x] Slice 2 · the real marks outside git: baseline walk and copies, rule 3, deleted rows, roll-ups, live re-list — 2026-09-24, `bun run check` green (581 bun, 217 Rust); `tree-changes.e2e.ts` (7) and the four row-matching specs green, run alone
 - [ ] Slice 3 · git as the baseline's source: clean blobs, hash-object, nested repositories
 - [ ] Slice 4 · refresh and reload: ↻ on every tree head, the palette command, `on_page_load` → ship point 1
 - [ ] Slice 5 · the Changes view for a modified or added file: diff, folds, toggle, live re-diff, refusals
@@ -22,8 +22,8 @@
   the Gate documents were first written on `docs/tree-changes-gate-1` from `1394be7`, PR #31). Its Rust target is an
   APFS clone of a warm target at the same base (`cp -Rc`): a cold one costs 6–8 GB and the disk is near full.
 - The build's draft PR is #32 (`feat/tree-changes` → `main`); it holds the Gate commits too, so #31 can close for it.
-  Next: slice 2, the real marks outside git — `build-spec.md` §12. Slice 1's stub marks every saved file M; slice 2
-  replaces it with the baseline's comparison.
+  Next: slice 3, git as the baseline's source — `build-spec.md` §12. Until then every listed text file is copied (the
+  budget holds the Kinas repository 17 times over), and `repo` in the e2e fixture is a plain folder.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's two screenshots did not reach the session that wrote Gate 1; the "reload" they showed was read as

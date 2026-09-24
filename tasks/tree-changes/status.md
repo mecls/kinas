@@ -22,12 +22,15 @@
 
 ## Notes for a fresh session
 
-- Worktree `.claude/worktrees/tree-changes`, branch `feat/tree-changes`, on `origin/main` at `dd21e35` (2026-09-23;
-  the Gate documents were first written on `docs/tree-changes-gate-1` from `1394be7`, PR #31). Its Rust target is an
-  APFS clone of a warm target at the same base (`cp -Rc`): a cold one costs 6–8 GB and the disk is near full.
-- The build's draft PR is #32 (`feat/tree-changes` → `main`); it holds the Gate commits too, so #31 can close for it.
-  Next: slice 4, refresh and reload → ship point 1 — `build-spec.md` §12. Until it, nothing clears a mark: no ↻, no
-  palette command, and a window reload keeps the records (`on_page_load` is slice 4's).
+- Worktree `.claude/worktrees/tree-changes`, branch **`feat/tree-changes-2`**, rebased onto `origin/main` at `a01dec1`
+  (2026-09-24, the reader's layout's ship point 1) for this feature's ship point 1. Its Rust target is an APFS clone
+  of a warm target (`cp -Rc`): a cold one costs 6–8 GB and the disk is near full.
+- The build's draft PR is **#34** (`feat/tree-changes-2` → `main`). The captain chose a new branch over a force-push:
+  #32 (`feat/tree-changes`, the pre-rebase tip, also kept locally as `tree-changes-before-rebase`) is closed for it,
+  and #31 (the Gate documents on their first base) is still open — #34 holds those commits too.
+- Next: ship point 1 — `bun run check` and the full e2e suite alone on `feat/tree-changes-2` (which also re-runs
+  slice 4's steps 7 and 13), then `main` by fast-forward only on the captain's word (§16). Then slice 5, the Changes
+  view. DESIGN.md's entry is 1.6: the reader's layout took 1.5.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's two screenshots did not reach the session that wrote Gate 1; the "reload" they showed was read as

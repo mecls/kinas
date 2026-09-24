@@ -44,6 +44,9 @@
   --warn: #b87a12;
   --danger: #c4262e;
   --stale: #7c818d;
+  /* The Diff's added and removed lines (DESIGN.md 1.6): a faint tint, always beside the line's sign. */
+  --ok-soft: color-mix(in oklab, var(--ok) 12%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, var(--surface));
 
   --cat-1: #3e7c8a;
   --cat-2: #7a62b0;
@@ -163,6 +166,8 @@
     --warn: #d9a03a;
     --danger: #e5575e;
     --stale: #7c818d;
+    --ok-soft: color-mix(in oklab, var(--ok) 18%, var(--surface));
+    --danger-soft: color-mix(in oklab, var(--danger) 18%, var(--surface));
 
     --cat-1: #5fa3b2;
     --cat-2: #9d88d6;

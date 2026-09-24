@@ -87,7 +87,8 @@ export function Sidebar({
   /** The open file, highlighted wherever it appears. */
   selected: string | null;
   recent: readonly RecentEntry[];
-  onOpen: (path: string) => void;
+  /** `view`: a marked row of a file tree opens the file on its Changes view (tree changes rule 24). */
+  onOpen: (path: string, view?: "changes") => void;
   onPin: (path: string) => void;
   onUnpin: (path: string) => void;
   /** Open this folder in the terminal: its Herdr workspace, focused or made. */
@@ -317,7 +318,7 @@ function PinRow({
 }: {
   pin: PinView;
   selected: string | null;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, view?: "changes") => void;
   onUnpin: (path: string) => void;
   onTerminal: (path: string) => void;
   folderActions: TreeFolderActions;
@@ -375,7 +376,7 @@ function PinRow({
 }
 
 /** A pinned folder's tree, mounted only once the click that expanded it has been allowed (see `activate`). */
-function PinnedFolder({ path, selected, onOpen, folderActions }: { path: string; selected: string | null; onOpen: (path: string) => void; folderActions: TreeFolderActions }) {
+function PinnedFolder({ path, selected, onOpen, folderActions }: { path: string; selected: string | null; onOpen: (path: string, view?: "changes") => void; folderActions: TreeFolderActions }) {
   return (
     <div className="sidebar-pin-tree">
       <FileTree root={path} selected={selected} onOpen={onOpen} folderActions={folderActions} />

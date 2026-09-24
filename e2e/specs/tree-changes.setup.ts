@@ -32,6 +32,8 @@ export function setup(dataDir: string): Record<string, string> {
   mkdirSync(join(plain, "docs"), { recursive: true });
   writeFileSync(join(plain, `README-${TOKEN}.md`), `# Plain ${TOKEN}\n\nA folder that is not a repository.\n`);
   writeFileSync(join(plain, "docs", `overview-${TOKEN}.md`), `# Overview ${TOKEN}\n`);
+  // Over the reader's 4 MB when its tree is first shown, so Kinas keeps no copy of it (build spec AC-5).
+  writeFileSync(join(plain, `big-${TOKEN}.md`), `# Big ${TOKEN}\n\n${"A line of a long file.\n".repeat(200_000)}`);
   return { KINAS_ROOT: root, KINAS_E2E_NO_OPEN: "1" };
 }
 

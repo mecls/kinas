@@ -6,6 +6,10 @@ import {
   Button,
   Card,
   ChangeMark,
+  ChangesIcon,
+  Diff,
+  DiffRefusal,
+  type DiffShape,
   CheckIcon,
   ChecksList,
   Chip,
@@ -80,6 +84,35 @@ const withMark = (name: string, mark: ReactNode) => (
     {name} {mark}
   </span>
 );
+// A file edited since 14:02: two lines changed, one added, and a long unchanged run folded between them.
+const EDITED: DiffShape = {
+  mark: "M",
+  added: 3,
+  removed: 1,
+  folds: [{ id: 0, lines: 34 }],
+  rows: [
+    { kind: "context", old: 1, new: 1, text: "# Overview", fold: null },
+    { kind: "context", old: 2, new: 2, text: "", fold: null },
+    { kind: "remove", old: 3, new: null, text: "Kinas reads what agents write.", fold: null },
+    { kind: "add", old: null, new: 3, text: "Kinas reads what agents write, and marks what they change.", fold: null },
+    { kind: "context", old: 4, new: 4, text: "", fold: null },
+    { kind: "context", old: 5, new: 5, text: "## The reader", fold: null },
+    { kind: "context", old: 6, new: 6, text: "", fold: null },
+    ...Array.from({ length: 34 }, (_, i) => ({ kind: "context" as const, old: 7 + i, new: 7 + i, text: `Line ${7 + i} of the overview.`, fold: 0 })),
+    { kind: "context", old: 41, new: 41, text: "", fold: null },
+    { kind: "context", old: 42, new: 42, text: "## Tree changes", fold: null },
+    { kind: "context", old: 43, new: 43, text: "", fold: null },
+    { kind: "add", old: null, new: 44, text: "Every file tree marks A, M and D since it was first shown.", fold: null },
+    { kind: "add", old: null, new: 45, text: "", fold: null },
+  ],
+};
+const GONE: DiffShape = {
+  mark: "D",
+  added: 0,
+  removed: 3,
+  folds: [],
+  rows: ["# Old plan", "", "Ship the reader first."].map((text, i) => ({ kind: "remove" as const, old: i + 1, new: null, text, fold: null })),
+};
 const withChip = (cat: 1 | 2 | 3 | 4 | 5 | 6, name: string) => (
   <span style={{ display: "inline-flex", gap: "var(--space-2)", alignItems: "center" }}>
     <Chip cat={cat} /> {name}
@@ -329,6 +362,15 @@ export const STORIES: Story[] = [
     ],
   },
   {
+    component: "Diff",
+    states: [
+      { name: "modified", node: <Diff view={EDITED} language="markdown" /> },
+      { name: "deleted", node: <Diff view={GONE} language="markdown" /> },
+      { name: "no-copy", node: <DiffRefusal text="Kinas kept no copy of this file from 14:02, so there is nothing to compare — the folder holds more text than Kinas keeps" /> },
+      { name: "too-many", node: <DiffRefusal text="Too many changes to show — 1,204 lines then, 980 now" /> },
+    ],
+  },
+  {
     component: "Toast",
     states: [
       { name: "success", node: <Toast action={{ label: "Undo", onClick: noop }}>Plan approved</Toast> },
@@ -440,7 +482,7 @@ export const STORIES: Story[] = [
         name: "reader-icons",
         node: (
           <div style={{ display: "flex", gap: "var(--space-4)", color: "var(--ink-2)" }}>
-            <BackIcon /> <EyeIcon /> <CodeIcon /> <ListIcon /> <ExpandIcon /> <CollapseIcon />
+            <BackIcon /> <EyeIcon /> <CodeIcon /> <ChangesIcon /> <ListIcon /> <ExpandIcon /> <CollapseIcon />
           </div>
         ),
       },

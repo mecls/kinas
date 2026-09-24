@@ -150,6 +150,24 @@ export function createChangesStore() {
       if (asked === null) return null;
       return summaries.get(realOf.get(asked) ?? asked) ?? null;
     },
+    /**
+     * A file's mark from every summary, and its root's baseline: the deepest root that marks it wins, so a pinned
+     * `kinas/tasks` answers for its own files over Files' `kinas`. A file inside an added folder is A. Null: unmarked.
+     */
+    markOf(path: string): { mark: Mark; since_ms: number } | null {
+      let found: { mark: Mark; since_ms: number } | null = null;
+      let depth = -1;
+      for (const s of summaries.values()) {
+        if (!path.startsWith(`${s.root}/`) || s.root.length <= depth) continue;
+        const own = s.entries.find((e) => e.path === path)?.mark;
+        const mark = own ?? (s.entries.some((e) => e.kind === "dir" && e.mark === "A" && path.startsWith(`${e.path}/`)) ? "A" : null);
+        if (mark) {
+          found = { mark, since_ms: s.since_ms };
+          depth = s.root.length;
+        }
+      }
+      return found;
+    },
     touchedSeq: (dir: string) => seqs.get(dir) ?? 0,
     epochOf: (root: string) => epochs.get(root) ?? 0,
     subscribe(listener: () => void) {
@@ -196,6 +214,22 @@ function useSummary(root: string | null): TreeChanges | null {
 export function useTreeChanges(root: string | null): TreeSummary | null {
   const summary = useSummary(root);
   return useMemo(() => (summary ? { total: summary.total, since: sinceLabel(summary.since_ms), watching: summary.watching } : null), [summary]);
+}
+
+/**
+ * The open file's mark and the time it counts from, for the reader's view toggle (rules 19, 25). A primitive through
+ * the store, so an unrelated burst does not re-render the reader.
+ */
+export function useMarkOf(path: string | null): { mark: Mark; since: string } | null {
+  const key = useSyncExternalStore(store.subscribe, () => {
+    const found = path === null ? null : store.markOf(path);
+    return found ? `${found.mark} ${found.since_ms}` : null;
+  });
+  return useMemo(() => {
+    if (key === null) return null;
+    const [mark, ms] = key.split(" ");
+    return { mark: mark as Mark, since: sinceLabel(Number(ms)) };
+  }, [key]);
 }
 
 /**

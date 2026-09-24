@@ -349,8 +349,8 @@ export function App() {
   // A click on a file in the sidebar. It goes to the reader as a `follow` — the path a click on the reader's own
   // tree takes — and never as a made-up `kinas open`, which would clear the open folder, skip the human-click door
   // and add a line to the log the 200 ms gate counts (three-column shell §6.14). It opens the panel if it is closed.
-  const openFromSidebar = useCallback((path: string) => {
-    setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current } }));
+  const openFromSidebar = useCallback((path: string, view?: "changes") => {
+    setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq: ++readerSeq.current, view } }));
   }, []);
 
   // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane, so this is the

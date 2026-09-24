@@ -17,6 +17,7 @@ import {
   readerReadText,
   readerRendered,
   type ReaderSide,
+  treeChangesDiff,
 } from "../api.ts";
 import { focusTerminal } from "../shell/focus.ts";
 import { NOTICE_MS } from "../shell/notice.ts";
@@ -36,7 +37,9 @@ import { drawnWidth, edgeDrag, sectionButton, sectionPlace, SIDE_DEFAULT, SIDE_M
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
 import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
-import { Button } from "../ui/index.ts";
+import { sinceLabel, useMarkOf } from "./changes.ts";
+import { renderDiff, renderRefusal } from "./diff.ts";
+import { Button, openFold } from "../ui/index.ts";
 
 // The reader (tasks/prd-kinas-open.md): the file `kinas open` named, in the panel on the right of the window. It only
 // reads. Opening, reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one
@@ -49,9 +52,10 @@ import { Button } from "../ui/index.ts";
  * - `follow`: a click on a file or a folder outside the reader — the sidebar's tree, a pin, a recent row. It takes the same
  *   path as a click on the reader's own tree: `follow()`, the human-click door (`reader_allow_click`), which keeps
  *   the open folder and carries no `received_at_ms`, so it adds no line to the log the 200 ms gate counts. A click
- *   must never be dressed up as a `show` (three-column shell §6.14).
+ *   must never be dressed up as a `show` (three-column shell §6.14). With `view: "changes"` — a click on a marked row
+ *   of a file tree — the file opens on its Changes view (tree changes rule 24).
  */
-export type ReaderRequest = ({ type: "show" } & ReaderShow & { seq: number }) | { type: "follow"; path: string; seq: number };
+export type ReaderRequest = ({ type: "show" } & ReaderShow & { seq: number }) | { type: "follow"; path: string; seq: number; view?: "changes" };
 
 interface Doc {
   path: string;
@@ -88,6 +92,21 @@ function renderDoc(text: string, render: ReaderRender, ext: string, path: string
       return views.html === "rendered" ? renderPreview(text) : renderSource(text, languageFor(ext));
     case "source":
       return renderSource(text, languageFor(ext));
+  }
+}
+
+/**
+ * A file's Changes view (tree changes rules 21–25): its diff, or one line in its place — Rust's reason for showing
+ * none. Null when no watched root marks the file any more, so there is no Changes view to show.
+ */
+async function changesOf(path: string): Promise<{ rendered: Rendered; since: string | null } | null> {
+  try {
+    const view = await treeChangesDiff(path);
+    return { rendered: renderDiff(view), since: sinceLabel(view.since_ms) };
+  } catch (e) {
+    const error = readerErrorOf(e);
+    if (error.code === "not_watched") return null;
+    return { rendered: renderRefusal(error.message), since: null };
   }
 }
 
@@ -310,6 +329,16 @@ export function Reader({
   const [liveWidth, setLiveWidth] = useState<number | null>(null);
   const [overlay, setOverlay] = useState<"files" | "contents" | null>(null);
   const [currentSlug, setCurrentSlug] = useState<string | null>(null);
+  /**
+   * Whether the open file shows its Changes view (tree changes rule 19), as the baseline it counts from, "14:02"; null
+   * when it shows its usual one. Per file: the next file opens as its click asks (rule 24).
+   */
+  const [changes, setChanges] = useState<string | null>(null);
+  const changesRef = useRef<string | null>(null);
+  const setChangesOn = useCallback((since: string | null) => {
+    changesRef.current = since;
+    setChanges(since);
+  }, []);
 
   const frame = useRef<HTMLDivElement>(null);
   const main = useRef<HTMLDivElement>(null);
@@ -369,7 +398,7 @@ export function Reader({
   );
 
   const show = useCallback(
-    async function show(path: string, opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number }): Promise<void> {
+    async function show(path: string, opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number; changes?: boolean }): Promise<void> {
       const gen = ++generation.current;
       const timer = window.setTimeout(() => {
         if (gen === generation.current && !docRef.current) setOpening(baseName(path));
@@ -396,6 +425,8 @@ export function Reader({
             text: "",
             rendered: renderDoc("", "image", opened.ext, opened.path),
           };
+          // An image has marks but no Changes view (tree changes rule 23).
+          setChangesOn(null);
           docRef.current = next;
           setDoc(next);
           setProblem(null);
@@ -415,6 +446,9 @@ export function Reader({
         pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
         // A file always carries a mode; only a folder has none, and that returned above.
         const render = opened.render ?? "source";
+        // Asked to open on Changes: the diff is fetched before anything is drawn, so the usual view never flashes first.
+        const diffed = opts.changes ? await changesOf(opened.path) : null;
+        if (gen !== generation.current) return;
         const next: Doc = {
           path: opened.path,
           displayPath: opened.display_path,
@@ -424,8 +458,9 @@ export function Reader({
           render,
           ext: opened.ext,
           text: opened.text.text,
-          rendered: renderDoc(opened.text.text, render, opened.ext, opened.path),
+          rendered: diffed?.rendered ?? renderDoc(opened.text.text, render, opened.ext, opened.path),
         };
+        setChangesOn(diffed ? (diffed.since ?? "") : null);
         docRef.current = next;
         setDoc(next);
         setProblem(null);
@@ -450,7 +485,7 @@ export function Reader({
     },
     // openFolder is hoisted below and only reads refs and setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [say],
+    [say, setChangesOn],
   );
 
   async function openFolder(path: string) {
@@ -464,6 +499,7 @@ export function Reader({
         await show(readme.path, { push: true });
       } else {
         generation.current++;
+        setChangesOn(null);
         docRef.current = null;
         setDoc(null);
         setProblem(null);
@@ -474,11 +510,11 @@ export function Reader({
   }
 
   const follow = useCallback(
-    async (path: string, fragment: string | null) => {
+    async (path: string, fragment: string | null, view?: "changes") => {
       try {
         const target = await readerAllowClick(path);
         if (target.kind === "dir") await openFolder(target.path);
-        else await show(target.path, { push: true, fragment });
+        else await show(target.path, { push: true, fragment, changes: view === "changes" });
       } catch (e) {
         const message = readerErrorOf(e).message;
         // A click in the sidebar can open the panel with nothing in it yet — a pin whose file has since gone, say.
@@ -650,7 +686,7 @@ export function Reader({
   useEffect(() => {
     if (!request) return;
     if (request.type === "follow") {
-      void follow(request.path, null);
+      void follow(request.path, null, request.view);
       return;
     }
     if (request.pick && request.pick.length > 0) {
@@ -682,14 +718,24 @@ export function Reader({
         if (!latest || latest.path !== path) return;
         setStatus((s) => (s?.sticky ? null : s));
         if (text.hash === latest.hash) return;
+        // Showing Changes, each save re-diffs (tree changes rule 25); a file back at its baseline text has no Changes
+        // view any more, and the reader drops to its usual one.
+        const since = changesRef.current;
+        const diffed = since === null ? null : await changesOf(path);
+        const current = docRef.current;
+        if (!current || current.path !== path) return;
+        if (since !== null && !diffed) {
+          setChangesOn(null);
+          say(since ? `No changes since ${since} any more` : "No changes any more");
+        }
         pending.current = { mode: "reload" };
         // The same mode the open used: a `.sql` saved in the pane beside the reader must not come back as markdown.
         const next: Doc = {
-          ...latest,
+          ...current,
           hash: text.hash,
           lines: text.text.split("\n").length,
           text: text.text,
-          rendered: renderDoc(text.text, latest.render, latest.ext, latest.path),
+          rendered: diffed?.rendered ?? renderDoc(text.text, current.render, current.ext, current.path),
         };
         docRef.current = next;
         setDoc(next);
@@ -700,7 +746,7 @@ export function Reader({
       }
     });
     return () => void stop.then((u) => u());
-  }, [say]);
+  }, [say, setChangesOn]);
 
   // The shell speaks through the reader's status line: a pin's result, or Rust's reason for refusing one.
   useEffect(() => {
@@ -781,6 +827,11 @@ export function Reader({
 
   // Every link click is the reader's: the webview never navigates (R19, R21).
   const onClickCapture = (event: React.MouseEvent) => {
+    // A folded run of unchanged lines in the Changes view opens in place.
+    if (body.current && openFold(event.target, body.current)) {
+      event.preventDefault();
+      return;
+    }
     const anchor = (event.target as Element).closest?.("a");
     if (!anchor || !body.current?.contains(anchor)) return;
     event.preventDefault();
@@ -814,6 +865,7 @@ export function Reader({
   const close = () => {
     generation.current++;
     void readerClose().catch(() => {});
+    setChangesOn(null);
     docRef.current = null;
     setDoc(null);
     setFolder(null);
@@ -854,14 +906,51 @@ export function Reader({
    */
   const changeView = (next: View) => {
     const current = docRef.current;
-    const kind = current ? viewKindOf(current.render) : null;
-    if (!current || !kind || views[kind] === next) return;
-    views[kind] = next;
-    pending.current = { mode: "new", fragment: null, scrollTop: 0 };
-    const rerendered: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path) };
-    docRef.current = rerendered;
-    setDoc(rerendered);
+    if (!current) return;
+    if (next === "changes") {
+      if (changesRef.current === null) void enterChanges(current);
+      return;
+    }
+    const kind = viewKindOf(current.render);
+    if (changesRef.current === null && (!kind || views[kind] === next)) return;
+    if (kind) views[kind] = next;
+    leaveChanges(current);
   };
+
+  /** The open file's Changes view, from the toggle. */
+  const enterChanges = async (current: Doc) => {
+    const gen = generation.current;
+    const diffed = await changesOf(current.path);
+    const latest = docRef.current;
+    if (!diffed || gen !== generation.current || !latest || latest.path !== current.path) return;
+    pending.current = { mode: "new", fragment: null, scrollTop: 0 };
+    const next: Doc = { ...latest, rendered: diffed.rendered };
+    setChangesOn(diffed.since ?? "");
+    docRef.current = next;
+    setDoc(next);
+  };
+
+  /** The open file's usual view again: rendered or source, as its kind last chose. */
+  const leaveChanges = (current: Doc) => {
+    setChangesOn(null);
+    pending.current = { mode: "new", fragment: null, scrollTop: 0 };
+    const next: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path) };
+    docRef.current = next;
+    setDoc(next);
+  };
+
+  // The open file lost its mark — a Refresh, or a save back to its baseline text seen first by the tree — while
+  // showing Changes: the usual view, and the status line says why (tree changes rule 25).
+  const openMark = useMarkOf(doc?.path ?? null);
+  useEffect(() => {
+    const since = changesRef.current;
+    const current = docRef.current;
+    if (openMark || since === null || !current) return;
+    leaveChanges(current);
+    say(since ? `No changes since ${since} any more` : "No changes any more");
+    // Keyed on the mark alone: the functions it calls read refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openMark]);
 
   // A copy of the file, wherever Miguel says in the macOS save sheet. The page names the file and nothing else; the
   // sheet, the read and the write are all Rust's (reader/export.rs). Cancelling the sheet is not an event: it says
@@ -961,6 +1050,11 @@ export function Reader({
   const columnWidth = liveWidth ?? drawnWidth(side.width, readerWidth);
 
   const viewKind = doc ? viewKindOf(doc.render) : null;
+  // The toggle offers what the open file has: rendered and source for markdown and HTML, and Changes while it has a
+  // mark — a source file with a mark gets a toggle it never had, Source and Changes (tree changes rule 19). An image
+  // has no Changes view.
+  const hasChanges = doc !== null && doc.render !== "image" && (openMark !== null || changes !== null);
+  const offered: View[] = [...(viewKind ? (["rendered", "source"] as const) : hasChanges ? (["source"] as const) : []), ...(hasChanges ? (["changes"] as const) : [])];
   const noFile = doc ? null : "Open a file first";
   // What the print sheet gets is this document laid out for paper (styles/print.css). An image is not text to lay
   // out, and a rendered HTML page is a sandboxed frame, which prints as the clipped box it is — its source prints.
@@ -982,8 +1076,10 @@ export function Reader({
         showBadge={Boolean(doc)}
         canGoBack={back.length > 0}
         onBack={goBack}
-        view={viewKind ? views[viewKind] : null}
+        views={offered.length > 0 ? offered : null}
+        view={changes !== null ? "changes" : viewKind ? views[viewKind] : offered.length > 0 ? "source" : null}
         onView={changeView}
+        changesSince={openMark?.since ?? changes}
         files={filesButton && { ...filesButton, onToggle: toggle("files") }}
         contents={contentsButton && { ...contentsButton, onToggle: toggle("contents") }}
         copyDisabledReason={!doc ? noFile : doc.render === "image" ? "Images can't be copied as text" : null}
@@ -1015,7 +1111,7 @@ export function Reader({
                   <RefreshButton root={folder} name={baseName(folder)} />
                 </div>
                 <ChangesCaption root={folder} name={baseName(folder)} />
-                <FileTree root={folder} selected={doc?.path ?? null} onOpen={(path) => void follow(path, null)} />
+                <FileTree root={folder} selected={doc?.path ?? null} onOpen={(path, view) => void follow(path, null, view)} />
               </section>
             )}
             {contentsPlace && (
@@ -1110,7 +1206,7 @@ export function Reader({
           {!doc && !problem && !opening && folder && <p className="reader-note">Choose a file</p>}
           {/* data-render carries the mode to the stylesheet (source and images are not capped at a prose measure)
               and to the e2e, which asserts how a file opened. */}
-          <article className="reader-doc" data-render={doc?.render} ref={article} hidden={!doc}>
+          <article className="reader-doc" data-render={doc?.render} data-view={changes !== null ? "changes" : undefined} ref={article} hidden={!doc}>
             {doc?.rendered.frontmatter && <FrontmatterCard view={doc.rendered.frontmatter} />}
             <div className="reader-body" ref={body} />
           </article>

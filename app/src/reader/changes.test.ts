@@ -132,6 +132,21 @@ describe("the store keeps each root's latest summary", () => {
     expect(store.summaryOf("/p/kinas")).toBe(burst);
   });
 
+  test("useMarkOf_prefers_the_deepest_root", () => {
+    const store = createChangesStore();
+    store.accept(summary({ root: "/p/kinas", since_ms: 1_000, total: 1, entries: [file("/p/kinas/tasks/plan.md", "M")] }));
+    store.accept(summary({ root: "/p/kinas/tasks", since_ms: 2_000, total: 1, entries: [file("/p/kinas/tasks/plan.md", "A")] }));
+    expect(store.markOf("/p/kinas/tasks/plan.md")).toEqual({ mark: "A", since_ms: 2_000 });
+    // Only the outer root marks it: the outer root answers.
+    store.accept(summary({ root: "/p/kinas/tasks", since_ms: 2_000 }));
+    expect(store.markOf("/p/kinas/tasks/plan.md")).toEqual({ mark: "M", since_ms: 1_000 });
+    // Inside an added folder, A; a root is not inside itself; unmarked is null.
+    store.accept(summary({ root: "/p/site", since_ms: 3_000, total: 1, entries: [dir("/p/site/research", "A")] }));
+    expect(store.markOf("/p/site/research/deep/idea.md")).toEqual({ mark: "A", since_ms: 3_000 });
+    expect(store.markOf("/p/site")).toBeNull();
+    expect(store.markOf("/p/kinas/README.md")).toBeNull();
+  });
+
   test("subscribers hear every change, and stop hearing once they leave", () => {
     const store = createChangesStore();
     let heard = 0;

@@ -6,6 +6,7 @@ import "./base.css";
 export { Button, Kbd, type ButtonKind } from "./Button.tsx";
 export { Dot, Chip, Tag, type Category, type DotKind } from "./Dot.tsx";
 export { ChangeMark, countLabel, type ChangeKind } from "./ChangeMark.tsx";
+export { Diff, DiffRefusal, diffHtml, refusalHtml, openFold, type DiffShape, type DiffLine } from "./Diff.tsx";
 export { StatusBadge, Badges, BADGE, type BadgeState } from "./StatusBadge.tsx";
 export { Bar, SegBar, toneOf, type Tone, type Segments } from "./Bar.tsx";
 export { Gauge, Gauges, formatUsed } from "./Gauge.tsx";

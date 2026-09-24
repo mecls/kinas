@@ -43,6 +43,11 @@ const PAIRS: [text: string, ground: string, floor: number][] = [
   ["--accent-ink", "--accent", 4.5],
   ["--danger", "--surface", 4.5],
   ["--ink", "--accent-soft", 4.5],
+  // The Diff's lines (DESIGN.md 1.6): the text and its numbers on either tint.
+  ["--ink", "--ok-soft", 4.5],
+  ["--ink", "--danger-soft", 4.5],
+  ["--ink-2", "--ok-soft", 4.5],
+  ["--ink-2", "--danger-soft", 4.5],
   ["--ok", "--bg", 3],
   ["--warn", "--bg", 3],
   ["--stale", "--bg", 3],

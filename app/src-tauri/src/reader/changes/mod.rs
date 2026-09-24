@@ -10,6 +10,7 @@
 
 pub mod baseline;
 pub mod compare;
+pub mod diff;
 pub mod git;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -22,7 +23,7 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use super::access::Kind;
+use super::access::{self, Kind};
 use super::{checked, listable_file, off_main, ReaderError, ReaderState};
 use baseline::{BaseEntry, BaseText, Baseline, NoCopy, Stat};
 use compare::Now;
@@ -180,6 +181,96 @@ pub async fn tree_changes_refresh(app: AppHandle, root: String) -> Result<TreeCh
         Ok(answer)
     })
     .await
+}
+
+/// The Changes view of one changed file (rules 20–25): its text now against its text at the baseline. It answers only
+/// for a path a watched root marks — itself, or anything inside a folder marked added — under a root the reader may
+/// still read (ADR 0009); nothing else is a door to a file. A file Kinas kept no text for is refused with the reason,
+/// never guessed at (rule 23).
+#[tauri::command]
+pub async fn tree_changes_diff(app: AppHandle, path: String) -> Result<diff::DiffView, ReaderError> {
+    off_main(move || {
+        let path = super::absolute(&path)?;
+        let projects = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
+        // Cloned, so the reader's guard is never held with this module's (ADR 0005).
+        let allowed = app.state::<ReaderState>().lock().allowed.clone();
+        let permitted = |root: &Path| access::permitted(root, &projects, &allowed);
+        diff_view(&app.state::<ChangesState>(), &path, &permitted, Git::find().as_ref(), &projects, &super::home())
+    })
+    .await
+}
+
+/// `tree_changes_diff` without Tauri: the record's half under the guard, the disk's without it.
+fn diff_view(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>, projects: &Path, home: &Path) -> Result<diff::DiffView, ReaderError> {
+    let (_, since_ms, mark, baseline) = changed_file(state, path)
+        .filter(|(root, ..)| permitted(root))
+        .ok_or_else(|| ReaderError::new("not_watched", "Kinas is not following changes to this file"))?;
+    let before = match baseline.entries.get(path).map(|b| &b.text) {
+        // Not in the tree at the baseline: every line is new.
+        None | Some(BaseText::NotText) => String::new(),
+        Some(BaseText::Copy(bytes)) => String::from_utf8_lossy(bytes).into_owned(),
+        Some(BaseText::Blob { head, .. }) => {
+            let bytes = git.ok_or(()).and_then(|g| g.blob_text(&head.repo, &head.commit, path).map_err(|_| ()));
+            String::from_utf8_lossy(&bytes.map_err(|()| no_baseline(since_ms, "git could not read it back"))?).into_owned()
+        }
+        Some(BaseText::NoCopy(reason)) => return Err(no_copy(since_ms, *reason, mark)),
+    };
+    let after = if mark == Mark::Deleted { String::new() } else { access::read_text(path).map_err(|d| ReaderError::denied(&d, path))?.text };
+    let (rows, folds, added, removed) = diff::diff(&before, &after, diff::DIFF_DEADLINE).map_err(|t| {
+        ReaderError::new("too_many_changes", format!("Too many changes to show — {} lines then, {} now", diff::grouped(t.before_lines), diff::grouped(t.after_lines)))
+    })?;
+    Ok(diff::DiffView {
+        path: path.display().to_string(),
+        display_path: access::display_path(path, projects, home),
+        root: access::real_root(projects).display().to_string(),
+        ext: access::ext_of(path),
+        since_ms,
+        mark,
+        added,
+        removed,
+        rows,
+        folds,
+        baseline_text: (mark == Mark::Deleted).then_some(before),
+    })
+}
+
+/// The deepest watched root that marks `path` — itself, or a folder above it marked added — with its "since", the
+/// path's mark, and the baseline to read its old text from.
+fn changed_file(state: &ChangesState, path: &Path) -> Option<(PathBuf, Millis, Mark, Arc<Baseline>)> {
+    let changes = state.lock();
+    changes
+        .roots
+        .values()
+        .filter(|r| path.starts_with(&r.root) && path != r.root)
+        .filter_map(|r| {
+            let baseline = r.baseline.clone()?;
+            let own = r.marks.get(path).map(|&(_, mark)| mark);
+            let inside_added = || path.ancestors().skip(1).take_while(|a| *a != r.root).any(|a| matches!(r.marks.get(a), Some((_, Mark::Added))));
+            let mark = own.or_else(|| inside_added().then_some(Mark::Added))?;
+            Some((r.root.clone(), r.since_ms, mark, baseline))
+        })
+        .max_by_key(|(root, ..)| root.components().count())
+}
+
+/// The baseline as local HH:MM, as the webview's captions say it.
+fn clock(ms: Millis) -> String {
+    jiff::Timestamp::from_millisecond(ms).map(|t| t.to_zoned(jiff::tz::TimeZone::system()).strftime("%H:%M").to_string()).unwrap_or_default()
+}
+
+/// Rule 23's line, with its reason.
+fn no_baseline(since_ms: Millis, reason: &str) -> ReaderError {
+    ReaderError::new("no_baseline", format!("Kinas kept no copy of this file from {}, so there is nothing to compare — {reason}", clock(since_ms)))
+}
+
+fn no_copy(since_ms: Millis, reason: NoCopy, mark: Mark) -> ReaderError {
+    match reason {
+        NoCopy::Image if mark == Mark::Deleted => ReaderError::new("no_baseline", "This image was deleted; Kinas keeps no copy of images"),
+        NoCopy::Image => ReaderError::new("no_baseline", "Kinas keeps no copy of images, so there is nothing to compare"),
+        NoCopy::Budget => no_baseline(since_ms, "the folder holds more text than Kinas keeps"),
+        NoCopy::TooLarge => no_baseline(since_ms, "it is larger than 4 MB"),
+        NoCopy::ChangedDuringCopy => no_baseline(since_ms, "it changed while Kinas was taking its copies"),
+        NoCopy::Unreadable => no_baseline(since_ms, "it could not be read then"),
+    }
 }
 
 /// `PageLoadEvent::Started` on the main webview — a reload (rule 17): every record, watch and copy goes, as if no
@@ -857,6 +948,85 @@ mod tests {
         std::fs::remove_file(root.join("notes.md")).unwrap();
         std::fs::remove_file(root.join("logo.png")).unwrap();
         assert_eq!(marked(&git_burst(&state, &root, &g, &["notes.md", "logo.png"]), &root), ["D logo.png", "D notes.md"]);
+    }
+
+    const EVERYWHERE: &dyn Fn(&Path) -> bool = &|_| true;
+
+    fn view(state: &ChangesState, path: &Path, git: Option<&Git>) -> Result<diff::DiffView, ReaderError> {
+        diff_view(state, path, EVERYWHERE, git, Path::new("/nowhere"), Path::new("/nowhere"))
+    }
+
+    fn rows(view: &diff::DiffView) -> Vec<String> {
+        view.rows.iter().map(|r| format!("{:?} {}", r.kind, r.text)).collect()
+    }
+
+    #[test]
+    fn diff_refuses_a_path_in_no_record() {
+        let (_dir, root, state) = watched(&[("a.md", b"# A\n"), ("b.md", b"# B\n")], 1024);
+        std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
+        burst(&state, &root, &["a.md"]);
+        // Unmarked, outside every root, or under a root the reader may no longer read: no door.
+        for path in [root.join("b.md"), PathBuf::from("/etc/hosts"), root.clone()] {
+            assert_eq!(view(&state, &path, None).unwrap_err().code, "not_watched", "{}", path.display());
+        }
+        let refused = diff_view(&state, &root.join("a.md"), &|_| false, None, Path::new("/"), Path::new("/")).unwrap_err();
+        assert_eq!(refused.code, "not_watched");
+        assert!(view(&state, &root.join("a.md"), None).is_ok());
+    }
+
+    #[test]
+    fn a_modified_file_diffs_against_its_copy() {
+        let (_dir, root, state) = watched(&[("notes.md", b"# Notes\n\nOne.\n")], 1024);
+        std::fs::write(root.join("notes.md"), "# Notes\n\nOne.\nTwo.\n").unwrap();
+        burst(&state, &root, &["notes.md"]);
+        let v = view(&state, &root.join("notes.md"), None).unwrap();
+        assert_eq!((v.mark, v.added, v.removed, v.since_ms, v.ext.as_str(), v.baseline_text.is_none()), (Mark::Modified, 1, 0, 1_000, "md", true));
+        assert_eq!(rows(&v), ["Context # Notes", "Context ", "Context One.", "Add Two."]);
+    }
+
+    #[test]
+    fn a_file_inside_an_added_folder_is_all_additions() {
+        let (_dir, root, state) = watched(&[("README.md", b"# R\n")], 1024);
+        std::fs::create_dir(root.join("research")).unwrap();
+        std::fs::write(root.join("research/idea.md"), "# Idea\n\nNew.\n").unwrap();
+        burst(&state, &root, &["research", "research/idea.md"]);
+        let v = view(&state, &root.join("research/idea.md"), None).unwrap();
+        assert_eq!((v.mark, v.added, v.removed), (Mark::Added, 3, 0));
+    }
+
+    #[test]
+    fn a_deleted_file_is_all_removals_and_carries_its_old_text() {
+        let (_dir, root, state) = watched(&[("old.md", b"# Old\n\nGone.\n")], 1024);
+        std::fs::remove_file(root.join("old.md")).unwrap();
+        burst(&state, &root, &["old.md"]);
+        let v = view(&state, &root.join("old.md"), None).unwrap();
+        assert_eq!((v.mark, v.added, v.removed), (Mark::Deleted, 0, 3));
+        assert_eq!(v.baseline_text.as_deref(), Some("# Old\n\nGone.\n"));
+    }
+
+    #[test]
+    fn no_copy_gives_the_reason_never_a_diff() {
+        let (_dir, root, state) = watched(&[("big.md", b"# Too much for the budget\n")], 0);
+        std::fs::write(root.join("big.md"), "# Changed\n").unwrap();
+        assert_eq!(marked(&burst(&state, &root, &["big.md"]), &root), ["M big.md"]);
+        let refused = view(&state, &root.join("big.md"), None).unwrap_err();
+        assert_eq!(refused.code, "no_baseline");
+        assert!(refused.message.starts_with("Kinas kept no copy of this file from "), "{}", refused.message);
+        assert!(refused.message.ends_with(", so there is nothing to compare — the folder holds more text than Kinas keeps"), "{}", refused.message);
+        assert_eq!(no_copy(0, NoCopy::TooLarge, Mark::Modified).message.rsplit(" — ").next(), Some("it is larger than 4 MB"));
+        assert_eq!(no_copy(0, NoCopy::ChangedDuringCopy, Mark::Modified).message.rsplit(" — ").next(), Some("it changed while Kinas was taking its copies"));
+        assert_eq!(no_copy(0, NoCopy::Image, Mark::Deleted).message, "This image was deleted; Kinas keeps no copy of images");
+    }
+
+    #[test]
+    fn a_clean_tracked_file_diffs_against_its_blob() {
+        let (_dir, root, state, g) = watched_repo(&[("README.md", b"# Read me\n")]);
+        std::fs::write(root.join("README.md"), "# Read me\n\nA line.\n").unwrap();
+        git_burst(&state, &root, &g, &["README.md"]);
+        let v = view(&state, &root.join("README.md"), Some(&g)).unwrap();
+        assert_eq!(rows(&v), ["Context # Read me", "Add ", "Add A line."]);
+        // With no git to read the blob back, it says so rather than guessing.
+        assert_eq!(view(&state, &root.join("README.md"), None).unwrap_err().code, "no_baseline");
     }
 
     #[test]

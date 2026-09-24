@@ -11,11 +11,9 @@
 - [x] Slice 1 · tracer bullet: save a file, see an M (watch, stub burst, event, ChangeMark, caption) — 2026-09-24, `bun run check` green (575 bun, 194 Rust); `tree-changes.e2e.ts` and the four row-matching specs green, run alone
 - [x] Slice 2 · the real marks outside git: baseline walk and copies, rule 3, deleted rows, roll-ups, live re-list — 2026-09-24, `bun run check` green (581 bun, 217 Rust); `tree-changes.e2e.ts` (7) and the four row-matching specs green, run alone
 - [x] Slice 3 · git as the baseline's source: clean blobs, hash-object, nested repositories — 2026-09-24, `bun run check` green (581 bun, 229 Rust); `tree-changes` (7) and `tree-changes-no-git` (1) green, run alone
-- [ ] Slice 4 · refresh and reload: ↻ on every tree head, the palette command, `on_page_load` → ship point 1 — code in
-  2026-09-24, `bun run check` green (582 bun, 234 Rust); e2e 13:26–13:38 alone: palette, reader-pins-a/b, reader.e2e,
-  reader-terminal, reader-panel, stories, tree-changes-no-git, tree-changes-watch-fail green; tree-changes 8 of 10 — steps
-  7 and 13 failed on the test's own check (it compared an object's JSON, and key order does not survive WebDriver),
-  fixed, to re-run with ship point 1's full suite
+- [x] Slice 4 · refresh and reload: ↻ on every tree head, the palette command, `on_page_load` → ship point 1 — 2026-09-24;
+  ship point 1 verified on `9207e6c`: `bun run check` green (591 bun, 237 Rust), the full e2e alone, all 25 specs green
+  (`tree-changes` 10 of 10). `main` waits on the captain's word
 - [ ] Slice 5 · the Changes view for a modified or added file: diff, folds, toggle, live re-diff, refusals
 - [ ] Slice 6 · deleted files: the record's text, Copy and Download, the disabled menu items
 - [ ] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2
@@ -28,9 +26,8 @@
 - The build's draft PR is **#34** (`feat/tree-changes-2` → `main`). The captain chose a new branch over a force-push:
   #32 (`feat/tree-changes`, the pre-rebase tip, also kept locally as `tree-changes-before-rebase`) is closed for it,
   and #31 (the Gate documents on their first base) is still open — #34 holds those commits too.
-- Next: ship point 1 — `bun run check` and the full e2e suite alone on `feat/tree-changes-2` (which also re-runs
-  slice 4's steps 7 and 13), then `main` by fast-forward only on the captain's word (§16). Then slice 5, the Changes
-  view. DESIGN.md's entry is 1.6: the reader's layout took 1.5.
+- Next: ship point 1 is verified and waits on the captain's word for `main` (fast-forward only, §16), then the
+  release build and install. Then slice 5, the Changes view. DESIGN.md's entry is 1.6: the reader's layout took 1.5.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's two screenshots did not reach the session that wrote Gate 1; the "reload" they showed was read as

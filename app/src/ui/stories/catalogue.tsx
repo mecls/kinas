@@ -34,6 +34,7 @@ import {
   PanelHeader,
   PinIcon,
   PinOffIcon,
+  RefreshIcon,
   BackIcon,
   EyeIcon,
   CodeIcon,
@@ -415,7 +416,7 @@ export const STORIES: Story[] = [
         ),
       },
       {
-        // The three drawn beyond the preview's sprite, for the sidebar's folder rows (icons.tsx).
+        // The four drawn beyond the preview's sprite, for the sidebar's folder rows (icons.tsx): refresh since 1.5.
         name: "folder-icons",
         node: (
           <div style={{ display: "flex", gap: "var(--space-4)", color: "var(--ink-2)" }}>
@@ -427,6 +428,9 @@ export const STORIES: Story[] = [
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1h)" }}>
               <PinOffIcon size="sm" /> unpin
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1h)" }}>
+              <RefreshIcon size="sm" /> refresh
             </span>
           </div>
         ),

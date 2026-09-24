@@ -11,7 +11,11 @@
 - [x] Slice 1 · tracer bullet: save a file, see an M (watch, stub burst, event, ChangeMark, caption) — 2026-09-24, `bun run check` green (575 bun, 194 Rust); `tree-changes.e2e.ts` and the four row-matching specs green, run alone
 - [x] Slice 2 · the real marks outside git: baseline walk and copies, rule 3, deleted rows, roll-ups, live re-list — 2026-09-24, `bun run check` green (581 bun, 217 Rust); `tree-changes.e2e.ts` (7) and the four row-matching specs green, run alone
 - [x] Slice 3 · git as the baseline's source: clean blobs, hash-object, nested repositories — 2026-09-24, `bun run check` green (581 bun, 229 Rust); `tree-changes` (7) and `tree-changes-no-git` (1) green, run alone
-- [ ] Slice 4 · refresh and reload: ↻ on every tree head, the palette command, `on_page_load` → ship point 1
+- [ ] Slice 4 · refresh and reload: ↻ on every tree head, the palette command, `on_page_load` → ship point 1 — code in
+  2026-09-24, `bun run check` green (582 bun, 234 Rust); e2e 13:26–13:38 alone: palette, reader-pins-a/b, reader.e2e,
+  reader-terminal, reader-panel, stories, tree-changes-no-git, tree-changes-watch-fail green; tree-changes 8 of 10 — steps
+  7 and 13 failed on the test's own check (it compared an object's JSON, and key order does not survive WebDriver),
+  fixed, to re-run with ship point 1's full suite
 - [ ] Slice 5 · the Changes view for a modified or added file: diff, folds, toggle, live re-diff, refusals
 - [ ] Slice 6 · deleted files: the record's text, Copy and Download, the disabled menu items
 - [ ] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2

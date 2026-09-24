@@ -33,6 +33,7 @@ import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
+import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
 import { Button } from "../ui/index.ts";
 
 // The reader (tasks/prd-kinas-open.md): the file `kinas open` named, in the panel on the right of the window. It only
@@ -879,7 +880,12 @@ export function Reader({
           <div className="reader-side" data-overlay={narrow ? "" : undefined}>
             {folder && ownTree && (!narrow || overlay === "files") && (
               <section className="reader-files" aria-label="Files">
-                <h2 className="reader-label">Files</h2>
+                {/* The reader's own tree shows only while the sidebar is hidden, so it carries its own ↻ (PRD rule 15, Gate 2). */}
+                <div className="reader-files-head">
+                  <h2 className="reader-label">Files</h2>
+                  <RefreshButton root={folder} name={baseName(folder)} />
+                </div>
+                <ChangesCaption root={folder} name={baseName(folder)} />
                 <FileTree root={folder} selected={doc?.path ?? null} onOpen={(path) => void follow(path, null)} />
               </section>
             )}

@@ -3,7 +3,7 @@ import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
 import type { Page } from "../App.tsx";
 import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
-import { ChangesCaption } from "../reader/treeHead.tsx";
+import { ChangesCaption, RefreshButton } from "../reader/treeHead.tsx";
 import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
 import {
   ChevronDownIcon,
@@ -138,6 +138,7 @@ export function Sidebar({
               <h2 className="sidebar-label" title={folder}>
                 {baseName(folder)}
               </h2>
+              <RefreshButton root={folder} name={baseName(folder)} />
               <button type="button" className="sidebar-row-action" aria-label="Open this folder in the terminal" title="Open this folder in the terminal" onClick={() => onTerminal(folder)}>
                 <TerminalIcon size="sm" />
               </button>
@@ -361,10 +362,13 @@ function PinRow({
             <TerminalButton path={pin.path} name={name} onTerminal={onTerminal} />
           </span>
         )}
+        {/* Expanded, a pinned folder's row is its tree's head (tree changes rule 15). */}
+        {isDir && expanded && !missing && <RefreshButton root={pin.path} name={name} />}
         <button type="button" className="sidebar-row-action" aria-label="Unpin" title={`Unpin ${name}`} onClick={() => onUnpin(pin.path)}>
           <PinOffIcon size="sm" />
         </button>
       </div>
+      {isDir && expanded && !missing && <ChangesCaption root={pin.path} name={name} />}
       {isDir && expanded && !missing && <PinnedFolder path={pin.path} selected={selected} onOpen={onOpen} folderActions={folderActions} />}
     </li>
   );

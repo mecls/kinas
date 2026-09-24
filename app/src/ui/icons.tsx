@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 // The design system's icon set (DESIGN.md §4; design/preview.html's sprite, lines 311–327): fifteen strokes on a
 // 16-unit grid, drawn in the current colour at `--icon` (16) by default and `--icon-sm` (14) beside a row action.
-// Inline SVG, no package — a dozen paths are not worth a pinned dependency (Build 1 R6). Three the sidebar needs
-// beyond the sprite — folder, pin, unpin — are drawn here on the same grid, and so are the reader header's six
+// Inline SVG, no package — a dozen paths are not worth a pinned dependency (Build 1 R6). Four the sidebar needs
+// beyond the sprite — folder, pin, unpin, refresh — are drawn here on the same grid, and so are the reader header's six
 // (back, rendered, source, expand, collapse, contents), which replaced the older Lucide set in slice 6.
 
 export type IconSize = "md" | "sm";
@@ -126,6 +126,14 @@ export const PinOffIcon = (p: Props) => (
     <path d="M10.2 7.5V4h.55a.75.75 0 0 0 0-1.5H5.5" />
     <path d="M5.8 6.2v1.3l-.8 3H11" />
     <path d="m2.5 2.5 11 11" />
+  </Icon>
+);
+
+/* Tree changes: a tree's Refresh (↻), on the same grid — an open arc and its arrowhead. */
+export const RefreshIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M13 8a5 5 0 1 1-1.5-3.55" />
+    <path d="M13 2.5v3h-3" />
   </Icon>
 );
 

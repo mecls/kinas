@@ -17,8 +17,15 @@ describe("the command palette", () => {
     );
     await expect($(".palette")).toBeDisplayed();
     const ids = await $$(".palette-item").map((item) => item.getAttribute("data-command"));
-    // keymap.md, 2026-09-22: Home joined the palette; Crew, Inbox and Reader are click-only and do not.
-    expect(ids).toEqual(["status", "refresh", "go.home", "go.usage", "go.work", "sidebar", "settings"]);
+    // keymap.md, 2026-09-22: Home joined the palette; Crew, Inbox and Reader are click-only and do not. 2026-09-23 (tree
+    // changes): "Refresh files", the Files header's ↻ for the keyboard.
+    expect(ids).toEqual(["status", "refresh", "files.refresh", "go.home", "go.usage", "go.work", "sidebar", "settings"]);
+  });
+
+  it("Refresh files with no folder in Files says so and stays open", async () => {
+    await $('[data-command="files.refresh"]').click();
+    await expect($('[data-testid="palette-output"]')).toHaveText("No folder in Files to refresh");
+    await expect($(".palette")).toBeDisplayed();
   });
 
   it("runs Status and shows the status lines", async () => {

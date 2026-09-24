@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { paletteMatches, statusFromStore, statusLines, type Command } from "@kinas/commands";
 import { dispatchAppAction } from "../actions.ts";
 import { getUsageSnapshot, refreshReadings } from "../api.ts";
+import { refreshRoot } from "../reader/changes.ts";
 import { snapshotAdapter } from "./snapshotAdapter.ts";
 
 // The ⌘K palette (R36, §3.7): the registry's palette door. Esc closes it and hands focus back to whatever had
 // it — the terminal included — so the next keystroke reaches the shell without a click (R31).
 
-export function Palette({ onClose }: { onClose: () => void }) {
+/** `filesFolder`: the folder the sidebar's Files shows, for "Refresh files" (tree changes rule 16). */
+export function Palette({ onClose, filesFolder }: { onClose: () => void; filesFolder: string | null }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const [output, setOutput] = useState<string[] | null>(null);
@@ -39,11 +41,21 @@ export function Palette({ onClose }: { onClose: () => void }) {
         },
         navigate: (page) => dispatchAppAction(`go.${page}`),
         refresh: () => refreshReadings(),
+        refreshFiles: async () => {
+          if (filesFolder === null) return false;
+          await refreshRoot(filesFolder);
+          return true;
+        },
         toggleSidebar: () => dispatchAppAction("sidebar"),
         openSettings: () => dispatchAppAction("settings"),
       });
       if (out.result) {
         setOutput(statusLines(out.result, false));
+        return;
+      }
+      // A line to read — "No folder in Files to refresh" — keeps the palette open to show it.
+      if (out.lines?.length) {
+        setOutput(out.lines);
         return;
       }
       onClose();

@@ -2,13 +2,13 @@ import { browser, expect } from "@wdio/globals";
 import { spawnSync } from "node:child_process";
 import { realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { typeLine, waitForShell } from "../helpers.ts";
+import { hook, typeLine, waitForShell } from "../helpers.ts";
 import { README_TEXT, TOKEN } from "./tree-changes.setup.ts";
 
 // Tree changes (tasks/tree-changes/prd.md §5): marks in the sidebar's tree as files are written, deleted and put
-// back, with their words, roll-ups and the caption. Everything is read inside the page: a lookup costs seconds under
-// this driver. The steps are the PRD's, numbered as it numbers them; the ones about the Changes view, Refresh and a
-// reload arrive with their slices.
+// back, with their words, roll-ups and the caption; then Refresh and a reload clear them, and the terminal pane is the
+// same process throughout. Everything is read inside the page: a lookup costs seconds under this driver. The steps are
+// the PRD's, numbered as it numbers them; the ones about the Changes view arrive with it.
 
 const CLI = join(process.cwd(), "app/src-tauri/binaries/kinas-cli-aarch64-apple-darwin");
 const root = realpathSync(process.env.KINAS_ROOT!);
@@ -74,6 +74,21 @@ async function since(): Promise<string> {
 }
 
 /** Files on `folder`, once its tree lists `name` — by path: `repo` and `plain` both hold a README of that name. */
+/** Local HH:MM, as the caption says it. */
+const clock = (ms: number) => {
+  const at = new Date(ms);
+  return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+};
+
+/** The sidebar's Files has no mark, no caption and no deleted row. */
+async function unmarked() {
+  return browser.execute(() => ({
+    marks: document.querySelectorAll(".sidebar .reader-files .ui-change-mark").length,
+    caption: document.querySelector(".sidebar .reader-files .tree-since")?.textContent ?? null,
+    gone: document.querySelectorAll(".sidebar .reader-files .tree-row[data-gone]").length,
+  }));
+}
+
 async function openInFiles(folder: string, name: string) {
   if (kinas("open", folder).code !== 0) throw new Error(`kinas open ${folder} failed`);
   const path = join(root, folder, name);
@@ -81,11 +96,15 @@ async function openInFiles(folder: string, name: string) {
 }
 
 describe("Tree changes", () => {
+  /** The terminal pane's process at step 1: nothing here may restart it (ADR 0002). */
+  let pid = 0;
+
   before(async () => {
     await waitForShell();
   });
 
   it("1: a folder just shown in Files has no marks and no caption", async () => {
+    pid = await hook<number>("ptyPid");
     await openInFiles("repo", README);
     // Its baseline is taken in the background; give it a moment, so the writes below land after it.
     await browser.pause(500);
@@ -149,5 +168,53 @@ describe("Tree changes", () => {
     await until(async () => (await row(`after-${TOKEN}.md`))?.mark === "A", "the control file marked A");
     // Folders first, as the tree sorts; docs is collapsed again, since Files was on plain in between.
     expect(await marked()).toEqual(["docs D 1", `after-${TOKEN}.md A A`]);
+  });
+
+  it("7: ↻ clears the tree — marks, caption, deleted rows — and a later write counts from the refresh", async () => {
+    const button = () =>
+      browser.execute(() => {
+        const b = document.querySelector<HTMLButtonElement>(".sidebar .reader-files .sidebar-section-head .tree-refresh");
+        return b ? { label: b.getAttribute("aria-label"), title: b.title, marked: b.dataset.marked !== undefined, opacity: getComputedStyle(b).opacity } : null;
+      });
+    // While the tree has marks, the ↻ is in sight without pointing at the head.
+    expect(await button()).toEqual({ label: "Refresh repo", title: "Refresh repo: clear its changes and start counting again", marked: true, opacity: "1" });
+    // Expanded, so the deleted row is on screen to be cleared.
+    await browser.execute(() => [...document.querySelectorAll<HTMLButtonElement>(".sidebar .reader-files .tree-dir")].find((b) => b.title.endsWith("/repo/docs"))!.click());
+    await until(async () => (await row(OLD))?.gone === true, `${OLD} drawn struck through`, 5000);
+
+    const pressed = Date.now();
+    await browser.execute(() => document.querySelector<HTMLButtonElement>(".sidebar .reader-files .tree-refresh")!.click());
+    // Field by field: an object's key order does not survive the WebDriver wire.
+    await until(async () => {
+      const u = await unmarked();
+      return u.marks === 0 && u.caption === null && u.gone === 0;
+    }, "the tree cleared");
+    expect((await button())?.marked).toBe(false);
+
+    await browser.pause(500);
+    writeFileSync(join(repo, `later-${TOKEN}.md`), `# Later ${TOKEN}\n`);
+    await until(async () => (await row(`later-${TOKEN}.md`))?.mark === "A", "a write after the refresh marked A");
+    expect([clock(pressed), clock(pressed + 60_000)]).toContain(await since());
+    expect(await marked()).toEqual([`later-${TOKEN}.md A A`]);
+  });
+
+  it("12: the terminal pane is the process it was at step 1", async () => {
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("13, last: a window reload clears every record; the folder shown again is unmarked, from a new baseline", async () => {
+    expect((await marked()).length).toBeGreaterThan(0);
+    await browser.execute(() => location.reload());
+    // Past the old page, whose hooks would otherwise answer for the new one.
+    await browser.pause(1000);
+    await waitForShell(60000);
+    const reloaded = Date.now();
+    await openInFiles("repo", README);
+    await browser.pause(500);
+    expect(await unmarked()).toEqual({ marks: 0, caption: null, gone: 0 });
+    writeFileSync(join(repo, `after-reload-${TOKEN}.md`), `# After the reload ${TOKEN}\n`);
+    await until(async () => (await row(`after-reload-${TOKEN}.md`))?.mark === "A", "a write after the reload marked A");
+    expect([clock(reloaded - 60_000), clock(reloaded), clock(reloaded + 60_000)]).toContain(await since());
+    expect(await marked()).toEqual([`after-reload-${TOKEN}.md A A`]);
   });
 });

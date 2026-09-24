@@ -443,7 +443,7 @@ export function App() {
           />
         </aside>
       </div>
-      {palette && <Palette onClose={() => setPalette(false)} />}
+      {palette && <Palette onClose={() => setPalette(false)} filesFolder={nav.folder} />}
     </div>
   );
 }

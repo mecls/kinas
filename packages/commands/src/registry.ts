@@ -16,6 +16,8 @@ export interface CommandContext {
   /** Palette only. */
   navigate?: (page: "home" | "usage" | "work") => void;
   refresh?: () => Promise<void>;
+  /** Refreshes the tree Files shows (tree changes rule 16); false when Files shows no folder. */
+  refreshFiles?: () => Promise<boolean>;
   toggleSidebar?: () => void;
   openSettings?: () => void;
 }
@@ -83,6 +85,17 @@ export const commands: readonly Command[] = [
     async run(ctx) {
       await need(ctx.refresh, "refresh")();
       return {};
+    },
+  },
+  {
+    // Tree changes (rule 16): what the Files header's ↻ does, for the folder Files shows. The sidebar's actions are
+    // click-only, and this is their keyboard path (keymap.md, Sidebar).
+    id: "files.refresh",
+    title: "Refresh files",
+    doors: ["palette"],
+    async run(ctx) {
+      const refreshed = await need(ctx.refreshFiles, "refreshing files")();
+      return refreshed ? {} : { lines: ["No folder in Files to refresh"] };
     },
   },
   {

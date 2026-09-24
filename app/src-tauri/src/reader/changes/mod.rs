@@ -88,6 +88,8 @@ pub struct TreeChanges {
 struct Record {
     root: PathBuf,
     since_ms: Millis,
+    /// Unique across the window: a new one at every refresh, so a baseline thread started before it installs nothing.
+    generation: u64,
     watching: bool,
     baseline: Option<Arc<Baseline>>,
     /// Paths named by bursts before the baseline was in. A file here when its turn to be copied comes gets no copy.
@@ -103,8 +105,8 @@ struct Record {
 }
 
 impl Record {
-    fn new(root: PathBuf, since_ms: Millis) -> Self {
-        Record { root, since_ms, watching: true, baseline: None, queued: BTreeSet::new(), marks: BTreeMap::new(), watcher: None, feed: None, copy_bytes: 0 }
+    fn new(root: PathBuf, since_ms: Millis, generation: u64) -> Self {
+        Record { root, since_ms, generation, watching: true, baseline: None, queued: BTreeSet::new(), marks: BTreeMap::new(), watcher: None, feed: None, copy_bytes: 0 }
     }
 }
 
@@ -113,6 +115,15 @@ pub struct Changes {
     roots: HashMap<PathBuf, Record>,
     /// Every record's `copy_bytes`, against `COPY_BUDGET_BYTES`.
     budget_used: u64,
+    /// The last generation handed out. Never reset — not even by a reload, whose old threads may still be running.
+    last_generation: u64,
+}
+
+impl Changes {
+    fn next_generation(&mut self) -> u64 {
+        self.last_generation += 1;
+        self.last_generation
+    }
 }
 
 #[derive(Default)]
@@ -143,74 +154,151 @@ fn summary(record: &Record, touched: Vec<PathBuf>) -> TreeChanges {
 #[tauri::command]
 pub async fn tree_changes_watch(app: AppHandle, root: String) -> Result<TreeChanges, ReaderError> {
     off_main(move || {
-        let projects = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
-        let (real, kind) = checked(&app.state::<ReaderState>(), &projects, &root)?;
-        if kind != Kind::Dir {
-            return Err(ReaderError::new("not_dir", format!("Not a folder: {}", real.display())));
+        let real = checked_dir(&app, &root)?;
+        match register(&app.state::<ChangesState>(), &real, crate::store::now_ms()) {
+            (answer, None) => Ok(answer),
+            (first, Some(generation)) => Ok(follow(&app, &real, generation, first)),
         }
-        let state = app.state::<ChangesState>();
-        let first = {
-            let mut changes = state.lock();
-            if let Some(record) = changes.roots.get(&real) {
-                return Ok(summary(record, Vec::new()));
-            }
-            // In before the watch starts, so a second call racing this one finds it and starts nothing.
-            let record = Record::new(real.clone(), crate::store::now_ms());
-            let first = summary(&record, Vec::new());
-            changes.roots.insert(real.clone(), record);
-            first
-        };
+    })
+    .await
+}
 
-        // Found once per watch; None outside a machine with git, or in an e2e launch that says so.
-        let git = Git::find();
-        let (feed, rx) = mpsc::channel::<PathBuf>();
-        let burst_app = app.clone();
-        let burst_root = real.clone();
-        let burst_git = git.clone();
-        let started = start(&real, feed.clone(), rx, move |paths| {
-            if let Some(summary) = apply_burst(&burst_app.state::<ChangesState>(), &burst_root, burst_git.as_ref(), paths) {
-                let _ = burst_app.emit(TREE_CHANGED, summary);
-            }
-        });
-
-        let (answer, failed) = {
-            let mut changes = state.lock();
-            // Gone already: the window reloaded while the watch was starting. Its watcher drops here.
-            let Some(record) = changes.roots.get_mut(&real) else {
-                return Ok(first);
-            };
-            let failed = match started {
-                Ok(watcher) => {
-                    record.watcher = Some(watcher);
-                    record.feed = Some(feed);
-                    None
-                }
-                Err(e) => {
-                    record.watching = false;
-                    Some(e)
-                }
-            };
-            (summary(record, Vec::new()), failed)
+/// Refresh (rule 15): one root's marks, deleted rows and copies go, and its baseline becomes now. Other roots keep
+/// theirs. A root whose watch had failed tries to start it again (PRD §3). Refused for a root not watched: nothing
+/// else starts a watch but a tree being shown.
+#[tauri::command]
+pub async fn tree_changes_refresh(app: AppHandle, root: String) -> Result<TreeChanges, ReaderError> {
+    off_main(move || {
+        let real = checked_dir(&app, &root)?;
+        let Some((answer, generation, retry)) = reset(&app.state::<ChangesState>(), &real, crate::store::now_ms()) else {
+            return Err(ReaderError::new("not_watched", format!("Kinas is not following changes in {}", real.display())));
         };
-        match failed {
-            // The kind only: notify's own message names the path.
-            Some(e) => log::warn!("tree changes: could not watch a folder ({})", error_kind(&e)),
-            None => {
-                let baseline_app = app.clone();
-                let baseline_root = real.clone();
-                if let Err(e) = std::thread::Builder::new().name("tree-changes-baseline".into()).spawn(move || take_baseline(&baseline_app, baseline_root, git.as_ref())) {
-                    log::error!("tree changes: could not start the baseline thread: {e}");
-                }
-            }
+        if retry {
+            return Ok(follow(&app, &real, generation, answer));
         }
+        spawn_baseline(&app, &real, generation, Git::find());
         Ok(answer)
     })
     .await
 }
 
+/// `PageLoadEvent::Started` on the main webview — a reload (rule 17): every record, watch and copy goes, as if no
+/// folder had ever been shown. The records are dropped after the guard is released: stopping a watch is not free.
+pub fn on_page_load(app: &AppHandle) {
+    if let Some(state) = app.try_state::<ChangesState>() {
+        drop(drop_all(&state));
+    }
+}
+
+/// A root the reader may read (ADR 0009), as a folder.
+fn checked_dir(app: &AppHandle, root: &str) -> Result<PathBuf, ReaderError> {
+    let projects = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
+    let (real, kind) = checked(&app.state::<ReaderState>(), &projects, root)?;
+    if kind != Kind::Dir {
+        return Err(ReaderError::new("not_dir", format!("Not a folder: {}", real.display())));
+    }
+    Ok(real)
+}
+
+/// The root's record, made on its first showing. Answers its summary, and — when this call made it — its generation,
+/// for the caller to start its watch. In before the watch starts, so a second call racing this one starts nothing.
+fn register(state: &ChangesState, real: &Path, now: Millis) -> (TreeChanges, Option<u64>) {
+    let mut changes = state.lock();
+    if let Some(record) = changes.roots.get(real) {
+        return (summary(record, Vec::new()), None);
+    }
+    let generation = changes.next_generation();
+    let record = Record::new(real.to_path_buf(), now, generation);
+    let first = summary(&record, Vec::new());
+    changes.roots.insert(real.to_path_buf(), record);
+    (first, Some(generation))
+}
+
+/// Refresh's half under the guard: the record back to empty, with a new generation and "since". Answers the empty
+/// summary, the generation, and whether the watch has to be started again; None for a root not watched.
+fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges, u64, bool)> {
+    let mut changes = state.lock();
+    let generation = changes.next_generation();
+    let Changes { roots, budget_used, .. } = &mut *changes;
+    let record = roots.get_mut(real)?;
+    *budget_used = budget_used.saturating_sub(record.copy_bytes);
+    record.generation = generation;
+    record.since_ms = now;
+    record.baseline = None;
+    record.queued.clear();
+    record.marks.clear();
+    record.copy_bytes = 0;
+    Some((summary(record, Vec::new()), generation, !record.watching))
+}
+
+/// Every record out of the state, the budget back to nothing. The caller drops them, with no guard held.
+fn drop_all(state: &ChangesState) -> HashMap<PathBuf, Record> {
+    let mut changes = state.lock();
+    changes.budget_used = 0;
+    std::mem::take(&mut changes.roots)
+}
+
+/// The watch, the burst thread and the baseline thread, for a record that has none: its first showing, or a refresh
+/// after a watch that failed. Answers the record's summary as it then stands — or `fallback`, when a reload or a
+/// refresh took the record meanwhile.
+fn follow(app: &AppHandle, real: &Path, generation: u64, fallback: TreeChanges) -> TreeChanges {
+    // Found once per watch; None on a machine without git, or in an e2e launch that says so.
+    let git = Git::find();
+    let (feed, rx) = mpsc::channel::<PathBuf>();
+    let burst_app = app.clone();
+    let burst_root = real.to_path_buf();
+    let burst_git = git.clone();
+    let started = start(real, feed.clone(), rx, move |paths| {
+        if let Some(summary) = apply_burst(&burst_app.state::<ChangesState>(), &burst_root, burst_git.as_ref(), paths) {
+            let _ = burst_app.emit(TREE_CHANGED, summary);
+        }
+    });
+
+    let (answer, failed) = {
+        let state = app.state::<ChangesState>();
+        let mut changes = state.lock();
+        // Gone already, or refreshed: whatever took it owns it now. This watcher drops here.
+        let Some(record) = changes.roots.get_mut(real).filter(|r| r.generation == generation) else {
+            return fallback;
+        };
+        let failed = match started {
+            Ok(watcher) => {
+                record.watching = true;
+                record.watcher = Some(watcher);
+                record.feed = Some(feed);
+                None
+            }
+            Err(e) => {
+                record.watching = false;
+                Some(e)
+            }
+        };
+        (summary(record, Vec::new()), failed)
+    };
+    match failed {
+        // The kind only: notify's own message names the path.
+        Some(e) => log::warn!("tree changes: could not watch a folder ({})", error_kind(&e)),
+        None => spawn_baseline(app, real, generation, git),
+    }
+    answer
+}
+
+fn spawn_baseline(app: &AppHandle, real: &Path, generation: u64, git: Option<Git>) {
+    let app = app.clone();
+    let root = real.to_path_buf();
+    if let Err(e) = std::thread::Builder::new().name("tree-changes-baseline".into()).spawn(move || take_baseline(&app, root, generation, git.as_ref())) {
+        log::error!("tree changes: could not start the baseline thread: {e}");
+    }
+}
+
 /// The recursive watch and its burst thread. The callback does no disk work (rule 28): it drops what the tree could
 /// never list — `.git`, `node_modules`, a build folder — so a build streaming into `target/` never delays a burst.
 fn start(root: &Path, tx: Sender<PathBuf>, rx: Receiver<PathBuf>, on_burst: impl FnMut(BTreeSet<PathBuf>) + Send + 'static) -> notify::Result<RecommendedWatcher> {
+    // A debug build started with KINAS_E2E_WATCH_FAIL=1 refuses every watch, so the e2e can see the tree say so.
+    #[cfg(debug_assertions)]
+    if std::env::var("KINAS_E2E_WATCH_FAIL").as_deref() == Ok("1") {
+        return Err(notify::Error::generic("refused for the e2e"));
+    }
     let filter_root = root.to_path_buf();
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
         if let Ok(event) = event {
@@ -241,13 +329,13 @@ fn error_kind(e: &notify::Error) -> &'static str {
 }
 
 /// The baseline thread: the walk and the copies with no guard held, then one guard to install them.
-fn take_baseline(app: &AppHandle, root: PathBuf, git: Option<&Git>) {
+fn take_baseline(app: &AppHandle, root: PathBuf, generation: u64, git: Option<&Git>) {
     let state = app.state::<ChangesState>();
     let left = COPY_BUDGET_BYTES.saturating_sub(state.lock().budget_used);
     let started = Instant::now();
     let taken = baseline::take(&root, git, left, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
     let (copies, bytes) = (taken.entries.values().filter(|e| matches!(e.text, BaseText::Copy(_))).count(), taken.copy_bytes);
-    let Some((summary, queued, feed)) = install_baseline(&state, &root, taken) else {
+    let Some((summary, queued, feed)) = install_baseline(&state, &root, generation, taken) else {
         return;
     };
     // Counts and a duration, never a path.
@@ -262,12 +350,12 @@ fn take_baseline(app: &AppHandle, root: PathBuf, git: Option<&Git>) {
 
 /// Installs a taken baseline, trimmed to what the window's budget still holds — another root may have installed its
 /// own since this one's copies started. Returns the summary to emit, and the queued paths with the channel they go
-/// back through; None when the root is no longer watched.
-fn install_baseline(state: &ChangesState, root: &Path, mut taken: Baseline) -> Option<(TreeChanges, BTreeSet<PathBuf>, Option<Sender<PathBuf>>)> {
+/// back through; None when the root is no longer watched, or was refreshed after this baseline began.
+fn install_baseline(state: &ChangesState, root: &Path, generation: u64, mut taken: Baseline) -> Option<(TreeChanges, BTreeSet<PathBuf>, Option<Sender<PathBuf>>)> {
     let mut changes = state.lock();
     let left = COPY_BUDGET_BYTES.saturating_sub(changes.budget_used);
-    let Changes { roots, budget_used } = &mut *changes;
-    let record = roots.get_mut(root)?;
+    let Changes { roots, budget_used, .. } = &mut *changes;
+    let record = roots.get_mut(root).filter(|r| r.generation == generation)?;
     taken.trim_to(left);
     *budget_used += taken.copy_bytes;
     record.copy_bytes = taken.copy_bytes;
@@ -299,7 +387,8 @@ fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTre
     let touched: BTreeSet<PathBuf> = judged.keys().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
 
     let mut changes = state.lock();
-    let record = changes.roots.get_mut(root)?;
+    // Judged against a baseline a refresh has since replaced: the new one will judge these paths itself.
+    let record = changes.roots.get_mut(root).filter(|r| r.baseline.as_ref().is_some_and(|b| Arc::ptr_eq(b, &baseline)))?;
     for (path, mark) in judged {
         match mark {
             Some(mark) => record.marks.insert(path, mark),
@@ -491,8 +580,8 @@ mod tests {
             std::fs::write(path, bytes).unwrap();
         }
         let state = ChangesState::default();
-        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000));
-        install_baseline(&state, &root, baseline::take(&root, None, budget, &|_| false)).unwrap();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
+        install_baseline(&state, &root, 0, baseline::take(&root, None, budget, &|_| false)).unwrap();
         (dir, root, state)
     }
 
@@ -612,12 +701,12 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         std::fs::write(root.join("busy.md"), "# before\n").unwrap();
         let state = ChangesState::default();
-        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000));
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
 
         assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("busy.md")])), None);
         let taken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
         assert_eq!(taken.entries[&root.join("busy.md")].text, BaseText::NoCopy(NoCopy::ChangedDuringCopy));
-        let (ready, queued, _) = install_baseline(&state, &root, taken).unwrap();
+        let (ready, queued, _) = install_baseline(&state, &root, 0, taken).unwrap();
         assert!(ready.ready);
         assert_eq!(queued, BTreeSet::from([root.join("busy.md")]));
         // Applied now, the file that changed around its copy is M: Kinas cannot tell, so it says modified.
@@ -631,16 +720,101 @@ mod tests {
         let other = tempfile::tempdir().unwrap();
         let other_root = other.path().canonicalize().unwrap();
         std::fs::write(other_root.join("b.md"), [b'b'; 100]).unwrap();
-        state.lock().roots.insert(other_root.clone(), Record::new(other_root.clone(), 2_000));
+        state.lock().roots.insert(other_root.clone(), Record::new(other_root.clone(), 2_000, 0));
         let taken = baseline::take(&other_root, None, 1024, &|_| false);
         // As if the budget had been 150 when the second baseline was installed.
         state.lock().budget_used = COPY_BUDGET_BYTES - 50;
-        install_baseline(&state, &other_root, taken).unwrap();
+        install_baseline(&state, &other_root, 0, taken).unwrap();
         let changes = state.lock();
         let record = &changes.roots[&other_root];
         assert_eq!(record.copy_bytes, 0);
         assert_eq!(record.baseline.as_ref().unwrap().entries[&other_root.join("b.md")].text, BaseText::NoCopy(NoCopy::Budget));
         assert_eq!(changes.budget_used, COPY_BUDGET_BYTES - 50);
+    }
+
+    #[test]
+    fn watch_twice_keeps_the_first_baseline() {
+        let state = ChangesState::default();
+        let root = Path::new("/p/kinas");
+        let (first, made) = register(&state, root, 1_000);
+        assert!(made.is_some(), "the first showing makes the record");
+        let (second, again) = register(&state, root, 5_000);
+        assert_eq!((again, second.since_ms), (None, 1_000), "a second tree on the root shares the first one's time");
+        assert_eq!(first, second);
+        // Another root is its own record, with its own time.
+        assert_eq!(register(&state, Path::new("/p/kinas/tasks"), 6_000).0.since_ms, 6_000);
+    }
+
+    #[test]
+    fn a_refresh_clears_one_root_and_gives_its_copies_back() {
+        let (_dir, root, state) = watched(&[("a.md", &[b'a'; 100])], 1024);
+        let (_other_dir, other, _) = watched(&[("b.md", b"# b\n")], 1024);
+        state.lock().roots.insert(other.clone(), Record::new(other.clone(), 2_000, 7));
+        std::fs::write(root.join("a.md"), "# edited\n").unwrap();
+        std::fs::remove_file(root.join("a.md")).unwrap();
+        std::fs::write(root.join("new.md"), "# new\n").unwrap();
+        assert_eq!(burst(&state, &root, &["a.md", "new.md"]).total, 2);
+        assert_eq!(state.lock().budget_used, 100);
+
+        let (answer, generation, retry) = reset(&state, &root, 9_000).expect("a watched root");
+        assert_eq!((answer.since_ms, answer.ready, answer.total, answer.entries.len(), retry), (9_000, false, 0, 0, false));
+        assert_eq!(state.lock().budget_used, 0);
+        assert_eq!(state.lock().roots[&other].since_ms, 2_000, "the other root is untouched");
+        // A burst now waits for the new baseline, which does not know a.md: new.md is part of the new "before".
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("new.md")])), None);
+        let retaken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
+        let (ready, queued, _) = install_baseline(&state, &root, generation, retaken).unwrap();
+        assert_eq!((ready.ready, ready.total), (true, 0));
+        let after = apply_burst(&state, &root, None, queued).unwrap();
+        assert_eq!(marked(&after, &root), ["M new.md"], "written around its copy, so modified: Kinas cannot tell");
+
+        assert_eq!(reset(&state, Path::new("/p/never-shown"), 9_000), None);
+    }
+
+    #[test]
+    fn a_refresh_during_a_baseline_discards_the_old_thread() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::write(root.join("a.md"), [b'a'; 100]).unwrap();
+        let state = ChangesState::default();
+        let (_, first) = register(&state, &root, 1_000);
+        // The first baseline is still being taken when the refresh comes.
+        let slow = baseline::take(&root, None, 1024, &|_| false);
+        let (_, second, _) = reset(&state, &root, 2_000).unwrap();
+        assert!(install_baseline(&state, &root, first.unwrap(), slow).is_none(), "the old thread installs nothing");
+        {
+            let changes = state.lock();
+            assert_eq!((changes.budget_used, changes.roots[&root].baseline.is_none()), (0, true));
+        }
+        let fresh = baseline::take(&root, None, 1024, &|_| false);
+        assert!(install_baseline(&state, &root, second, fresh).unwrap().0.ready);
+        assert_eq!(state.lock().budget_used, 100);
+    }
+
+    #[test]
+    fn a_refresh_makes_the_text_as_it_is_the_starting_point() {
+        let (_dir, root, state) = watched(&[("a.md", b"# A\n")], 1024);
+        std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
+        let old = state.lock().roots[&root].baseline.clone().unwrap();
+        let (_, generation, _) = reset(&state, &root, 2_000).unwrap();
+        install_baseline(&state, &root, generation, baseline::take(&root, None, 1024, &|_| false)).unwrap();
+        // As if this burst had judged against the old baseline while the refresh ran.
+        let judged = judge_all(&old, None, &BTreeSet::from([root.join("a.md")]), &BTreeMap::new());
+        assert_eq!(judged[&root.join("a.md")], Some((Kind::File, Mark::Modified)));
+        assert_eq!(burst(&state, &root, &["a.md"]).total, 0, "against the new baseline the edit is the starting point");
+    }
+
+    #[test]
+    fn page_load_drops_every_record() {
+        let (_dir, root, state) = watched(&[("a.md", &[b'a'; 100])], 1024);
+        register(&state, Path::new("/p/other"), 2_000);
+        let before = state.lock().last_generation;
+        assert!(before > 0);
+        let dropped = drop_all(&state);
+        assert_eq!(dropped.len(), 2);
+        assert!(dropped.contains_key(&root));
+        let changes = state.lock();
+        assert_eq!((changes.roots.len(), changes.budget_used, changes.last_generation), (0, 0, before), "generations keep counting across a reload");
     }
 
     /// As `watched`, but the root is a git repository with these files committed, and git answers for them.
@@ -650,8 +824,8 @@ mod tests {
         git::tests::repo_with(&root, files);
         let g = Git::find().expect("git is installed");
         let state = ChangesState::default();
-        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000));
-        install_baseline(&state, &root, baseline::take(&root, Some(&g), 1024, &|_| false)).unwrap();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
+        install_baseline(&state, &root, 0, baseline::take(&root, Some(&g), 1024, &|_| false)).unwrap();
         (dir, root, state, g)
     }
 

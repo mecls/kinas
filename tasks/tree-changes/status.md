@@ -13,7 +13,8 @@
 - [x] Slice 3 · git as the baseline's source: clean blobs, hash-object, nested repositories — 2026-09-24, `bun run check` green (581 bun, 229 Rust); `tree-changes` (7) and `tree-changes-no-git` (1) green, run alone
 - [x] Slice 4 · refresh and reload: ↻ on every tree head, the palette command, `on_page_load` → ship point 1 — 2026-09-24;
   ship point 1 verified on `9207e6c`: `bun run check` green (591 bun, 237 Rust), the full e2e alone, all 25 specs green
-  (`tree-changes` 10 of 10). `main` waits on the captain's word
+  (`tree-changes` 10 of 10). **Merged to `main` (`cbab8be`, PR #34) on the captain's word; not installed** — the
+  captain installs once the first mate's build is done
 - [ ] Slice 5 · the Changes view for a modified or added file: diff, folds, toggle, live re-diff, refusals
 - [ ] Slice 6 · deleted files: the record's text, Copy and Download, the disabled menu items
 - [ ] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2
@@ -26,8 +27,10 @@
 - The build's draft PR is **#34** (`feat/tree-changes-2` → `main`). The captain chose a new branch over a force-push:
   #32 (`feat/tree-changes`, the pre-rebase tip, also kept locally as `tree-changes-before-rebase`) is closed for it,
   and #31 (the Gate documents on their first base) is still open — #34 holds those commits too.
-- Next: ship point 1 is verified and waits on the captain's word for `main` (fast-forward only, §16), then the
-  release build and install. Then slice 5, the Changes view. DESIGN.md's entry is 1.6: the reader's layout took 1.5.
+- Ship point 1 is on `main` at `cbab8be` (2026-09-24), not installed. Next: slice 5, the Changes view, on
+  `feat/tree-changes-2` (it starts level with `main`); ship point 2 gets its own PR. DESIGN.md's entry is 1.6: the
+  reader's layout took 1.5. #31 (the Gate documents on their first base) is still open, and everything in it is on
+  `main` now.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's two screenshots did not reach the session that wrote Gate 1; the "reload" they showed was read as

@@ -330,7 +330,7 @@ as version 1.4 (the list at the end of this section); every binding is written i
 recommendation are shown only when the source carries them, and its keys are bound; four new badge words — **failed**
 (solid, `--danger`), **paused** (solid, `--stale`), **unknown** (solid, `--stale`) and **gone** (cross, `--ink-3`);
 the right panel holds one thing at a time; Home's "since" on the Mac; the terminal chrome shows a badge only for a
-worker's pane; the Work page's strip of lanes does not come with Build 3 (§6). **DESIGN.md 1.6, with the reopening:**
+worker's pane; the Work page's strip of lanes does not come with Build 3 (§6). **DESIGN.md 1.7, with the reopening:**
 a crew item's actions copy an answer line and go to the first mate, with **Copy and go** in the text box and `Copied
 15:02` as the one state after — no Sending, Sent or Not delivered, and no item that cannot be answered from Kinas.
 

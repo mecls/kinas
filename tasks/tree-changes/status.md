@@ -22,8 +22,8 @@
 - [x] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2 — 2026-09-24, rebased onto
   `6b754ee` (the reader's layout's ship point 2, landed first on the captain's word): `bun run check` green (601 bun,
   258 Rust); `tree-changes` 15 of 15, the write-to-mark median 100 ms. **Ship point 2 verified on `dae41eb`**: the full
-  e2e alone, all 26 specs green (19:52–20:37). Draft PR #37. `main` waits for the captain's word; not installed — the
-  captain installs after the first mate's build
+  e2e alone, all 26 specs green (19:52–20:37). **On `main` by fast-forward on the captain's word
+  (PR #37), 2026-09-24; not installed** — the captain installs after the first mate's build
 
 ## Notes for a fresh session
 
@@ -37,7 +37,8 @@
   went up as draft PR #35 from `feat/tree-changes-2`. DESIGN.md's entry is 1.6: the reader's layout took 1.5. #31 (the
   Gate documents on their first base) is still open, and everything in it is on `main` now.
 - **Ship point 2 follows the reader's layout's** (the captain's order, 2026-09-24): this build is rebased onto its
-  ship point 2 (`6b754ee`, tabs) as **`feat/tree-changes-3`**, a new branch as at ship point 1; its draft PR is **#37**, and #35 is closed for it.
+  ship point 2 (`6b754ee`, tabs) as **`feat/tree-changes-3`**, a new branch as at ship point 1; its PR is **#37**, and #35 is closed for it. It went to `main` by fast-forward
+  on the captain's word on 2026-09-24.
   The six conflicts and the one decision they needed — a deleted file gets a tab — are in the build spec's §17.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.

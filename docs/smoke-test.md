@@ -368,8 +368,9 @@ The side column and the text, the reader's tabs, and the window's title bar (202
 
 - [x] The title bar moves the window when dragged anywhere but its three buttons, and a double-click on it zooms the
       window and a second one unzooms it — `checked by Miguel on the debug build, 2026-09-24`
-- [x] In full screen, the three buttons sit at the bar's left padding and nothing sits where the traffic lights were;
-      out of full screen, the traffic lights are centred in the bar — `checked by Miguel on the debug build, 2026-09-24`
+- [x] Out of full screen, the traffic lights are centred in the bar — `checked by Miguel on the debug build, 2026-09-24`
+- [ ] The green light takes the window to full screen, filling it; there the three buttons sit at the bar's left
+      padding and nothing sits where the traffic lights were — `outstanding — needs Miguel`
 
 ## Throughput, page switch, renderer
 

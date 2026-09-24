@@ -455,22 +455,15 @@
   margin-top: 10px;
 }
 
-/* The document */
+/* The document. It fills the reader's width inside the scroller's padding, prose included: no 72ch measure since the
+   reader's layout (tasks/reader-layout/prd.md rule 9). Tables, code, images and diagrams keep their own limits below. */
 
 .reader-doc {
-  max-width: 72ch;
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: var(--fs-lg);
   line-height: 1.6;
   overflow-wrap: break-word;
-}
-
-/* 72ch is a measure for prose. Source wants the width it has, and code must not be reflowed to fit a column. */
-.reader-doc[data-render="source"],
-.reader-doc[data-render="html"],
-.reader-doc[data-render="image"] {
-  max-width: none;
 }
 
 /*

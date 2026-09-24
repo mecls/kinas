@@ -98,6 +98,50 @@ async function waitForStored(side: { contents: boolean; files: boolean; width: n
     });
 }
 
+/** The document's width against the scroller's content box: prose fills it, with no 72ch measure (PRD rule 9). */
+const fill = () =>
+  browser.execute(() => {
+    const scroller = document.querySelector<HTMLElement>("aside.reader .reader-scroll")!;
+    const style = getComputedStyle(scroller);
+    return {
+      doc: Math.round(document.querySelector("aside.reader .reader-doc")!.getBoundingClientRect().width),
+      content: Math.round(scroller.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)),
+      paddings: [style.paddingLeft, style.paddingRight],
+    };
+  });
+
+/** Where long.md's 40th heading ("Section 39") sits against the scroller's top, and what Contents marks. */
+const place = () =>
+  browser.execute(() => {
+    const scroller = document.querySelector("aside.reader .reader-scroll")!;
+    const heading = [...document.querySelectorAll(".reader-body h1, .reader-body h2, .reader-body h3")][39];
+    return {
+      offset: heading ? Math.round(heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top) : Number.NaN,
+      docWidth: Math.round(document.querySelector("aside.reader .reader-doc")!.getBoundingClientRect().width),
+      current: document.querySelector('.reader-contents button[aria-current="true"]')?.textContent ?? null,
+    };
+  });
+
+/**
+ * Runs a step that changes the text's width, waits for the text to reflow, then for the 40th heading to be back
+ * within one line (24 px) of the top. Waited for in the page rather than paused: the reader puts the place back when
+ * its resize observer runs, which lags in a window behind others.
+ */
+async function keepsPlace(label: string, step: () => Promise<unknown>) {
+  const before = await place();
+  await step();
+  await browser
+    .waitUntil(async () => (await place()).docWidth !== before.docWidth, { timeout: 10000, interval: 250 })
+    .catch(async () => {
+      throw new Error(`${label}: the text never changed width: ${JSON.stringify(await place())}`);
+    });
+  await browser
+    .waitUntil(async () => Math.abs((await place()).offset) <= 24, { timeout: 10000, interval: 250 })
+    .catch(async () => {
+      throw new Error(`${label}: the 40th heading is not within 24 px of the top: ${JSON.stringify({ before, after: await place() })}`);
+    });
+}
+
 describe("the reader's side column", () => {
   let pid = 0;
 
@@ -121,6 +165,10 @@ describe("the reader's side column", () => {
     await clickLabelled("Contents");
     await waitInPage(() => document.querySelector("aside.reader .reader-side") === null, "the side column never went");
     expect(await contentsState()).toEqual({ button: { pressed: "false", title: "Show Contents" }, side: null });
+    // The text now has the column's room too: all of it, inside the reader's 28 px sides.
+    const widths = await fill();
+    expect(widths.paddings).toEqual(["28px", "28px"]);
+    expect(Math.abs(widths.doc - widths.content)).toBeLessThanOrEqual(1);
     await browser.waitUntil(async () => storedSide() !== null, { timeout: 10000, interval: 250, timeoutMsg: "reader_side was never stored" });
     expect(storedSide()).toEqual({ contents: false, files: true, width: 220 });
   });
@@ -160,6 +208,51 @@ describe("the reader's side column", () => {
     const limit = Math.min(480, (await column()).main - 320);
     await waitForColumn(limit);
     await waitForStored({ contents: true, files: true, width: limit });
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("the 40th heading stays at the top, and stays marked, when Contents hides, across Collapse and Expand, and across ⌘S", async () => {
+    expect(kinasOpen("long.md")).toBe(0);
+    await opened("long.md");
+    await waitInPage(() => document.querySelectorAll(".reader-contents li").length >= 40, "Contents never listed forty headings");
+    await browser.execute(() => document.querySelectorAll<HTMLButtonElement>(".reader-contents li button")[39]!.click());
+    const start = await place();
+    expect(Math.abs(start.offset)).toBeLessThanOrEqual(1);
+    expect(start.current).toBe("Section 39");
+
+    await keepsPlace("hiding Contents", () => clickLabelled("Contents"));
+    await keepsPlace("showing Contents", () => clickLabelled("Contents"));
+    expect((await place()).current).toBe("Section 39");
+
+    await keepsPlace("Collapse", () => clickLabelled("Collapse"));
+    await keepsPlace("Expand", () => clickLabelled("Expand"));
+    expect((await place()).current).toBe("Section 39");
+
+    await keepsPlace("⌘S hiding the sidebar", () => browser.keys(["Meta", "s"]));
+    await keepsPlace("⌘S showing the sidebar", () => browser.keys(["Meta", "s"]));
+    expect((await place()).current).toBe("Section 39");
+    expect(await browser.execute(() => document.querySelector<HTMLElement>(".sidebar")!.hidden)).toBe(false);
+    // Prose fills the expanded reader beside the column too.
+    const widths = await fill();
+    expect(Math.abs(widths.doc - widths.content)).toBeLessThanOrEqual(1);
+  });
+
+  it("narrow, Contents opens over the text as before, and a click there stores nothing", async () => {
+    const stored = storedSide();
+    await clickLabelled("Collapse");
+    await waitInPage(() => document.querySelector("aside.reader .reader-main[data-narrow]") !== null, "the collapsed reader never became narrow");
+    expect(await contentsState()).toEqual({ button: { pressed: "false", title: "Contents" }, side: null });
+
+    await clickLabelled("Contents");
+    await waitInPage(() => document.querySelector("aside.reader .reader-side[data-overlay] .reader-contents") !== null, "Contents never opened over the text");
+    expect(await contentsState()).toEqual({ button: { pressed: "true", title: "Contents" }, side: { overlay: true, contents: true } });
+    // The overlay is 220 px whatever the wide column remembers, and has no edge to drag.
+    expect(await browser.execute(() => Math.round(document.querySelector("aside.reader .reader-side")!.getBoundingClientRect().width))).toBe(220);
+    expect(await browser.execute(() => document.querySelector(".reader-side-edge") === null)).toBe(true);
+
+    await clickLabelled("Contents");
+    await waitInPage(() => document.querySelector("aside.reader .reader-side") === null, "Contents never closed");
+    expect(storedSide()).toEqual(stored);
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
 });

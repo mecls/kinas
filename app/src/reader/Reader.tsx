@@ -178,6 +178,43 @@ function swapBody(body: HTMLElement, scroller: HTMLElement, rendered: Rendered, 
   if (reload) scroller.scrollTop = atBottom ? scroller.scrollHeight : top;
 }
 
+/**
+ * A place in the document, kept when the text's width changes (reader-layout PRD rule 10): the top-level block the
+ * scroller's top edge is in, and how far down that block it is, as a share of the block's height — a paragraph that
+ * rewraps into fewer lines keeps the same line at the top, near enough. `width` is the scroller's width it was taken at.
+ */
+interface Anchor {
+  width: number;
+  block: Element;
+  within: number;
+}
+
+/** The block under the scroller's top edge, by bisection: the body's blocks are in document order, top to bottom. */
+function anchorAt(body: HTMLElement, scroller: HTMLElement): Anchor | null {
+  const blocks = body.children;
+  const top = scroller.getBoundingClientRect().top;
+  let lo = 0;
+  let hi = blocks.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (blocks[mid]!.getBoundingClientRect().bottom > top) {
+      found = mid;
+      hi = mid - 1;
+    } else lo = mid + 1;
+  }
+  const block = blocks[found];
+  if (!block) return null;
+  const box = block.getBoundingClientRect();
+  return { width: scroller.clientWidth, block, within: box.height > 0 ? (top - box.top) / box.height : 0 };
+}
+
+/** Scrolls so the anchored point is at the scroller's top edge again. */
+function restoreAnchor(scroller: HTMLElement, anchor: Anchor) {
+  const box = anchor.block.getBoundingClientRect();
+  scroller.scrollTop += box.top + anchor.within * box.height - scroller.getBoundingClientRect().top;
+}
+
 function FrontmatterCard({ view }: { view: FrontmatterView }) {
   if (!view.ok) {
     return (
@@ -292,10 +329,43 @@ export function Reader({
     if (!sticky) statusTimer.current = window.setTimeout(() => setStatus(null), STATUS_MS);
   }, []);
 
-  const scrollToId = useCallback((id: string) => {
-    const target = body.current?.querySelector(`[id="${CSS.escape(id)}"]`);
-    if (target && scroller.current) scroller.current.scrollTop += target.getBoundingClientRect().top - scroller.current.getBoundingClientRect().top;
+  /** The heading Contents marks: the last one whose top has reached the reader's first line. */
+  const highlight = useCallback(() => {
+    const sc = scroller.current;
+    const current = docRef.current;
+    if (!sc || !current) return;
+    const line = sc.getBoundingClientRect().top + 16;
+    let slug: string | null = null;
+    for (const heading of current.rendered.headings) {
+      const el = body.current?.querySelector(`[id="${CSS.escape(heading.slug)}"]`);
+      if (el && el.getBoundingClientRect().top <= line) slug = heading.slug;
+    }
+    setCurrentSlug(slug);
   }, []);
+
+  // The place kept across a change of the text's width (reader-layout PRD rule 10). WebKit does not anchor scrolling
+  // (measured, build spec §17), so the reader does: the place is taken on every scroll and put back whenever the
+  // scroller's width changes — Expand, Collapse, both dividers, Files, Contents, the sidebar, the window. Taken in the
+  // scroll event itself, not a frame: frames do not tick in a window that is behind others.
+  const anchor = useRef<Anchor | null>(null);
+  const takeAnchor = useCallback(() => {
+    const sc = scroller.current;
+    const el = body.current;
+    if (!sc || !el) return;
+    anchor.current = sc.scrollTop > 0 ? anchorAt(el, sc) : null;
+  }, []);
+
+  const scrollToId = useCallback(
+    (id: string) => {
+      const target = body.current?.querySelector(`[id="${CSS.escape(id)}"]`);
+      if (!target || !scroller.current) return;
+      scroller.current.scrollTop += target.getBoundingClientRect().top - scroller.current.getBoundingClientRect().top;
+      // Said now, not when the scroll event's frame comes: this is the place, and this is the heading.
+      takeAnchor();
+      highlight();
+    },
+    [highlight, takeAnchor],
+  );
 
   const show = useCallback(
     async function show(path: string, opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number }): Promise<void> {
@@ -563,6 +633,8 @@ export function Reader({
       sc.scrollTop = p.scrollTop ?? 0;
       if (p.fragment) scrollToId(p.fragment);
     }
+    // The blocks are new, so the place is taken again among them.
+    takeAnchor();
     const inUse = new Set([...el.querySelectorAll("img")].map((i) => i.src));
     for (const url of blobs.current) {
       if (!inUse.has(url)) {
@@ -571,7 +643,7 @@ export function Reader({
       }
     }
     void hydrate(doc, p.receivedAt);
-  }, [doc, hydrate, scrollToId]);
+  }, [doc, hydrate, scrollToId, takeAnchor]);
 
   // A request from the shell: a `kinas open`, or a click on a file outside the reader.
   useEffect(() => {
@@ -654,6 +726,14 @@ export function Reader({
     const box = frame.current;
     if (!sc || !el || !box) return;
     const measure = () => {
+      const kept = anchor.current;
+      if (kept && kept.width !== sc.clientWidth) {
+        if (kept.block.isConnected) {
+          restoreAnchor(sc, kept);
+          anchor.current = { ...kept, width: sc.clientWidth };
+          highlight();
+        } else anchor.current = null;
+      }
       setTall(sc.scrollHeight > sc.clientHeight + 1);
       setNarrow(box.clientWidth > 0 && box.clientWidth < NARROW_PX);
       setReaderWidth(box.clientWidth);
@@ -663,7 +743,7 @@ export function Reader({
     observer.observe(el);
     observer.observe(box);
     return () => observer.disconnect();
-  }, []);
+  }, [highlight]);
 
   // The column's edge (reader-layout PRD rule 5). The controller outlives renders, so it saves through refs to the
   // current side and callback: a drag that starts on one render ends on another.
@@ -687,19 +767,14 @@ export function Reader({
 
   const frameRequest = useRef(0);
   const onScroll = () => {
+    // A scroll at a width the observer has not seen yet is the browser clamping to the reflowed page, not the captain
+    // moving: the place taken before it is the one to put back.
+    const sc = scroller.current;
+    if (!anchor.current || anchor.current.width === sc?.clientWidth) takeAnchor();
     if (frameRequest.current) return;
     frameRequest.current = requestAnimationFrame(() => {
       frameRequest.current = 0;
-      const sc = scroller.current;
-      const current = docRef.current;
-      if (!sc || !current) return;
-      const line = sc.getBoundingClientRect().top + 16;
-      let slug: string | null = null;
-      for (const heading of current.rendered.headings) {
-        const el = body.current?.querySelector(`[id="${CSS.escape(heading.slug)}"]`);
-        if (el && el.getBoundingClientRect().top <= line) slug = heading.slug;
-      }
-      setCurrentSlug(slug);
+      highlight();
     });
   };
 

@@ -2,7 +2,7 @@
 
 ## What it is
 
-The command-line tools Firstmate's scripts run, installed on the captain's Mac by `kinas crew setup` at exact versions (Firstmate's floors at its pin, `f9f74a1`). They are the captain's programs, run as him; Kinas only installs them when he says yes, and checks they are there. The one list is `app/src-tauri/src/crew/pin.rs` (`TOOLS`, `PREREQS`), held equal to `packages/commands/src/crew-tools.ts` through `fixtures/crew-tools.json`.
+The command-line tools Firstmate's scripts run, installed on the captain's Mac by `kinas crew setup` at exact versions (Firstmate's floors at its pin, `f9f74a1`). They are the captain's programs, run as the captain; Kinas only installs them on a yes, and checks they are there. The one list is `app/src-tauri/src/crew/pin.rs` (`TOOLS`, `PREREQS`), held equal to `packages/commands/src/crew-tools.ts` through `fixtures/crew-tools.json`.
 
 | Tool | Version | Floor | From | Goes to | Prints a `setup hooks` line |
 |---|---|---|---|---|---|
@@ -33,6 +33,6 @@ On the login shell's `PATH` (`~/.local/bin`, npm's global prefix — under nvm o
 ## Never
 
 - `curl … | sh`, or any install without an exact version — and, for a release, without its pinned checksum matching. A changed checksum for the same tag is not installed.
-- Run a tool's `setup hooks`: setup prints the line for the captain to run himself.
+- Run a tool's `setup hooks`: setup prints the line for the captain to run.
 - Run `quota-axi` from Kinas, even for its version (ADR 0016).
 - Move a version or a floor without moving the Firstmate pin, and the pin only with the captain.

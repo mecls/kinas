@@ -20,7 +20,7 @@ Firstmate (`github.com/kunchenguid/firstmate`) is the crew's conductor — the f
 
 ## What it can do
 
-Its scripts spawn workers into Herdr, run `git`, `gh`, `claude` and the crew tools, file tasks, deliver answers and tear sessions down. Kinas runs none of the ones that change anything: only `fm-fleet-snapshot.sh --json`, `fm-afk-contract.sh field` and `fm-project-mode.sh`, as processes with `FM_HOME` set. `fm-send.sh` is the first mate's channel to its workers; the captain's answers reach the first mate in its own chat, pasted by him from the clipboard (ADR 0017).
+Its scripts spawn workers into Herdr, run `git`, `gh`, `claude` and the crew tools, file tasks, deliver answers and tear sessions down. Kinas runs none of the ones that change anything: only `fm-fleet-snapshot.sh --json`, `fm-afk-contract.sh field` and `fm-project-mode.sh`, as processes with `FM_HOME` set. `fm-send.sh` is the first mate's channel to its workers; the captain's answers reach the first mate in its own chat, pasted from the clipboard (ADR 0017).
 
 ## Never
 

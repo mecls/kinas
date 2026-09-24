@@ -216,7 +216,7 @@ under Sidebar.
 
 Amended 2026-09-23 (the first mate's Gate 1, reopened after its slice 0 probe — `tasks/first-mate/prd.md` rules 5–7):
 nothing is sent from an inbox item. A and Enter put the answer line on the clipboard and go to the first mate's pane,
-where the captain pastes it with ⌘V (as under Terminal pane) and presses Enter himself. Every crew item takes A, R and
+where the captain pastes it with ⌘V (as under Terminal pane) and presses Enter themselves. Every crew item takes A, R and
 D; the item answered only through a button, which had no keys, is gone.
 
 ## Launch screen (the Work pane at start, and `kinas` in any terminal)

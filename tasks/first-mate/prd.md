@@ -20,7 +20,7 @@ the Work page, and it files tasks, launches disposable workers in their own work
 captain only what it must, merges and tears down. Kinas does not rebuild any of that. It installs Firstmate and its
 tools, launches it, reads its fleet through Firstmate's own published contracts into a mirror in Kinas's store, and
 shows what a terminal-only conductor cannot: a Crew page with every task live, a task detail in the right panel, an
-Inbox of everything waiting on the captain, which hands each answer to the first mate's chat, the orders he typed into
+Inbox of everything waiting on the captain, which hands each answer to the first mate's chat, the orders they typed into
 a worker's pane, mismatches it can see after a restart, the crew's night on Home, the waiting count in the sidebar and
 the menu bar, and the crew's in-progress features in `kinas context`. It replaces the Crew and Inbox pages' "arrives
 with Build 3" placeholders and Home's empty Overnight and Waiting on you sections. It is built now because the design
@@ -129,7 +129,7 @@ now says what the crew did while you were away, and a right-click on a client fo
     sidebar's Inbox row, the "N waiting on you" button on Home and on Crew, and the menu bar all show this one number
     from the same reading; at 0 none of them shows a number.
 17. **An order is recorded, never generated.** A line the captain types into Kinas's terminal becomes an order on a
-    task only if, when he presses Enter, Herdr says the focused pane is that task's worker pane. Typed into the first
+    task only if, when they press Enter, Herdr says the focused pane is that task's worker pane. Typed into the first
     mate's pane or a plain shell, it is dropped without a row and without a log line. It is redacted (`Bearer …`,
     `sk-ant-…`), stripped of NUL and capped at 2,000 characters, and kept in Kinas's store only; Firstmate sees the
     typing as conversation, never as a record.
@@ -156,7 +156,7 @@ now says what the crew did while you were away, and a right-click on a client fo
 22. **The Work pane opens on the first mate, once.** When Kinas starts and the attached Herdr session has a
     `firstmate` workspace, Kinas focuses it, so the pane shows the first mate when the session attaches. After that
     Kinas moves the pane only on a click (First mate, Open its pane, Launch task, Open in the terminal); the pane is
-    the captain's and never changes under his hands. *(Clarified at Gate 2, 2026-09-23: "when Kinas starts" means
+    the captain's and never changes under their hands. *(Clarified at Gate 2, 2026-09-23: "when Kinas starts" means
     Herdr answered within 10 s of Kinas starting; when its server was not up yet, Kinas focuses nothing, then or
     later.)*
 23. **The launcher makes one first mate.** At most one `firstmate` workspace per session — Firstmate's own label for
@@ -222,12 +222,12 @@ worker starts in its own worktree and a `fm-<id>` tab → **working**, and **Ope
 **ready** → the captain says "merge it" in the pane → **done**, the tab and the worktree gone, the timeline showing
 it. A scout ends with **Open the report** instead of a PR.
 
-**A decision.** A worker asks something only the captain can decide, or the first mate holds a task for him → an item
+**A decision.** A worker asks something only the captain can decide, or the first mate holds a task for them → an item
 on the Inbox, with the count up by one everywhere → **Approve** puts `On <id> (<key>): Approved — go ahead.` on the
-clipboard at once; **Answer** and **Deny** open a text box, and **Copy and go** puts the line with his text on it (a
+clipboard at once; **Answer** and **Deny** open a text box, and **Copy and go** puts the line with their text on it (a
 denial as `Denied — <text>`) → Kinas goes to the first mate (rule 23: focused if it runs, started if not), the Work
 page shows with the terminal holding the keys, and the sidebar says `Your answer is on the clipboard — paste it into
-the first mate's pane.` → he pastes it and presses Enter → the first mate records the answer its own way and the
+the first mate's pane.` → they paste it and press Enter → the first mate records the answer its own way and the
 worker carries on → the next snapshot no longer lists the item: it leaves and the count drops. Until then the item
 says `Copied 15:02 — paste it into the first mate's pane` and keeps its actions, so it can be copied again. The same
 item and actions sit in the task's detail and, compact, on Home. When the launcher refuses (a missing tool, no Herdr
@@ -422,8 +422,8 @@ the privacy check (AC-10).
 - **AC-22 · It ships clean.** `bun run check` and the full suite green on `main`'s commit; merged by fast-forward;
   the release binary holds none of the test seams; `/Applications/Kinas.app` built from that commit and running;
   `kinas crew status --json` says `installed: true` with the pin.
-- **Needs the captain's eyes** (the smoke test): the first launch into his own `default` session, the trust prompt
-  answered once, Claude Code's Bypass Permissions prompt at the first real worker (his choice: accept it, or tell the
+- **Needs the captain's eyes** (the smoke test): the first launch into their own `default` session, the trust prompt
+  answered once, Claude Code's Bypass Permissions prompt at the first real worker (their choice: accept it, or tell the
   first mate to use auto mode, as the probe did), the first real ask and its card, the first real decision answered
   from the Inbox — pasted into the first mate's pane — and the worker going on, Add to crew on a real folder, the
   morning after a night of crew work read from Home.

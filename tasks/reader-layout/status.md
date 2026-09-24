@@ -28,9 +28,9 @@
 - [x] Slice 7 · Recent leaves the sidebar → ship point 2 (2026-09-24, `6b754ee`; ship point 2: check and the full e2e
   green alone — 26 specs, 153 cases, `settings` and `shell` rerun after the Mac slept mid-run — pushed, PR #36,
   `main` fast-forwarded by the captain, not installed)
-- [ ] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
-  (code, docs and `title-bar.e2e.ts` written 2026-09-24; its checks, the e2e build and the traffic lights' measurement
-  wait for a machine slot after the other sessions' runs — build spec §12 and §17 have the state)
+- [x] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
+  (2026-09-24, on `5df4b7d`; the traffic lights, the drag, the zoom and full screen checked by the captain's eye on
+  the debug build)
 - [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes
 - [ ] Slice 10 · ship point 3, and the hand-off
 
@@ -40,7 +40,7 @@
   in the worktree `.claude/worktrees/reader-layout`. Pushed at ship point 1 on the captain's word (2026-09-24), PR
   #33, and at ship point 2 (2026-09-24), PR #36; each time `main` was fast-forwarded to it by the captain. Parts 2 and 3 continue on this branch, and each later push,
   PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at ship points 1 and 2. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
-  in this worktree, never there.
+  in this worktree, never there. Slice 8 was rebased onto `5df4b7d` (tree changes' ship point 2) and is not pushed.
 - Round 1's request came with two screenshots: the reader at about 875 px with Contents at 220 px, and the reader
   expanded on a wide screen with the text stopping at 72ch. Round 2 came, in reply to the first "Approve Gate 1",
   with an editor's tab strip, the sidebar's Recent list, and a window top bar with a sidebar icon, ← and →.

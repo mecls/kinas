@@ -2,6 +2,8 @@
    showing tab, on --surface, covers it and joins the header below. It scrolls sideways when the tabs do not fit, with
    no scrollbar drawn; the window never does. */
 .ui-tabstrip {
+  /* Positioned, so it is its tabs' offsetParent: TabStrip.tsx keeps the showing tab in view from their offsetLeft. */
+  position: relative;
   display: flex;
   flex: none;
   height: var(--chrome-h);
@@ -36,6 +38,29 @@
 
 .ui-tab:hover {
   color: var(--ink);
+}
+
+/* Dragging (PRD rule 19): the held tab lifts and follows the pointer, and the others slide aside to make room. Only
+   transform moves (DESIGN.md §2.7: a background never transitions). */
+.ui-tabstrip[data-dragging] .ui-tab {
+  transition: transform var(--dur-fast) ease-out;
+}
+
+.ui-tabstrip[data-dragging] .ui-tab[data-dragging] {
+  z-index: 2;
+  /* Raised half a --space-1; `translate` composes with the inline transform that carries it along the strip. */
+  translate: 0 calc(var(--space-1) / -2);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
+  border-radius: var(--radius-sm);
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-tabstrip[data-dragging] .ui-tab {
+    transition: none;
+  }
 }
 
 .ui-tab[aria-selected="true"] {

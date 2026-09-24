@@ -70,6 +70,29 @@ async function waitForStrip(expected: { tabs: string[]; selected: string | null 
     });
 }
 
+/**
+ * Drags a tab in the page with synthetic pointer events sent in one script, as reader.e2e.ts drags the divider:
+ * pressed at the tab's middle, moved in steps, released at (x, y), given relative to the strip's top-left corner.
+ */
+const dragTab = (name: string, to: { x: number; y: number }) =>
+  browser.execute(
+    (n: string, x: number, y: number) => {
+      const strip = document.querySelector<HTMLElement>("aside.reader .ui-tabstrip")!.getBoundingClientRect();
+      const tab = document.querySelector<HTMLElement>(`aside.reader .ui-tab[data-path$="/${n}"]`)!;
+      const at = tab.getBoundingClientRect();
+      const send = (type: string, cx: number, cy: number) =>
+        tab.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerId: 7, button: 0, isPrimary: true }));
+      const from = { x: at.left + at.width / 2, y: at.top + at.height / 2 };
+      const end = { x: strip.left + x, y: strip.top + y };
+      send("pointerdown", from.x, from.y);
+      for (let i = 1; i <= 10; i++) send("pointermove", from.x + ((end.x - from.x) * i) / 10, from.y + ((end.y - from.y) * i) / 10);
+      send("pointerup", end.x, end.y);
+    },
+    name,
+    to.x,
+    to.y,
+  );
+
 /** Where tab-01's 20th heading sits against the scroller's top. */
 const twentieth = () =>
   browser.execute(() => {
@@ -229,6 +252,25 @@ describe("the reader's tabs", () => {
     await waitInPage(() => !document.querySelector<HTMLElement>("aside.reader")!.hidden, "the pin did not bring the panel back");
     await opened(TAB(1));
     expect(await strip()).toEqual({ tabs: [...before, TAB(1)], selected: TAB(1) });
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("a tab dragged to the first place moves there, and the showing tab stays; a drag released below the strip changes nothing", async () => {
+    await clickTab(TAB(2));
+    await opened(TAB(2));
+    const before = (await strip()).tabs as string[];
+    expect(before.at(-1)).toBe(TAB(1));
+
+    await dragTab(TAB(1), { x: 4, y: 16 });
+    await waitForStrip({ tabs: [TAB(1), ...before.slice(0, -1)], selected: TAB(2) });
+    expect(await browser.execute(() => (document.querySelector(".reader-path")?.textContent ?? "").endsWith("tab-02-9c2e.md"))).toBe(true);
+    expect(await browser.execute(() => document.querySelector("aside.reader .ui-tabstrip")!.hasAttribute("data-dragging"))).toBe(false);
+
+    const moved = (await strip()).tabs as string[];
+    await dragTab(TAB(7), { x: 400, y: 200 });
+    await browser.pause(300);
+    expect(await strip()).toEqual({ tabs: moved, selected: TAB(2) });
+    expect(await browser.execute(() => document.querySelector("aside.reader .ui-tabstrip")!.hasAttribute("data-dragging"))).toBe(false);
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
 });

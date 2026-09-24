@@ -516,6 +516,7 @@ export const STORIES: Story[] = [
               selected="/r/tasks/reader-layout/status.md"
               onSelect={noop}
               onClose={noop}
+              onMove={noop}
             />
             <div style={{ height: "var(--hit)", borderBottom: "1px solid var(--line)" }} />
           </div>
@@ -532,6 +533,29 @@ export const STORIES: Story[] = [
               selected="/r/notes-3.md"
               onSelect={noop}
               onClose={noop}
+              onMove={noop}
+            />
+          </div>
+        ),
+      },
+      {
+        // Mid-drag: status.md held 90 px right of its place, lifted, and DESIGN.md slid aside to make room for it.
+        name: "dragging",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)" }}>
+            <TabStrip
+              label="Open files"
+              tabs={[
+                { key: "/r/tasks/reader-layout/prd.md", name: "prd.md", detail: null, title: "tasks/reader-layout/prd.md" },
+                { key: "/r/tasks/reader-layout/status.md", name: "status.md", detail: null, title: "tasks/reader-layout/status.md" },
+                { key: "/r/DESIGN.md", name: "DESIGN.md", detail: null, title: "DESIGN.md" },
+                { key: "/r/keymap.md", name: "keymap.md", detail: null, title: "keymap.md" },
+              ]}
+              selected="/r/tasks/reader-layout/prd.md"
+              onSelect={noop}
+              onClose={noop}
+              onMove={noop}
+              dragPreview={{ key: "/r/tasks/reader-layout/status.md", dx: 90 }}
             />
           </div>
         ),
@@ -550,6 +574,7 @@ export const STORIES: Story[] = [
               selected="/r/tasks/reader-layout/prd.md"
               onSelect={noop}
               onClose={noop}
+              onMove={noop}
             />
           </div>
         ),

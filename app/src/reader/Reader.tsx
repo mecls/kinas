@@ -34,7 +34,7 @@ import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { drawnWidth, edgeDrag, sectionButton, sectionPlace, SIDE_DEFAULT, SIDE_MAX_PX, SIDE_MIN_PX, type SectionState } from "./side.ts";
 import { renderImage, renderSource } from "./source.ts";
-import { closeTab, NO_TABS, openTab, rememberScroll, showNone, tabLabels, type Tabs } from "./tabs.ts";
+import { closeTab, moveTab, NO_TABS, openTab, rememberScroll, showNone, tabLabels, type Tabs } from "./tabs.ts";
 import { FileTree } from "./tree.tsx";
 import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
 import { Button, TabStrip } from "../ui/index.ts";
@@ -1041,6 +1041,7 @@ export function Reader({
         selected={tabs.showing}
         onSelect={selectTab}
         onClose={closeTabOf}
+        onMove={(from, to) => setTabs((t) => moveTab(t, from, to))}
       />
       <Header
         displayPath={doc?.displayPath ?? problem?.displayPath ?? (folder ? baseName(folder) : "")}

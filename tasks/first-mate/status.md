@@ -26,7 +26,9 @@
 - [x] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card — *2026-09-24: the real
   setup ran on this Mac (Firstmate at f9f74a1, backend herdr); check green; crew-collector, crew-settings, settings,
   stories, screens and shell green alone*
-- [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1
+- [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1 — *2026-09-24:
+  code in, rebased onto `origin/main` (the reader's layout, PR #33); check green; the full e2e alone green, 26 specs and
+  147 cases; ship point 1 waits for the captain's push*
 - [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
 - [ ] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
   menu bar)
@@ -37,7 +39,7 @@
 
 ## Notes for a fresh session
 
-- **Next: slice 3, launchable (`tasks.md` 3.0) — ship point 1.** The work is in the worktree
+- **Next: ship point 1 when the captain says push (`build-spec.md` §16's procedure), then slice 4 (`tasks.md` 4.0).** The work is in the worktree
   `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1), local commits only — nothing
   pushed. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;
@@ -55,7 +57,7 @@
   - `plan-2026-09-23.md` — the captain's consolidated plan, verbatim.
   - `build_mockups.py` — generates the seven mockups from the template's tokens, `app/src/ui/*.css` and one body per
     screen. Regenerate after a change rather than editing the HTML by hand.
-- **DESIGN.md 1.4 and 1.5 and `keymap.md`'s Build 3 amendments** were written with the PRD and its reopening.
+- **DESIGN.md 1.4 and 1.6 and `keymap.md`'s Build 3 amendments** were written with the PRD and its reopening.
 - **Firstmate.** The pin is `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540` (reviewed monthly; the fleet ledger is worth
   adopting at the next review, after this build ships — §17). Read the pin from a scratch clone and run none of its
   scripts outside a throwaway probe. Kinas's own clone will live under the data directory

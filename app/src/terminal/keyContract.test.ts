@@ -44,12 +44,13 @@ describe("⌘ chords", () => {
     expect(decide(key("k", { metaKey: true }))).toEqual({ kind: "app", action: "palette" });
     expect(decide(key("K", { metaKey: true }))).toEqual({ kind: "app", action: "palette" });
   });
-  test("⌘1, ⌘2, ⌘4, ⌘S and ⌘, are app actions", () => {
-    // keymap.md, 2026-09-22: ⌘1 is Home and ⌘4 is Usage; ⌘3 is reserved for the crew and stays the terminal's.
+  test("⌘1, ⌘2, ⌘3, ⌘4, ⌘S and ⌘, are app actions", () => {
+    // keymap.md, 2026-09-22: ⌘1 is Home and ⌘4 is Usage; 2026-09-24: ⌘3 is the Crew page. ⌘5 waits for the Inbox.
     expect(decide(key("1", { metaKey: true }))).toEqual({ kind: "app", action: "go.home" });
     expect(decide(key("2", { metaKey: true }))).toEqual({ kind: "app", action: "go.work" });
     expect(decide(key("4", { metaKey: true }))).toEqual({ kind: "app", action: "go.usage" });
-    expect(decide(key("3", { metaKey: true }))).toEqual({ kind: "native" });
+    expect(decide(key("3", { metaKey: true }))).toEqual({ kind: "app", action: "go.crew" });
+    expect(decide(key("5", { metaKey: true }))).toEqual({ kind: "native" });
     expect(decide(key("s", { metaKey: true, code: "KeyS" }))).toEqual({ kind: "app", action: "sidebar" });
     expect(decide(key(",", { metaKey: true }))).toEqual({ kind: "app", action: "settings" });
   });

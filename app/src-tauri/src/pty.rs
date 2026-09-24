@@ -141,7 +141,7 @@ pub fn herdr_vars<I: IntoIterator<Item = (OsString, OsString)>>(vars: I) -> Vec<
         .collect()
 }
 
-fn login_shell() -> String {
+pub(crate) fn login_shell() -> String {
     // SAFETY: getpwuid returns a pointer into static storage or null; it is read immediately.
     let from_passwd = unsafe {
         let pw = libc::getpwuid(libc::getuid());

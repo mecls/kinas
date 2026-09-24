@@ -131,6 +131,20 @@ client folder, what is waiting on you, the three usage gauges that decide the da
 **Inbox** wait for Build 3 and say so. Every surface is built
 from `DESIGN.md`'s tokens and components (`app/src/ui/`); a test refuses any raw colour, size or spacing outside
 `app/src/styles/tokens.css`.
+Amended 2026-09-24 (the first mate): **Crew** (⌘3) shows the crew's fleet — a card per task the first mate knows,
+with its state, one lane per project — once Firstmate is installed (below); **Inbox** still waits for its slice.
+
+## The crew
+
+Added 2026-09-24 (the first mate). The crew is Firstmate, adopted (ADR 0016): Kinas's own clone of
+`github.com/kunchenguid/firstmate` at `<data dir>/firstmate` — `~/Library/Application Support/ai.sintralabs.kinas/firstmate`
+— pinned at `f9f74a1` and reviewed monthly. That folder is Firstmate's home, and **Kinas never writes under it**: it
+runs only Firstmate's read-only scripts, with the login shell's `PATH` and `FM_HOME` set. The app keeps a read-only
+mirror of the fleet in its own store (the `crew_*` tables): a thread runs `bin/fm-fleet-snapshot.sh --json` at most
+once every 5 s — when `data/backlog.md` or `state/home-summary.json` changes, when the Crew page shows, and every minute
+while the window is visible (five while it is hidden) — and records every task, when it was first seen, first working,
+done and gone. Nothing is deleted from the mirror, and nothing about a task reaches the log beyond counts and times.
+Deleting the data directory deletes the clone and the crew's project clones under it.
 
 ## Appearance
 
@@ -178,6 +192,8 @@ The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug buil
 
 ```
 app/                 Tauri app: src-tauri/ (Rust: store, PTY, readers, menu bar) and src/ (React webview)
+app/src-tauri/src/crew/     the crew's commands: the Firstmate home, its pin, the only runner of its scripts
+app/src-tauri/src/readers/crew/ the crew's collector: the snapshot's parse, the word rule, the scheduler, the mirror
 app/src/ui/          the component library — one file per DESIGN.md component, a story per state (stories/)
 app/src/styles/      tokens.css (every colour, size and space), the page sheets, the guard and contrast tests
 app/src/assets/fonts/ Inter, JetBrains Mono, Bricolage Grotesque as woff2, with their OFL licences
@@ -189,6 +205,7 @@ integrations/        session-start hooks for Pi and Claude Code
 migrations/          forward-only SQL, applied by the app
 fixtures/            shared test data (synthetic files are marked .synthetic)
 e2e/                 WebdriverIO specs and runner
+e2e/fake-firstmate/  a fake Firstmate home for the crew specs: stub scripts that log their argv, fixture snapshots
 keymap.md            every key binding
 DESIGN.md            the design system: tokens, components, pages — the law for every surface
 design/preview.html  DESIGN.md rendered, both themes, for a browser; held equal to tokens.css by a test

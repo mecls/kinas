@@ -16,7 +16,7 @@ registers it (PRD rule 5). A binding in code that is not listed here is a bug.
 | ⌘K | Open the command palette |
 | ⌘1 | Go to the Home page (Usage until 2026-09-22, see below) |
 | ⌘2 | Go to the Work page |
-| ⌘3 | Go to the Crew page (from Build 3; bound to nothing until it lands) |
+| ⌘3 | Go to the Crew page (since 2026-09-24, the first mate) |
 | ⌘4 | Go to the Usage page |
 | ⌘5 | Go to the Inbox page (from Build 3; bound to nothing until it lands) |
 | ⌘S | Hide or show the sidebar (remembered across launches) |
@@ -49,6 +49,9 @@ Hide or show the sidebar does, remembered the same way, and its tooltip names th
 missed, this file is where it is added. A click on any of the three moves no keyboard focus, so the terminal keeps
 the keys; ← or → onto the Work page gives the terminal the keys as ⌘2 does. No `keydown` handler comes with them.
 The rest of the bar moves the window when dragged and zooms it when double-clicked, as macOS's own title bar did.
+Amended 2026-09-24 (the first mate, slice 1): ⌘3 and Go to Crew landed — Go to Crew follows Go to Work in the palette.
+Until the Inbox's slice the defaults are seven, ⌘5 is still the terminal's, and Go to Inbox and Go to the first mate
+are not in the palette.
 
 ## Command palette
 
@@ -80,7 +83,7 @@ The only ⌘ chords the app handles in the pane:
 | ⌘K | Open the palette |
 | ⌘C | Copy the selection, if there is one; otherwise nothing |
 | ⌘V | Paste (bracketed when the running program enabled bracketed paste) |
-| ⌘1 / ⌘2 / ⌘4 | Switch pages (and ⌘3 / ⌘5 from Build 3) |
+| ⌘1 / ⌘2 / ⌘3 / ⌘4 | Switch pages (⌘3 since 2026-09-24; ⌘5 from Build 3) |
 | ⌘S | Hide or show the sidebar |
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |

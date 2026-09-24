@@ -1,0 +1,160 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-09-24T09:05:00Z",
+  "fm_home": "__FM_HOME__",
+  "roots": {
+    "fm_root": "__FM_HOME__",
+    "state": "__FM_HOME__/state",
+    "data": "__FM_HOME__/data",
+    "config": "__FM_HOME__/config",
+    "projects": "__FM_HOME__/projects"
+  },
+  "backlog": {
+    "path": "__FM_HOME__/data/backlog.md",
+    "present": true,
+    "records": [
+      {
+        "order": 1,
+        "state": "in_flight",
+        "structured": true,
+        "id": "shop-health-9c2e",
+        "checked": false,
+        "title": "Add a health check to the shop 9c2e",
+        "repo": "shop-9c2e",
+        "kind": "ship",
+        "priority": null,
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "since": "2026-09-24",
+        "merged": null,
+        "reported": null,
+        "done": null,
+        "pr_url": null,
+        "report_path": null,
+        "raw": "- [ ] shop-health-9c2e - Add a health check to the shop 9c2e (repo: shop-9c2e) (kind: ship)",
+        "body_lines": [
+          "Delivery: direct-pr 9c2e."
+        ],
+        "body_excerpt": "Delivery: direct-pr 9c2e.",
+        "current_role": "worker",
+        "hold_bucket": null,
+        "captain_actionable": false
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "shop-health-9c2e",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "direct-pr",
+      "yolo": "off",
+      "project": "__FM_HOME__/projects/shop-9c2e",
+      "spawn_gen": "s1.9c2e",
+      "backend": "herdr",
+      "remote": null,
+      "paths": {
+        "meta": {
+          "path": "__FM_HOME__/state/shop-health-9c2e.meta",
+          "present": true
+        },
+        "status_log": {
+          "path": "__FM_HOME__/state/shop-health-9c2e.status",
+          "present": true,
+          "kind": "event_history",
+          "last_event": {
+            "state": "working",
+            "note": "running the tests 9c2e",
+            "raw": "working: running the tests 9c2e",
+            "age_seconds": 30
+          }
+        },
+        "worktree": {
+          "path": "__ROOT__/.treehouse/shop-9c2e-000000/1/shop-9c2e",
+          "present": true
+        },
+        "home": {
+          "path": null,
+          "present": false
+        },
+        "report": {
+          "path": "__FM_HOME__/data/shop-health-9c2e/report.md",
+          "present": false
+        }
+      },
+      "secondmate_projects": [],
+      "current_state": {
+        "state": "working",
+        "source": "status-log",
+        "detail": "running the tests 9c2e",
+        "raw": "state: working · source: status-log · running the tests 9c2e",
+        "observed_at": "2026-09-24T09:00:00Z",
+        "freshness": "fresh"
+      },
+      "endpoint": {
+        "target": "kinas-e2e-crew:w2:p2",
+        "exists": true,
+        "agent_alive": "not_checked",
+        "status": "unknown",
+        "observed_at": "2026-09-24T09:00:00Z",
+        "freshness": "fresh"
+      },
+      "pr": {
+        "url": null,
+        "source": "absent",
+        "head": null
+      },
+      "hints": {
+        "pending_decision": false,
+        "blocked_event": false,
+        "open_decisions": [],
+        "scout_report_present": false,
+        "last_event_text": "working: running the tests 9c2e"
+      },
+      "actions": {
+        "watch": "bin/fm-peek.sh fm-shop-health-9c2e",
+        "steer": "bin/fm-send.sh fm-shop-health-9c2e '<instruction>'",
+        "return_channel_note": null
+      },
+      "backlog": {
+        "order": 1,
+        "state": "in_flight",
+        "structured": true,
+        "id": "shop-health-9c2e",
+        "checked": false,
+        "title": "Add a health check to the shop 9c2e",
+        "repo": "shop-9c2e",
+        "kind": "ship",
+        "priority": null,
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "since": "2026-09-24",
+        "merged": null,
+        "reported": null,
+        "done": null,
+        "pr_url": null,
+        "report_path": null,
+        "raw": "- [ ] shop-health-9c2e - Add a health check to the shop 9c2e (repo: shop-9c2e) (kind: ship)",
+        "body_lines": [
+          "Delivery: direct-pr 9c2e."
+        ],
+        "body_excerpt": "Delivery: direct-pr 9c2e.",
+        "current_role": "worker",
+        "hold_bucket": null,
+        "captain_actionable": false
+      }
+    }
+  ],
+  "main_inventory": {
+    "valid": true,
+    "reason": null,
+    "orphan_in_flight": [],
+    "unstructured_current_count": 0
+  },
+  "scout_reports": [],
+  "secondmate_guidance": {
+    "note": "synthetic fixture for Kinas's crew specs; every task carries the marker 9c2e"
+  }
+}

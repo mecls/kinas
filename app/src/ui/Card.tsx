@@ -4,6 +4,7 @@ import "./Card.css";
 
 // DESIGN.md §4 Card and Lane. Cards exist to group, not to decorate; a selected one is --accent-soft with a 2 px
 // accent edge. A lane is one client folder's column on the Crew board; an empty lane shows one line of quiet text.
+// A crew project no client folder matches has a lane under its own name with no chip (1.4).
 
 export function Card({ selected = false, title, children, className, ...rest }: { selected?: boolean; title?: ReactNode; children: ReactNode } & HTMLAttributes<HTMLElement>) {
   return (
@@ -14,11 +15,11 @@ export function Card({ selected = false, title, children, className, ...rest }: 
   );
 }
 
-export function Lane({ name, cat, slots, children, ...rest }: { name: string; cat: Category; slots?: string; children?: ReactNode } & HTMLAttributes<HTMLElement>) {
+export function Lane({ name, cat, slots, children, className, ...rest }: { name: string; cat?: Category; slots?: string; children?: ReactNode } & HTMLAttributes<HTMLElement>) {
   return (
-    <section className="ui-lane" {...rest}>
+    <section className={className ? `ui-lane ${className}` : "ui-lane"} {...rest}>
       <div className="ui-lane-head">
-        <Chip cat={cat} />
+        {cat !== undefined && <Chip cat={cat} />}
         <span>{name}</span>
         {slots && <span className="ui-lane-slots">{slots}</span>}
       </div>

@@ -1,0 +1,28 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-09-24T09:00:00Z",
+  "fm_home": "__FM_HOME__",
+  "roots": {
+    "fm_root": "__FM_HOME__",
+    "state": "__FM_HOME__/state",
+    "data": "__FM_HOME__/data",
+    "config": "__FM_HOME__/config",
+    "projects": "__FM_HOME__/projects"
+  },
+  "backlog": {
+    "path": "__FM_HOME__/data/backlog.md",
+    "present": true,
+    "records": []
+  },
+  "tasks": [],
+  "main_inventory": {
+    "valid": true,
+    "reason": null,
+    "orphan_in_flight": [],
+    "unstructured_current_count": 0
+  },
+  "scout_reports": [],
+  "secondmate_guidance": {
+    "note": "synthetic fixture for Kinas's crew specs; every task carries the marker 9c2e"
+  }
+}

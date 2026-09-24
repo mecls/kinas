@@ -3,6 +3,7 @@
 
 pub mod claude_plan;
 pub mod convex;
+pub mod crew;
 pub mod hostinger;
 pub mod host;
 pub mod logs;

@@ -253,7 +253,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | TitleRow | home |
 | Table | today |
 | Card | plain, selected |
-| Lane | with-cards, empty |
+| Lane | with-cards, empty, no-chip |
 | ProgressRow | list, quiet |
 | InboxItem | plan |
 | Timeline | task |

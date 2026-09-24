@@ -21,7 +21,8 @@
   build if Firstmate's Herdr backend fails on 0.9.0) — *probe done 2026-09-23: Herdr works (q1), `claude '<ask>'`
   works (q2), the snapshot is cheap (q6); q3–q5 answered from the scripts; field paths corrected 2026-09-24 (0.12);
   the baseline (0.2) taken alone 2026-09-24: check green, 21 e2e specs and 122 cases green*
-- [ ] Slice 1 · tracer bullet: a task in the fake home is a card on the Crew page
+- [x] Slice 1 · tracer bullet: a task in the fake home is a card on the Crew page — *2026-09-24: a filed task is a card
+  in 558–638 ms (AC-3); check green, the crew-collector, shell, palette, keyboard, settings and stories specs green alone*
 - [ ] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card
 - [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1
 - [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
@@ -34,7 +35,7 @@
 
 ## Notes for a fresh session
 
-- **Next: slice 1, the tracer bullet (`tasks.md` 1.0).** The work is in the worktree
+- **Next: slice 2, installed (`tasks.md` 2.0).** The work is in the worktree
   `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1), local commits only — nothing
   pushed. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;

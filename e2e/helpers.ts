@@ -1,5 +1,28 @@
 import { browser } from "@wdio/globals";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+/**
+ * The app's log. Every debug and release build of Kinas writes this one file, so a spec reads it for its own lines —
+ * and a marker like `9c2e`, which only fixtures carry, must never appear in it from any run.
+ */
+export const APP_LOG = join(homedir(), "Library/Logs/ai.sintralabs.kinas/kinas.log");
+
+/** The log's lines that contain `needle`; none when the log does not exist yet. */
+export const logLines = (needle: string): string[] =>
+  existsSync(APP_LOG) ? readFileSync(APP_LOG, "utf8").split("\n").filter((line) => line.includes(needle)) : [];
+
+/** The built CLI, run with the spec's environment (its `KINAS_DATA_DIR`), from the projects root. */
+export function kinasCli(...args: string[]): { code: number | null; stdout: string; stderr: string } {
+  const cli = join(process.cwd(), "app/src-tauri/binaries/kinas-cli-aarch64-apple-darwin");
+  const result = spawnSync(cli, args, { cwd: process.env.KINAS_ROOT ?? process.cwd(), env: process.env, encoding: "utf8", timeout: 20000 });
+  return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+/** The fake Firstmate home a crew spec's setup made (`e2e/fake-firstmate/make.ts`): `<data dir>/firstmate`. */
+export const fakeHome = (): string => join(process.env.KINAS_DATA_DIR!, "firstmate");
 
 /** Calls a debug-only test hook from app/src/testHooks.ts (or one registered by a component). */
 export async function hook<T = unknown>(name: string): Promise<T> {

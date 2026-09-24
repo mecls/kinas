@@ -11,6 +11,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("../../../migrations/0002_usage_details.sql")),
     (3, include_str!("../../../migrations/0003_provider_metrics.sql")),
     (4, include_str!("../../../migrations/0004_hostinger.sql")),
+    (5, include_str!("../../../migrations/0005_crew.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -275,7 +276,7 @@ mod tests {
         }
 
         let store = Store::open(dir.path()).unwrap();
-        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), 4);
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), MIGRATIONS.last().unwrap().0);
         assert_eq!(count(&store, "SELECT count(*) FROM orgs"), 1, "the upgrade must not mint a second org");
 
         let (state, last_success): (String, i64) = store
@@ -294,5 +295,57 @@ mod tests {
                 [],
             )
             .expect("v4 must accept the reader id 'hostinger'");
+    }
+
+    /// The first mate (build spec §11.2): a store written by the previous build upgrades in place — its rows kept,
+    /// `reader_status` rebuilt by copy — and only then admits the reader id 'crew' and the four mirror tables. The
+    /// same two halves as the v3 test above, for the same reason.
+    #[test]
+    fn upgrading_from_v4_keeps_rows_and_admits_crew() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_FILE);
+        {
+            let mut conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)")
+                .unwrap();
+            for (version, sql) in MIGRATIONS.iter().filter(|(v, _)| *v <= 4) {
+                let tx = conn.transaction().unwrap();
+                tx.execute_batch(sql).unwrap();
+                tx.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)", params![version]).unwrap();
+                tx.commit().unwrap();
+            }
+            conn.execute("INSERT INTO orgs (id, name, created_at) VALUES ('org-1', 'test', 0)", []).unwrap();
+            conn.execute("INSERT INTO settings (org_id, key, value) VALUES ('org-1', 'appearance', '\"dark\"')", []).unwrap();
+            conn.execute(
+                "INSERT INTO reader_status (org_id, reader, state, last_attempt_at, last_success_at, last_error, stale_after_ms, dead_after_ms)
+                 VALUES ('org-1', 'hostinger', 'error', 33, 22, 'HTTP 401', 600000, 43200000)",
+                [],
+            )
+            .unwrap();
+            let refused = conn.execute(
+                "INSERT INTO reader_status (org_id, reader, state, stale_after_ms, dead_after_ms) VALUES ('org-1', 'crew', 'ok', 60000, 43200000)",
+                [],
+            );
+            assert!(refused.is_err(), "v4 accepted 'crew' — then 0005's rebuild is not testing what it claims");
+        }
+
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), 5);
+        assert_eq!(count(&store, "SELECT count(*) FROM orgs"), 1, "the upgrade must not mint a second org");
+        assert_eq!(count(&store, "SELECT count(*) FROM settings WHERE key = 'appearance'"), 1);
+        let row: (String, i64, i64, String) = store
+            .conn()
+            .query_row("SELECT state, last_attempt_at, last_success_at, last_error FROM reader_status WHERE reader = 'hostinger'", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert_eq!(row, ("error".into(), 33, 22, "HTTP 401".into()), "the rebuild lost or altered the existing row");
+        store
+            .conn()
+            .execute("INSERT INTO reader_status (org_id, reader, state, stale_after_ms, dead_after_ms) VALUES ('org-1', 'crew', 'ok', 60000, 43200000)", [])
+            .expect("v5 must accept the reader id 'crew'");
+        for table in ["crew_tasks", "crew_workers", "crew_events", "crew_decisions"] {
+            assert_eq!(count(&store, &format!("SELECT count(*) FROM {table}")), 0, "{table}");
+        }
     }
 }

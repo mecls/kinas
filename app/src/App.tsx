@@ -38,6 +38,7 @@ import { Sidebar } from "./shell/Sidebar.tsx";
 import { CrewPage } from "./pages/Crew.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { InboxPage } from "./pages/Inbox.tsx";
+import { useCrew } from "./crew/useCrew.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
 import { useSplit } from "./shell/useSplit.ts";
@@ -144,6 +145,8 @@ export function App() {
 
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
+  // One crew reading for every page that shows the crew (crew/useCrew.ts); the collector runs for the Crew page.
+  const { crew } = useCrew(page === "crew");
 
   // Going to a page means wanting to see it: an expanded panel goes back to the side.
   const goTo = useCallback(
@@ -159,6 +162,7 @@ export function App() {
       if (action === "go.home") goTo("home");
       else if (action === "go.usage") goTo("usage");
       else if (action === "go.work") goTo("work");
+      else if (action === "go.crew") goTo("crew");
       else if (action === "palette") setPalette(true);
       else if (action === "settings") {
         setPalette(false);
@@ -520,7 +524,7 @@ export function App() {
             <HomePage usage={usage.snapshot} usageError={usage.error} projects={projects} folder={nav.folder} onOpen={openFromSidebar} onGo={goTo} onLaunch={launchTask} />
           </section>
           <section className="page" data-page="crew" hidden={page !== "crew"}>
-            <CrewPage />
+            <CrewPage crew={crew} />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
             <InboxPage />

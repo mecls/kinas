@@ -112,7 +112,7 @@ export function Sidebar({
       <div className="sidebar-nav">
         <NavItem icon={<HomeIcon />} label="Home" current={current("home")} onClick={() => onGo("home")} title={`Home (${chord("go.home")})`} />
         <NavItem icon={<TerminalIcon />} label="Work" current={current("work")} onClick={() => onGo("work")} title={`Work (${chord("go.work")})`} />
-        <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} />
+        <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} title={`Crew (${chord("go.crew")})`} />
         <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={0} onClick={() => onGo("inbox")} />
         <NavItem icon={<GaugeIcon />} label="Usage" current={current("usage")} onClick={() => onGo("usage")} title={`Usage (${chord("go.usage")})`} />
       </div>

@@ -305,6 +305,16 @@ export const STORIES: Story[] = [
         ),
       },
       { name: "empty", node: <Lane name="arc-edu" cat={2} slots="Claude 0/1 · Codex 0/2" /> },
+      {
+        name: "no-chip",
+        node: (
+          <Lane name="tools-cli">
+            <Card title="Upgrade the argument parser">
+              <StatusBadge state="working" />
+            </Card>
+          </Lane>
+        ),
+      },
     ],
   },
   {

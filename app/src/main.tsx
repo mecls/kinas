@@ -7,6 +7,7 @@ import "./styles/home.css";
 import "./styles/settings.css";
 import "./styles/overlay.css";
 import "./styles/reader.css";
+import "./styles/crew.css";
 // Last, and entirely inside `@media print`: what the print sheet gets (Print as PDF).
 import "./styles/print.css";
 

@@ -1,0 +1,143 @@
+{
+  "about": "The crew's word rule (build spec §7): one case per row of the table, first match wins, plus precedence cases. Read by app/src-tauri/src/readers/crew/word.rs and, from its slice, packages/commands/src/crew-words.ts, so both sides say the same word. `overnight` is the bucket of the word computed without the gone rule.",
+  "cases": [
+    {
+      "name": "gone: gone_at set",
+      "input": { "gone": true, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "gone",
+      "overnight": "working"
+    },
+    {
+      "name": "done: done_at set",
+      "input": { "gone": false, "done": true, "state": "done", "backlog_state": "done", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "done",
+      "overnight": "done"
+    },
+    {
+      "name": "failed: state failed",
+      "input": { "gone": false, "done": false, "state": "failed", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "failed",
+      "overnight": "fail"
+    },
+    {
+      "name": "needs decision: a pending decision",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": true, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "needs decision",
+      "overnight": "wait"
+    },
+    {
+      "name": "needs decision: state parked",
+      "input": { "gone": false, "done": false, "state": "parked", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "needs decision",
+      "overnight": "wait"
+    },
+    {
+      "name": "needs decision: a captain-actionable hold",
+      "input": { "gone": false, "done": false, "state": "done", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": true, "blocked_event": false, "pr": null },
+      "word": "needs decision",
+      "overnight": "wait"
+    },
+    {
+      "name": "blocked: a blocked event",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": true, "pr": null },
+      "word": "blocked",
+      "overnight": "fail"
+    },
+    {
+      "name": "blocked: state blocked",
+      "input": { "gone": false, "done": false, "state": "blocked", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "blocked",
+      "overnight": "fail"
+    },
+    {
+      "name": "paused: state paused",
+      "input": { "gone": false, "done": false, "state": "paused", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "paused",
+      "overnight": "working"
+    },
+    {
+      "name": "ready: open, not a draft, mergeable, every check green",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": false, "mergeable": "MERGEABLE", "checks_total": 4, "checks_failed": 0 } },
+      "word": "ready",
+      "overnight": "wait"
+    },
+    {
+      "name": "CI red: a failing check",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": false, "mergeable": "MERGEABLE", "checks_total": 4, "checks_failed": 1 } },
+      "word": "CI red",
+      "overnight": "fail"
+    },
+    {
+      "name": "PR open: a PR not yet checked by gh",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": null, "draft": false, "mergeable": null, "checks_total": null, "checks_failed": null } },
+      "word": "PR open",
+      "overnight": "working"
+    },
+    {
+      "name": "PR open: a draft with green checks is not ready",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": true, "mergeable": "MERGEABLE", "checks_total": 2, "checks_failed": 0 } },
+      "word": "PR open",
+      "overnight": "working"
+    },
+    {
+      "name": "PR open: no checks yet is not ready",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": false, "mergeable": "MERGEABLE", "checks_total": 0, "checks_failed": 0 } },
+      "word": "PR open",
+      "overnight": "working"
+    },
+    {
+      "name": "PR open: conflicting is not ready",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": false, "mergeable": "CONFLICTING", "checks_total": 3, "checks_failed": 0 } },
+      "word": "PR open",
+      "overnight": "working"
+    },
+    {
+      "name": "working: state working",
+      "input": { "gone": false, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "working",
+      "overnight": "working"
+    },
+    {
+      "name": "queued: a queued backlog record",
+      "input": { "gone": false, "done": false, "state": null, "backlog_state": "queued", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "queued",
+      "overnight": "working"
+    },
+    {
+      "name": "unknown: in flight with no state",
+      "input": { "gone": false, "done": false, "state": "unknown", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "unknown",
+      "overnight": "working"
+    },
+    {
+      "name": "precedence: a gone task with a PR is gone",
+      "input": { "gone": true, "done": false, "state": "working", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": false, "mergeable": "MERGEABLE", "checks_total": 3, "checks_failed": 1 } },
+      "word": "gone",
+      "overnight": "fail"
+    },
+    {
+      "name": "precedence: a parked task with a red check needs a decision",
+      "input": { "gone": false, "done": false, "state": "parked", "backlog_state": "in_flight", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": { "state": "OPEN", "draft": false, "mergeable": "MERGEABLE", "checks_total": 3, "checks_failed": 1 } },
+      "word": "needs decision",
+      "overnight": "wait"
+    },
+    {
+      "name": "precedence: gone then done counts as done overnight",
+      "input": { "gone": true, "done": true, "state": "done", "backlog_state": "done", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "gone",
+      "overnight": "done"
+    },
+    {
+      "name": "precedence: done outranks a failure it recovered from",
+      "input": { "gone": false, "done": true, "state": "failed", "backlog_state": "done", "pending_decision": false, "captain_actionable": false, "blocked_event": false, "pr": null },
+      "word": "done",
+      "overnight": "done"
+    },
+    {
+      "name": "precedence: a blocked task with a queued record is blocked",
+      "input": { "gone": false, "done": false, "state": null, "backlog_state": "queued", "pending_decision": false, "captain_actionable": false, "blocked_event": true, "pr": null },
+      "word": "blocked",
+      "overnight": "fail"
+    }
+  ]
+}

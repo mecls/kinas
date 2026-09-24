@@ -1,0 +1,57 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-09-24T09:01:00Z",
+  "fm_home": "__FM_HOME__",
+  "roots": {
+    "fm_root": "__FM_HOME__",
+    "state": "__FM_HOME__/state",
+    "data": "__FM_HOME__/data",
+    "config": "__FM_HOME__/config",
+    "projects": "__FM_HOME__/projects"
+  },
+  "backlog": {
+    "path": "__FM_HOME__/data/backlog.md",
+    "present": true,
+    "records": [
+      {
+        "order": 1,
+        "state": "queued",
+        "structured": true,
+        "id": "shop-health-9c2e",
+        "checked": false,
+        "title": "Add a health check to the shop 9c2e",
+        "repo": "shop-9c2e",
+        "kind": "ship",
+        "priority": null,
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "since": "2026-09-24",
+        "merged": null,
+        "reported": null,
+        "done": null,
+        "pr_url": null,
+        "report_path": null,
+        "raw": "- [ ] shop-health-9c2e - Add a health check to the shop 9c2e (repo: shop-9c2e) (kind: ship)",
+        "body_lines": [
+          "Delivery: direct-pr 9c2e."
+        ],
+        "body_excerpt": "Delivery: direct-pr 9c2e.",
+        "current_role": "queued",
+        "hold_bucket": null,
+        "captain_actionable": false
+      }
+    ]
+  },
+  "tasks": [],
+  "main_inventory": {
+    "valid": true,
+    "reason": null,
+    "orphan_in_flight": [],
+    "unstructured_current_count": 0
+  },
+  "scout_reports": [],
+  "secondmate_guidance": {
+    "note": "synthetic fixture for Kinas's crew specs; every task carries the marker 9c2e"
+  }
+}

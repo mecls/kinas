@@ -7,7 +7,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export type ReadingState = "fresh" | "stale" | "dead" | "reset";
 export type Subscription = "claude-plan" | "ollama-cloud";
 export type QuotaWindow = "session" | "week" | "month_credits";
-export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host" | "convex" | "hostinger";
+export type ReaderId = "claude-plan" | "ollama-cloud" | "claude-code-logs" | "pi-logs" | "host" | "convex" | "hostinger" | "crew";
 
 /**
  * A provider whose metrics live in `provider_metrics`, not `quotas`.
@@ -121,6 +121,67 @@ export interface UsageSnapshot {
   backfill: Backfill;
   claude_hook: HookStatus;
 }
+
+
+// The crew (build spec §11.2): Kinas's read-only mirror of Firstmate's fleet. Words are Rust's, derived at read time.
+export type CrewPage = "uninstalled" | "installed" | "running";
+export type CrewWord = "queued" | "working" | "needs decision" | "blocked" | "CI red" | "PR open" | "ready" | "done" | "failed" | "paused" | "unknown" | "gone";
+export interface CrewPr {
+  number: number;
+  state: string | null;
+  draft: boolean;
+  mergeable: string | null;
+  checks_total: number | null;
+  checks_failed: number | null;
+}
+export interface CrewTask {
+  id: string;
+  title: string | null;
+  repo: string | null;
+  project_name: string | null;
+  kind: string;
+  word: CrewWord;
+  overnight_word: CrewWord;
+  harness: string | null;
+  first_seen_at: number;
+  first_working_at: number | null;
+  done_at: number | null;
+  gone_at: number | null;
+  last_event_at: number | null;
+  last_event_text: string | null;
+  pr: CrewPr | null;
+  has_pane: boolean;
+}
+export interface CrewDecision {
+  task_id: string;
+  key: string;
+  verb: string;
+  summary: string;
+  task_title: string | null;
+  repo: string | null;
+  opened_at: number;
+  copied_at: number | null;
+}
+export interface CrewSnapshot {
+  now: number;
+  /** The last good snapshot's own time (ISO 8601), for the `as of` caption. */
+  generated: string | null;
+  reader: ReaderView;
+  page: CrewPage;
+  blocked: string | null;
+  tasks: CrewTask[];
+  decisions: CrewDecision[];
+  reconcile: string[];
+  waiting: number;
+  overnight_since: number;
+}
+export interface CrewError {
+  code: string;
+  message: string;
+}
+export const getCrew = () => invoke<CrewSnapshot>("crew_snapshot");
+export const setCrewVisible = (visible: boolean) => invoke<void>("set_crew_visible", { visible });
+export const onCrewChanged = (handler: () => void): Promise<UnlistenFn> => listen("crew_changed", handler);
 
 export const getUsageSnapshot = () => invoke<UsageSnapshot>("get_usage_snapshot");
 /** The session the Work page's chrome names: `default`, a debug build's test session, or a plain shell. */

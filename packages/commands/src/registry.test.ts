@@ -12,6 +12,7 @@ describe("the registry (R36, CLI v0)", () => {
       ["go.home", ["palette"]],
       ["go.usage", ["palette"]],
       ["go.work", ["palette"]],
+      ["go.crew", ["palette"]],
       ["sidebar", ["palette"]],
       ["settings", ["palette"]],
     ]);
@@ -23,8 +24,8 @@ describe("the registry (R36, CLI v0)", () => {
   });
 
   test("palette filtering by title", () => {
-    expect(paletteMatches("").map((c) => c.id)).toEqual(["status", "refresh", "files.refresh", "go.home", "go.usage", "go.work", "sidebar", "settings"]);
-    expect(paletteMatches("go to").map((c) => c.id)).toEqual(["go.home", "go.usage", "go.work"]);
+    expect(paletteMatches("").map((c) => c.id)).toEqual(["status", "refresh", "files.refresh", "go.home", "go.usage", "go.work", "go.crew", "sidebar", "settings"]);
+    expect(paletteMatches("go to").map((c) => c.id)).toEqual(["go.home", "go.usage", "go.work", "go.crew"]);
     expect(paletteMatches("REFR").map((c) => c.id)).toEqual(["refresh", "files.refresh"]);
     expect(paletteMatches("files").map((c) => c.id)).toEqual(["files.refresh"]);
     expect(paletteMatches("sidebar").map((c) => c.id)).toEqual(["sidebar"]);

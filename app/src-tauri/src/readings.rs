@@ -114,6 +114,7 @@ fn default_limits(reader: &str) -> (i64, i64) {
         "pi-logs" => Reader::PiLogs,
         "convex" => Reader::Convex,
         "hostinger" => Reader::Hostinger,
+        "crew" => Reader::Crew,
         // Anything unrecognised falls through to Host's 120 s window, which is the *shortest* — so a reader
         // missing from this match goes stale in two minutes and nobody is told why. Add new readers here.
         _ => Reader::Host,

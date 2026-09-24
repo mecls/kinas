@@ -13,12 +13,14 @@ const press = (key: string, code: string, mods: Partial<ChordKey> = {}): ChordKe
 });
 
 describe("the default shortcuts (keymap.md)", () => {
-  test("⌘K ⌘1 ⌘2 ⌘4 ⌘S ⌘, raise their actions (⌘1 is Home and ⌘4 Usage since 2026-09-22)", () => {
+  test("⌘K ⌘1 ⌘2 ⌘3 ⌘4 ⌘S ⌘, raise their actions (⌘1 is Home and ⌘4 Usage since 2026-09-22, ⌘3 Crew since 2026-09-24)", () => {
     expect(actionForEvent(press("k", "KeyK"), DEFAULT_SHORTCUTS)).toBe("palette");
     expect(actionForEvent(press("1", "Digit1"), DEFAULT_SHORTCUTS)).toBe("go.home");
     expect(actionForEvent(press("2", "Digit2"), DEFAULT_SHORTCUTS)).toBe("go.work");
     expect(actionForEvent(press("4", "Digit4"), DEFAULT_SHORTCUTS)).toBe("go.usage");
-    expect(actionForEvent(press("3", "Digit3"), DEFAULT_SHORTCUTS)).toBeNull();
+    expect(actionForEvent(press("3", "Digit3"), DEFAULT_SHORTCUTS)).toBe("go.crew");
+    // ⌘5 waits for the Inbox (keymap.md).
+    expect(actionForEvent(press("5", "Digit5"), DEFAULT_SHORTCUTS)).toBeNull();
     expect(actionForEvent(press("s", "KeyS"), DEFAULT_SHORTCUTS)).toBe("sidebar");
     expect(actionForEvent(press(",", "Comma"), DEFAULT_SHORTCUTS)).toBe("settings");
   });

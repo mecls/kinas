@@ -2,7 +2,8 @@
 //! connection only for its own writes, never across a network request or a sample, so the window's reads
 //! are never blocked for long.
 
-use super::{claude_plan, convex, host, hostinger, logs, ollama_cloud, poller};
+use super::crew::schedule::CrewWake;
+use super::{claude_plan, convex, crew, host, hostinger, logs, ollama_cloud, poller};
 use crate::keychain::{self, KeyStore};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use crate::store::{now_ms, Store};
@@ -16,6 +17,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 pub const READINGS_CHANGED: &str = "readings_changed";
 pub const BACKFILL_PROGRESS: &str = "backfill_progress";
+/// The crew's mirror changed (build spec §11.3): the webview reads `crew_snapshot` again.
+pub const CREW_CHANGED: &str = "crew_changed";
 
 const HOST_VISIBLE: Duration = Duration::from_secs(10);
 const HOST_HIDDEN: Duration = Duration::from_secs(60);
@@ -39,6 +42,9 @@ pub struct ReaderControl {
     ollama: Mutex<Sender<poller::Trigger>>,
     convex: Mutex<Sender<poller::Trigger>>,
     hostinger: Mutex<Sender<poller::Trigger>>,
+    crew: Mutex<Sender<CrewWake>>,
+    /// The Crew page is on screen: the crew's baseline runs every 60 s instead of 300 s.
+    crew_visible: AtomicBool,
     backfill: Mutex<Backfill>,
     data_dir: PathBuf,
 }
@@ -66,6 +72,18 @@ impl ReaderControl {
         }
     }
 
+    /// The Crew page came on screen or left it. Coming on screen runs the snapshot as soon as the schedule allows.
+    pub fn set_crew_visible(&self, visible: bool) {
+        let was = self.crew_visible.swap(visible, Ordering::SeqCst);
+        if visible && !was {
+            let _ = self.crew.lock().unwrap_or_else(|p| p.into_inner()).send(CrewWake::Visible);
+        }
+    }
+
+    pub fn crew_visible(&self) -> bool {
+        self.crew_visible.load(Ordering::SeqCst)
+    }
+
     /// "Refresh readings" in the palette, or a key just saved in Settings.
     pub fn refresh(&self) {
         let _ = self.host.lock().unwrap_or_else(|p| p.into_inner()).send(());
@@ -74,6 +92,7 @@ impl ReaderControl {
         let _ = self.ollama.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
         let _ = self.convex.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
         let _ = self.hostinger.lock().unwrap_or_else(|p| p.into_inner()).send(poller::Trigger::Manual);
+        let _ = self.crew.lock().unwrap_or_else(|p| p.into_inner()).send(CrewWake::Manual);
     }
 }
 
@@ -119,6 +138,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
     let (ollama_tx, ollama_rx) = channel();
     let (convex_tx, convex_rx) = channel();
     let (hostinger_tx, hostinger_rx) = channel();
+    let (crew_tx, crew_rx) = channel();
     let keys = key_store();
     app.manage(ReaderControl {
         usage_visible: AtomicBool::new(false),
@@ -128,6 +148,8 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
         ollama: Mutex::new(ollama_tx),
         convex: Mutex::new(convex_tx),
         hostinger: Mutex::new(hostinger_tx),
+        crew: Mutex::new(crew_tx.clone()),
+        crew_visible: AtomicBool::new(false),
         backfill: Mutex::new(Backfill::default()),
         data_dir: data_dir.clone(),
     });
@@ -161,6 +183,12 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) -> Arc<dyn KeyStore> {
         let app = app.clone();
         let keys = Arc::clone(&keys);
         move || hostinger_loop(app, keys, hostinger_rx)
+    });
+    app.manage(crew::CrewLive::default());
+    spawn("kinas-crew", {
+        let app = app.clone();
+        let home = crate::crew::home::home_in(&data_dir);
+        move || crew::crew_loop(app, home, crew_tx, crew_rx)
     });
     keys
 }
@@ -537,10 +565,17 @@ fn set_backfill(app: &AppHandle, value: Backfill) {
 
 /// A file watcher that nudges `tx`; roots that do not exist are skipped (their reader reports it).
 fn watch(paths: &[&Path], mode: notify::RecursiveMode, tx: Sender<()>) -> Option<notify::RecommendedWatcher> {
+    watch_with(paths, mode, move |_| {
+        let _ = tx.send(());
+    })
+}
+
+/// `watch` with the event handed to `on_event`, so a caller can filter it (the crew watches two files by name).
+pub(crate) fn watch_with(paths: &[&Path], mode: notify::RecursiveMode, on_event: impl Fn(notify::Event) + Send + 'static) -> Option<notify::RecommendedWatcher> {
     use notify::Watcher;
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-        if event.is_ok() {
-            let _ = tx.send(());
+        if let Ok(event) = event {
+            on_event(event);
         }
     })
     .map_err(|e| log::error!("file watcher: {e}"))

@@ -41,6 +41,8 @@ pub enum Reader {
     Host,
     Convex,
     Hostinger,
+    /// The crew's collector (the first mate, build spec §6.6): the fleet snapshot.
+    Crew,
 }
 
 /// Every reader's limit for turning dead (R12).
@@ -56,6 +58,7 @@ impl Reader {
             Reader::Host => "host",
             Reader::Convex => "convex",
             Reader::Hostinger => "hostinger",
+            Reader::Crew => "crew",
         }
     }
 
@@ -66,6 +69,8 @@ impl Reader {
             // Twice the 5-minute cadence, matching Ollama's (R13).
             Reader::OllamaCloud | Reader::Convex | Reader::Hostinger => 600_000,
             Reader::ClaudeCodeLogs | Reader::PiLogs | Reader::Host => 120_000,
+            // The Crew page says "stale" past 60 s (build spec §4): its baseline is 60 s while the window is visible.
+            Reader::Crew => 60_000,
         }
     }
 }
@@ -172,6 +177,7 @@ mod tests {
             (Reader::Host, 120_000),
             (Reader::ClaudeCodeLogs, 120_000),
             (Reader::PiLogs, 120_000),
+            (Reader::Crew, 60_000),
         ] {
             write_reader_status(&store.conn(), store.org_id(), reader, Outcome::NotConfigured("no key"), 5).unwrap();
             let (state, _, success, _, stale_after, dead_after) = row(&store, reader);

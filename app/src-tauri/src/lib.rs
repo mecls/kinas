@@ -1,7 +1,10 @@
 mod cli_link;
 mod commands;
+mod crew;
 mod keychain;
+mod login_path;
 mod paths;
+mod proc;
 mod projects;
 mod pty;
 mod quota_line;
@@ -109,6 +112,8 @@ pub fn run() {
             commands::get_usage_snapshot,
             commands::set_usage_visible,
             commands::refresh_readings,
+            crew::crew_snapshot,
+            crew::set_crew_visible,
             commands::ollama_key_status,
             commands::save_ollama_key,
             commands::remove_ollama_key,

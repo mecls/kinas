@@ -18,8 +18,9 @@
   (2026-09-23; WebKit measured not to keep the place, so slice 3 builds the anchor)
 - [x] Slice 2 · the column's edge: drag 160–480, the text keeps 320, double-click for 220, one save per drag
   (2026-09-24)
-- [ ] Slice 3 · prose fills the reader, and the place survives every reflow → ship point 1
-  (code and its checks done 2026-09-24, `78845da`; ship point 1's full e2e and the captain's word pending)
+- [x] Slice 3 · prose fills the reader, and the place survives every reflow → ship point 1
+  (2026-09-24, `78845da`; ship point 1: check and the full e2e green alone — 22 specs, 129 cases — pushed, PR #33,
+  not installed at the captain's word)
 - [ ] Slice 4 · tracer bullet: every opened file gets a tab, and a click switches to it where it was left
 - [ ] Slice 5 · fifteen at most, closing, the reader's × keeps the tabs, a gone file, names told apart
 - [ ] Slice 6 · drag a tab to reorder the strip
@@ -31,8 +32,9 @@
 ## Notes for a fresh session
 
 - Branch `feat/reader-layout` (from `docs/reader-layout-gate-1`, rebased onto `origin/main` at `dd21e35` in slice 0),
-  in the worktree `.claude/worktrees/reader-layout`. Not pushed: the folder-views notes record "nothing is pushed
-  without the captain's word", so pushing and the draft PR wait for it. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
+  in the worktree `.claude/worktrees/reader-layout`. Pushed at ship point 1 on the captain's word (2026-09-24), PR
+  #33; `main` is fast-forwarded to it by the captain. Parts 2 and 3 continue on this branch, and each later push,
+  PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at ship point 1. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
   in this worktree, never there.
 - Round 1's request came with two screenshots: the reader at about 875 px with Contents at 220 px, and the reader
   expanded on a wide screen with the text stopping at 72ch. Round 2 came, in reply to the first "Approve Gate 1",

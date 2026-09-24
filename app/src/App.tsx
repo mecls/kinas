@@ -432,6 +432,12 @@ export function App() {
     },
     [goTo, closeReader],
   );
+  // Debug builds only (testHooks.ts): the places as recorded, for title-bar.e2e.ts to say where a walk went wrong.
+  useEffect(() => {
+    if (import.meta.env.TAURI_ENV_DEBUG !== "true") return;
+    void import("./testHooks.ts").then(({ registerTestHooks }) => registerTestHooks({ places: () => historyRef.current }));
+  }, []);
+
   const goBack = useCallback(() => walk(back), [walk]);
   const goForward = useCallback(() => walk(forward), [walk]);
 

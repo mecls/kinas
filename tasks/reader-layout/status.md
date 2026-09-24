@@ -31,8 +31,8 @@
 - [x] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
   (2026-09-24, on `5df4b7d`; the traffic lights, the drag, the zoom and full screen checked by the captain's eye on
   the debug build)
-- [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes (code, docs and specs written 2026-09-24;
-  its checks, and the green light's full screen on a regular launch, wait for the machine — build spec §17)
+- [x] Slice 9 · ← and → walk every place, and the reader's own ← goes (2026-09-24, on `5df4b7d`; the green light
+  proved to fill the screen on a regular launch, by the captain)
 - [ ] Slice 10 · ship point 3, and the hand-off
 
 ## Notes for a fresh session
@@ -41,7 +41,7 @@
   in the worktree `.claude/worktrees/reader-layout`. Pushed at ship point 1 on the captain's word (2026-09-24), PR
   #33, and at ship point 2 (2026-09-24), PR #36; each time `main` was fast-forwarded to it by the captain. Parts 2 and 3 continue on this branch, and each later push,
   PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at ship points 1 and 2. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
-  in this worktree, never there. Slice 8 was rebased onto `5df4b7d` (tree changes' ship point 2) and is not pushed.
+  in this worktree, never there. Slices 8 and 9 sit on `5df4b7d` (tree changes' ship point 2), not pushed.
 - Round 1's request came with two screenshots: the reader at about 875 px with Contents at 220 px, and the reader
   expanded on a wide screen with the text stopping at 72ch. Round 2 came, in reply to the first "Approve Gate 1",
   with an editor's tab strip, the sidebar's Recent list, and a window top bar with a sidebar icon, ← and →.

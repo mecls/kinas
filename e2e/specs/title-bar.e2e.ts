@@ -47,12 +47,18 @@ const place = () =>
 async function waitForPlace(page: string, file: string | null) {
   const at = (p: (string | null)[]) => p[0] === page && (file === null ? p[1] === null : (p[1] ?? "").endsWith(file));
   await browser.waitUntil(async () => at(await place()), { timeout: 15000, interval: 250 }).catch(async () => {
-    throw new Error(`the place is ${JSON.stringify(await place())}, not ${JSON.stringify([page, file])}`);
+    const h = await hook<{ places: { page: string; reader: { kind: string; path?: string } }[]; at: number }>("places");
+    const recorded = h.places.map((p, i) => `${i === h.at ? "→" : " "}(${p.page}, ${p.reader.kind === "none" ? "nothing" : p.reader.path})`).join(" ");
+    throw new Error(`the place is ${JSON.stringify(await place())}, not ${JSON.stringify([page, file])}; recorded: ${recorded}`);
   });
 }
 
-/** ← or →, by the driver's own click; a button that cannot act does nothing. */
-const press = (label: "Back" | "Forward") => $(`.ui-titlebar button[aria-label="${label}"]`).click();
+/**
+ * ← or →, clicked in the page like every other click here: the driver's own click waits on the service's focus probe
+ * (about 30 s a command, build spec §19), and four of them outlast a case. The sidebar case above has already shown
+ * the driver's click works inside the bar. A button that cannot act does nothing.
+ */
+const press = (label: "Back" | "Forward") => browser.execute((l: string) => document.querySelector<HTMLButtonElement>(`.ui-titlebar button[aria-label="${l}"]`)!.click(), label);
 /** Whether ← and → can act. */
 const arrows = () =>
   browser.execute(() => ["Back", "Forward"].map((l) => document.querySelector(`.ui-titlebar button[aria-label="${l}"]`)?.getAttribute("aria-disabled") !== "true"));
@@ -177,5 +183,9 @@ describe("the window's title bar", () => {
     await waitForPlace("work", "place-a.md");
     await browser.waitUntil(async () => hook<boolean>("terminalFocused"), { timeout: 10000, timeoutMsg: "the terminal never got the keys" });
     expect(await hook<number>("ptyPid")).toBe(pid);
+    // Every file a place ever held is this spec's own: nothing outside its projects root was shown.
+    const h = await hook<{ places: { reader: { kind: string; path?: string } }[] }>("places");
+    const outside = h.places.filter((p) => p.reader.kind !== "none" && !(p.reader.path ?? "").startsWith(root));
+    expect(outside).toEqual([]);
   });
 });

@@ -129,6 +129,9 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
     // The start focus is decided on Herdr's first answer, whenever it comes, and only then.
     let mut first_answer_seen = false;
     let mut last_herdr: i64 = 0;
+    // A Herdr-only refresh asked for sooner than 2 s after the last one waits for the gap, never dropped: the launcher
+    // asks right after it changed the session, and a dropped ask left the page reading the old session for minutes.
+    let mut herdr_pending = false;
     loop {
         // Watched once the home exists: `kinas crew setup` may create it while Kinas runs.
         if watcher.is_none() {
@@ -136,26 +139,19 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
         }
         schedule.set_visible(app.state::<ReaderControl>().crew_visible());
         let now = now_ms();
-        let tick = schedule.run_at(&CrewWake::Tick, now);
-        let next = due.map_or(tick, |d| d.min(tick));
+        let cycle_at = due.map_or_else(|| schedule.run_at(&CrewWake::Tick, now), |d| d.min(schedule.run_at(&CrewWake::Tick, now)));
+        let herdr_at = if herdr_pending { last_herdr + HERDR_MIN_GAP_MS } else { i64::MAX };
+        let next = cycle_at.min(herdr_at);
         match rx.recv_timeout(Duration::from_millis(next.saturating_sub(now).max(0) as u64)) {
-            Ok(CrewWake::Herdr) => {
-                // Herdr only, for the chrome or after a launch; at most every 2 s.
-                let now = now_ms();
-                if now - last_herdr >= HERDR_MIN_GAP_MS {
-                    last_herdr = now;
-                    let view = refresh_live(&app);
-                    first_answer(&app, started_at, &mut first_answer_seen, view.as_ref());
-                }
-            }
+            Ok(CrewWake::Herdr) => herdr_pending = true,
             Ok(wake) => {
                 let mut wakes = vec![wake];
                 if wake == CrewWake::File {
                     // Quiet for 500 ms first; whatever else arrives meanwhile joins this run.
                     while let Ok(more) = rx.recv_timeout(FILE_DEBOUNCE) {
-                        // A chrome's Herdr wake is not a reason for a fleet snapshot; the chrome asks again.
-                        if more != CrewWake::Herdr {
-                            wakes.push(more);
+                        match more {
+                            CrewWake::Herdr => herdr_pending = true,
+                            other => wakes.push(other),
                         }
                     }
                 }
@@ -168,13 +164,24 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
                     due = Some(due.map_or(at, |d| d.min(at)));
                 }
             }
-            Err(RecvTimeoutError::Timeout) => {
-                let ok = cycle(&app, &home, started_at, &mut first_answer_seen);
-                last_herdr = now_ms();
-                schedule.finished(now_ms(), ok);
-                due = None;
-            }
+            Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
+        }
+        let now = now_ms();
+        let cycle_at = due.map_or_else(|| schedule.run_at(&CrewWake::Tick, now), |d| d.min(schedule.run_at(&CrewWake::Tick, now)));
+        if now >= cycle_at {
+            // A cycle asks Herdr too, so it answers a pending Herdr ask as well.
+            let ok = cycle(&app, &home, started_at, &mut first_answer_seen);
+            last_herdr = now_ms();
+            herdr_pending = false;
+            schedule.finished(now_ms(), ok);
+            due = None;
+        } else if herdr_pending && now - last_herdr >= HERDR_MIN_GAP_MS {
+            // Herdr only, for the chrome or after a launch.
+            last_herdr = now;
+            herdr_pending = false;
+            let view = refresh_live(&app);
+            first_answer(&app, started_at, &mut first_answer_seen, view.as_ref());
         }
     }
 }

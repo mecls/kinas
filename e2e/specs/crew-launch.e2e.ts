@@ -77,8 +77,10 @@ describe("the first mate in the pane", () => {
   });
 
   it("AC-2: Launch makes one workspace in Firstmate's home, runs the first mate there, and hands the Work page the keys", async () => {
-    // Close the workspace setup made, so Launch has none to find.
+    // Close the workspace setup made, so Launch has none to find, and have Kinas look again as Refresh readings does: the
+    // Crew page's own trigger needs a window the webview reports visible, and this test app runs in the background.
     herdr(SESSION, "workspace", "close", firstMates()[0]!.workspace_id);
+    expect((await invoke("refresh_readings")).refused).toBeUndefined();
     const pid = (await invoke<number>("pty_pid")).ok;
     await clickCrewButton("installed", "Launch the first mate");
     await workShowing();

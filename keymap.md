@@ -42,6 +42,13 @@ the Crew page and ⌘5 to the Inbox page. Both are defaults Settings can rebind,
 ⌘2, ⌘3, ⌘4, ⌘5, ⌘S and ⌘, — and the rules above hold for all eight. Crew and Inbox are no longer click-only. The
 palette gains three commands: Go to Crew, Go to Inbox, and Go to the first mate (the same as the Crew page's First
 mate button). ⌘5 sits after ⌘4 so Usage keeps the chord it took on 2026-09-22.
+Amended 2026-09-24 (the reader's layout, Part 3, `tasks/reader-layout/prd.md`): Kinas draws the window's title bar,
+and its three buttons are click-only. The **sidebar button** is ⌘S by click: it does exactly what the chord bound to
+Hide or show the sidebar does, remembered the same way, and its tooltip names that chord; ⌘S itself is unchanged.
+**←** and **→** walk the places visited, pages and files alike, and have no chord, deliberately: if one starts being
+missed, this file is where it is added. A click on any of the three moves no keyboard focus, so the terminal keeps
+the keys; ← or → onto the Work page gives the terminal the keys as ⌘2 does. No `keydown` handler comes with them.
+The rest of the bar moves the window when dragged and zooms it when double-clicked, as macOS's own title bar did.
 
 ## Command palette
 

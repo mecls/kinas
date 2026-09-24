@@ -61,6 +61,7 @@ import {
   TerminalChrome,
   TerminalIcon,
   Timeline,
+  TitleBar,
   TitleRow,
   Toast,
   Wordmark,
@@ -618,6 +619,39 @@ export const STORIES: Story[] = [
               onClose={noop}
               onMove={noop}
             />
+          </div>
+        ),
+      },
+    ],
+  },
+  {
+    // DESIGN.md §4 Title bar (1.5): the window's own. The empty room on the left is where the system draws the
+    // traffic lights, which a story cannot; a drag on it moves this window, as it does in the app.
+    component: "TitleBar",
+    states: [
+      {
+        // At launch: nothing to go back or forward to.
+        name: "start",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+            <TitleBar sidebarShown sidebarChord="⌘S" onSidebar={noop} canBack={false} canForward={false} onBack={noop} onForward={noop} fullscreen={false} />
+          </div>
+        ),
+      },
+      {
+        name: "sidebar-hidden",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+            <TitleBar sidebarShown={false} sidebarChord="⌘S" onSidebar={noop} canBack canForward={false} onBack={noop} onForward={noop} fullscreen={false} />
+          </div>
+        ),
+      },
+      {
+        // No traffic lights, so the buttons start at the bar's padding.
+        name: "fullscreen",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+            <TitleBar sidebarShown sidebarChord="⌘S" onSidebar={noop} canBack canForward onBack={noop} onForward={noop} fullscreen />
           </div>
         ),
       },

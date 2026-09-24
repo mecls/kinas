@@ -1,0 +1,52 @@
+/* DESIGN.md §4 Title bar (1.5): the window's own title bar, a --chrome-h row on --bg across the whole window with a
+   --line along its foot. From the left: room for the system's traffic lights, then the sidebar button, ← and →. */
+.ui-titlebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--chrome-h);
+  padding: 0 var(--space-3);
+  background: var(--bg);
+  box-shadow: inset 0 -1px 0 var(--line);
+  user-select: none;
+  cursor: default;
+}
+
+/* The traffic lights, the system's own, sit over this box (tauri.conf.json's trafficLightPosition puts the first at
+   14 px): three 14 px buttons 20 px apart end 68 px from the window's edge, which is this box's width past the bar's
+   padding. Measured on the debug build in slice 8 (build spec §17). */
+.ui-titlebar-lights {
+  flex: none;
+  width: 56px;
+  height: 100%;
+  margin-right: var(--space-3);
+}
+
+/* In full screen the lights are gone, and the buttons start at the bar's padding. */
+.ui-titlebar[data-fullscreen] .ui-titlebar-lights {
+  display: none;
+}
+
+.ui-titlebar-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.ui-titlebar-button:hover:not([aria-disabled="true"]) {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* Nothing to go back or forward to: in place, in --ink-3, with the reason as the tooltip. */
+.ui-titlebar-button[aria-disabled="true"] {
+  color: var(--ink-3);
+}

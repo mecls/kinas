@@ -175,3 +175,15 @@ export const ListIcon = (p: Props) => (
     <path d="M2.5 4h.01M2.5 8h.01M2.5 12h.01M5.5 4h8M5.5 8h8M5.5 12h8" />
   </Icon>
 );
+// The title bar's (1.5, the reader's layout): the sidebar button, and → to BackIcon's ←.
+export const SidebarIcon = (p: Props) => (
+  <Icon {...p}>
+    <rect x="2" y="3" width="12" height="10" rx="2" />
+    <path d="M6.5 3v10" />
+  </Icon>
+);
+export const ForwardIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M8 3.5 12.5 8 8 12.5M3.5 8h9" />
+  </Icon>
+);

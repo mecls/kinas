@@ -75,6 +75,7 @@
   }
 
   /* `display: none`, never `visibility`: a page that still has a layout box would refit the terminal to the paper. */
+  .ui-titlebar,
   .sidebar,
   .content,
   .stage-divider,

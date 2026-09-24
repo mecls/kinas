@@ -29,6 +29,8 @@
   green alone — 26 specs, 153 cases, `settings` and `shell` rerun after the Mac slept mid-run — pushed, PR #36,
   `main` fast-forwarded by the captain, not installed)
 - [ ] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
+  (code, docs and `title-bar.e2e.ts` written 2026-09-24; its checks, the e2e build and the traffic lights' measurement
+  wait for a machine slot after the other sessions' runs — build spec §12 and §17 have the state)
 - [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes
 - [ ] Slice 10 · ship point 3, and the hand-off
 

@@ -29,7 +29,7 @@ import { WorkPage } from "./pages/Work.tsx";
 import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
 import { SIDE_DEFAULT } from "./reader/side.ts";
-import { actionForEvent, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
+import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { addedLine } from "./shell/folders.ts";
 import type { Notice } from "./shell/notice.ts";
@@ -38,7 +38,9 @@ import { CrewPage } from "./pages/Crew.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { InboxPage } from "./pages/Inbox.tsx";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
+import { useFullscreen } from "./shell/useFullscreen.ts";
 import { useSplit } from "./shell/useSplit.ts";
+import { TitleBar } from "./ui/index.ts";
 
 /** The pages, always mounted (below). Home is the first screen since 2026-09-22 (keymap.md: ⌘1 Home, ⌘2 Work, ⌘4 Usage). */
 export type Page = "home" | "work" | "crew" | "inbox" | "usage" | "settings";
@@ -57,8 +59,8 @@ interface PanelState {
 // the palette, ⌘, opens Settings). Every page stays mounted and only its visibility changes, so the terminal on the
 // Work page is never unmounted and its PTY never restarts (R33).
 //
-// The tree below is static (tasks/three-column-shell-build-spec.md §6.1): the sidebar, the stage, the page, the
-// divider and the panel are always there, and only `hidden` and the data attributes change. Anything that wrapped, re-keyed
+// The tree below is static (tasks/three-column-shell-build-spec.md §6.1): the title bar, the sidebar, the stage, the
+// page, the divider and the panel are always there, and only `hidden` and the data attributes change. Anything that wrapped, re-keyed
 // or conditionally rendered an ancestor of <Terminal> would remount it and restart the PTY.
 export function App() {
   const [page, setPage] = useState<Page>("home");
@@ -118,6 +120,9 @@ export function App() {
     expandedRef.current = next;
     setReader((r) => ({ ...r, expanded: next }));
   }, []);
+
+  /** In full screen the title bar keeps no room for the traffic lights. */
+  const fullscreen = useFullscreen();
 
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
@@ -383,6 +388,18 @@ export function App() {
 
   return (
     <div className="shell" data-sidebar={sidebar ? "shown" : "hidden"} data-panel={!reader.open ? "closed" : reader.expanded ? "expanded" : "open"}>
+      {/* The window's title bar (reader-layout PRD rules 26–28): a static sibling, first, so nothing above the terminal
+          moves. Its sidebar button is ⌘S by click; ← and → have nowhere to go until the places are recorded. */}
+      <TitleBar
+        sidebarShown={sidebar}
+        sidebarChord={chordLabel(shortcuts.sidebar)}
+        onSidebar={() => run("sidebar")}
+        canBack={false}
+        canForward={false}
+        onBack={() => {}}
+        onForward={() => {}}
+        fullscreen={fullscreen}
+      />
       <Sidebar
         hidden={!sidebar}
         page={page}

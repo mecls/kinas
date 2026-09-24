@@ -361,6 +361,16 @@ Every file tree marks what changed since it was first shown, and the reader's Ch
 - [ ] A real agent's session read by eye: marks, roll-ups, the Changes view on markdown and code, both themes —
       `outstanding — needs Miguel`
 
+## The reader's layout
+
+The side column and the text, the reader's tabs, and the window's title bar (2026-09-24,
+`tasks/reader-layout/prd.md`). Being built; the build's hand-off adds the rest of what only eyes can check.
+
+- [ ] The title bar moves the window when dragged anywhere but its three buttons, and a double-click on it zooms the
+      window and a second one unzooms it — `outstanding — needs Miguel`
+- [ ] In full screen, the three buttons sit at the bar's left padding and nothing sits where the traffic lights were;
+      out of full screen, the traffic lights are centred in the bar — `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

@@ -3,6 +3,8 @@
  * middle, and what was opened in a panel on the right. tokens.css variables only — guard.test.ts holds it to that.
  *
  *   div.shell[data-sidebar][data-panel]
+ *     header.ui-titlebar        the window's title bar, across both columns (ui/TitleBar.tsx; the reader's layout,
+ *                               2026-09-24): the traffic lights' room, the sidebar button, ← and →
  *     nav.sidebar               the wordmark, the pages, then Pinned, the open folder's Files, the client folders,
  *                               and the VPS row at the foot (Recent left for the reader's tabs, 2026-09-24)
  *     div.stage                 a flex row — the row the divider measures
@@ -23,7 +25,13 @@
 .shell {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: var(--chrome-h) minmax(0, 1fr);
   height: 100%;
+}
+
+/* The title bar spans the window, whichever columns are showing; the sidebar and the stage fill the row below it. */
+.shell > .ui-titlebar {
+  grid-column: 1 / -1;
 }
 
 /* ⌘S (keymap.md): the sidebar goes, and the stage takes the whole width. */

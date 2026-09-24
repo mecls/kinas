@@ -8,9 +8,9 @@
 // prints it through the same WebKit call the app's print button reaches (scripts/print-probe.swift).
 //
 // A case passes when the PDF has at least MIN_PAGES pages, still contains the document's last line, and contains none
-// of the sentinels planted in the sidebar, the page, the reader's tabs, its header and its side column. The control matters as
-// much as the check: a probe that reports five pages whatever the stylesheet says has proved nothing. Without
-// print.css the root is `height: 100%; overflow: hidden`, so the control prints one clipped page.
+// of the sentinels planted in the title bar, the sidebar, the page, the reader's tabs, its header and its side column.
+// The control matters as much as the check: a probe that reports five pages whatever the stylesheet says has proved
+// nothing. Without print.css the root is `height: 100%; overflow: hidden`, so the control prints one clipped page.
 //
 // Needs a logged-in GUI session (WebKit needs a window server), so it is not part of `bun run check`.
 
@@ -21,7 +21,7 @@ import { renderMarkdown } from "../app/src/reader/render.ts";
 import { renderSource } from "../app/src/reader/source.ts";
 
 const MIN_PAGES = 5;
-const SENTINELS = ["SIDEBAR-SENTINEL", "CONTENT-SENTINEL", "TABS-SENTINEL", "HEADER-SENTINEL", "SIDE-SENTINEL"];
+const SENTINELS = ["TITLEBAR-SENTINEL", "SIDEBAR-SENTINEL", "CONTENT-SENTINEL", "TABS-SENTINEL", "HEADER-SENTINEL", "SIDE-SENTINEL"];
 
 const repo = resolve(import.meta.dir, "..");
 const styles = join(repo, "app/src/styles");
@@ -51,6 +51,7 @@ ${stylesheets()}
 <body>
 <div id="root">
   <div class="shell" data-sidebar="shown" data-panel="open">
+    <header class="ui-titlebar" data-tauri-drag-region="deep"><button class="ui-titlebar-button" aria-label="Back">TITLEBAR-SENTINEL</button></header>
     <nav class="sidebar" aria-label="Sidebar">SIDEBAR-SENTINEL</nav>
     <div class="stage">
       <main class="content"><section class="page" data-page="usage"><p>CONTENT-SENTINEL</p></section></main>

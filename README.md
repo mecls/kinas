@@ -115,6 +115,9 @@ Amended 2026-09-23 (folder views): the navigation is Home, Work, Crew, Inbox and
 reader, so there is no Reader row — with Settings as the sidebar's last row, and Recent under the client folders.
 Amended 2026-09-24 (the reader's layout): Recent has left the sidebar — the files opened this session are the
 reader's tabs — and a folder is kept at hand by pinning it.
+Amended 2026-09-24 (the reader's layout): Kinas draws the window's title bar. Beside the traffic lights sit the
+sidebar button, which does what ⌘S does, and **←** and **→**, which walk back and forth through the places you have
+been, pages and files alike, like a browser. The rest of the bar moves the window and zooms it on a double-click.
 Right-click a client folder to hide it from the sidebar and Home, to show a hidden one, or to add any folder inside
 the projects folder, git or not; Settings → Client folders does the same and also removes a folder from Kinas —
 restorable there, and never touched on disk. Amended 2026-09-23 (tree changes): every file tree follows the disk and

@@ -27,6 +27,7 @@ const FILE: Record<string, string> = {
   Toast: "Toast",
   Lane: "Card",
   Switch: "Field",
+  "Tab strip": "TabStrip",
 };
 
 /** Not in app/src/ui/ yet, each with its reason. */

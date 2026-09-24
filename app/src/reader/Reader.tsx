@@ -34,9 +34,10 @@ import { downloadLabel } from "./labels.ts";
 import { type Rendered, renderMarkdown } from "./render.ts";
 import { drawnWidth, edgeDrag, sectionButton, sectionPlace, SIDE_DEFAULT, SIDE_MAX_PX, SIDE_MIN_PX, type SectionState } from "./side.ts";
 import { renderImage, renderSource } from "./source.ts";
+import { closeTab, NO_TABS, openTab, rememberScroll, showNone, tabLabels, type Tabs } from "./tabs.ts";
 import { FileTree } from "./tree.tsx";
 import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
-import { Button } from "../ui/index.ts";
+import { Button, TabStrip } from "../ui/index.ts";
 
 // The reader (tasks/prd-kinas-open.md): the file `kinas open` named, in the panel on the right of the window. It only
 // reads. Opening, reloading and confirming never move keyboard focus (R34), and a reload replaces the page in one
@@ -302,6 +303,10 @@ export function Reader({
   const [status, setStatus] = useState<{ text: string; sticky: boolean } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [back, setBack] = useState<{ path: string; scrollTop: number }[]>([]);
+  /** Every file shown this session, one tab each (reader/tabs.ts). In memory only: never stored, gone on quit. */
+  const [tabs, setTabs] = useState<Tabs>(NO_TABS);
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
   const [tall, setTall] = useState(false);
   const [narrow, setNarrow] = useState(false);
   /** The reader's width, for the column's: the text keeps 320 px of it (reader-layout PRD rule 6). */
@@ -368,6 +373,21 @@ export function Reader({
     [highlight, takeAnchor],
   );
 
+  /**
+   * The file showing now stops showing: its tab keeps where it was scrolled, for a click to bring it back there. Read
+   * now, not in the state updater, which runs after `docRef` already holds the next file.
+   */
+  const leaveTab = () => {
+    const leaving = docRef.current;
+    const scrollTop = scroller.current?.scrollTop ?? 0;
+    return (t: Tabs) => (leaving ? rememberScroll(t, leaving.path, scrollTop) : t);
+  };
+  /** Every route in makes a tab, or brings the file's tab forward: keyed on the real path `reader_open` returned. */
+  const toTab = (path: string, displayPath: string) => {
+    const leave = docRef.current?.path === path ? (t: Tabs) => t : leaveTab();
+    setTabs((t) => openTab(leave(t), { path, displayPath }));
+  };
+
   const show = useCallback(
     async function show(path: string, opts: { push: boolean; fragment?: string | null; scrollTop?: number; receivedAt?: number }): Promise<void> {
       const gen = ++generation.current;
@@ -384,6 +404,7 @@ export function Reader({
           if (opts.push && previous && previous.path !== opened.path) {
             setBack((b) => [...b, { path: previous.path, scrollTop: scroller.current?.scrollTop ?? 0 }].slice(-BACK_CAP));
           }
+          toTab(opened.path, opened.display_path);
           pending.current = { mode: "new", fragment: null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
           const next: Doc = {
             path: opened.path,
@@ -412,6 +433,7 @@ export function Reader({
           const scrollTop = scroller.current?.scrollTop ?? 0;
           setBack((b) => [...b, { path: previous.path, scrollTop }].slice(-BACK_CAP));
         }
+        toTab(opened.path, opened.display_path);
         pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
         // A file always carries a mode; only a folder has none, and that returned above.
         const render = opened.render ?? "source";
@@ -464,6 +486,8 @@ export function Reader({
         await show(readme.path, { push: true });
       } else {
         generation.current++;
+        const leave = leaveTab();
+        setTabs((t) => showNone(leave(t)));
         docRef.current = null;
         setDoc(null);
         setProblem(null);
@@ -474,11 +498,11 @@ export function Reader({
   }
 
   const follow = useCallback(
-    async (path: string, fragment: string | null) => {
+    async (path: string, fragment: string | null, scrollTop?: number) => {
       try {
         const target = await readerAllowClick(path);
         if (target.kind === "dir") await openFolder(target.path);
-        else await show(target.path, { push: true, fragment });
+        else await show(target.path, { push: true, fragment, scrollTop });
       } catch (e) {
         const message = readerErrorOf(e).message;
         // A click in the sidebar can open the panel with nothing in it yet — a pin whose file has since gone, say.
@@ -818,12 +842,33 @@ export function Reader({
     setDoc(null);
     setFolder(null);
     setBack([]);
+    setTabs(NO_TABS);
     setConfirm(null);
     setProblem(null);
     setStatus(null);
     setOverlay(null);
     // The shell gives the terminal the keys afterwards, when the Work page is showing (App.tsx, closeReader).
     onClose();
+  };
+
+  // A tab click goes through the click door like a sidebar click (ADR 0009): the path is checked again in Rust, and
+  // the file is read as it is now. It is selected at once; the open brings it forward and to where it was left.
+  const selectTab = (path: string) => {
+    const tab = tabsRef.current.list.find((t) => t.path === path);
+    if (!tab) return;
+    setTabs((t) => ({ ...t, showing: path }));
+    void follow(path, null, tab.scrollTop);
+  };
+
+  // Closing the showing tab shows the one shown before it; closing the last closes the panel (PRD rule 17).
+  const closeTabOf = (path: string) => {
+    const before = tabsRef.current;
+    const next = closeTab(before, path);
+    setTabs(next);
+    if (before.showing !== path) return;
+    const successor = next.list.find((t) => t.path === next.showing);
+    if (successor) void follow(successor.path, null, successor.scrollTop);
+    else close();
   };
 
   const openConfirmed = async () => {
@@ -976,6 +1021,13 @@ export function Reader({
 
   return (
     <div className="reader-frame" ref={frame}>
+      <TabStrip
+        label="Open files"
+        tabs={tabLabels(tabs.list).map((label, i) => ({ key: tabs.list[i]!.path, ...label, title: tabs.list[i]!.displayPath }))}
+        selected={tabs.showing}
+        onSelect={selectTab}
+        onClose={closeTabOf}
+      />
       <Header
         displayPath={doc?.displayPath ?? problem?.displayPath ?? (folder ? baseName(folder) : "")}
         title={doc?.path ?? folder ?? ""}

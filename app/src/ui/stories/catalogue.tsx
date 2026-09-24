@@ -52,6 +52,7 @@ import {
   StatusBadge,
   Switch,
   Table,
+  TabStrip,
   Tag,
   TerminalChrome,
   TerminalIcon,
@@ -493,6 +494,31 @@ export const STORIES: Story[] = [
             ]}
             onClose={() => {}}
           />
+        ),
+      },
+    ],
+  },
+  {
+    // DESIGN.md §4 Tab strip (1.5): the reader's open files, the showing one joined to the header below it.
+    component: "TabStrip",
+    states: [
+      {
+        name: "plain",
+        node: (
+          <div style={{ width: "calc(var(--sidebar-w) * 3)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)" }}>
+            <TabStrip
+              label="Open files"
+              tabs={[
+                { key: "/r/tasks/reader-layout/prd.md", name: "prd.md", detail: null, title: "tasks/reader-layout/prd.md" },
+                { key: "/r/tasks/reader-layout/status.md", name: "status.md", detail: null, title: "tasks/reader-layout/status.md" },
+                { key: "/r/DESIGN.md", name: "DESIGN.md", detail: null, title: "DESIGN.md" },
+              ]}
+              selected="/r/tasks/reader-layout/status.md"
+              onSelect={noop}
+              onClose={noop}
+            />
+            <div style={{ height: "var(--hit)", borderBottom: "1px solid var(--line)" }} />
+          </div>
         ),
       },
     ],

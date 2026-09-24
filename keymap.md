@@ -112,7 +112,9 @@ while the open file has a change mark, is click-only too, and a fold's "N unchan
 
 Amended 2026-09-23 (the reader's layout, `tasks/reader-layout/prd.md`): **Files** and **Contents**, now in the
 header at every width, and the side column's **edge** (drag to resize, double-click for 220 px) are click-only too,
-for the same reason. No `keydown` handler comes with them.
+for the same reason. No `keydown` handler comes with them. The **tabs** above the header are click-only as well: a
+click shows a tab, its × or a middle-click closes it, and a drag moves it. A tab takes no focus, so the terminal keeps
+the keys while tabs are switched.
 
 The header's **▾** menu is the one place the reader handles keys, and only while it is open: it takes focus when
 it opens and gives it back when it closes, so that nothing typed at an open menu reaches the terminal.

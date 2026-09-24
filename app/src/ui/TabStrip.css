@@ -1,0 +1,82 @@
+/* DESIGN.md §4 Tab strip (1.5): a --chrome-h row on --surface-2 with a --line along its foot, drawn inside it so the
+   showing tab, on --surface, covers it and joins the header below. It scrolls sideways when the tabs do not fit, with
+   no scrollbar drawn; the window never does. */
+.ui-tabstrip {
+  display: flex;
+  flex: none;
+  height: var(--chrome-h);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  background: var(--surface-2);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.ui-tabstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.ui-tab {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(var(--sidebar-w) - var(--space-5));
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-right: 1px solid var(--line);
+  color: var(--ink-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.ui-tab:hover {
+  color: var(--ink);
+}
+
+.ui-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ui-tab > .ui-icon {
+  flex: none;
+}
+
+.ui-tab-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-tab-detail {
+  color: var(--ink-3);
+}
+
+/* The × shows on the showing tab and on any tab under the pointer. */
+.ui-tab-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  visibility: hidden;
+}
+
+.ui-tab[aria-selected="true"] .ui-tab-close,
+.ui-tab:hover .ui-tab-close {
+  visibility: visible;
+}
+
+.ui-tab-close:hover {
+  background: var(--line);
+}

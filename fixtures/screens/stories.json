@@ -142,6 +142,21 @@
       "background-color": "rgb(237, 234, 226)",
       "height": "32px"
     },
+    "[data-story=\"TitleBar/back-and-forward\"] .ui-titlebar-button[aria-label=\"Back\"]": {
+      "border-radius": "6px",
+      "color": "rgb(91, 97, 112)",
+      "height": "28px",
+      "width": "28px"
+    },
+    "[data-story=\"TitleBar/start\"] .ui-titlebar": {
+      "background-color": "rgb(244, 242, 236)",
+      "box-shadow": "rgb(227, 223, 213) 0px -1px 0px 0px inset",
+      "height": "32px",
+      "padding-left": "12px"
+    },
+    "[data-story=\"TitleBar/start\"] .ui-titlebar-button[aria-label=\"Back\"]": {
+      "color": "rgb(138, 143, 155)"
+    },
     "[data-story=\"TitleRow/home\"] h1": {
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "20px",
@@ -295,6 +310,21 @@
     "[data-story=\"TerminalChrome/working\"] .ui-termchrome": {
       "background-color": "rgb(35, 40, 51)",
       "height": "32px"
+    },
+    "[data-story=\"TitleBar/back-and-forward\"] .ui-titlebar-button[aria-label=\"Back\"]": {
+      "border-radius": "6px",
+      "color": "rgb(161, 167, 180)",
+      "height": "28px",
+      "width": "28px"
+    },
+    "[data-story=\"TitleBar/start\"] .ui-titlebar": {
+      "background-color": "rgb(20, 23, 30)",
+      "box-shadow": "rgb(43, 49, 64) 0px -1px 0px 0px inset",
+      "height": "32px",
+      "padding-left": "12px"
+    },
+    "[data-story=\"TitleBar/start\"] .ui-titlebar-button[aria-label=\"Back\"]": {
+      "color": "rgb(110, 116, 130)"
     },
     "[data-story=\"TitleRow/home\"] h1": {
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",

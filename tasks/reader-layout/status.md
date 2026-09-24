@@ -33,7 +33,9 @@
   the debug build)
 - [x] Slice 9 · ← and → walk every place, and the reader's own ← goes (2026-09-24, on `5df4b7d`; the green light
   proved to fill the screen on a regular launch, by the captain)
-- [ ] Slice 10 · ship point 3, and the hand-off
+- [ ] Slice 10 · ship point 3, and the hand-off (2026-09-24: the reader PRD amended, the hand-off written in build spec
+  §19 and the smoke test; ship point 3's check green and its full e2e running alone from 23:27; the push, PR and
+  whether to install wait for the captain's word)
 
 ## Notes for a fresh session
 

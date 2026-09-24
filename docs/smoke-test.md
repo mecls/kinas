@@ -364,7 +364,8 @@ Every file tree marks what changed since it was first shown, and the reader's Ch
 ## The reader's layout
 
 The side column and the text, the reader's tabs, and the window's title bar (2026-09-24,
-`tasks/reader-layout/prd.md`). Being built; the build's hand-off adds the rest of what only eyes can check.
+`tasks/reader-layout/prd.md`). The e2e suite covers the rest: `reader-layout.e2e.ts`, `reader-tabs.e2e.ts` and
+`title-bar.e2e.ts`; these are what only eyes can check.
 
 - [x] The title bar moves the window when dragged anywhere but its three buttons, and a double-click on it zooms the
       window and a second one unzooms it — `checked by Miguel on the debug build, 2026-09-24`
@@ -372,6 +373,12 @@ The side column and the text, the reader's tabs, and the window's title bar (202
 - [x] The green light takes the window to full screen, filling it; there the three buttons sit at the bar's left
       padding and nothing sits where the traffic lights were, and leaving it puts them back beside the lights —
       `checked by Miguel on the debug build launched as a regular app, 2026-09-24`
+- [ ] On the wide screen, the reader expanded and Contents hidden: long lines read comfortably, or ask for the
+      reader-layout PRD's round 1 option 4C — `outstanding — needs Miguel`
+- [ ] Fifteen tabs: the strip scrolls sideways with the trackpad, and dragging a tab feels right —
+      `outstanding — needs Miguel`
+- [ ] Both themes: the column edge's accent while dragged, the showing tab joined to the header, and a ← or → with
+      nowhere to go drawn in `--ink-3` — `outstanding — needs Miguel`
 
 ## Throughput, page switch, renderer
 

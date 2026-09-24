@@ -71,6 +71,9 @@ const CONTRACT: [selector: string, props: string[]][] = [
   ['[data-story="TabStrip/plain"] .ui-tabstrip', ["height", "background-color", "box-shadow"]],
   ['[data-story="TabStrip/plain"] .ui-tab[aria-selected="true"]', ["background-color", "color", "font-size", "max-width"]],
   ['[data-story="TabStrip/plain"] .ui-tab[aria-selected="false"]', ["color"]],
+  ['[data-story="TitleBar/start"] .ui-titlebar', ["height", "background-color", "box-shadow", "padding-left"]],
+  ['[data-story="TitleBar/back-and-forward"] .ui-titlebar-button[aria-label="Back"]', ["width", "height", "color", "border-radius"]],
+  ['[data-story="TitleBar/start"] .ui-titlebar-button[aria-label="Back"]', ["color"]],
 ];
 
 type Contract = Record<string, Record<string, string>>;

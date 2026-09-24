@@ -5,8 +5,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { hook, runReaderMenuItem, waitForShell } from "../helpers.ts";
 
-// Pinned and Recent, first launch (tasks/three-column-shell-build-spec.md AC-12, AC-13). `reader-pins-b` is the
+// Pinned and the tabs, first launch (tasks/three-column-shell-build-spec.md AC-12, AC-13). `reader-pins-b` is the
 // second launch over the same data folder: what is pinned here must be there, and what was merely opened must not.
+// Amended 2026-09-24 (tasks/reader-layout/prd.md rule 25): Recent left the sidebar, and what was merely opened is the
+// reader's tabs; AC-13's fifteen and "once each" are the tabs' now.
 
 const CLI = join(process.cwd(), "app/src-tauri/binaries/kinas-cli-aarch64-apple-darwin");
 const root = realpathSync(process.env.KINAS_ROOT!);
@@ -37,11 +39,8 @@ interface Row {
   expanded: string;
 }
 
-/**
- * A sidebar section's rows, in order. An array: an object's key order does not survive the WebDriver wire. A folder's
- * row in Recent sits in a `.sidebar-entry` (2026-09-21): it is matched too, so that "15 rows" cannot hide a 16th.
- */
-const rows = (section: "pinned" | "recent") =>
+/** A sidebar section's rows, in order. An array: an object's key order does not survive the WebDriver wire. */
+const rows = (section: "pinned") =>
   browser.execute(
     (s: string) =>
       [
@@ -59,7 +58,7 @@ const rows = (section: "pinned" | "recent") =>
 
 const sectionShown = (section: "pinned" | "recent") => browser.execute((s: string) => document.querySelector(`.sidebar-${s}`) !== null, section);
 
-const clickRow = (section: "pinned" | "recent", name: string) =>
+const clickRow = (section: "pinned", name: string) =>
   browser.execute(
     (s: string, wanted: string) => {
       const row = [...document.querySelectorAll<HTMLButtonElement>(`.sidebar-${s} .sidebar-row`)].find((b) => b.querySelector(".sidebar-row-name")?.textContent === wanted);
@@ -78,6 +77,8 @@ const unpinRow = (name: string) =>
   }, name);
 
 const statusLog = () => hook<string>("readerStatusLog");
+/** The reader's tabs, by name, in strip order. */
+const tabNames = () => browser.execute(() => [...document.querySelectorAll("aside.reader .ui-tab .ui-tab-name")].map((n) => n.textContent ?? ""));
 const header = () => browser.execute(() => document.querySelector(".reader-path")?.textContent ?? "");
 
 /** One reader command, called the way the page calls it. Answers `ok:<json>` or `refused:<message>`. */
@@ -97,14 +98,15 @@ const invokeReader = (command: string, path: string) =>
 /** The sidebar reloads its pins when the window comes forward; this is that, without needing a real window switch. */
 const refreshPins = () => browser.execute(() => void window.dispatchEvent(new Event("focus")));
 
-describe("Pinned and Recent, first launch", () => {
+describe("Pinned and the tabs, first launch", () => {
   before(async () => {
     await waitForShell();
   });
 
-  it("a fresh launch shows no Pinned and no Recent section at all", async () => {
+  it("a fresh launch shows no Pinned section, no tabs, and no Recent section at all", async () => {
     expect(await sectionShown("pinned")).toBe(false);
     expect(await sectionShown("recent")).toBe(false);
+    expect(await tabNames()).toEqual([]);
     expect(await browser.execute(() => document.querySelector(".sidebar .reader-files"))).toBeNull();
   });
 
@@ -205,27 +207,29 @@ describe("Pinned and Recent, first launch", () => {
     await browser.waitUntil(async () => (await rows("pinned")).length === 2, { timeout: 15000, timeoutMsg: "the sidebar never went back to two pins" });
   });
 
-  it("AC-13: Recent holds 15, newest first, and lists a file once", async () => {
+  it("AC-13: the tabs hold 15, in the order opened, list a file once, and there is no Recent section", async () => {
     const names = Array.from({ length: 16 }, (_, i) => `recent-${String(i + 1).padStart(2, "0")}.md`);
     for (const name of names) writeFileSync(join(root, name), `# ${name}\n`);
     for (const name of names) {
       expect(kinas("open", name).code).toBe(0);
       await opened(name);
     }
-    const listed = (await rows("recent")).map((r) => r.name);
+    // Everything opened before, and the first of the sixteen, was shown longest ago: those tabs have gone.
+    const listed = await tabNames();
     expect(listed).toHaveLength(15);
-    expect(listed).toEqual([...names].reverse().slice(0, 15));
+    expect(listed).toEqual(names.slice(1));
 
-    // The first one, opened again through the sidebar's own door, comes back to the front — still 15, still once each.
+    // The first one, opened again, is a tab once more, at the right end — still 15, still once each.
     expect(kinas("open", names[0]!).code).toBe(0);
     await opened(names[0]!);
-    const again = (await rows("recent")).map((r) => r.name);
+    const again = await tabNames();
     expect(again).toHaveLength(15);
-    expect(again[0]).toBe(names[0]);
+    expect(again.at(-1)).toBe(names[0]);
     expect(new Set(again).size).toBe(15);
+    expect(await sectionShown("recent")).toBe(false);
 
-    // A Recent row opens its file.
-    expect(await clickRow("recent", names[5]!)).toBe(true);
+    // A tab opens its file.
+    await browser.execute((n: string) => [...document.querySelectorAll<HTMLElement>("aside.reader .ui-tab")].find((t) => t.querySelector(".ui-tab-name")?.textContent === n)!.click(), names[5]!);
     await opened(names[5]!);
   });
 });

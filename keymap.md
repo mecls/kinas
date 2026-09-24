@@ -137,7 +137,7 @@ the projects root never move keyboard focus. If the terminal had it, it keeps it
 never accept the card; Open and Dismiss take a click. Closing the reader with × gives the terminal focus while the
 Work page is showing; on any other page the terminal is hidden, and focus is left where it was.
 
-## Sidebar (the navigation, Pinned, Files, Recent, Client folders)
+## Sidebar (the navigation, Pinned, Files, Client folders)
 
 Added 2026-09-21 (sidebar folders). The sidebar adds no key bindings and no palette command. **Pin**, **Unpin** and
 **Open in the terminal** — the buttons that show when a folder's row is pointed at — are click-only, for the reason
@@ -163,6 +163,10 @@ heading, the same without Hide. The menu has no chord and no palette command. Wh
 exactly as the reader's ▾ menu does (the table under Reader, dividers skipped like unusable items), and when it
 closes focus goes back where it was, to the terminal if the terminal had it. Hiding, showing, adding, removing and
 restoring a folder are also in Settings → Client folders, by click.
+
+Amended 2026-09-24 (the reader's layout): **Recent** is gone from the sidebar — the files opened this session are the
+reader's tabs (see Reader) — and with it its rows and their buttons. Pin, Unpin and Open in the terminal stay on every
+other folder row, and a folder is kept at hand by pinning it. Nothing here gains a key.
 
 **Open in the terminal** is the one sidebar action that moves you. Kinas asks Herdr, through its CLI, for that
 folder's workspace — focusing the one that already carries the folder's label, creating it in that folder if there

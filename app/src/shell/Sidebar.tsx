@@ -27,7 +27,6 @@ import {
 } from "../ui/index.ts";
 import { type Connection, connectionOf } from "./connection.ts";
 import { type Notice, NOTICE_MS } from "./notice.ts";
-import type { RecentEntry } from "./recent.ts";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
@@ -36,7 +35,7 @@ const CONNECTION_MS = 60_000;
 
 /**
  * The left sidebar (DESIGN.md §3.1; three-column shell §4): the wordmark, the five pages, then what Miguel can open —
- * Pinned, the open folder's Files — the client folders with their chips, Recent, and at the foot the shell's last
+ * Pinned, the open folder's Files — the client folders with their chips, and at the foot the shell's last
  * notice, the VPS row and Settings, the last row (folder views, 2026-09-23).
  *
  * A module-level component, like everything the shell mounts: a component defined inside App's render would be a
@@ -49,8 +48,8 @@ const CONNECTION_MS = 60_000;
  * stays the single owner of what is open. There is no Reader row (keymap.md, 2026-09-23): every file and folder row
  * opens the reader, and with nothing to open the row had nothing to show.
  *
- * **A folder is a thing in its own right here** (2026-09-21): wherever one shows — a row in a file tree, a row in
- * Recent, a pin, the Files header, a client folder — pointing at it offers a terminal button and a pin button. The
+ * **A folder is a thing in its own right here** (2026-09-21): wherever one shows — a row in a file tree, a pin,
+ * the Files header, a client folder — pointing at it offers a terminal button and a pin button. The
  * terminal button asks Herdr for the folder's workspace (App's `onTerminal`); nothing is typed into the pane.
  */
 export function Sidebar({
@@ -63,7 +62,6 @@ export function Sidebar({
   folder,
   folderPinned,
   selected,
-  recent,
   onOpen,
   onPin,
   onUnpin,
@@ -86,7 +84,6 @@ export function Sidebar({
   folderPinned: boolean;
   /** The open file, highlighted wherever it appears. */
   selected: string | null;
-  recent: readonly RecentEntry[];
   onOpen: (path: string) => void;
   onPin: (path: string) => void;
   onUnpin: (path: string) => void;
@@ -158,36 +155,6 @@ export function Sidebar({
         )}
 
         <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} onHide={onHide} onShow={onShow} onAdd={onAdd} />
-
-        {recent.length > 0 && (
-          <section className="sidebar-section sidebar-recent" aria-label="Recent">
-            <h2 className="sidebar-label">Recent</h2>
-            <ul className="sidebar-list">
-              {recent.map((entry) =>
-                entry.kind === "dir" ? (
-                  // A folder: its click reopens it in Files (the reader's `follow` takes a folder as it takes a file).
-                  <li key={entry.path} data-kind="dir">
-                    <div className="sidebar-entry">
-                      <button type="button" className="sidebar-row" aria-current={entry.path === folder ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
-                        <FolderIcon size="sm" />
-                        <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
-                      </button>
-                      {folderActions(entry.path, baseName(entry.displayPath))}
-                    </div>
-                  </li>
-                ) : (
-                  <li key={entry.path} data-kind="file">
-                    <button type="button" className="sidebar-row" aria-current={entry.path === selected ? "true" : undefined} title={entry.displayPath} onClick={() => onOpen(entry.path)}>
-                      <FileIcon size="sm" />
-                      <span className="sidebar-row-name">{baseName(entry.displayPath)}</span>
-                    </button>
-                  </li>
-                ),
-              )}
-            </ul>
-          </section>
-        )}
-
       </div>
 
       <SidebarNotice notice={notice} panelOpen={panelOpen} />
@@ -206,7 +173,7 @@ const MENU_MARGIN = 8;
 /**
  * The client folders (DESIGN.md §3.1): one row per shown folder, its chip in the category Settings chose or the name
  * derives — seated over every folder, hidden and removed ones too, so hiding one repaints no other — the internal
- * ones last and tagged. A click opens the folder in the reader — Files and its README — as a folder in Recent does;
+ * ones last and tagged. A click opens the folder in the reader — Files and its README — as a pinned folder does;
  * the terminal and pin buttons appear beside it as they do on every folder row.
  *
  * A right-click (folder views, 2026-09-23) opens a Menu at the pointer: Hide from sidebar on a folder, Add a client

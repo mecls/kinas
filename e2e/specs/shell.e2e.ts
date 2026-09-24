@@ -111,7 +111,7 @@ describe("the sidebar (DESIGN.md §3.1)", () => {
     expect(seen.rows).toEqual(["Home", "Work", "Crew", "Inbox", "Usage"]);
     // Settings left the pages for the foot (folder views, 2026-09-23): the sidebar's last element, below the machine.
     expect(seen.last).toBe("Settings");
-    // Nothing is pinned, open or recent at launch: the client folders are the only section drawn.
+    // Nothing is pinned or open at launch: the client folders are the only section drawn.
     expect(seen.sections).toEqual(["Client folders"]);
     expect(seen.counts).toBe(0);
     expect(seen.current).toEqual(["Home"]);

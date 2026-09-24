@@ -68,6 +68,9 @@ const CONTRACT: [selector: string, props: string[]][] = [
   ['[data-story="Field/text"] .ui-input', ["height", "border-top-color", "border-radius"]],
   ['[data-story="Field/switch"] .ui-switch[aria-checked="true"]', ["background-color", "width", "height"]],
   ['[data-story="Chip/cat-1"] .ui-chip', ["background-color", "width"]],
+  ['[data-story="TabStrip/plain"] .ui-tabstrip', ["height", "background-color", "box-shadow"]],
+  ['[data-story="TabStrip/plain"] .ui-tab[aria-selected="true"]', ["background-color", "color", "font-size", "max-width"]],
+  ['[data-story="TabStrip/plain"] .ui-tab[aria-selected="false"]', ["color"]],
 ];
 
 type Contract = Record<string, Record<string, string>>;

@@ -33,7 +33,6 @@ import { actionForEvent, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from 
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { addedLine } from "./shell/folders.ts";
 import type { Notice } from "./shell/notice.ts";
-import { NAV_NOTHING, navSeenOf, pushRecent, recentAfterNav, recentFolder, type RecentEntry } from "./shell/recent.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
 import { CrewPage } from "./pages/Crew.tsx";
 import { HomePage } from "./pages/Home.tsx";
@@ -75,12 +74,8 @@ export function App() {
   const [nav, setNav] = useState<ReaderNav>({ doc: null, folder: null });
   /** Stored, by an explicit click, and nothing else about what Miguel reads is (reader/pins.rs). */
   const [pins, setPins] = useState<PinView[]>([]);
-  /** In memory only, by design: what was merely opened is forgotten when Kinas quits (shell/recent.ts). */
-  const [recent, setRecent] = useState<readonly RecentEntry[]>([]);
   /** The client folders (projects.rs): the sidebar lists them, Settings colours them. */
   const [projects, setProjects] = useState<readonly ProjectRow[]>([]);
-  /** What the reader last reported, so Recent can tell a change from a repeat (shell/recent.ts). */
-  const navSeen = useRef(NAV_NOTHING);
   /** Something the shell wants said: in the reader's status line, and at the sidebar's foot while the panel is closed. */
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeSeq = useRef(0);
@@ -257,15 +252,9 @@ export function App() {
     void saveReaderSide(next).catch(() => {});
   }, []);
 
-  // Stable, because the reader's reporting effect is keyed on it. A file or a folder goes to the front of Recent when
-  // it is what changed (shell/recent.ts says why both are gated). The ref is read and written out here, not in the
-  // updater, which stays a pure function of the list.
-  const onNav = useCallback((next: ReaderNav) => {
-    setNav(next);
-    const seen = navSeen.current;
-    navSeen.current = navSeenOf(next);
-    setRecent((list) => recentAfterNav(list, seen, next));
-  }, []);
+  // Stable, because the reader's reporting effect is keyed on it. What was merely opened is the reader's tabs now,
+  // kept in memory there (reader/tabs.ts); the sidebar only mirrors what is open.
+  const onNav = useCallback((next: ReaderNav) => setNav(next), []);
 
   // The pins, at launch — and again whenever the window comes forward, because a pinned file can vanish or come
   // back while Kinas sits in the background, and a row that lies about that is worse than no row.
@@ -362,8 +351,7 @@ export function App() {
   }, [goTo]);
 
   // Open in the terminal (keymap.md, Sidebar): Rust asks Herdr for the folder's workspace — nothing is typed into the
-  // pane — and only when that worked does anything move: the folder goes to the front of Recent, the Work page shows
-  // and the terminal gets the keys. The click is first put through the human-click door, as a pinned folder's is
+  // pane — and only when that worked does anything move: the Work page shows and the terminal gets the keys. The click is first put through the human-click door, as a pinned folder's is
   // before its tree mounts: after a relaunch that is what lets a pinned folder outside the projects folder through.
   // If the door refuses (the folder has gone), Rust's own refusal below is what gets said.
   const openInTerminal = useCallback(
@@ -376,7 +364,6 @@ export function App() {
           () => path,
         );
         await readerOpenInTerminal(real);
-        setRecent((list) => pushRecent(list, recentFolder(real)));
         wantTerminalFocus.current = true;
         goTo("work");
         setFocusTick((n) => n + 1);
@@ -405,7 +392,6 @@ export function App() {
         folder={nav.folder}
         folderPinned={isPinned(nav.folder)}
         selected={nav.doc?.path ?? null}
-        recent={recent}
         onOpen={openFromSidebar}
         onPin={pin}
         onUnpin={unpin}

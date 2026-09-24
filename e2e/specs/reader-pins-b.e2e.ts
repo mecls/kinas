@@ -1,8 +1,9 @@
 import { browser, expect } from "@wdio/globals";
 import { waitForShell } from "../helpers.ts";
 
-// Pinned and Recent, second launch (tasks/three-column-shell-build-spec.md AC-12, AC-13): a new process over the data
-// folder `reader-pins-a` left behind. What was pinned is here; what was merely opened is not.
+// Pinned and the tabs, second launch (tasks/three-column-shell-build-spec.md AC-12, AC-13): a new process over the data
+// folder `reader-pins-a` left behind. What was pinned is here; what was merely opened is not — no Recent section and,
+// since 2026-09-24 (tasks/reader-layout/prd.md rule 16), no tab.
 
 const PINNED_FILE = "pin-me-7f3a.md";
 
@@ -18,12 +19,12 @@ const pinned = () =>
     })),
   );
 
-describe("Pinned and Recent, after a relaunch", () => {
+describe("Pinned and the tabs, after a relaunch", () => {
   before(async () => {
     await waitForShell();
   });
 
-  it("AC-12: the pins are back, in the order they were pinned, and AC-13: Recent is empty and so not there", async () => {
+  it("AC-12: the pins are back, in the order they were pinned, and AC-13: no tab and no Recent came back", async () => {
     await browser.waitUntil(async () => (await pinned()).length === 2, { timeout: 20000, timeoutMsg: `the pins did not come back: ${JSON.stringify(await pinned())}` });
     expect(await pinned()).toEqual([
       { name: PINNED_FILE, disabled: false },
@@ -31,6 +32,7 @@ describe("Pinned and Recent, after a relaunch", () => {
     ]);
     // Sixteen files were opened in the first launch. None of that was kept.
     expect(await browser.execute(() => document.querySelector(".sidebar-recent"))).toBeNull();
+    expect(await browser.execute(() => document.querySelectorAll(".ui-tab").length)).toBe(0);
     // Nothing is open, so there is no Files section and the panel is closed.
     expect(await browser.execute(() => ({ files: document.querySelector(".sidebar .reader-files") !== null, panel: document.querySelector<HTMLElement>(".shell")!.dataset.panel }))).toEqual({
       files: false,
@@ -46,8 +48,8 @@ describe("Pinned and Recent, after a relaunch", () => {
       "the pinned file never opened",
     );
     expect(await browser.execute(() => document.querySelector<HTMLElement>(".shell")!.dataset.panel)).toBe("open");
-    // And now it is the one recent file.
-    expect(await browser.execute(() => [...document.querySelectorAll(".sidebar-recent .sidebar-row-name")].map((n) => n.textContent))).toEqual([PINNED_FILE]);
+    // And now it is the one tab.
+    expect(await browser.execute(() => [...document.querySelectorAll("aside.reader .ui-tab .ui-tab-name")].map((n) => n.textContent))).toEqual([PINNED_FILE]);
 
     await browser.execute(() => [...document.querySelectorAll<HTMLButtonElement>(".sidebar-pinned .sidebar-row")].find((b) => b.querySelector(".sidebar-row-name")?.textContent === "docs")!.click());
     await browser.waitUntil(() => browser.execute(() => [...document.querySelectorAll(".sidebar-pin-tree .tree-item")].some((b) => b.textContent?.trim() === "guide.md")), {

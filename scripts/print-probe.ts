@@ -8,7 +8,7 @@
 // prints it through the same WebKit call the app's print button reaches (scripts/print-probe.swift).
 //
 // A case passes when the PDF has at least MIN_PAGES pages, still contains the document's last line, and contains none
-// of the sentinels planted in the sidebar, the page, the reader's header and its side column. The control matters as
+// of the sentinels planted in the sidebar, the page, the reader's tabs, its header and its side column. The control matters as
 // much as the check: a probe that reports five pages whatever the stylesheet says has proved nothing. Without
 // print.css the root is `height: 100%; overflow: hidden`, so the control prints one clipped page.
 //
@@ -21,7 +21,7 @@ import { renderMarkdown } from "../app/src/reader/render.ts";
 import { renderSource } from "../app/src/reader/source.ts";
 
 const MIN_PAGES = 5;
-const SENTINELS = ["SIDEBAR-SENTINEL", "CONTENT-SENTINEL", "HEADER-SENTINEL", "SIDE-SENTINEL"];
+const SENTINELS = ["SIDEBAR-SENTINEL", "CONTENT-SENTINEL", "TABS-SENTINEL", "HEADER-SENTINEL", "SIDE-SENTINEL"];
 
 const repo = resolve(import.meta.dir, "..");
 const styles = join(repo, "app/src/styles");
@@ -57,6 +57,7 @@ ${stylesheets()}
       <div class="stage-divider" role="separator"></div>
       <aside class="shell-panel reader" aria-label="Reader" style="flex-basis: 45%">
         <div class="reader-frame">
+          <div class="ui-tabstrip" role="tablist"><div class="ui-tab" role="tab" aria-selected="true">TABS-SENTINEL</div></div>
           <header class="reader-head"><span class="reader-path">HEADER-SENTINEL</span></header>
           <div class="reader-main" data-narrow="">
             <div class="reader-side" data-overlay=""><nav class="reader-contents">SIDE-SENTINEL</nav></div>

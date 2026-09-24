@@ -3,8 +3,8 @@
  * middle, and what was opened in a panel on the right. tokens.css variables only — guard.test.ts holds it to that.
  *
  *   div.shell[data-sidebar][data-panel]
- *     nav.sidebar               the wordmark, the pages, then Pinned, the open folder's Files, Recent, the client
- *                               folders, and the VPS row at the foot
+ *     nav.sidebar               the wordmark, the pages, then Pinned, the open folder's Files, the client folders,
+ *                               and the VPS row at the foot (Recent left for the reader's tabs, 2026-09-24)
  *     div.stage                 a flex row — the row the divider measures
  *       main.content            the six stacked pages
  *       div.stage-divider
@@ -50,8 +50,8 @@
   gap: var(--space-0);
 }
 
-/* Pinned, Files, the client folders and Recent scroll together between the pages and the foot; an empty one is not
-   here at all. */
+/* Pinned, Files and the client folders scroll together between the pages and the foot; an empty one is not here at
+   all. */
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
@@ -176,7 +176,7 @@
   opacity: 1;
 }
 
-/* A folder's row in Recent or the client folders: the row, and what can be done to the folder beside it. */
+/* A client folder's row: the row, and what can be done to the folder beside it. */
 .sidebar-entry {
   display: flex;
   align-items: center;

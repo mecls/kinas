@@ -1,6 +1,6 @@
 import { browser, $, expect } from "@wdio/globals";
 import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { hook, runReaderMenuItem, waitForShell } from "../helpers.ts";
@@ -272,5 +272,16 @@ describe("the reader's tabs", () => {
     expect(await strip()).toEqual({ tabs: moved, selected: TAB(2) });
     expect(await browser.execute(() => document.querySelector("aside.reader .ui-tabstrip")!.hasAttribute("data-dragging"))).toBe(false);
     expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("AC-5: nothing opened is stored or logged — no tab file's name in the log, the settings or the page's storage", async () => {
+    // Every file here carries the tag 9c2e, found nowhere else in the repository, so any hit came from this spec.
+    expect(existsSync(APP_LOG) ? readFileSync(APP_LOG, "utf8").split("\n").filter((line) => line.includes("9c2e")) : []).toEqual([]);
+    const db = join(process.env.KINAS_DATA_DIR!, "kinas.sqlite");
+    const settings = execFileSync("/usr/bin/sqlite3", [db, "SELECT key || '=' || value FROM settings"], { encoding: "utf8" }).trim().split("\n");
+    expect(settings.filter((row) => row.includes("9c2e"))).toEqual([]);
+    // The tabs are React state only: not in localStorage or sessionStorage either (build spec §10).
+    const stored = await browser.execute(() => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }));
+    expect(stored.includes("9c2e")).toBe(false);
   });
 });

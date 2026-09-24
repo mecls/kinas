@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { herdr, herdrSnapshot, hook, stopHerdrSession, waitForHook } from "../helpers.ts";
 import { SESSION } from "./reader-terminal.setup.ts";
 
-// Folders in the sidebar (2026-09-21): a folder is pinned from its own row, an opened folder joins Recent, and a
+// Folders in the sidebar (2026-09-21): a folder is pinned from its own row, an opened folder puts its README in a tab
+// (Recent, where it went before, left the sidebar on 2026-09-24 — tasks/reader-layout/prd.md rule 25), and a
 // folder's terminal button asks Herdr for its workspace — in the throwaway session, never `default` — and types
 // nothing into the pane. Everything is clicked and read inside the page: a lookup costs about 5 s under this driver,
 // and the folder buttons are out of the layout until their row is pointed at, which a script's click does not need.
@@ -36,11 +37,8 @@ const opened = (suffix: string) =>
     `${suffix} never finished rendering`,
   );
 
-/** Recent, in order, as `kind:name`. An array: an object's key order does not survive the WebDriver wire. */
-const recent = () =>
-  browser.execute(() =>
-    [...document.querySelectorAll<HTMLLIElement>(".sidebar-recent .sidebar-list > li")].map((li) => `${li.dataset.kind ?? "?"}:${li.querySelector(".sidebar-row-name")?.textContent ?? ""}`),
-  ) as Promise<string[]>;
+/** The reader's tabs, by name, in strip order. An array: an object's key order does not survive the WebDriver wire. */
+const tabs = () => browser.execute(() => [...document.querySelectorAll("aside.reader .ui-tab .ui-tab-name")].map((n) => n.textContent ?? "")) as Promise<string[]>;
 
 /** Clicks the button with this label inside `scope`. False when it is not there. */
 const clickLabelled = (scope: string, label: string) =>
@@ -118,37 +116,18 @@ describe("Folders in the sidebar", () => {
     expect(stored.map((p) => `${p.display_path}|${p.kind}|${p.exists}`)).toEqual([`${ALPHA}|dir|true`]);
   });
 
-  it("an opened folder joins Recent as a folder, under the file it opened with and above what was open before, and its row reopens it", async () => {
-    // The projects folder, opened above, has no README: it is in Recent on its own.
-    expect(await recent()).toEqual(["dir:root"]);
+  it("an opened folder puts its README in a tab, and adds no tab of its own", async () => {
+    // The projects folder, opened above, has no README: no tab, and none showing.
+    expect(await tabs()).toEqual([]);
 
     expect(kinas("open", LOOSE).code).toBe(0);
     await opened(LOOSE);
     expect(kinas("open", ALPHA).code).toBe(0);
     await opened(`${ALPHA}/README.md`);
-    expect(await recent()).toEqual(["file:README.md", `dir:${ALPHA}`, `file:${LOOSE}`, "dir:root"]);
-
-    // A file opened on its own closes the folder; the folder stays in Recent, and its row brings it back.
-    expect(kinas("open", LOOSE).code).toBe(0);
-    await opened(LOOSE);
-    await browser.waitUntil(() => browser.execute(() => document.querySelector(".sidebar .reader-files") === null), { timeout: 15000, interval: 250, timeoutMsg: "the Files section never went" });
-    expect(await recent()).toEqual([`file:${LOOSE}`, "file:README.md", `dir:${ALPHA}`, "dir:root"]);
-
-    expect(
-      await browser.execute((name: string) => {
-        const row = [...document.querySelectorAll<HTMLButtonElement>('.sidebar-recent li[data-kind="dir"] .sidebar-row')].find((b) => b.querySelector(".sidebar-row-name")?.textContent === name);
-        row?.click();
-        return row !== undefined;
-      }, ALPHA),
-    ).toBe(true);
-    await opened(`${ALPHA}/README.md`);
-    const files = await browser.execute(() => ({
-      label: document.querySelector(".sidebar .reader-files .sidebar-label")?.textContent ?? "",
-      current: [...document.querySelectorAll('.sidebar-recent li[data-kind="dir"] .sidebar-row[aria-current="true"] .sidebar-row-name')].map((n) => n.textContent),
-    }));
-    expect(files.label).toBe(ALPHA);
-    expect(files.current).toEqual([ALPHA]);
-    expect(await recent()).toEqual(["file:README.md", `dir:${ALPHA}`, `file:${LOOSE}`, "dir:root"]);
+    // The folder is Files, not a tab; its README is a tab like any file shown.
+    expect(await tabs()).toEqual([LOOSE, "README.md"]);
+    expect(await browser.execute(() => document.querySelector(".sidebar .reader-files .sidebar-label")?.textContent ?? "")).toBe(ALPHA);
+    expect(await browser.execute(() => document.querySelector(".sidebar-recent"))).toBeNull();
   });
 });
 
@@ -171,6 +150,7 @@ describe("Open in the terminal", () => {
     firstWorkspace = before.focused_workspace_id;
     expect(before.workspaces.some((w) => w.label === ALPHA)).toBe(false);
     const pid = await hook<number>("ptyPid");
+    const tabsBefore = await tabs();
     const createdBefore = logLines("reader: folder opened in the terminal (created)").length;
 
     expect(await clickLabelled(".sidebar-pinned", `Open ${ALPHA} in the terminal`)).toBe(true);
@@ -193,7 +173,8 @@ describe("Open in the terminal", () => {
     // The PTY was not restarted, and nothing was typed into it: Herdr was asked, the pane was not told.
     expect(await hook<number>("ptyPid")).toBe(pid);
     expect(await hook<string>("terminalText")).not.toMatch(TYPED_CD);
-    expect((await recent())[0]).toBe(`dir:${ALPHA}`);
+    // Opening a folder in the terminal adds it to nothing (tasks/reader-layout/prd.md rule 25).
+    expect(await tabs()).toEqual(tabsBefore);
 
     // The log says that it happened and how long it took, and never which folder.
     expect(logLines("reader: folder opened in the terminal (created)").length).toBeGreaterThan(createdBefore);
@@ -208,8 +189,8 @@ describe("Open in the terminal", () => {
     const before = herdrSnapshot(SESSION);
     const focusedBefore = logLines("reader: folder opened in the terminal (focused)").length;
 
-    // From Recent this time: the same button, wherever the folder shows.
-    expect(await clickLabelled(".sidebar-recent", `Open ${ALPHA} in the terminal`)).toBe(true);
+    // From the pin again: the same button, wherever the folder shows.
+    expect(await clickLabelled(".sidebar-pinned", `Open ${ALPHA} in the terminal`)).toBe(true);
     await browser.waitUntil(() => herdrSnapshot(SESSION).focused_workspace_id === alphaWorkspace, { timeout: 20000, timeoutMsg: "the folder's workspace never got the focus back" });
     await browser.waitUntil(() => showing("work"), { timeout: 10000, timeoutMsg: "the Work page never showed" });
 
@@ -222,8 +203,11 @@ describe("Open in the terminal", () => {
   });
 
   it("a folder that has gone is refused in Rust's words — at the foot of the sidebar, the panel being closed — and nothing moves", async () => {
+    // Pinned from its Files header, so its pin carries the terminal button (Recent, which did, has gone).
     expect(kinas("open", BETA).code).toBe(0);
-    await waitInPageWith((name: string) => [...document.querySelectorAll('.sidebar-recent li[data-kind="dir"] .sidebar-row-name')].some((n) => n.textContent === name), BETA, "the second folder never reached Recent");
+    await waitInPageWith((name: string) => document.querySelector(".sidebar .reader-files .sidebar-label")?.textContent === name, BETA, "the second folder never reached Files");
+    expect(await clickLabelled(".sidebar .reader-files", "Pin this folder")).toBe(true);
+    await waitInPageWith((name: string) => [...document.querySelectorAll(".sidebar-pinned .sidebar-row-name")].some((n) => n.textContent === name), BETA, "the second folder never appeared under Pinned");
     rmSync(join(root, BETA), { recursive: true, force: true });
 
     await browser.execute(() => document.querySelector<HTMLButtonElement>(".reader-close")!.click());
@@ -232,7 +216,7 @@ describe("Open in the terminal", () => {
     await browser.waitUntil(() => showing("home"), { timeout: 10000, timeoutMsg: "the Home page never showed" });
     const before = herdrSnapshot(SESSION);
 
-    const said = await clickAndReadNotice(".sidebar-recent", `Open ${BETA} in the terminal`, "^No such file: ");
+    const said = await clickAndReadNotice(".sidebar-pinned", `Open ${BETA} in the terminal`, "^No such file: ");
     expect(said).toBe(`No such file: ${join(root, BETA)}`);
     expect(await showing("home")).toBe(true);
     expect(await browser.execute(() => document.querySelector(".shell")?.getAttribute("data-panel"))).toBe("closed");

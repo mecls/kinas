@@ -422,7 +422,9 @@ export const STORIES: Story[] = [
           </div>
         ),
       },
-      { name: "shell", node: <TerminalChrome session="default" state="stale" profile="plain shell" actions={[{ label: "Copy", onClick: noop }]} /> },
+      // DESIGN.md 1.4: the badge is a worker's only, so the shell and the first mate draw none.
+      { name: "shell", node: <TerminalChrome session="shell" profile="plain shell" actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "first-mate", node: <TerminalChrome session="default · firstmate" profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
     ],
   },
   {

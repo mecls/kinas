@@ -1,5 +1,5 @@
 import { browser } from "@wdio/globals";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -181,6 +181,29 @@ export interface HerdrSnapshot {
 
 export function herdrSnapshot(session: string): HerdrSnapshot {
   return JSON.parse(herdr(session, "api", "snapshot")).result.snapshot;
+}
+
+/**
+ * Starts a throwaway session's server headless, before the app attaches it (`herdr --session <name> server`, detached),
+ * with its own config, and waits for it to answer. The crew specs need workspaces in it before Kinas starts.
+ */
+export function startHerdrServer(session: string, config: string): void {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && !k.toUpperCase().includes("HERDR")) env[k] = v;
+  }
+  env.HERDR_CONFIG_PATH = config;
+  const child = spawn(join(homedir(), ".local/bin/herdr"), ["--session", session, "server"], { env, detached: true, stdio: "ignore" });
+  child.unref();
+  for (let i = 0; i < 50; i++) {
+    try {
+      herdr(session, "api", "snapshot");
+      return;
+    } catch {
+      execFileSync("/bin/sleep", ["0.2"]);
+    }
+  }
+  throw new Error(`Herdr's server for ${session} never answered`);
 }
 
 export function stopHerdrSession(session: string): void {

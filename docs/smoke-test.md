@@ -391,6 +391,21 @@ The side column and the text, the reader's tabs, and the window's title bar (202
 - [ ] Settings → Crew shows Firstmate at `f9f74a1 (pinned)`, backend `herdr`, every tool `installed`, `gh` signed in —
       `automated (crew-settings.e2e.ts)` over stub tools; on the real install — `outstanding — needs Miguel`
 
+## The crew: launch
+
+The first mate in the pane (2026-09-24, slice 3).
+
+- [ ] Launch the first mate on the Crew page opens a `firstmate` workspace in the attached session, its pane in
+      Firstmate's home running `claude`, and gives the terminal the keys; Claude Code asks once to trust the folder —
+      `automated (crew-launch.e2e.ts)` with a stand-in in `kinas-e2e-crew`; in `default` with the real `claude` —
+      `outstanding — needs Miguel`
+- [ ] First mate (Crew), the palette's Go to the first mate and Home's Launch task focus that workspace and make no
+      second one — `automated (crew-launch.e2e.ts)`
+- [ ] Kinas started with Herdr up and a `firstmate` workspace in `default` opens the pane on it once, and never moves
+      it again without a click — `automated (crew-launch.e2e.ts)`; in `default` — `outstanding — needs Miguel`
+- [ ] The Work chrome reads `default · firstmate` and `claude` on the first mate's pane, `default · fm-<id>` with the
+      task's badge on a worker's, and `shell` · `plain shell` without Herdr — `automated (crew-chrome.e2e.ts)`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

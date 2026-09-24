@@ -285,6 +285,16 @@ pub fn display_path(real: &Path, root: &Path, home: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// The first mate's home is Kinas's data directory, outside the projects folder, so nothing under it is ever a
+    /// path the reader may open without the captain's click (build spec §6.17).
+    #[test]
+    fn home_is_not_permitted() {
+        let root = Path::new("/nowhere/projects");
+        let home = Path::new("/nowhere/Library/Application Support/ai.sintralabs.kinas/firstmate");
+        assert!(!permitted(&home.join("data/backlog.md"), root, &HashSet::new()));
+        assert!(!permitted(home, root, &HashSet::new()));
+    }
+
     use super::*;
     use std::fs;
     use std::os::unix::fs::symlink;

@@ -50,8 +50,9 @@ missed, this file is where it is added. A click on any of the three moves no key
 the keys; ← or → onto the Work page gives the terminal the keys as ⌘2 does. No `keydown` handler comes with them.
 The rest of the bar moves the window when dragged and zooms it when double-clicked, as macOS's own title bar did.
 Amended 2026-09-24 (the first mate, slice 1): ⌘3 and Go to Crew landed — Go to Crew follows Go to Work in the palette.
-Until the Inbox's slice the defaults are seven, ⌘5 is still the terminal's, and Go to Inbox and Go to the first mate
-are not in the palette.
+Until the Inbox's slice the defaults are seven, ⌘5 is still the terminal's, and Go to Inbox is not in the palette.
+Amended 2026-09-24 (slice 3): Go to the first mate follows Go to Crew — the launcher, then the Work page with the
+terminal holding the keys, as the Crew page's First mate.
 
 ## Command palette
 

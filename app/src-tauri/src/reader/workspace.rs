@@ -1,5 +1,5 @@
 //! Open in the terminal (reader PRD R37b): a folder gets a Herdr workspace of its own, and a second click finds it
-//! again instead of making another. Kinas asks Herdr through its CLI (`herdr.rs`) with a fixed argv and sends it no
+//! again instead of making another. Kinas asks Herdr through its CLI (`crate::herdr`) with a fixed argv and sends it no
 //! shell string at all. Nothing is typed into the Kinas terminal: its folder is fixed when the PTY spawns, restarting
 //! it would drop Herdr's client, and a typed `cd` would reach Claude Code or Pi as a prompt.
 //!
@@ -11,16 +11,11 @@
 //! made by hand in `kinas` is found too, which is what he would want.
 
 use std::path::Path;
-use std::sync::Mutex;
 
 use serde::Serialize;
 
-use super::herdr::{find_herdr, herdr_args, run, session, NOT_INSTALLED};
+use crate::herdr::{find_herdr, herdr_args, run, session, NOT_INSTALLED, NOT_RUNNING, OPENING};
 
-/// Herdr's server did not answer. Its "focused pane" is the server's own state and is reported with no client
-/// attached at all (measured), so unlike Open in editor there is no pane to ask for: the server answering is the
-/// whole of what can be known.
-pub const NOT_RUNNING: &str = "Herdr isn't running; attach it first";
 const MAX_LABEL_CHARS: usize = 80;
 
 #[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
@@ -39,9 +34,6 @@ impl Opened {
     }
 }
 
-/// One open at a time: two clicks racing between the snapshot and the create would make two workspaces.
-static OPENING: Mutex<()> = Mutex::new(());
-
 /// The workspace label for a folder: its display path, the projects folder itself by its own name (it displays as
 /// `.`), without control characters, and at most 80 characters keeping the **tail** — the tail is what tells two long
 /// paths apart.
@@ -52,6 +44,11 @@ pub fn label_for(real: &Path, root: &Path, home: &Path) -> String {
         _ => shown,
     };
     let clean: String = shown.chars().filter(|c| !c.is_control()).collect();
+    // `firstmate` is the first mate's own workspace (Firstmate's label, the crew's launcher finds it by it): a client
+    // folder of that name gets a label of its own, or Open in the terminal would focus the first mate (build spec §6.17).
+    if clean == crate::crew::pin::WORKSPACE_LABEL {
+        return format!("{clean}-folder");
+    }
     let count = clean.chars().count();
     if count <= MAX_LABEL_CHARS {
         return clean;
@@ -124,6 +121,15 @@ mod tests {
         assert_eq!(label_for(Path::new("/nowhere/projects/other/docs"), &root, &home), "other/docs");
         assert_eq!(label_for(Path::new("/nowhere/home/notes"), &root, &home), "~/notes");
         assert_eq!(label_for(Path::new("/elsewhere/notes"), &root, &home), "/elsewhere/notes");
+    }
+
+    #[test]
+    fn label_for_firstmate_folder() {
+        let root = PathBuf::from("/nowhere/projects");
+        let home = PathBuf::from("/nowhere/home");
+        assert_eq!(label_for(Path::new("/nowhere/projects/firstmate"), &root, &home), "firstmate-folder");
+        assert_eq!(label_for(Path::new("/nowhere/projects/firstmate/docs"), &root, &home), "firstmate/docs");
+        assert_eq!(label_for(Path::new("/nowhere/projects/firstmates"), &root, &home), "firstmates");
     }
 
     #[test]

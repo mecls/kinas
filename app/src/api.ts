@@ -206,6 +206,20 @@ export interface CrewSettings {
 }
 export const getCrew = () => invoke<CrewSnapshot>("crew_snapshot");
 export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");
+/** The launcher: "focused" (it was running), "run" (its workspace was there without it), "created". */
+export const launchFirstMate = () => invoke<"focused" | "run" | "created">("crew_launch");
+/** A crew command's refusal, in its own words (CrewError), or the error as it came. */
+export const crewErrorOf = (e: unknown): string =>
+  e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string" ? (e as { message: string }).message : String(e);
+/** What the Work page's chrome says about the pane (build spec §4 Work). */
+export interface PaneState {
+  session: string;
+  workspace: string | null;
+  word: CrewWord | null;
+  profile: string | null;
+  stale: boolean;
+}
+export const crewPaneState = () => invoke<PaneState>("crew_pane_state");
 export const setCrewVisible = (visible: boolean) => invoke<void>("set_crew_visible", { visible });
 export const onCrewChanged = (handler: () => void): Promise<UnlistenFn> => listen("crew_changed", handler);
 

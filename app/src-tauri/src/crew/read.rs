@@ -7,6 +7,7 @@ use crate::readings::ReaderView;
 use crate::redact::{Reader, DEAD_AFTER_MS};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use std::collections::HashMap;
 
 const DAY_MS: i64 = 86_400_000;
 /// Done tasks stay on the board for 7 days after `done_at`, gone ones for 24 h after `gone_at` (§7). Rows stay forever.
@@ -71,15 +72,21 @@ pub struct DecisionRow {
     pub copied_at: Option<i64>,
 }
 
-/// The Crew page's reading. `installed` and `generated` are known outside the guard: whether the home's snapshot
-/// script exists, and the last good snapshot's time. An installed crew is `installed` until the launcher's Herdr view
-/// can tell that the first mate runs (slice 3).
-pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: bool, generated: Option<String>) -> rusqlite::Result<CrewSnapshot> {
+/// A worker row this old no longer shows its pane's button (§7 Worker: stale after 15 s).
+const WORKER_FRESH_MS: i64 = 15_000;
+
+/// The Crew page's reading. `installed`, `running` and `generated` are known outside the guard: whether the home's
+/// snapshot script exists, whether Herdr's last view has the `firstmate` workspace, and the last good snapshot's time.
+pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: bool, running: bool, generated: Option<String>) -> rusqlite::Result<CrewSnapshot> {
     Ok(CrewSnapshot {
         now,
         generated,
         reader: reader(conn, org)?,
-        page: if installed { "installed" } else { "uninstalled" },
+        page: match (installed, running) {
+            (false, _) => "uninstalled",
+            (true, false) => "installed",
+            (true, true) => "running",
+        },
         blocked: None,
         tasks: tasks(conn, org, now)?,
         decisions: Vec::new(),
@@ -124,13 +131,14 @@ fn tasks(conn: &Connection, org: &str, now: i64) -> rusqlite::Result<Vec<TaskRow
         "SELECT id, title, repo, project_name, kind, harness, pr_number, (SELECT e.at FROM crew_events e WHERE e.org_id = t.org_id
            AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1), (SELECT e.text FROM crew_events e
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
-           {STORED_COLUMNS}
+           {STORED_COLUMNS},
+           EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4)
          FROM crew_tasks t
          WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3)
          ORDER BY first_seen_at DESC, id"
     );
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params![org, now - GONE_SHOWN_MS, now - DONE_SHOWN_MS], |r| {
+    let rows = stmt.query_map(params![org, now - GONE_SHOWN_MS, now - DONE_SHOWN_MS, now - WORKER_FRESH_MS], |r| {
         let stored = stored_of(r, 9)?;
         let input = stored.input();
         let pr_number: Option<u32> = r.get(6)?;
@@ -157,8 +165,19 @@ fn tasks(conn: &Connection, org: &str, now: i64) -> rusqlite::Result<Vec<TaskRow
                 checks_total: stored.pr_checks_total,
                 checks_failed: stored.pr_checks_failed,
             }),
-            has_pane: false,
+            has_pane: r.get(24)?,
         })
+    })?;
+    rows.collect()
+}
+
+/// Each worker's pane → its task's word and harness: the chrome's badge (§4 Work), kept in memory by the collector.
+pub(crate) fn worker_words(conn: &Connection, org: &str) -> rusqlite::Result<HashMap<String, (&'static str, Option<String>)>> {
+    let sql = format!("SELECT w.pane_id, t.harness, {STORED_COLUMNS} FROM crew_workers w JOIN crew_tasks t ON t.org_id = w.org_id AND t.id = w.task_id WHERE w.org_id = ?1");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![org], |r| {
+        let stored = stored_of(r, 2)?;
+        Ok((r.get::<_, String>(0)?, (word_of(&stored.input()), r.get::<_, Option<String>>(1)?)))
     })?;
     rows.collect()
 }
@@ -175,18 +194,18 @@ mod tests {
     fn cycle(store: &Store, name: &str, now: i64) {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../fixtures/crew-snapshot.{name}.synthetic.json"));
         let fleet = parse_fleet(&std::fs::read_to_string(path).unwrap());
-        record(&mut store.conn(), store.org_id(), &fleet, now).unwrap();
+        record(&mut store.conn(), store.org_id(), &fleet, &[], now).unwrap();
     }
 
     #[test]
     fn the_page_reads_the_mirror_inside_retention() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).unwrap();
-        let view = snapshot_view(&store.conn(), store.org_id(), T0, false, None).unwrap();
+        let view = snapshot_view(&store.conn(), store.org_id(), T0, false, false, None).unwrap();
         assert_eq!((view.page, view.tasks.len(), view.reader.state.as_str()), ("uninstalled", 0, "not_configured"));
 
         cycle(&store, "working", T0);
-        let view = snapshot_view(&store.conn(), store.org_id(), T0 + 1, true, Some("g".into())).unwrap();
+        let view = snapshot_view(&store.conn(), store.org_id(), T0 + 1, true, false, Some("g".into())).unwrap();
         assert_eq!((view.page, view.generated.as_deref(), view.reader.state.as_str()), ("installed", Some("g"), "ok"));
         let task = &view.tasks[0];
         assert_eq!((task.word, task.kind.as_str(), task.project_name.as_deref()), ("working", "ship", Some("shop-9c2e")));
@@ -194,14 +213,14 @@ mod tests {
         assert_eq!(task.last_event_text.as_deref(), Some("working"), "the newest event that is not an order");
 
         cycle(&store, "done", T0 + 10);
-        let done = snapshot_view(&store.conn(), store.org_id(), T0 + 7 * DAY_MS, true, None).unwrap();
+        let done = snapshot_view(&store.conn(), store.org_id(), T0 + 7 * DAY_MS, true, true, None).unwrap();
         assert_eq!(done.tasks[0].word, "done");
         assert_eq!(done.tasks[0].pr.as_ref().map(|p| p.number), Some(12));
-        let later = snapshot_view(&store.conn(), store.org_id(), T0 + 10 + 7 * DAY_MS + 1, true, None).unwrap();
+        let later = snapshot_view(&store.conn(), store.org_id(), T0 + 10 + 7 * DAY_MS + 1, true, true, None).unwrap();
         assert!(later.tasks.is_empty(), "done is shown for 7 days");
 
         cycle(&store, "empty", T0 + 20);
-        let gone = snapshot_view(&store.conn(), store.org_id(), T0 + 21, true, None).unwrap();
+        let gone = snapshot_view(&store.conn(), store.org_id(), T0 + 21, true, true, None).unwrap();
         assert_eq!((gone.tasks[0].word, gone.tasks[0].overnight_word), ("gone", "done"));
     }
 }

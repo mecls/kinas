@@ -5,11 +5,12 @@
 pub(crate) mod config;
 pub(crate) mod firstmate;
 pub(crate) mod home;
+pub(crate) mod launch;
 pub(crate) mod pin;
 pub(crate) mod read;
 pub(crate) mod tools;
 
-use crate::readers::crew::CrewLive;
+use crate::readers::crew::{CrewLive, HERDR_FRESH_MS};
 use crate::readers::runtime::ReaderControl;
 use crate::store::{now_ms, Store};
 use config::{Away, ProjectMode};
@@ -50,11 +51,13 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let home = crew_home(&app);
         // The file check and the collector's memory, before the guard.
         let installed = home::installed(&home);
-        let generated = app.state::<CrewLive>().generated();
+        let live = app.state::<CrewLive>();
+        let generated = live.generated();
+        let running = live.live().first_mate_there();
         let blocked = tools::cached(&home).as_ref().and_then(blocked_line);
         let store = app.state::<Store>();
         let conn = store.conn();
-        let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
+        let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, running, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
         view.blocked = blocked;
         Ok(view)
     })
@@ -66,6 +69,71 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
 #[tauri::command]
 pub fn set_crew_visible(control: State<'_, ReaderControl>, visible: bool) {
     control.set_crew_visible(visible);
+}
+
+/// **Launch the first mate** and **First mate** on the Crew page, the palette's Go to the first mate, Home's Launch
+/// task while the first mate runs (§11.3 Launching): the launcher, its one log line, then a fresh Herdr view so the
+/// page reads as running.
+#[tauri::command]
+pub async fn crew_launch(app: AppHandle) -> Result<launch::Launched, CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let started = std::time::Instant::now();
+        let home = crew_home(&app);
+        // Probes at most once a minute; a tool the captain just installed is seen after Refresh readings.
+        let (health, _) = tools::health(&home, now_ms());
+        let launched = launch::launch(&home, &health, &launch::Ask::None)?;
+        log::info!("crew: launched ({}) in {} ms", launched.word(), started.elapsed().as_millis());
+        app.state::<ReaderControl>().crew_herdr();
+        Ok(launched)
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the launcher did not finish: {e}")))?
+}
+
+/// What the Work page's chrome says about the pane (§4 Work): the session, then the focused workspace's label — a
+/// worker's tab label for a worker's pane — the task's word only for a worker's pane, and `claude` when Herdr reports
+/// it in the foreground. From Herdr's last view, in memory; an older view asks the crew's thread for a fresh one and
+/// drops the badge once it is 15 s old. Nothing is drawn from a guess.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct PaneState {
+    pub session: String,
+    pub workspace: Option<String>,
+    pub word: Option<&'static str>,
+    pub profile: Option<String>,
+    pub stale: bool,
+}
+
+const PANE_STALE_MS: i64 = 15_000;
+
+#[tauri::command]
+pub fn crew_pane_state(app: AppHandle) -> PaneState {
+    let pane = crate::pty::pane_session();
+    if pane.shell {
+        return PaneState { session: pane.session, workspace: None, word: None, profile: Some("plain shell".into()), stale: false };
+    }
+    let live = app.state::<CrewLive>().live();
+    let now = now_ms();
+    if now - live.observed_at >= HERDR_FRESH_MS {
+        app.state::<ReaderControl>().crew_herdr();
+    }
+    pane_state_of(pane.session, &live, now)
+}
+
+fn pane_state_of(session: String, live: &crate::readers::crew::LiveView, now: i64) -> PaneState {
+    let stale = live.view.is_none() || now - live.observed_at > PANE_STALE_MS;
+    let Some(view) = live.view.as_ref() else { return PaneState { session, workspace: None, word: None, profile: None, stale } };
+    let focused = view.focused_pane.as_deref().and_then(|id| view.pane(id));
+    let worker = focused.and_then(|p| live.worker_words.get(&p.id));
+    let workspace = match (focused, worker) {
+        (Some(p), Some(_)) => p.tab_label.clone(),
+        (Some(p), None) => view.workspace(&p.workspace_id).map(|w| w.label.clone()),
+        (None, _) => None,
+    };
+    let profile = match worker {
+        Some((_, harness)) => harness.clone(),
+        None => live.focused_foreground.iter().any(|a| a == "claude" || a.ends_with("/claude")).then(|| "claude".to_string()),
+    };
+    PaneState { session, workspace, word: worker.map(|(w, _)| *w).filter(|_| !stale), profile, stale }
 }
 
 /// Settings → Crew, and the Crew page's tool table (§4 Settings).
@@ -139,6 +207,38 @@ fn user_home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::herdr::{Pane, View, Workspace};
+    use crate::readers::crew::LiveView;
+
+    fn live(focused: &str, fg: &[&str], observed_at: i64) -> LiveView {
+        let ws = |id: &str, label: &str| Workspace { id: id.into(), label: label.into(), number: 1, focused: false };
+        let pane = |id: &str, w: &str, tab: &str| Pane { id: id.into(), workspace_id: w.into(), tab_label: Some(tab.into()), focused: id == focused, cwd: None };
+        LiveView {
+            view: Some(View {
+                focused_pane: Some(focused.into()),
+                workspaces: vec![ws("w1", "firstmate"), ws("w2", "└ shop-9c2e · p:x"), ws("w3", "kinas")],
+                panes: vec![pane("w1:p1", "w1", "1"), pane("w2:p2", "w2", "fm-shop-9c2e"), pane("w3:p1", "w3", "1")],
+            }),
+            focused_foreground: fg.iter().map(|s| s.to_string()).collect(),
+            observed_at,
+            worker_words: [("w2:p2".to_string(), ("working", Some("claude".to_string())))].into(),
+        }
+    }
+
+    #[test]
+    fn the_chrome_says_only_what_is_known() {
+        let now = 100_000;
+        let first_mate = pane_state_of("default".into(), &live("w1:p1", &["caffeinate", "claude"], now), now);
+        assert_eq!(first_mate, PaneState { session: "default".into(), workspace: Some("firstmate".into()), word: None, profile: Some("claude".into()), stale: false });
+        let worker = pane_state_of("default".into(), &live("w2:p2", &["claude"], now), now);
+        assert_eq!(worker, PaneState { session: "default".into(), workspace: Some("fm-shop-9c2e".into()), word: Some("working"), profile: Some("claude".into()), stale: false });
+        let shell = pane_state_of("default".into(), &live("w3:p1", &["zsh"], now), now);
+        assert_eq!((shell.workspace.as_deref(), shell.word, shell.profile), (Some("kinas"), None, None));
+        let old = pane_state_of("default".into(), &live("w2:p2", &["claude"], now - 16_000), now);
+        assert_eq!((old.word, old.stale), (None, true), "a stale view drops the badge");
+        let none = pane_state_of("default".into(), &LiveView::default(), now);
+        assert_eq!((none.workspace, none.stale), (None, true));
+    }
 
     #[test]
     fn the_stored_health_is_names_versions_and_the_short_commit() {

@@ -84,6 +84,11 @@ impl ReaderControl {
         self.crew_visible.load(Ordering::SeqCst)
     }
 
+    /// Asks the crew's thread for a fresh Herdr view (the launcher changed the session, or the chrome's view is old).
+    pub fn crew_herdr(&self) {
+        let _ = self.crew.lock().unwrap_or_else(|p| p.into_inner()).send(CrewWake::Herdr);
+    }
+
     /// "Refresh readings" in the palette, or a key just saved in Settings.
     pub fn refresh(&self) {
         let _ = self.host.lock().unwrap_or_else(|p| p.into_inner()).send(());

@@ -17,6 +17,8 @@ export interface CommandContext {
   crew?: () => Promise<number>;
   /** Palette only. */
   navigate?: (page: "home" | "usage" | "work" | "crew") => void;
+  /** Palette only: the Crew page's First mate — the launcher, then the Work page with the terminal holding the keys. */
+  firstMate?: () => void;
   refresh?: () => Promise<void>;
   /** Refreshes the tree Files shows (tree changes rule 16); false when Files shows no folder. */
   refreshFiles?: () => Promise<boolean>;
@@ -146,6 +148,15 @@ export const commands: readonly Command[] = [
     doors: ["palette"],
     async run(ctx) {
       need(ctx.navigate, "navigation")("crew");
+      return {};
+    },
+  },
+  {
+    id: "go.firstmate",
+    title: "Go to the first mate",
+    doors: ["palette"],
+    async run(ctx) {
+      need(ctx.firstMate, "the first mate")();
       return {};
     },
   },

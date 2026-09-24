@@ -198,8 +198,7 @@ fn last_component(path: &str) -> Option<String> {
 }
 
 /// `endpoint.target` is `<session>:<pane>`, and a Herdr pane id holds a colon of its own (`w2:p2`), so the split is at
-/// the FIRST colon (§6.8). A worker's pane (slice 3) and its PR (slice 4) are the first callers outside the tests.
-#[allow(dead_code)]
+/// the FIRST colon (§6.8).
 pub(crate) fn split_target(target: &str) -> Option<(&str, &str)> {
     let (session, pane) = target.split_once(':')?;
     (!session.is_empty() && !pane.is_empty()).then_some((session, pane))

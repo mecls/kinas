@@ -22,11 +22,12 @@ pub(crate) struct Applied {
 
 /// A cycle's outcome, written under the caller's one guard (§6.15): the fleet and a success, or an error and nothing
 /// else — the mirror keeps its last good reading (ADR 0004).
-pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, String>, now: i64) -> rusqlite::Result<Option<Applied>> {
+pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, String>, workers: &[Worker], now: i64) -> rusqlite::Result<Option<Applied>> {
     let tx = conn.transaction()?;
     let applied = match outcome {
         Ok(fleet) => {
             let applied = apply(&tx, org, fleet, now)?;
+            write_workers(&tx, org, workers, now)?;
             write_reader_status(&tx, org, Reader::Crew, Outcome::Success, now)?;
             Some(applied)
         }
@@ -37,6 +38,44 @@ pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, S
     };
     tx.commit()?;
     Ok(applied)
+}
+
+/// A worker's pane as Herdr shows it now: the pane behind a task's `endpoint.target`, in the session Kinas attaches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Worker {
+    pub task_id: String,
+    pub session: String,
+    pub pane_id: String,
+    pub workspace_id: Option<String>,
+    pub tab_label: Option<String>,
+}
+
+/// The workers from the fleet and Herdr's view (§6.8): `endpoint.target` split at its first colon, only a target in
+/// the attached session, only a pane Herdr has. Never matched by tab label or folder.
+pub(crate) fn workers_of(fleet: &Fleet, view: Option<&crate::herdr::View>, session: Option<&str>) -> Vec<Worker> {
+    let (Some(view), Some(session)) = (view, session) else { return Vec::new() };
+    fleet
+        .tasks
+        .iter()
+        .filter_map(|t| {
+            let (s, pane) = super::snapshot::split_target(t.endpoint_target.as_deref()?)?;
+            let found = view.pane(pane).filter(|_| s == session)?;
+            Some(Worker { task_id: t.id.clone(), session: s.to_string(), pane_id: pane.to_string(), workspace_id: Some(found.workspace_id.clone()), tab_label: found.tab_label.clone() })
+        })
+        .collect()
+}
+
+/// `crew_workers` is a cache (§6.7): rewritten whole every cycle, and the one table that is.
+fn write_workers(tx: &Transaction, org: &str, workers: &[Worker], now: i64) -> rusqlite::Result<()> {
+    tx.execute("DELETE FROM crew_workers WHERE org_id = ?1", params![org])?;
+    for w in workers {
+        tx.execute(
+            "INSERT OR REPLACE INTO crew_workers (org_id, task_id, session, pane_id, workspace_id, tab_label, alive, foreground, observed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, NULL, ?7)",
+            params![org, w.task_id, w.session, w.pane_id, w.workspace_id, w.tab_label, now],
+        )?;
+    }
+    Ok(())
 }
 
 /// The columns a task's word is computed from, as the mirror holds them: the prior state before a cycle, and the
@@ -284,7 +323,7 @@ mod tests {
 
     fn cycle(store: &Store, name: &str, now: i64) -> Applied {
         let mut conn = store.conn();
-        record(&mut conn, store.org_id(), &Ok(fleet(name)), now).unwrap().unwrap()
+        record(&mut conn, store.org_id(), &Ok(fleet(name)), &[], now).unwrap().unwrap()
     }
 
     type Row = (Option<String>, Option<String>, i64, Option<i64>, i64, Option<i64>, Option<i64>);
@@ -377,12 +416,32 @@ mod tests {
         let store = Store::open(dir.path()).unwrap();
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/firstmate-fleet-snapshot.held.captured.json");
         let held = parse_fleet(&std::fs::read_to_string(path).unwrap()).unwrap();
-        record(&mut store.conn(), store.org_id(), &Ok(held), T0).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(held), &[], T0).unwrap();
         let conn = store.conn();
         let ship = priors_one(&conn, store.org_id(), "scratch-readme-kinas-r8").unwrap().unwrap();
         assert_eq!((ship.done_at, word_of(&ship.input())), (None, "needs decision"));
         let scout = priors_one(&conn, store.org_id(), "scratch-count-files-c4").unwrap().unwrap();
         assert_eq!((scout.done_at, word_of(&scout.input())), (Some(T0), "done"));
+    }
+
+    #[test]
+    fn workers_are_the_targets_herdr_has_in_the_attached_session() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/herdr-api-snapshot.captured.json");
+        let view = crate::herdr::parse_view(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let fleet = fleet("working");
+        // The fixture's target is kinas-e2e-crew:w2:p2; the capture's pane w2:p2 carries the tab fm-scratch-count-files-c4.
+        let workers = workers_of(&fleet, Some(&view), Some("kinas-e2e-crew"));
+        assert_eq!(workers.len(), 1);
+        assert_eq!((workers[0].pane_id.as_str(), workers[0].tab_label.as_deref()), ("w2:p2", Some("fm-scratch-count-files-c4")));
+        assert!(workers_of(&fleet, Some(&view), Some("default")).is_empty(), "another session's pane has no button");
+        assert!(workers_of(&fleet, None, Some("kinas-e2e-crew")).is_empty(), "no Herdr answer, no workers");
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &workers, T0).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &[], T0 + MIN).unwrap();
+        let n: i64 = store.conn().query_row("SELECT count(*) FROM crew_workers", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "the cache is rewritten whole each cycle");
     }
 
     #[test]
@@ -398,7 +457,7 @@ mod tests {
         assert_eq!(before.2, Some(T0));
 
         let refused = parse_fleet(r#"{"schema":"fm-fleet-snapshot.v2"}"#);
-        let written = record(&mut store.conn(), store.org_id(), &refused, T0 + MIN).unwrap();
+        let written = record(&mut store.conn(), store.org_id(), &refused, &[], T0 + MIN).unwrap();
         assert_eq!(written, None);
         assert_eq!(snapshot(&store), before, "every crew row as it was, and the last success kept");
         let (state, attempt, error): (String, i64, String) = store

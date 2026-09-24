@@ -47,3 +47,17 @@ export function makeStubTools(dir: string, opts: StubOptions = {}): string {
 export function removeStubTool(dir: string, name: string): void {
   rmSync(join(dir, "bin", name), { force: true });
 }
+
+/**
+ * The first mate's stand-in for KINAS_E2E_CREW_COMMAND: a script named `claude` that appends its argument count and first
+ * argument to argv.log beside it, clears the screen, and becomes `sleep` under the name `claude` — so Herdr's
+ * process-info reports `argv0` `claude` and the launcher sees the first mate running (measured in a throwaway session,
+ * 2026-09-24). No spec starts the real `claude`.
+ */
+export function makeStandIn(dir: string): string {
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, "claude");
+  writeFileSync(path, `#!/bin/bash\nprintf '%s\\n' "$#\${1:+ $1}" >> '${join(dir, "argv.log")}'\nprintf '\\033[2J\\033[H'\nexec -a claude sleep 3600\n`);
+  chmodSync(path, 0o755);
+  return path;
+}

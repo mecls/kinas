@@ -1,6 +1,7 @@
 mod cli_link;
 mod commands;
 mod crew;
+mod herdr;
 mod keychain;
 mod login_path;
 mod paths;
@@ -115,6 +116,8 @@ pub fn run() {
             crew::crew_snapshot,
             crew::set_crew_visible,
             crew::crew_settings,
+            crew::crew_launch,
+            crew::crew_pane_state,
             commands::ollama_key_status,
             commands::save_ollama_key,
             commands::remove_ollama_key,

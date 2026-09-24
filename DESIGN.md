@@ -261,7 +261,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | Diff | modified, deleted, no-copy, too-many |
 | Toast | success, error |
 | EmptyState | with-action, plain |
-| TerminalChrome | working, shell |
+| TerminalChrome | working, shell, first-mate |
 | Panel | task-detail |
 | Nav | sidebar, folder-icons, reader-icons, connection-states |
 | Menu | plain, disabled, divider |

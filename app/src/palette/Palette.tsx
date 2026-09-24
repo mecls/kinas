@@ -8,8 +8,9 @@ import { snapshotAdapter } from "./snapshotAdapter.ts";
 // The ⌘K palette (R36, §3.7): the registry's palette door. Esc closes it and hands focus back to whatever had
 // it — the terminal included — so the next keystroke reaches the shell without a click (R31).
 
-/** `filesFolder`: the folder the sidebar's Files shows, for "Refresh files" (tree changes rule 16). */
-export function Palette({ onClose, filesFolder }: { onClose: () => void; filesFolder: string | null }) {
+/** `filesFolder`: the folder the sidebar's Files shows, for "Refresh files" (tree changes rule 16). `onFirstMate`: the
+ * Crew page's First mate, for "Go to the first mate". */
+export function Palette({ onClose, filesFolder, onFirstMate }: { onClose: () => void; filesFolder: string | null; onFirstMate: () => void }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const [output, setOutput] = useState<string[] | null>(null);
@@ -40,6 +41,7 @@ export function Palette({ onClose, filesFolder }: { onClose: () => void; filesFo
           return statusFromStore(snapshotAdapter(snapshot), snapshot.now);
         },
         navigate: (page) => dispatchAppAction(`go.${page}`),
+        firstMate: onFirstMate,
         refresh: () => refreshReadings(),
         refreshFiles: async () => {
           if (filesFolder === null) return false;

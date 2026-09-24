@@ -1,11 +1,11 @@
 //! Open in editor (reader PRD R36, R37): the file goes to a new Herdr pane split off the focused one, running the
 //! editor from Settings. It is never typed into the Kinas terminal: when Claude Code or Pi has that pane, the text
 //! would arrive as a prompt. Herdr 0.9.0's output shapes were measured in task 1.4 (PRD §7 Q1). The CLI door itself
-//! is `herdr.rs`, shared with Open in the terminal.
+//! is `crate::herdr`, shared with Open in the terminal.
 
 use std::path::Path;
 
-use super::herdr::{find_herdr, herdr_args, run, session, NOT_INSTALLED, NO_FOCUSED_PANE};
+use crate::herdr::{find_herdr, herdr_args, run, session, NOT_INSTALLED, NO_FOCUSED_PANE};
 
 pub const DEFAULT_EDITOR: &str = "vim";
 const MAX_EDITOR_CHARS: usize = 200;

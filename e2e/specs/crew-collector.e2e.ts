@@ -72,6 +72,19 @@ describe("the crew's collector", () => {
     if (process.env.KINAS_E2E_SHOT) await browser.saveScreenshot(process.env.KINAS_E2E_SHOT);
   });
 
+  it("AC-18's third form: with no Herdr, the chrome reads shell, plain shell, and no badge", async () => {
+    await browser.execute(() => [...document.querySelectorAll<HTMLButtonElement>(".sidebar button")].find((b) => b.textContent?.trim() === "Work")!.click());
+    await browser.waitUntil(
+      () => browser.execute(() => document.querySelector('section[data-page="work"] .ui-termchrome-session')?.textContent === "shell"),
+      { timeout: 15000, timeoutMsg: "the chrome never read shell" },
+    );
+    const chrome = await browser.execute(() => {
+      const c = document.querySelector('section[data-page="work"] .ui-termchrome')!;
+      return { badge: c.querySelector(".ui-badge") !== null, profile: c.querySelector(".ui-ink2")?.textContent };
+    });
+    expect(chrome).toEqual({ badge: false, profile: "plain shell" });
+  });
+
   it("logs the count, never the task, and runs no script but the snapshot", async () => {
     expect(logLines("crew: snapshot 1 tasks, 0 decisions in ").length).toBeGreaterThan(0);
     expect(logLines("9c2e")).toEqual([]);

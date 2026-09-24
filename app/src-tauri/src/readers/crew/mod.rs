@@ -3,21 +3,25 @@
 //! across the script (§6.15). Kinas reads the fleet this way only: no file under the home is opened except to learn
 //! that one of the two trigger files changed.
 
+mod guard;
 pub mod mirror;
 pub mod schedule;
 pub mod snapshot;
 pub mod word;
 
 use super::runtime::{watch_with, ReaderControl, CREW_CHANGED};
+use crate::crew::pin::WORKSPACE_LABEL;
 use crate::crew::{firstmate, home};
+use crate::herdr::{self, View};
 use crate::proc::{Exit, Ran};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use crate::store::{now_ms, Store};
 use schedule::{CrewWake, Schedule};
 use snapshot::{parse_fleet, Fleet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -27,10 +31,37 @@ const FILE_DEBOUNCE: Duration = Duration::from_millis(500);
 /// The two files whose change means the fleet changed. Their contents are never read (§6.5).
 const TRIGGERS: [&str; 2] = ["backlog.md", "home-summary.json"];
 
+/// The chrome asks for a fresher Herdr view once the one it has is this old (§4 Work: polled every 5 s).
+pub(crate) const HERDR_FRESH_MS: i64 = 5_000;
+/// Herdr is asked at most this often for the chrome's sake.
+const HERDR_MIN_GAP_MS: i64 = 2_000;
+/// The start focus happens only if Herdr answered within this long of the thread starting (§6.18, rule 22).
+const START_FOCUS_MS: i64 = 10_000;
+
+/// Herdr's last answer (build spec §11.2): the session's view and the focused pane's foreground programs, shared
+/// with the commands (the Crew page's running state, the chrome) behind a lock no one holds across a process.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LiveView {
+    pub view: Option<View>,
+    /// The focused pane's foreground `argv0`s.
+    pub focused_foreground: Vec<String>,
+    pub observed_at: i64,
+    /// A worker's pane → its task's word and harness, from the last cycle, for the chrome's badge.
+    pub worker_words: HashMap<String, (&'static str, Option<String>)>,
+}
+
+impl LiveView {
+    /// The first mate's workspace is in the session: the Crew page reads as running.
+    pub(crate) fn first_mate_there(&self) -> bool {
+        self.view.as_ref().is_some_and(|v| herdr::workspace_with_label(v, WORKSPACE_LABEL).is_some())
+    }
+}
+
 /// What the collector knows that the store does not hold, shared with the commands.
 #[derive(Default)]
 pub(crate) struct CrewLive {
     generated: Mutex<Option<String>>,
+    live: RwLock<LiveView>,
 }
 
 impl CrewLive {
@@ -38,13 +69,66 @@ impl CrewLive {
     pub(crate) fn generated(&self) -> Option<String> {
         self.generated.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
+
+    pub(crate) fn live(&self) -> LiveView {
+        self.live.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    fn set_live(&self, live: LiveView) {
+        *self.live.write().unwrap_or_else(|p| p.into_inner()) = live;
+    }
+
+    fn set_worker_words(&self, words: HashMap<String, (&'static str, Option<String>)>) {
+        self.live.write().unwrap_or_else(|p| p.into_inner()).worker_words = words;
+    }
+}
+
+/// The session the Work pane attaches — Herdr's own for the crew — or None when the pane is a plain shell (a debug
+/// switch), and then Kinas asks Herdr nothing: no spec's shell may reach `default`.
+fn attached_session() -> Option<String> {
+    let pane = crate::pty::pane_session();
+    (!pane.shell).then_some(pane.session)
+}
+
+/// Asks Herdr for the session's view and the focused pane's foreground, and keeps it. None when Herdr did not answer.
+fn refresh_live(app: &AppHandle) -> Option<View> {
+    let now = now_ms();
+    let crew = app.state::<CrewLive>();
+    let previous = crew.live();
+    let answer = attached_session().and_then(|_| herdr::find_herdr()).and_then(|bin| {
+        let view = herdr::api_snapshot(&bin).ok()?;
+        let fg = view.focused_pane.as_deref().map(|p| herdr::foreground(&bin, p).unwrap_or_default()).unwrap_or_default();
+        Some((view, fg))
+    });
+    let (view, focused_foreground) = match answer {
+        Some((v, fg)) => (Some(v), fg),
+        None => (None, Vec::new()),
+    };
+    let was_there = previous.first_mate_there();
+    let live = LiveView { view: view.clone(), focused_foreground, observed_at: now, worker_words: previous.worker_words };
+    let now_there = live.first_mate_there();
+    crew.set_live(live);
+    if was_there != now_there {
+        let _ = app.emit(CREW_CHANGED, ());
+    }
+    view
+}
+
+/// Once per run, when Herdr's first answer came within 10 s of the thread starting: focus an existing `firstmate`
+/// workspace, so the pane opens on the first mate (§6.18). Never again without a click.
+fn start_focus(started_at: i64, answered_at: i64, view: &View) -> Option<String> {
+    (answered_at - started_at <= START_FOCUS_MS).then(|| herdr::workspace_with_label(view, WORKSPACE_LABEL).map(|w| w.id.clone())).flatten()
 }
 
 pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx: Receiver<CrewWake>) {
+    let started_at = now_ms();
     let mut schedule = Schedule::new();
     let mut watcher: Option<notify::RecommendedWatcher> = None;
     // The first cycle runs at once.
     let mut due: Option<i64> = Some(now_ms());
+    // The start focus is decided on Herdr's first answer, whenever it comes, and only then.
+    let mut first_answer_seen = false;
+    let mut last_herdr: i64 = 0;
     loop {
         // Watched once the home exists: `kinas crew setup` may create it while Kinas runs.
         if watcher.is_none() {
@@ -55,12 +139,24 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
         let tick = schedule.run_at(&CrewWake::Tick, now);
         let next = due.map_or(tick, |d| d.min(tick));
         match rx.recv_timeout(Duration::from_millis(next.saturating_sub(now).max(0) as u64)) {
+            Ok(CrewWake::Herdr) => {
+                // Herdr only, for the chrome or after a launch; at most every 2 s.
+                let now = now_ms();
+                if now - last_herdr >= HERDR_MIN_GAP_MS {
+                    last_herdr = now;
+                    let view = refresh_live(&app);
+                    first_answer(&app, started_at, &mut first_answer_seen, view.as_ref());
+                }
+            }
             Ok(wake) => {
                 let mut wakes = vec![wake];
                 if wake == CrewWake::File {
                     // Quiet for 500 ms first; whatever else arrives meanwhile joins this run.
                     while let Ok(more) = rx.recv_timeout(FILE_DEBOUNCE) {
-                        wakes.push(more);
+                        // A chrome's Herdr wake is not a reason for a fleet snapshot; the chrome asks again.
+                        if more != CrewWake::Herdr {
+                            wakes.push(more);
+                        }
                     }
                 }
                 let now = now_ms();
@@ -73,7 +169,8 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
                 }
             }
             Err(RecvTimeoutError::Timeout) => {
-                let ok = cycle(&app, &home);
+                let ok = cycle(&app, &home, started_at, &mut first_answer_seen);
+                last_herdr = now_ms();
                 schedule.finished(now_ms(), ok);
                 due = None;
             }
@@ -82,9 +179,28 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
     }
 }
 
-/// One cycle: the snapshot, the parse, the write, the log line, `crew_changed`. Returns whether it succeeded.
-fn cycle(app: &AppHandle, home: &Path) -> bool {
+/// The start focus, decided on Herdr's first answer only.
+fn first_answer(app: &AppHandle, started_at: i64, seen: &mut bool, view: Option<&View>) {
+    let Some(view) = view else { return };
+    if std::mem::replace(seen, true) {
+        return;
+    }
+    if let Some(id) = start_focus(started_at, now_ms(), view) {
+        if herdr::find_herdr().is_some_and(|bin| herdr::workspace_focus(&bin, &id).is_ok()) {
+            log::info!("crew: focused the first mate at start");
+            // The chrome reads the pane that is focused now.
+            app.state::<ReaderControl>().crew_herdr();
+        }
+    }
+}
+
+/// One cycle: the snapshot, the parse, Herdr's view, the write, the log line, `crew_changed`. Returns whether the
+/// snapshot succeeded.
+fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut bool) -> bool {
     let started = Instant::now();
+    // Herdr is asked whether or not Firstmate is installed: the chrome and the start focus need its view.
+    let view = refresh_live(app);
+    first_answer(app, started_at, first_answer_seen, view.as_ref());
     if !home::installed(home) {
         let store = app.state::<Store>();
         let conn = store.conn();
@@ -95,10 +211,15 @@ fn cycle(app: &AppHandle, home: &Path) -> bool {
     }
     // The script runs with no guard held.
     let outcome = firstmate::fleet_snapshot(home).and_then(|ran| read(&ran));
+    let workers = outcome.as_ref().map(|fleet| mirror::workers_of(fleet, view.as_ref(), attached_session().as_deref())).unwrap_or_default();
     let written = {
         let store = app.state::<Store>();
         let mut conn = store.conn();
-        mirror::record(&mut conn, store.org_id(), &outcome, now_ms())
+        let written = mirror::record(&mut conn, store.org_id(), &outcome, &workers, now_ms());
+        let words = crate::crew::read::worker_words(&conn, store.org_id()).unwrap_or_default();
+        drop(conn);
+        app.state::<CrewLive>().set_worker_words(words);
+        written
     };
     let ms = started.elapsed().as_millis();
     let ok = match (&outcome, &written) {

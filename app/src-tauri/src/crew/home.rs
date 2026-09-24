@@ -18,7 +18,7 @@ pub(crate) fn home_in(data_dir: &Path) -> PathBuf {
 
 /// Installed means the snapshot script is there: `kinas crew setup` clones the pin, and nothing else puts it there.
 pub(crate) fn installed(home: &Path) -> bool {
-    home.join("bin/fm-fleet-snapshot.sh").is_file()
+    super::firstmate::snapshot_script(home).is_file()
 }
 
 /// Where the clone stands (§4 Settings): at the pin, moved on (Firstmate's `/updatefirstmate` moves `main`), on another

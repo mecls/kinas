@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
 import {
   addClientFolder,
+  crewErrorOf,
   getUiPrefs,
+  launchFirstMate,
   listProjects,
   onOpenPalette,
   onReaderShow,
@@ -146,7 +148,9 @@ export function App() {
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
   // One crew reading for every page that shows the crew (crew/useCrew.ts); the collector runs for the Crew page.
-  const { crew } = useCrew(page === "crew");
+  const { crew, reload: reloadCrew } = useCrew(page === "crew");
+  /** The launcher is on its way: Herdr can take seconds, and a second click would only queue behind it. */
+  const openingFirstMate = useRef(false);
 
   // Going to a page means wanting to see it: an expanded panel goes back to the side.
   const goTo = useCallback(
@@ -445,13 +449,37 @@ export function App() {
   const goBack = useCallback(() => walk(back), [walk]);
   const goForward = useCallback(() => walk(forward), [walk]);
 
-  // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane, so this is the
-  // Work page with the terminal holding the keys — the way Open in terminal hands them over, after the page shows.
+  // The first mate (build spec §11.3 Launching): Rust finds its workspace, or makes it and starts `claude` there — nothing
+  // is typed into Kinas's pane — and only when that worked does the Work page show with the terminal holding the keys,
+  // as Open in the terminal does. A refusal says why in the sidebar's notice. The Crew page, the palette and Home's
+  // Launch task all come here.
+  const firstMate = useCallback(async () => {
+    if (openingFirstMate.current) return;
+    openingFirstMate.current = true;
+    try {
+      await launchFirstMate();
+      wantTerminalFocus.current = true;
+      goTo("work");
+      setFocusTick((n) => n + 1);
+    } catch (e) {
+      say(crewErrorOf(e));
+    } finally {
+      openingFirstMate.current = false;
+      reloadCrew();
+    }
+  }, [goTo, say, reloadCrew]);
+
+  // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane — its own pane
+  // while it runs, else the Work page with the terminal holding the keys, the way Open in terminal hands them over.
   const launchTask = useCallback(() => {
+    if (crew?.page === "running") {
+      void firstMate();
+      return;
+    }
     wantTerminalFocus.current = true;
     goTo("work");
     setFocusTick((n) => n + 1);
-  }, [goTo]);
+  }, [goTo, crew?.page, firstMate]);
 
   // Open in the terminal (keymap.md, Sidebar): Rust asks Herdr for the folder's workspace — nothing is typed into the
   // pane — and only when that worked does anything move: the Work page shows and the terminal gets the keys. The click is first put through the human-click door, as a pinned folder's is
@@ -524,7 +552,7 @@ export function App() {
             <HomePage usage={usage.snapshot} usageError={usage.error} projects={projects} folder={nav.folder} onOpen={openFromSidebar} onGo={goTo} onLaunch={launchTask} />
           </section>
           <section className="page" data-page="crew" hidden={page !== "crew"}>
-            <CrewPage crew={crew} active={page === "crew"} />
+            <CrewPage crew={crew} active={page === "crew"} onLaunch={() => void firstMate()} />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
             <InboxPage />
@@ -560,7 +588,7 @@ export function App() {
           />
         </aside>
       </div>
-      {palette && <Palette onClose={() => setPalette(false)} filesFolder={nav.folder} />}
+      {palette && <Palette onClose={() => setPalette(false)} filesFolder={nav.folder} onFirstMate={() => void firstMate()} />}
     </div>
   );
 }

@@ -12,6 +12,11 @@ use std::time::Duration;
 const SNAPSHOT_LIMIT: Duration = Duration::from_secs(20);
 const SETTINGS_LIMIT: Duration = Duration::from_secs(3);
 
+/// `<home>/bin/fm-fleet-snapshot.sh`: its presence is what "installed" means (`home::installed`).
+pub(crate) fn snapshot_script(home: &Path) -> std::path::PathBuf {
+    home.join("bin").join("fm-fleet-snapshot.sh")
+}
+
 /// `bash <home>/bin/fm-fleet-snapshot.sh --json`, 20 s. `Err` only when `bash` could not be started.
 pub(crate) fn fleet_snapshot(home: &Path) -> Result<Ran, String> {
     script(home, "fm-fleet-snapshot.sh", &["--json"], SNAPSHOT_LIMIT)

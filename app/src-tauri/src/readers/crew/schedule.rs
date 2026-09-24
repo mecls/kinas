@@ -18,6 +18,9 @@ pub(crate) enum CrewWake {
     Manual,
     /// The baseline's own timer.
     Tick,
+    /// Herdr only: the Work page wants a fresh view for its chrome, or the launcher just changed the session. The fleet
+    /// snapshot does not run for it.
+    Herdr,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +45,7 @@ impl Schedule {
         let Some(last) = self.last_run else { return now };
         let earliest = now.max(last + MIN_GAP_MS);
         match wake {
-            CrewWake::File | CrewWake::Visible | CrewWake::Manual => earliest,
+            CrewWake::File | CrewWake::Visible | CrewWake::Manual | CrewWake::Herdr => earliest,
             CrewWake::Tick => {
                 let wait = match self.failures {
                     0 if self.visible => VISIBLE_MS,

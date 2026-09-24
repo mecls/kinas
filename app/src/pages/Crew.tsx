@@ -80,6 +80,11 @@ export function CrewPage({ crew, active, onLaunch }: { crew: CrewSnapshot | null
   return (
     <div className="page-in crew" data-crew={page}>
       <TitleRow title="Crew">
+        {page === "running" && (
+          <Button kind="primary" onClick={() => onLaunch?.()}>
+            First mate
+          </Button>
+        )}
         {page === "installed" && (
           <Button
             kind="primary"

@@ -25,9 +25,9 @@
   (2026-09-24)
 - [x] Slice 5 · fifteen at most, closing, the reader's × keeps the tabs, a gone file, names told apart (2026-09-24)
 - [x] Slice 6 · drag a tab to reorder the strip (2026-09-24)
-- [ ] Slice 7 · Recent leaves the sidebar → ship point 2 (2026-09-24, `5586c14` on `cbab8be`; ship point 2 verified:
-  check and the full e2e green alone — 26 specs, 153 cases, `settings` and `shell` rerun after the Mac slept
-  mid-run. The push waits for the captain's word; ticked once it has gone.)
+- [x] Slice 7 · Recent leaves the sidebar → ship point 2 (2026-09-24, `6b754ee`; ship point 2: check and the full e2e
+  green alone — 26 specs, 153 cases, `settings` and `shell` rerun after the Mac slept mid-run — pushed, PR #36,
+  `main` fast-forwarded by the captain, not installed)
 - [ ] Slice 8 · tracer bullet: Kinas draws the title bar; the sidebar button works; ← and → drawn, disabled
 - [ ] Slice 9 · ← and → walk every place, and the reader's own ← goes
 - [ ] Slice 10 · ship point 3, and the hand-off
@@ -36,8 +36,8 @@
 
 - Branch `feat/reader-layout` (from `docs/reader-layout-gate-1`, rebased onto `origin/main` at `dd21e35` in slice 0),
   in the worktree `.claude/worktrees/reader-layout`. Pushed at ship point 1 on the captain's word (2026-09-24), PR
-  #33; `main` is fast-forwarded to it by the captain. Parts 2 and 3 continue on this branch, and each later push,
-  PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at ship point 1. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
+  #33, and at ship point 2 (2026-09-24), PR #36; each time `main` was fast-forwarded to it by the captain. Parts 2 and 3 continue on this branch, and each later push,
+  PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at ship points 1 and 2. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
   in this worktree, never there.
 - Round 1's request came with two screenshots: the reader at about 875 px with Contents at 220 px, and the reader
   expanded on a wide screen with the text stopping at 72ch. Round 2 came, in reply to the first "Approve Gate 1",

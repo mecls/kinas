@@ -216,6 +216,12 @@ export function useTreeChanges(root: string | null): TreeSummary | null {
   return useMemo(() => (summary ? { total: summary.total, since: sinceLabel(summary.since_ms), watching: summary.watching } : null), [summary]);
 }
 
+/** A file's mark now, outside React: the reader asks it before choosing the door a click goes through. */
+export function markNow(path: string): { mark: Mark; since: string } | null {
+  const found = store.markOf(path);
+  return found ? { mark: found.mark, since: sinceLabel(found.since_ms) } : null;
+}
+
 /**
  * The open file's mark and the time it counts from, for the reader's view toggle (rules 19, 25). A primitive through
  * the store, so an unrelated burst does not re-render the reader.

@@ -162,6 +162,7 @@ pub fn run() {
             reader::changes::tree_changes_watch,
             reader::changes::tree_changes_refresh,
             reader::changes::tree_changes_diff,
+            reader::export::tree_changes_export,
         ])
         // A reload of the window (WebKit's right-click Reload) starts every file tree afresh: no record of what changed
         // survives it (tree changes rule 17). `Started`, so the records are gone before the new page asks for them.

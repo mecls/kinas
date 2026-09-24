@@ -10,6 +10,7 @@
 
 pub mod baseline;
 pub mod compare;
+pub mod git;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,7 @@ use super::access::Kind;
 use super::{checked, listable_file, off_main, ReaderError, ReaderState};
 use baseline::{BaseEntry, BaseText, Baseline, NoCopy, Stat};
 use compare::Now;
+use git::Git;
 
 /// Emitted with a root's whole summary after every burst that names something the tree lists.
 pub const TREE_CHANGED: &str = "tree_changed";
@@ -159,11 +161,14 @@ pub async fn tree_changes_watch(app: AppHandle, root: String) -> Result<TreeChan
             first
         };
 
+        // Found once per watch; None outside a machine with git, or in an e2e launch that says so.
+        let git = Git::find();
         let (feed, rx) = mpsc::channel::<PathBuf>();
         let burst_app = app.clone();
         let burst_root = real.clone();
+        let burst_git = git.clone();
         let started = start(&real, feed.clone(), rx, move |paths| {
-            if let Some(summary) = apply_burst(&burst_app.state::<ChangesState>(), &burst_root, paths) {
+            if let Some(summary) = apply_burst(&burst_app.state::<ChangesState>(), &burst_root, burst_git.as_ref(), paths) {
                 let _ = burst_app.emit(TREE_CHANGED, summary);
             }
         });
@@ -193,7 +198,7 @@ pub async fn tree_changes_watch(app: AppHandle, root: String) -> Result<TreeChan
             None => {
                 let baseline_app = app.clone();
                 let baseline_root = real.clone();
-                if let Err(e) = std::thread::Builder::new().name("tree-changes-baseline".into()).spawn(move || take_baseline(&baseline_app, baseline_root)) {
+                if let Err(e) = std::thread::Builder::new().name("tree-changes-baseline".into()).spawn(move || take_baseline(&baseline_app, baseline_root, git.as_ref())) {
                     log::error!("tree changes: could not start the baseline thread: {e}");
                 }
             }
@@ -236,11 +241,11 @@ fn error_kind(e: &notify::Error) -> &'static str {
 }
 
 /// The baseline thread: the walk and the copies with no guard held, then one guard to install them.
-fn take_baseline(app: &AppHandle, root: PathBuf) {
+fn take_baseline(app: &AppHandle, root: PathBuf, git: Option<&Git>) {
     let state = app.state::<ChangesState>();
     let left = COPY_BUDGET_BYTES.saturating_sub(state.lock().budget_used);
     let started = Instant::now();
-    let taken = baseline::take(&root, left, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
+    let taken = baseline::take(&root, git, left, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
     let (copies, bytes) = (taken.entries.values().filter(|e| matches!(e.text, BaseText::Copy(_))).count(), taken.copy_bytes);
     let Some((summary, queued, feed)) = install_baseline(&state, &root, taken) else {
         return;
@@ -273,7 +278,7 @@ fn install_baseline(state: &ChangesState, root: &Path, mut taken: Baseline) -> O
 
 /// One burst for one root. Returns the summary to emit, or None when the root is no longer watched, its baseline is
 /// not in yet (the paths wait for it), or nothing in the burst is something the tree lists.
-fn apply_burst(state: &ChangesState, root: &Path, paths: BTreeSet<PathBuf>) -> Option<TreeChanges> {
+fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTreeSet<PathBuf>) -> Option<TreeChanges> {
     let paths: BTreeSet<PathBuf> = paths.into_iter().filter(|p| compare::listable_path(root, p)).collect();
     if paths.is_empty() {
         return None;
@@ -290,7 +295,7 @@ fn apply_burst(state: &ChangesState, root: &Path, paths: BTreeSet<PathBuf>) -> O
     };
 
     // The disk, with no guard held.
-    let judged = judge_all(&baseline, &paths, &before);
+    let judged = judge_all(&baseline, git, &paths, &before);
     let touched: BTreeSet<PathBuf> = judged.keys().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
 
     let mut changes = state.lock();
@@ -307,30 +312,50 @@ fn apply_burst(state: &ChangesState, root: &Path, paths: BTreeSet<PathBuf>) -> O
 }
 
 /// Every path of a burst, judged against the baseline. A folder whose own mark changed — it appeared, vanished or came
-/// back — has everything beneath it judged too: its mark stood for them, or stops standing for them.
-fn judge_all(baseline: &Baseline, paths: &BTreeSet<PathBuf>, before: &BTreeMap<PathBuf, (Kind, Mark)>) -> BTreeMap<PathBuf, Option<(Kind, Mark)>> {
-    let mut judged = BTreeMap::new();
+/// back — has everything beneath it judged too: its mark stood for them, or stops standing for them. A folder's mark
+/// needs no hash, so that is settled first; then one `hash-object` per repository answers for every clean-tracked file.
+fn judge_all(baseline: &Baseline, git: Option<&Git>, paths: &BTreeSet<PathBuf>, before: &BTreeMap<PathBuf, (Kind, Mark)>) -> BTreeMap<PathBuf, Option<(Kind, Mark)>> {
+    let mut all = paths.clone();
     for path in paths {
-        let (mark, dir_now) = judge(baseline, path);
         let dir_then = baseline.entries.get(path).is_some_and(|b| b.stat.kind == Kind::Dir);
-        if (dir_then || dir_now) && before.get(path).copied() != mark {
-            for (beneath, _) in baseline.beneath(path) {
-                judged.entry(beneath.clone()).or_insert_with(|| judge(baseline, beneath).0);
-            }
-            if dir_now {
-                for (beneath, _) in baseline::walk(path) {
-                    judged.entry(beneath).or_insert_with_key(|p| judge(baseline, p).0);
-                }
-            }
+        let dir_now = Stat::of(path).is_some_and(|s| s.kind == Kind::Dir);
+        if !(dir_then || dir_now) || before.get(path).copied() == judge(baseline, path, &HashMap::new(), git) {
+            continue;
         }
-        judged.insert(path.clone(), mark);
+        all.extend(baseline.beneath(path).map(|(p, _)| p.clone()));
+        if dir_now {
+            all.extend(baseline::walk(path).entries.into_iter().map(|(p, _)| p));
+        }
     }
-    judged
+    let hashes = git.map(|g| blob_hashes(baseline, g, &all)).unwrap_or_default();
+    all.into_iter().map(|path| {
+        let mark = judge(baseline, &path, &hashes, git);
+        (path, mark)
+    }).collect()
 }
 
-/// What one path is marked now, and whether it is a folder now. A stat, the tree's filter for a file, and a read for
-/// a file whose copy decides.
-fn judge(baseline: &Baseline, path: &Path) -> (Option<(Kind, Mark)>, bool) {
+/// `git hash-object` of each clean-tracked file present now, one call per repository. A repository that does not
+/// answer leaves its files unhashed, and they read as changed: M when unsure (rule 3).
+fn blob_hashes(baseline: &Baseline, git: &Git, paths: &BTreeSet<PathBuf>) -> HashMap<PathBuf, String> {
+    let mut by_repo: HashMap<&Path, Vec<PathBuf>> = HashMap::new();
+    for path in paths {
+        if let Some(BaseEntry { text: BaseText::Blob { head, .. }, .. }) = baseline.entries.get(path) {
+            if Stat::of(path).is_some_and(|s| s.kind == Kind::File) {
+                by_repo.entry(head.repo.as_path()).or_default().push(path.clone());
+            }
+        }
+    }
+    let mut hashes = HashMap::new();
+    for (repo, files) in by_repo {
+        if let Ok(ids) = git.hash_objects(repo, &files) {
+            hashes.extend(files.into_iter().zip(ids));
+        }
+    }
+    hashes
+}
+
+/// What one path is marked now. A stat, the tree's filter for a file, and a read for a file whose copy decides.
+fn judge(baseline: &Baseline, path: &Path, hashes: &HashMap<PathBuf, String>, git: Option<&Git>) -> Option<(Kind, Mark)> {
     let base = baseline.entries.get(path);
     let stat = Stat::of(path);
     let now = match stat {
@@ -338,18 +363,36 @@ fn judge(baseline: &Baseline, path: &Path) -> (Option<(Kind, Mark)>, bool) {
         Some(s) if s.kind == Kind::Dir => Now::Dir,
         Some(_) => Now::File { listable: listable_file(path) },
     };
+    // A file that matched HEAD was never read, so what it was is judged now (rule 5, Gate 2): by its head if it is
+    // still here, by its blob's head if it is gone. One that proves a binary was never a row.
+    let base = match (base, now) {
+        (Some(BaseEntry { text: BaseText::Blob { .. }, .. }), Now::File { listable: false }) => None,
+        (Some(BaseEntry { text: BaseText::Blob { head, .. }, .. }), Now::Absent) if !blob_listed(git, head, path) => None,
+        _ => base,
+    };
     let same = match (base, stat, now) {
-        (Some(base), Some(stat), Now::File { listable: true }) if base.stat.kind == Kind::File && base.listed() => same_text(base, stat, path),
+        (Some(base), Some(stat), Now::File { listable: true }) if base.stat.kind == Kind::File && base.listed() => same_text(base, stat, path, hashes),
         _ => false,
     };
-    (compare::mark_of(base, now, same), now == Now::Dir)
+    compare::mark_of(base, now, same)
 }
 
-/// Rule 3's "the same text": byte-equal to the copy. With no copy, the same size and modification time (Gate 2), and
-/// never for a file that changed while its copy was being taken — Kinas cannot tell, and M is safer than silence.
-fn same_text(base: &BaseEntry, now: Stat, path: &Path) -> bool {
+/// Whether a deleted clean-tracked file was one the tree listed, by its blob's head. (An image is never a blob: it
+/// has no copy of any kind.) With no git to ask, it counts as listed — a D when unsure, as an M is.
+fn blob_listed(git: Option<&Git>, head: &baseline::Head, path: &Path) -> bool {
+    let Some(git) = git else { return true };
+    git.blob_text(&head.repo, &head.commit, path).map_or(true, |bytes| {
+        crate::reader::access::sniff(&bytes[..bytes.len().min(crate::reader::access::SNIFF_BYTES)]) == crate::reader::access::Content::Text
+    })
+}
+
+/// Rule 3's "the same text": byte-equal to the copy, or hashing to HEAD's blob. With neither, the same size and
+/// modification time (Gate 2) — and never for a file that changed while its copy was being taken: Kinas cannot tell,
+/// and M is safer than silence.
+fn same_text(base: &BaseEntry, now: Stat, path: &Path, hashes: &HashMap<PathBuf, String>) -> bool {
     match &base.text {
         BaseText::Copy(bytes) => now.size == bytes.len() as u64 && std::fs::read(path).is_ok_and(|read| read[..] == bytes[..]),
+        BaseText::Blob { blob, .. } => hashes.get(path) == Some(blob),
         BaseText::NoCopy(NoCopy::ChangedDuringCopy) => false,
         BaseText::NoCopy(_) | BaseText::NotText => now.size == base.stat.size && now.mtime_ms == base.stat.mtime_ms,
     }
@@ -449,12 +492,12 @@ mod tests {
         }
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000));
-        install_baseline(&state, &root, baseline::take(&root, budget, &|_| false)).unwrap();
+        install_baseline(&state, &root, baseline::take(&root, None, budget, &|_| false)).unwrap();
         (dir, root, state)
     }
 
     fn burst(state: &ChangesState, root: &Path, names: &[&str]) -> TreeChanges {
-        apply_burst(state, root, names.iter().map(|n| root.join(n)).collect()).expect("a summary to emit")
+        apply_burst(state, root, None, names.iter().map(|n| root.join(n)).collect()).expect("a summary to emit")
     }
 
     fn marked(summary: &TreeChanges, root: &Path) -> Vec<String> {
@@ -471,7 +514,7 @@ mod tests {
         std::fs::write(root.join("docs/photo.bin"), b"\x00\x01\x02").unwrap();
         std::fs::write(root.join("docs/new.bin"), b"\x00\x09").unwrap();
 
-        let answer = apply_burst(&state, &root, [".git/index", "node_modules/x.md", ".hidden.md", "docs/photo.bin", "docs/new.bin"].iter().map(|n| root.join(n)).collect());
+        let answer = apply_burst(&state, &root, None, [".git/index", "node_modules/x.md", ".hidden.md", "docs/photo.bin", "docs/new.bin"].iter().map(|n| root.join(n)).collect());
         let (total, entries) = answer.map(|s| (s.total, s.entries)).unwrap_or_default();
         assert_eq!((total, entries), (0, vec![]));
     }
@@ -489,7 +532,7 @@ mod tests {
         assert_eq!(answer.touched, [root.join("docs").display().to_string()]);
 
         // A root no longer watched answers nothing, so nothing is emitted for it.
-        assert_eq!(apply_burst(&ChangesState::default(), &root, BTreeSet::from([root.join("docs/overview.md")])), None);
+        assert_eq!(apply_burst(&ChangesState::default(), &root, None, BTreeSet::from([root.join("docs/overview.md")])), None);
     }
 
     #[test]
@@ -571,14 +614,14 @@ mod tests {
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000));
 
-        assert_eq!(apply_burst(&state, &root, BTreeSet::from([root.join("busy.md")])), None);
-        let taken = baseline::take(&root, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("busy.md")])), None);
+        let taken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
         assert_eq!(taken.entries[&root.join("busy.md")].text, BaseText::NoCopy(NoCopy::ChangedDuringCopy));
         let (ready, queued, _) = install_baseline(&state, &root, taken).unwrap();
         assert!(ready.ready);
         assert_eq!(queued, BTreeSet::from([root.join("busy.md")]));
         // Applied now, the file that changed around its copy is M: Kinas cannot tell, so it says modified.
-        assert_eq!(marked(&apply_burst(&state, &root, queued).unwrap(), &root), ["M busy.md"]);
+        assert_eq!(marked(&apply_burst(&state, &root, None, queued).unwrap(), &root), ["M busy.md"]);
     }
 
     #[test]
@@ -589,7 +632,7 @@ mod tests {
         let other_root = other.path().canonicalize().unwrap();
         std::fs::write(other_root.join("b.md"), [b'b'; 100]).unwrap();
         state.lock().roots.insert(other_root.clone(), Record::new(other_root.clone(), 2_000));
-        let taken = baseline::take(&other_root, 1024, &|_| false);
+        let taken = baseline::take(&other_root, None, 1024, &|_| false);
         // As if the budget had been 150 when the second baseline was installed.
         state.lock().budget_used = COPY_BUDGET_BYTES - 50;
         install_baseline(&state, &other_root, taken).unwrap();
@@ -598,6 +641,48 @@ mod tests {
         assert_eq!(record.copy_bytes, 0);
         assert_eq!(record.baseline.as_ref().unwrap().entries[&other_root.join("b.md")].text, BaseText::NoCopy(NoCopy::Budget));
         assert_eq!(changes.budget_used, COPY_BUDGET_BYTES - 50);
+    }
+
+    /// As `watched`, but the root is a git repository with these files committed, and git answers for them.
+    fn watched_repo(files: &[(&str, &[u8])]) -> (tempfile::TempDir, PathBuf, ChangesState, Git) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        git::tests::repo_with(&root, files);
+        let g = Git::find().expect("git is installed");
+        let state = ChangesState::default();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000));
+        install_baseline(&state, &root, baseline::take(&root, Some(&g), 1024, &|_| false)).unwrap();
+        (dir, root, state, g)
+    }
+
+    fn git_burst(state: &ChangesState, root: &Path, g: &Git, names: &[&str]) -> TreeChanges {
+        apply_burst(state, root, Some(g), names.iter().map(|n| root.join(n)).collect()).expect("a summary to emit")
+    }
+
+    #[test]
+    fn saving_a_clean_tracked_file_unchanged_makes_no_mark() {
+        let (_dir, root, state, g) = watched_repo(&[("README.md", b"# Read me\n")]);
+        assert!(matches!(state.lock().roots[&root].baseline.as_ref().unwrap().entries[&root.join("README.md")].text, BaseText::Blob { .. }));
+        // The same bytes, a new modification time: git says it is the blob it was.
+        std::fs::write(root.join("README.md"), "# Read me\n").unwrap();
+        assert_eq!(git_burst(&state, &root, &g, &["README.md"]).entries, vec![]);
+        std::fs::write(root.join("README.md"), "# Read me\n\nA line.\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["README.md"]), &root), ["M README.md"]);
+        std::fs::write(root.join("README.md"), "# Read me\n").unwrap();
+        assert_eq!(git_burst(&state, &root, &g, &["README.md"]).entries, vec![]);
+    }
+
+    #[test]
+    fn a_clean_tracked_binary_is_judged_when_it_changes_and_never_marks() {
+        let (_dir, root, state, g) = watched_repo(&[("tool.bin", b"\x00\x01\x02"), ("notes.md", b"# Notes\n"), ("logo.png", b"\x89PNG\r\n")]);
+        std::fs::write(root.join("tool.bin"), b"\x00\x01\x02\x03").unwrap();
+        assert_eq!(git_burst(&state, &root, &g, &["tool.bin"]).entries, vec![]);
+        std::fs::remove_file(root.join("tool.bin")).unwrap();
+        assert_eq!(git_burst(&state, &root, &g, &["tool.bin"]).entries, vec![]);
+        // Its text neighbour and an image, deleted, are rows the tree had: each is a D.
+        std::fs::remove_file(root.join("notes.md")).unwrap();
+        std::fs::remove_file(root.join("logo.png")).unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["notes.md", "logo.png"]), &root), ["D logo.png", "D notes.md"]);
     }
 
     #[test]

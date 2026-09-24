@@ -200,21 +200,45 @@ pub async fn tree_changes_diff(app: AppHandle, path: String) -> Result<diff::Dif
     .await
 }
 
-/// `tree_changes_diff` without Tauri: the record's half under the guard, the disk's without it.
-fn diff_view(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>, projects: &Path, home: &Path) -> Result<diff::DiffView, ReaderError> {
+/// The text of a deleted file at its tree's baseline, and its name, for Download (rule 22). Only for a path a
+/// watched, still readable root marks deleted: the record is this door's only source, as it is the diff's.
+pub(crate) fn deleted_baseline(app: &AppHandle, path: &str) -> Result<(String, Vec<u8>), ReaderError> {
+    let path = super::absolute(path)?;
+    let projects = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
+    let allowed = app.state::<ReaderState>().lock().allowed.clone();
+    let permitted = |root: &Path| access::permitted(root, &projects, &allowed);
+    let (_, mark, bytes) = old_text(&app.state::<ChangesState>(), &path, &permitted, Git::find().as_ref())?;
+    if mark != Mark::Deleted {
+        return Err(ReaderError::new("not_deleted", "This file is still there: download it as it is"));
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "copy".into());
+    Ok((name, bytes))
+}
+
+/// What a marked file said at its root's baseline — the kept copy, or HEAD's blob read back — with the baseline's
+/// time and the mark: empty for a file the tree did not have then, a refusal with the reason where Kinas kept no
+/// text (rule 23). Only for a path a watched root marks, under a root the reader may still read (ADR 0009).
+fn old_text(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>) -> Result<(Millis, Mark, Vec<u8>), ReaderError> {
     let (_, since_ms, mark, baseline) = changed_file(state, path)
         .filter(|(root, ..)| permitted(root))
         .ok_or_else(|| ReaderError::new("not_watched", "Kinas is not following changes to this file"))?;
-    let before = match baseline.entries.get(path).map(|b| &b.text) {
+    let bytes = match baseline.entries.get(path).map(|b| &b.text) {
         // Not in the tree at the baseline: every line is new.
-        None | Some(BaseText::NotText) => String::new(),
-        Some(BaseText::Copy(bytes)) => String::from_utf8_lossy(bytes).into_owned(),
-        Some(BaseText::Blob { head, .. }) => {
-            let bytes = git.ok_or(()).and_then(|g| g.blob_text(&head.repo, &head.commit, path).map_err(|_| ()));
-            String::from_utf8_lossy(&bytes.map_err(|()| no_baseline(since_ms, "git could not read it back"))?).into_owned()
-        }
+        None | Some(BaseText::NotText) => Vec::new(),
+        Some(BaseText::Copy(bytes)) => bytes.to_vec(),
+        Some(BaseText::Blob { head, .. }) => git
+            .ok_or(())
+            .and_then(|g| g.blob_text(&head.repo, &head.commit, path).map_err(|_| ()))
+            .map_err(|()| no_baseline(since_ms, "git could not read it back"))?,
         Some(BaseText::NoCopy(reason)) => return Err(no_copy(since_ms, *reason, mark)),
     };
+    Ok((since_ms, mark, bytes))
+}
+
+/// `tree_changes_diff` without Tauri: the record's half under the guard, the disk's without it.
+fn diff_view(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>, projects: &Path, home: &Path) -> Result<diff::DiffView, ReaderError> {
+    let (since_ms, mark, bytes) = old_text(state, path, permitted, git)?;
+    let before = String::from_utf8_lossy(&bytes).into_owned();
     let after = if mark == Mark::Deleted { String::new() } else { access::read_text(path).map_err(|d| ReaderError::denied(&d, path))?.text };
     let (rows, folds, added, removed) = diff::diff(&before, &after, diff::DIFF_DEADLINE).map_err(|t| {
         ReaderError::new("too_many_changes", format!("Too many changes to show — {} lines then, {} now", diff::grouped(t.before_lines), diff::grouped(t.after_lines)))
@@ -1002,6 +1026,17 @@ mod tests {
         let v = view(&state, &root.join("old.md"), None).unwrap();
         assert_eq!((v.mark, v.added, v.removed), (Mark::Deleted, 0, 3));
         assert_eq!(v.baseline_text.as_deref(), Some("# Old\n\nGone.\n"));
+    }
+
+    #[test]
+    fn a_deleted_file_s_old_text_is_the_record_s_and_only_for_a_deletion() {
+        let (_dir, root, state) = watched(&[("old.md", b"# Old\n\nGone.\n"), ("kept.md", b"# Kept\n")], 1024);
+        std::fs::remove_file(root.join("old.md")).unwrap();
+        std::fs::write(root.join("kept.md"), "# Kept, edited\n").unwrap();
+        burst(&state, &root, &["old.md", "kept.md"]);
+        assert_eq!(old_text(&state, &root.join("old.md"), EVERYWHERE, None).unwrap(), (1_000, Mark::Deleted, b"# Old\n\nGone.\n".to_vec()));
+        assert_eq!(old_text(&state, &root.join("kept.md"), EVERYWHERE, None).unwrap().1, Mark::Modified);
+        assert_eq!(old_text(&state, &root.join("old.md"), &|_| false, None).unwrap_err().code, "not_watched");
     }
 
     #[test]

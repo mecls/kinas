@@ -1,9 +1,9 @@
 import { browser, expect } from "@wdio/globals";
-import { spawnSync } from "node:child_process";
-import { realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { hook, typeLine, waitForShell } from "../helpers.ts";
-import { README_TEXT, TOKEN } from "./tree-changes.setup.ts";
+import { hook, openReaderMenu, runReaderMenuItem, typeLine, waitForShell } from "../helpers.ts";
+import { OLD_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
 
 // Tree changes (tasks/tree-changes/prd.md §5): marks in the sidebar's tree as files are written, deleted and put
 // back, with their words, roll-ups and the caption; then Refresh and a reload clear them, and the terminal pane is the
@@ -88,6 +88,19 @@ const changes = () =>
       views: [...document.querySelectorAll<HTMLButtonElement>("aside.reader .reader-view .reader-view-button")].map((b) => `${b.getAttribute("aria-label")}${b.getAttribute("aria-pressed") === "true" ? "*" : ""}`),
     };
   });
+
+/** The real clipboard, read and put back as reader-panel.e2e does: this spec copies a deleted file's text onto it. */
+const utf8 = { ...process.env, LANG: "en_US.UTF-8" };
+const pbpaste = () => execFileSync("/usr/bin/pbpaste", { encoding: "utf8", env: utf8 });
+const pbcopy = (text: string) => execFileSync("/usr/bin/pbcopy", { input: text, env: utf8 });
+
+/** The reader's ▾ menu, item by item: label, whether it is disabled, and why. */
+const menuItems = async () => {
+  await openReaderMenu();
+  return browser.execute(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('.reader-menu [role="menuitem"]')].map((b) => `${b.textContent?.trim()}${b.getAttribute("aria-disabled") === "true" ? ` (${b.getAttribute("title")})` : ""}`),
+  ) as Promise<string[]>;
+};
 
 /** Clicks a row of the sidebar's Files by its button's title (the path). */
 const clickRow = (path: string) =>
@@ -189,6 +202,33 @@ describe("Tree changes", () => {
     expect((await changes()).views).toEqual(["Rendered*", "Source"]);
     const said = await hook<string>("readerStatusLog");
     expect(said.split("\n")).toContain(`No changes since ${at} any more`);
+  });
+
+  it("4 (the click) and AC-2: the deleted row opens on what it said then; Copy and Download rescue it; the rest says it was deleted", async () => {
+    await clickRow(join(repo, "docs", OLD));
+    const lead = () => browser.execute(() => document.querySelector("aside.reader .ui-diff-lead")?.textContent ?? null);
+    await until(async () => (await changes()).showing && (await lead()) !== null, "the deleted file on Changes", 10000);
+    const at = await since();
+    const view = await changes();
+    expect(await lead()).toBe(`Deleted since ${at} — what it said then`);
+    expect(view.summary).toBe(`+0 −5 since ${at}`);
+    expect(view.rows).toEqual(OLD_TEXT.trimEnd().split("\n").map((line) => `remove − ${line}`));
+    expect(view.views).toEqual(["Changes*"]);
+    expect(await browser.execute(() => document.querySelector(".reader-path")?.textContent)).toBe(`repo/docs/${OLD}`);
+
+    const saved = pbpaste();
+    try {
+      await browser.execute(() => document.querySelector<HTMLButtonElement>(".reader-copy-main")!.click());
+      await browser.waitUntil(() => pbpaste() === OLD_TEXT, { timeout: 10000, timeoutMsg: "the clipboard never held the deleted file's text" });
+    } finally {
+      pbcopy(saved);
+    }
+
+    expect(await menuItems()).toEqual(["Download as .md", "Print as PDF (This file was deleted)", "Open in editor (This file was deleted)", "Pin (This file was deleted)"]);
+    const to = process.env.KINAS_E2E_EXPORT_TO!;
+    await runReaderMenuItem("Download as .md");
+    await browser.waitUntil(() => existsSync(to), { timeout: 10000, timeoutMsg: "Download never wrote the deleted file's text" });
+    expect(readFileSync(to, "utf8")).toBe(OLD_TEXT);
   });
 
   it("6: made and removed while Files showed another folder is no row; the deletion is still there", async () => {

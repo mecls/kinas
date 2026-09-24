@@ -467,6 +467,11 @@ export interface DiffView {
  * Kinas kept no text to compare (the reason is the message), `too_many_changes` past the diff's 500 ms.
  */
 export const treeChangesDiff = (path: string) => invoke<DiffView>("tree_changes_diff", { path });
+/**
+ * Download what a deleted file said at its tree's baseline. As `readerExport`, the page names the path and nothing
+ * else: Rust finds the text in its record, opens the save sheet and writes the bytes (reader/export.rs).
+ */
+export const treeChangesExport = (path: string) => invoke<ReaderExported>("tree_changes_export", { path });
 export const onTreeChanged = (handler: (c: TreeChanges) => void): Promise<UnlistenFn> => listen<TreeChanges>("tree_changed", (e) => handler(e.payload));
 
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);

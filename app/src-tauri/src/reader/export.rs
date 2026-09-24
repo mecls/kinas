@@ -66,10 +66,7 @@ impl Refused {
 /// the new one and never half of one; and the temp file is opened with `create_new`, so it can never be written
 /// *through* something that was already there.
 pub fn write_copy(source: &Path, dest: &Path, protected: &[PathBuf], max_bytes: u64) -> Result<(String, u64), Refused> {
-    let name = dest.file_name().and_then(|n| n.to_str()).ok_or(Refused::Failed)?.to_string();
-    let parent = dest.parent().filter(|p| !p.as_os_str().is_empty()).ok_or(Refused::Failed)?;
-    // The folder's real path: a symlinked folder must be judged by where it leads, not by what it is called.
-    let parent = std::fs::canonicalize(parent).map_err(|_| Refused::Failed)?;
+    let (parent, name) = destination(dest)?;
     let dest = parent.join(&name);
 
     let source_meta = std::fs::metadata(source).map_err(|_| Refused::Failed)?;
@@ -82,15 +79,7 @@ pub fn write_copy(source: &Path, dest: &Path, protected: &[PathBuf], max_bytes: 
             return Err(Refused::SameFile);
         }
     }
-    // Does not follow links: what is *at* that name. A dangling symlink has no metadata above, but it is here.
-    if let Ok(meta) = std::fs::symlink_metadata(&dest) {
-        if !meta.file_type().is_file() {
-            return Err(Refused::NotRegular);
-        }
-    }
-    if protected.iter().any(|p| access::inside(&parent, p)) {
-        return Err(Refused::Protected);
-    }
+    check_destination(&parent, &dest, protected)?;
 
     if source_meta.len() > max_bytes {
         return Err(Refused::TooLarge(source_meta.len()));
@@ -101,12 +90,49 @@ pub fn write_copy(source: &Path, dest: &Path, protected: &[PathBuf], max_bytes: 
     if bytes.len() as u64 > max_bytes {
         return Err(Refused::TooLarge(bytes.len() as u64));
     }
+    write_atomically(&parent, &name, &bytes)
+}
 
+/// Writes `bytes` Rust already holds — a deleted file's text at its tree's baseline (tree changes rule 22) — to
+/// `dest`, under the same rules as a copy: never through anything but a plain file, never into Kinas' own folders,
+/// never half a file. There is no source on disk to be the same file as.
+pub fn write_bytes(bytes: &[u8], dest: &Path, protected: &[PathBuf]) -> Result<(String, u64), Refused> {
+    let (parent, name) = destination(dest)?;
+    check_destination(&parent, &parent.join(&name), protected)?;
+    write_atomically(&parent, &name, bytes)
+}
+
+/// The destination's folder, by its real path — a symlinked folder is judged by where it leads, not by what it is
+/// called — and the name in it.
+fn destination(dest: &Path) -> Result<(PathBuf, String), Refused> {
+    let name = dest.file_name().and_then(|n| n.to_str()).ok_or(Refused::Failed)?.to_string();
+    let parent = dest.parent().filter(|p| !p.as_os_str().is_empty()).ok_or(Refused::Failed)?;
+    Ok((std::fs::canonicalize(parent).map_err(|_| Refused::Failed)?, name))
+}
+
+/// What is at the name, and where the name is: a plain file or nothing, outside Kinas' own folders.
+fn check_destination(parent: &Path, dest: &Path, protected: &[PathBuf]) -> Result<(), Refused> {
+    // Does not follow links: what is *at* that name. A dangling symlink has no metadata, but it is here.
+    if let Ok(meta) = std::fs::symlink_metadata(dest) {
+        if !meta.file_type().is_file() {
+            return Err(Refused::NotRegular);
+        }
+    }
+    if protected.iter().any(|p| access::inside(parent, p)) {
+        return Err(Refused::Protected);
+    }
+    Ok(())
+}
+
+/// A sibling temp file, opened `create_new` so it is never written through something already there, renamed over
+/// the destination last: a full disk or a pulled drive leaves the old file or the new one, never half of one.
+fn write_atomically(parent: &Path, name: &str, bytes: &[u8]) -> Result<(String, u64), Refused> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
     let temp = parent.join(format!(".{name}.kinas-{}-{nanos}.tmp", std::process::id()));
+    let dest = parent.join(name);
     let written = (|| -> std::io::Result<()> {
         let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
-        file.write_all(&bytes)?;
+        file.write_all(bytes)?;
         file.sync_all()?;
         drop(file);
         std::fs::rename(&temp, &dest)
@@ -116,7 +142,7 @@ pub fn write_copy(source: &Path, dest: &Path, protected: &[PathBuf], max_bytes: 
         let _ = std::fs::remove_file(&temp);
         return Err(Refused::Failed);
     }
-    Ok((name, bytes.len() as u64))
+    Ok((name.to_string(), bytes.len() as u64))
 }
 
 /// One export at a time: a second click while the save sheet is up must not stack a second sheet on it. Released
@@ -223,6 +249,36 @@ pub async fn reader_export(app: tauri::AppHandle, window: tauri::WebviewWindow, 
     Ok(Exported::Saved { name, bytes })
 }
 
+/// Download what a deleted file said at its tree's baseline (tree changes rule 22): how a deleted file is rescued.
+/// The page names the path and nothing else; Rust finds the text in the record (`changes::deleted_baseline`, which
+/// answers only for a path a watched root marks deleted), opens the sheet, asks the record again after it, and
+/// writes the bytes itself.
+#[tauri::command]
+pub async fn tree_changes_export(app: tauri::AppHandle, window: tauri::WebviewWindow, path: String) -> Result<Exported, ReaderError> {
+    let _busy = Busy::take(&app)?;
+
+    let (name, _) = {
+        let (app, path) = (app.clone(), path.clone());
+        off_main(move || super::changes::deleted_baseline(&app, &path)).await?
+    };
+    let Some(dest) = choose_destination(&app, &window, &name).await? else {
+        return Ok(Exported::Cancelled);
+    };
+
+    let started = std::time::Instant::now();
+    let worker = app.clone();
+    let (name, bytes) = off_main(move || {
+        // Again after the sheet: a refresh or a reload while it was open took the record, and its text, with it.
+        let (_, text) = super::changes::deleted_baseline(&worker, &path)?;
+        let fallback = dest.file_name().and_then(|n| n.to_str()).unwrap_or("the copy").to_string();
+        write_bytes(&text, &dest, &protected_dirs(&worker)).map_err(|refused| refused.into_error(Path::new(&path), &fallback))
+    })
+    .await?;
+    // Counts only: never the name, never the folder.
+    log::info!("tree changes: exported {bytes} bytes in {} ms", started.elapsed().as_millis());
+    Ok(Exported::Saved { name, bytes })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,6 +317,27 @@ mod tests {
         assert_eq!(names(folder), before, "a refusal left something behind");
         assert_eq!(fs::read(&b.source).unwrap(), b"# Plan\n\nbytes \xEF\xBB\xBF and a BOM in the middle, kept exactly\n");
         assert_eq!(fs::metadata(&b.source).unwrap().modified().unwrap(), b.mtime, "the source was written to");
+    }
+
+    #[test]
+    fn write_bytes_refuses_protected_and_non_regular_destinations() {
+        let b = bench();
+        let text = b"# Old plan\n\nWhat it said then.\n";
+        assert_eq!(write_bytes(text, &b.out.join("rescued.md"), &[]), Ok(("rescued.md".into(), text.len() as u64)));
+        assert_eq!(fs::read(b.out.join("rescued.md")).unwrap(), text);
+        assert_eq!(names(&b.out), ["rescued.md"], "no temp file is left");
+
+        fs::create_dir(b.out.join("a folder")).unwrap();
+        symlink(&b.source, b.out.join("a link")).unwrap();
+        for taken in ["a folder", "a link"] {
+            let before = names(&b.out);
+            assert_eq!(write_bytes(text, &b.out.join(taken), &[]), Err(Refused::NotRegular), "{taken}");
+            assert_untouched(&b, &b.out, &before);
+        }
+        let before = names(&b.out);
+        assert_eq!(write_bytes(text, &b.out.join("inside.md"), std::slice::from_ref(&b.out)), Err(Refused::Protected));
+        assert_untouched(&b, &b.out, &before);
+        assert_eq!(write_bytes(text, &b.out.join("missing/folder.md"), &[]), Err(Refused::Failed));
     }
 
     #[test]

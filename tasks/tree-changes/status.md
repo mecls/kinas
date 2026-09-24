@@ -17,7 +17,8 @@
   captain installs once the first mate's build is done
 - [x] Slice 5 · the Changes view for a modified or added file: diff, folds, toggle, live re-diff, refusals — 2026-09-24,
   `bun run check` green (600 bun, 250 Rust); `tree-changes` 12 of 12, every reader spec and `stories` green, run alone
-- [ ] Slice 6 · deleted files: the record's text, Copy and Download, the disabled menu items
+- [x] Slice 6 · deleted files: the record's text, Copy and Download, the disabled menu items — 2026-09-24,
+  `bun run check` green (600 bun, 252 Rust); `tree-changes` 13 of 13, every reader spec green, run alone
 - [ ] Slice 7 · the edges and the record: rescan, the log grep, the timings → ship point 2
 
 ## Notes for a fresh session
@@ -28,8 +29,8 @@
 - The build's draft PR is **#34** (`feat/tree-changes-2` → `main`). The captain chose a new branch over a force-push:
   #32 (`feat/tree-changes`, the pre-rebase tip, also kept locally as `tree-changes-before-rebase`) is closed for it,
   and #31 (the Gate documents on their first base) is still open — #34 holds those commits too.
-- Ship point 1 is on `main` at `cbab8be` (2026-09-24), not installed. Slice 5 (the Changes view) is on
-  `feat/tree-changes-2`, ahead of `main`; next is slice 6, deleted files. Ship point 2's draft PR is #35. DESIGN.md's entry is 1.6: the
+- Ship point 1 is on `main` at `cbab8be` (2026-09-24), not installed. Slices 5 and 6 (the Changes view, deleted files) are on
+  `feat/tree-changes-2`, ahead of `main`; next is slice 7, the edges and the record. Ship point 2's draft PR is #35. DESIGN.md's entry is 1.6: the
   reader's layout took 1.5. #31 (the Gate documents on their first base) is still open, and everything in it is on
   `main` now.
 - The main checkout is at `73c70fd`, behind `origin/main`, with another session's untracked `docs/overview.md` and

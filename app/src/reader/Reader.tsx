@@ -18,6 +18,7 @@ import {
   readerRendered,
   type ReaderSide,
   treeChangesDiff,
+  treeChangesExport,
 } from "../api.ts";
 import { focusTerminal } from "../shell/focus.ts";
 import { NOTICE_MS } from "../shell/notice.ts";
@@ -37,7 +38,7 @@ import { drawnWidth, edgeDrag, sectionButton, sectionPlace, SIDE_DEFAULT, SIDE_M
 import { renderImage, renderSource } from "./source.ts";
 import { FileTree } from "./tree.tsx";
 import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
-import { sinceLabel, useMarkOf } from "./changes.ts";
+import { markNow, sinceLabel, useMarkOf } from "./changes.ts";
 import { renderDiff, renderRefusal } from "./diff.ts";
 import { Button, openFold } from "../ui/index.ts";
 
@@ -70,6 +71,11 @@ interface Doc {
   /** The file's text, kept so the Preview/Source toggle re-renders it without reading the file again. */
   text: string;
   rendered: Rendered;
+  /**
+   * Deleted since its tree was first shown (tree changes rule 22): opened from the record, not the disk. `text` is
+   * what it said then — what Copy copies — and Changes is its only view.
+   */
+  deleted?: boolean;
 }
 
 /**
@@ -509,8 +515,48 @@ export function Reader({
     }
   }
 
+  /**
+   * A deleted file, from its struck-through row (tree changes rule 22): what it said at the baseline, from the record.
+   * Nothing is on disk to allow or to open, so this is not `reader_allow_click`'s door — `tree_changes_diff`, which
+   * answers only for a path a watched root marks, is its only one.
+   */
+  const openDeleted = useCallback(
+    async (path: string) => {
+      const gen = ++generation.current;
+      let next: Doc;
+      try {
+        const view = await treeChangesDiff(path);
+        if (gen !== generation.current) return;
+        const text = view.baseline_text ?? "";
+        next = { path: view.path, displayPath: view.display_path, root: view.root, hash: `deleted ${view.since_ms}`, lines: text.split("\n").length, render: "source", ext: view.ext, text, rendered: renderDiff(view), deleted: true };
+        setChangesOn(sinceLabel(view.since_ms));
+      } catch (e) {
+        if (gen !== generation.current) return;
+        const error = readerErrorOf(e);
+        if (error.code !== "no_baseline") {
+          if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message: error.message });
+          else say(error.message);
+          return;
+        }
+        // Kinas kept no text of it — an image, a file past the budget: the reason takes the diff's place.
+        next = { path, displayPath: baseName(path), root: "", hash: "deleted", lines: 0, render: "source", ext: "", text: "", rendered: renderRefusal(error.message), deleted: true };
+        setChangesOn(markNow(path)?.since ?? "");
+      }
+      const previous = docRef.current;
+      if (previous && previous.path !== next.path) setBack((b) => [...b, { path: previous.path, scrollTop: scroller.current?.scrollTop ?? 0 }].slice(-BACK_CAP));
+      pending.current = { mode: "new", fragment: null, scrollTop: 0 };
+      docRef.current = next;
+      setDoc(next);
+      setProblem(null);
+      setOpening(null);
+      setStatus((s) => (s?.sticky ? null : s));
+    },
+    [say, setChangesOn],
+  );
+
   const follow = useCallback(
     async (path: string, fragment: string | null, view?: "changes") => {
+      if (view === "changes" && markNow(path)?.mark === "D") return openDeleted(path);
       try {
         const target = await readerAllowClick(path);
         if (target.kind === "dir") await openFolder(target.path);
@@ -525,7 +571,7 @@ export function Reader({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [say, show],
+    [say, show, openDeleted],
   );
 
   const loadImage = useCallback(async (img: HTMLImageElement, current: Doc) => {
@@ -945,6 +991,11 @@ export function Reader({
   useEffect(() => {
     const since = changesRef.current;
     const current = docRef.current;
+    // A deleted file whose D went — it is back, or its tree was refreshed: the file as it is now, if it is there.
+    if (current?.deleted) {
+      if (openMark?.mark !== "D") void show(current.path, { push: false, changes: openMark !== null });
+      return;
+    }
     if (openMark || since === null || !current) return;
     leaveChanges(current);
     say(since ? `No changes since ${since} any more` : "No changes any more");
@@ -959,7 +1010,8 @@ export function Reader({
     const current = docRef.current;
     if (!current) return;
     try {
-      const result = await readerExport(current.path);
+      // A deleted file's copy is what it said then, from the record (tree changes rule 22).
+      const result = await (current.deleted ? treeChangesExport(current.path) : readerExport(current.path));
       if (result.status === "saved") say(`Saved ${result.name}`);
     } catch (e) {
       say(readerErrorOf(e).message);
@@ -1054,18 +1106,24 @@ export function Reader({
   // mark — a source file with a mark gets a toggle it never had, Source and Changes (tree changes rule 19). An image
   // has no Changes view.
   const hasChanges = doc !== null && doc.render !== "image" && (openMark !== null || changes !== null);
-  const offered: View[] = [...(viewKind ? (["rendered", "source"] as const) : hasChanges ? (["source"] as const) : []), ...(hasChanges ? (["changes"] as const) : [])];
+  // A deleted file has nothing but what it said then: Changes alone (rule 19).
+  const offered: View[] = doc?.deleted
+    ? ["changes"]
+    : [...(viewKind ? (["rendered", "source"] as const) : hasChanges ? (["source"] as const) : []), ...(hasChanges ? (["changes"] as const) : [])];
   const noFile = doc ? null : "Open a file first";
   // What the print sheet gets is this document laid out for paper (styles/print.css). An image is not text to lay
   // out, and a rendered HTML page is a sandboxed frame, which prints as the clipped box it is — its source prints.
   const cannotPrint = noFile ?? (doc?.render === "image" ? "Images can't be printed from here" : doc?.render === "html" && views.html === "rendered" ? "Switch to Source to print" : null);
   // An item is listed once it exists: nothing here is a placeholder for a later phase.
+  // A deleted file can be copied and downloaded — what it said then is how it is rescued — and nothing else (rule 22).
+  const gone = doc?.deleted ? "This file was deleted" : null;
+  const nothingKept = doc?.deleted && doc.text === "" ? "Kinas kept no copy of this file" : null;
   const menu: MenuItem[] = [
-    { id: "download", label: downloadLabel(doc ? baseName(doc.path) : ""), disabledReason: noFile, onSelect: () => void download() },
-    { id: "print", label: "Print as PDF", disabledReason: cannotPrint, onSelect: () => void print() },
-    { id: "editor", label: "Open in editor", disabledReason: noFile, onSelect: () => void openInEditor() },
+    { id: "download", label: downloadLabel(doc ? baseName(doc.path) : ""), disabledReason: noFile ?? nothingKept, onSelect: () => void download() },
+    { id: "print", label: "Print as PDF", disabledReason: gone ?? cannotPrint, onSelect: () => void print() },
+    { id: "editor", label: "Open in editor", disabledReason: gone ?? noFile, onSelect: () => void openInEditor() },
     // The open file. A folder is pinned from its header in the sidebar, where the folder is.
-    { id: "pin", label: pinned ? "Unpin" : "Pin", disabledReason: noFile, onSelect: () => doc && (pinned ? onUnpin(doc.path) : onPin(doc.path)) },
+    { id: "pin", label: pinned ? "Unpin" : "Pin", disabledReason: gone ?? noFile, onSelect: () => doc && (pinned ? onUnpin(doc.path) : onPin(doc.path)) },
   ];
 
   return (
@@ -1082,7 +1140,7 @@ export function Reader({
         changesSince={openMark?.since ?? changes}
         files={filesButton && { ...filesButton, onToggle: toggle("files") }}
         contents={contentsButton && { ...contentsButton, onToggle: toggle("contents") }}
-        copyDisabledReason={!doc ? noFile : doc.render === "image" ? "Images can't be copied as text" : null}
+        copyDisabledReason={!doc ? noFile : nothingKept ?? (doc.render === "image" ? "Images can't be copied as text" : null)}
         onCopy={() => void copy()}
         menu={menu}
         menuResetKey={doc?.path ?? folder ?? ""}

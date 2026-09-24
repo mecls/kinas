@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Tree changes (tasks/tree-changes/prd.md §5): a projects root holding `repo` and `plain`. Every name and text carries
@@ -13,7 +14,21 @@ export const TOKEN = "5d1c";
 export const README_TEXT = `# Repo ${TOKEN}\n\nThe committed text.\n`;
 export const OLD_TEXT = ["# Old", "", `One ${TOKEN}.`, `Two ${TOKEN}.`, `Three ${TOKEN}.`].join("\n") + "\n";
 
+/** Where Download writes a deleted file's text: outside the run's data folder, which a copy may never go into. */
+let out: string | undefined;
+
 export function setup(dataDir: string): Record<string, string> {
+  out = mkdtempSync(join(tmpdir(), "kinas-e2e-out-"));
+  return { ...fixture(dataDir), KINAS_E2E_EXPORT_TO: join(out, `rescued old-${TOKEN}.md`) };
+}
+
+export function teardown(): void {
+  if (out) rmSync(out, { recursive: true, force: true });
+  out = undefined;
+}
+
+/** The projects root and its two folders; the other tree-changes launches reuse it. */
+export function fixture(dataDir: string): Record<string, string> {
   const root = join(dataDir, "root");
   const repo = join(root, "repo");
   mkdirSync(join(repo, "docs"), { recursive: true });

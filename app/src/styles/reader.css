@@ -308,6 +308,14 @@
   color: var(--ink-2);
 }
 
+/* Under a tree's head while it has marks (tree changes rule 11): "5 changes since 14:02", aligned with the head's label. */
+.tree-since {
+  margin: 0 0 var(--space-1) var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+
 .tree-note {
   padding: var(--space-1) var(--space-1h);
   color: var(--ink-2);

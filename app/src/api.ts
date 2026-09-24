@@ -382,6 +382,35 @@ export const onReaderShow = (handler: (e: ReaderShow) => void): Promise<Unlisten
 export const onReaderChanged = (handler: (e: { path: string }) => void): Promise<UnlistenFn> =>
   listen<{ path: string }>("reader_changed", (e) => handler(e.payload));
 
+// Tree changes (tasks/tree-changes/prd.md): what changed on disk under a file tree since it was first shown. Rust
+// watches, compares and decides every mark; the webview draws what the latest summary says (reader/changes/mod.rs).
+
+export type Mark = "A" | "M" | "D";
+
+export interface ChangeEntry {
+  path: string;
+  kind: ReaderKind;
+  mark: Mark;
+}
+
+/** One root's whole summary, sent after every burst: it replaces the last one, never patches it. */
+export interface TreeChanges {
+  /** The root's real path. */
+  root: string;
+  /** The baseline moment every caption and tooltip counts from. */
+  since_ms: number;
+  /** False when the watch could not start: the tree works as today, without marks. */
+  watching: boolean;
+  total: number;
+  entries: ChangeEntry[];
+  /** Folders whose direct children changed in this burst. */
+  touched: string[];
+}
+
+/** Starts following a folder's tree, or answers with what it already follows: the first showing is the baseline. */
+export const treeChangesWatch = (root: string) => invoke<TreeChanges>("tree_changes_watch", { root });
+export const onTreeChanged = (handler: (c: TreeChanges) => void): Promise<UnlistenFn> => listen<TreeChanges>("tree_changed", (e) => handler(e.payload));
+
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);
 export const onReadingsChanged = (handler: () => void): Promise<UnlistenFn> => listen("readings_changed", handler);
 export const onBackfillProgress = (handler: (b: Backfill) => void): Promise<UnlistenFn> =>

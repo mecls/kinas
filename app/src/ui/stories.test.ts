@@ -20,6 +20,7 @@ const FILE: Record<string, string> = {
   "Progress row": "ProgressRow",
   "Inbox item": "InboxItem",
   "Terminal chrome": "TerminalChrome",
+  "Change mark": "ChangeMark",
   "Settings field": "Field",
   "Accent field": "AccentField",
   "Empty state": "Toast",
@@ -34,7 +35,6 @@ const NOT_YET: Record<string, string> = {
   Palette: "the palette's own (app/src/palette/), on the tokens since slice 6 — not a library piece",
   "Tab bar": "the phone — not built in this pass (DESIGN.md §3.3)",
   "Launch form": "the phone and the palette's launch form — Build 3",
-  "Change mark": "tree changes, slice 1 — written into DESIGN.md first (docs first); built with its stories then",
   Diff: "tree changes, slice 5 — written into DESIGN.md first (docs first); built with its stories then",
 };
 

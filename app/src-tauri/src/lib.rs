@@ -96,6 +96,7 @@ pub fn run() {
         .manage(pty::PtyState::default())
         .manage(projects::ProjectsCache::default())
         .manage(reader::ReaderState::default())
+        .manage(reader::changes::ChangesState::default())
         .invoke_handler(tauri::generate_handler![
             commands::store_info,
             commands::pty_start,
@@ -157,6 +158,7 @@ pub fn run() {
             reader::pins::reader_pins,
             reader::pins::reader_pin,
             reader::pins::reader_unpin,
+            reader::changes::tree_changes_watch,
         ])
         .on_window_event(|window, event| {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).

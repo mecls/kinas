@@ -4,6 +4,7 @@
 //! to a place Miguel chooses in a save sheet. Every command re-checks its path (R9): nothing is trusted because someone checked it before.
 
 pub mod access;
+pub mod changes;
 pub mod editor;
 pub mod export;
 mod herdr;

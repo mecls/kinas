@@ -119,6 +119,20 @@
     "[data-story=\"StatusBadge/done\"] .ui-dot": {
       "background-color": "rgb(46, 139, 87)"
     },
+    "[data-story=\"TabStrip/plain\"] .ui-tab[aria-selected=\"false\"]": {
+      "color": "rgb(91, 97, 112)"
+    },
+    "[data-story=\"TabStrip/plain\"] .ui-tab[aria-selected=\"true\"]": {
+      "background-color": "rgb(255, 255, 255)",
+      "color": "rgb(27, 31, 39)",
+      "font-size": "12px",
+      "max-width": "196px"
+    },
+    "[data-story=\"TabStrip/plain\"] .ui-tabstrip": {
+      "background-color": "rgb(237, 234, 226)",
+      "box-shadow": "rgb(227, 223, 213) 0px -1px 0px 0px inset",
+      "height": "32px"
+    },
     "[data-story=\"Table/today\"] th": {
       "color": "rgb(91, 97, 112)",
       "font-size": "12px",
@@ -258,6 +272,20 @@
     },
     "[data-story=\"StatusBadge/done\"] .ui-dot": {
       "background-color": "rgb(79, 179, 122)"
+    },
+    "[data-story=\"TabStrip/plain\"] .ui-tab[aria-selected=\"false\"]": {
+      "color": "rgb(161, 167, 180)"
+    },
+    "[data-story=\"TabStrip/plain\"] .ui-tab[aria-selected=\"true\"]": {
+      "background-color": "rgb(27, 31, 39)",
+      "color": "rgb(237, 238, 242)",
+      "font-size": "12px",
+      "max-width": "196px"
+    },
+    "[data-story=\"TabStrip/plain\"] .ui-tabstrip": {
+      "background-color": "rgb(35, 40, 51)",
+      "box-shadow": "rgb(43, 49, 64) 0px -1px 0px 0px inset",
+      "height": "32px"
     },
     "[data-story=\"Table/today\"] th": {
       "color": "rgb(161, 167, 180)",

@@ -279,7 +279,11 @@ describe("the reader's tabs", () => {
     expect(existsSync(APP_LOG) ? readFileSync(APP_LOG, "utf8").split("\n").filter((line) => line.includes("9c2e")) : []).toEqual([]);
     const db = join(process.env.KINAS_DATA_DIR!, "kinas.sqlite");
     const settings = execFileSync("/usr/bin/sqlite3", [db, "SELECT key || '=' || value FROM settings"], { encoding: "utf8" }).trim().split("\n");
-    expect(settings.filter((row) => row.includes("9c2e"))).toEqual([]);
+    // The one path Kinas stores is a pin, because a pin is an explicit click (ADR 0007): the file pinned above is
+    // there, and no other file this spec opened is — not in the pins, not in any other row.
+    expect(settings.filter((row) => row.includes("9c2e") && !row.startsWith("reader_pins="))).toEqual([]);
+    const pins = settings.find((row) => row.startsWith("reader_pins=")) ?? "";
+    expect(pins.match(/[a-z0-9-]*9c2e\.md/g)).toEqual([TAB(1)]);
     // The tabs are React state only: not in localStorage or sessionStorage either (build spec §10).
     const stored = await browser.execute(() => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }));
     expect(stored.includes("9c2e")).toBe(false);

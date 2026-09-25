@@ -27,8 +27,10 @@
   `-watch-fail` green, run alone
 - [x] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings —
   2026-09-25, rebased onto `49e6e03`; `bun run check` green (719 bun, 365 Rust); **the full e2e alone, 38 of 38 specs,
-  206 cases**; push-to-unmark median 122 ms. **Pushed on the captain's word, PR #40**; lands by the captain's own push;
-  **not installed** (the captain's word)
+  206 cases**; push-to-unmark median 122 ms. **On `main` by fast-forward on the captain's word ("push everything and merge to
+  main"), at `a2f5a17`, PR #42** — rebased onto `ddba122` (the first mate's docs-only follow-ups) as
+  `feat/tree-changes-push-2` rather than force-pushing #40's branch, and #40 closed for it; `bun run check` green on
+  that tip (721 bun, 365 Rust). **Not installed** (the captain's word)
 
 ## Notes for a fresh session
 
@@ -39,6 +41,9 @@
   mate's ship point 2) for its ship point. Nothing is pushed without the captain's word. The PR body is drafted in the
   job's tmp (`pr-tree-changes-push.md`).
 - The `tree-changes` worktree (`docs/tree-changes-installed`) belongs to another session. Leave it alone.
+- The remote `feat/tree-changes-push` still holds #40's pre-rebase commits (`a4e9fed`); the local one is the rebased
+  tip. Removing the worktree and the three branches (`feat/tree-changes-push`, `-2`, and the remote ones) waits for the
+  captain's word.
 - The main checkout stays at `73c70fd`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
 - The captain's screenshot that started this showed four marks, all on git-ignored private documents

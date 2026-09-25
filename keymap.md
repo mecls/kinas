@@ -169,6 +169,10 @@ marks and starts counting again; it is **click-only**, like every sidebar action
 **Refresh files**, for the folder Files shows. So the sidebar now has one palette command; it still adds no chord.
 A click on a marked row opens the reader on its Changes view.
 
+Amended 2026-09-25 (tree changes clear on push, `tasks/tree-changes-push/prd.md`): a mark goes by itself once its change
+is pushed, so **↻** and **Refresh files** now clear only what is pushed or can never be pushed — a path git ignores,
+or one outside any repository — and keep what waits for a push. Both stay as they were: click-only, and no chord.
+
 Amended 2026-09-23 (folder views): the navigation lists Home, Work, Crew, Inbox and Usage. The **Reader** row is
 gone: a file's or a folder's row opens the reader, and × closes it. **Settings** is the sidebar's last row, at its
 foot, with its chord unchanged. A right-click on a client folder (a two-finger tap, or Ctrl-click) opens its menu —

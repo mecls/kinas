@@ -21,7 +21,9 @@
 - [x] Slice 2 · counting from the push: each mark's own "since", the diff from the pushed text, D and added folders —
   2026-09-25, `bun run check` green (670 bun, 330 Rust); `tree-changes` 17 of 17 (`push 2` new), `-no-git` and
   `-watch-fail` green, run alone
-- [ ] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words
+- [x] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words — 2026-09-25,
+  `bun run check` green (673 bun, 338 Rust); `tree-changes` 19 of 19 (`push 3`, `push 4` new), `-no-git` and
+  `-watch-fail` green, run alone
 - [ ] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings
 
 ## Notes for a fresh session

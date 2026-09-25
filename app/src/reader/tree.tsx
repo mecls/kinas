@@ -72,7 +72,7 @@ const isGone = (row: Row): row is Gone => "gone" in row;
 
 function FileRow({ entry, selected, onOpen, marks }: TreeProps & { entry: Row }) {
   const mark = marks.markOf(entry.path);
-  const words = wordsFor(entry.name, mark, null, marks.sinceOf(entry.path));
+  const words = wordsFor(entry.name, mark, null, marks.sinceOf(entry.path), marks.waitsOf(entry.path));
   return (
     <li>
       <div className="tree-row" data-mark={mark ?? undefined} data-gone={isGone(entry) ? "" : undefined}>
@@ -98,7 +98,7 @@ function FolderNode({ entry, ...rest }: TreeProps & { entry: Row }) {
   const mark = marks.markOf(entry.path);
   // A folder that existed at both moments carries a roll-up instead of a letter (rule 10).
   const rollup = mark ? null : marks.rollupOf(entry.path);
-  const words = wordsFor(entry.name, mark, rollup, marks.sinceOf(entry.path));
+  const words = wordsFor(entry.name, mark, rollup, marks.sinceOf(entry.path), marks.waitsOf(entry.path));
   // A deleted folder is one struck-through row: Kinas does not know all it held, so it does not open (rule 9).
   const gone = isGone(entry);
   const open = expanded && !gone;

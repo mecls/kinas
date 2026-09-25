@@ -17,7 +17,7 @@ export function RefreshButton({ root, name }: { root: string; name: string }) {
       className="sidebar-row-action tree-refresh"
       data-marked={summary && summary.total > 0 ? "" : undefined}
       aria-label={`Refresh ${name}`}
-      title={`Refresh ${name}: clear its changes and start counting again`}
+      title={`Refresh ${name}: clear what's pushed or can't be pushed`}
       onClick={() => void refreshRoot(root)}
     >
       <RefreshIcon size="sm" />

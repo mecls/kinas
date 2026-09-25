@@ -99,6 +99,8 @@ pub enum Rebase {
     Pushed { head: Arc<Head>, blob: String, stat: Stat },
     /// Gone here and at the upstream: the entry and everything beneath it removed — the moment kept, as a tombstone.
     Gone,
+    /// Can't be pushed (↻): the text now is the starting point — a copy, or the reason there is none.
+    Kept { stat: Stat, text: BaseText },
     /// An added folder the upstream holds: its own entry. What is inside is judged path by path.
     Folder { stat: Stat },
 }
@@ -136,7 +138,7 @@ impl Baseline {
     }
 
     /// Makes `path`'s baseline what `rebase` says, from `now`. Answers the change in copy bytes: negative when copies
-    /// are given back.
+    /// are given back, positive when a copy is taken.
     pub fn rebase(&mut self, path: &Path, rebase: Rebase, now: Millis) -> i64 {
         let before = self.copy_bytes;
         match rebase {
@@ -147,6 +149,13 @@ impl Baseline {
                     self.give_back(&p);
                     self.entries.remove(&p);
                 }
+            }
+            Rebase::Kept { stat, text } => {
+                if let BaseText::Copy(bytes) = &text {
+                    self.copy_bytes += bytes.len() as u64;
+                    self.copied.push(path.to_path_buf());
+                }
+                self.put(path, BaseEntry { stat, text });
             }
             Rebase::Folder { stat } => self.put(path, BaseEntry { stat, text: BaseText::NotText }),
         }
@@ -311,7 +320,7 @@ pub fn take(root: &Path, git: Option<&Git>, budget_left: u64, changed: &dyn Fn(&
     baseline
 }
 
-fn copy(path: &Path, stat: Stat, left: u64, changed: &dyn Fn(&Path) -> bool) -> BaseText {
+pub(super) fn copy(path: &Path, stat: Stat, left: u64, changed: &dyn Fn(&Path) -> bool) -> BaseText {
     // Only the head is read to tell a binary from a text file the budget leaves out, as the tree's own filter does.
     let unless_binary = |reason| if listable_file(path) { BaseText::NoCopy(reason) } else { BaseText::NotText };
     if access::is_image(path) {
@@ -570,6 +579,23 @@ mod tests {
         std::fs::create_dir(root.join("a.md")).unwrap();
         assert_eq!(baseline.rebase(&root.join("a.md"), Rebase::Folder { stat: Stat::of(&root.join("a.md")).unwrap() }, 3_000), -100);
         assert_eq!((baseline.copy_bytes, baseline.entries[&root.join("a.md")].text.clone()), (0, BaseText::NotText));
+    }
+
+    #[test]
+    fn rebase_takes_a_copy_within_budget() {
+        let (_dir, root) = tree(&[("a.md", &[b'a'; 100])]);
+        let mut baseline = take(&root, None, 1024, NOTHING_CHANGED);
+        let stat = || Stat::of(&root.join("a.md")).unwrap();
+        std::fs::write(root.join("a.md"), [b'z'; 40]).unwrap();
+        // Kept takes a copy of the text now, and gives the old one back.
+        let now = copy(&root.join("a.md"), stat(), 1024, NOTHING_CHANGED);
+        assert_eq!(baseline.rebase(&root.join("a.md"), Rebase::Kept { stat: stat(), text: now }, 3_000), 40 - 100);
+        assert_eq!(baseline.entries[&root.join("a.md")].text, BaseText::Copy(Arc::from(&[b'z'; 40][..])));
+        // Past the budget: the reason instead, and nothing taken.
+        let none_left = copy(&root.join("a.md"), stat(), 0, NOTHING_CHANGED);
+        assert_eq!(none_left, BaseText::NoCopy(NoCopy::Budget));
+        assert_eq!(baseline.rebase(&root.join("a.md"), Rebase::Kept { stat: stat(), text: none_left }, 4_000), -40);
+        assert_eq!((baseline.copy_bytes, baseline.since_of(&root.join("a.md"), 0)), (0, 4_000));
     }
 
     #[test]

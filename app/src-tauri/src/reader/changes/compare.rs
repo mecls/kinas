@@ -35,6 +35,32 @@ pub fn listable_path(root: &Path, path: &Path) -> bool {
         })
 }
 
+/// A mark as a root's record holds it (tree changes clear on push): what it is, and whether git ignores the path — so
+/// whether it waits for a push can be said when the summary is built, from the repository's upstream as it is then.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Tag {
+    pub kind: Kind,
+    pub mark: Mark,
+    pub ignored: bool,
+}
+
+/// What the roll-ups and the pruning read of a mark: its letter. A judged `(Kind, Mark)` and a recorded `Tag` both have one.
+pub trait Marked {
+    fn mark(&self) -> Mark;
+}
+
+impl Marked for (Kind, Mark) {
+    fn mark(&self) -> Mark {
+        self.1
+    }
+}
+
+impl Marked for Tag {
+    fn mark(&self) -> Mark {
+        self.mark
+    }
+}
+
 /// Rules 3 and 4 as one table, from the tree's point of view: what it listed at the baseline, what it would list now.
 /// `same` answers for a file listed at both moments — byte-equal to its copy, or, with no copy, the same size and
 /// modification time — and is not asked otherwise. None is no mark (and, for absent at both, no row).
@@ -99,19 +125,17 @@ pub fn strongest(a: Mark, b: Mark) -> Mark {
 
 /// Whether a folder between `root` and `path` is itself marked A or D. Such a folder counts once, for everything in
 /// it (rule 10), so the path's own mark is dropped.
-pub fn under_marked_folder(root: &Path, path: &Path, marks: &BTreeMap<PathBuf, (Kind, Mark)>) -> bool {
-    path.ancestors()
-        .skip(1)
-        .take_while(|a| *a != root && a.starts_with(root))
-        .any(|a| matches!(marks.get(a), Some((_, Mark::Added | Mark::Deleted))))
+pub fn under_marked_folder<T: Marked>(root: &Path, path: &Path, marks: &BTreeMap<PathBuf, T>) -> bool {
+    path.ancestors().skip(1).take_while(|a| *a != root && a.starts_with(root)).any(|a| matches!(marks.get(a).map(Marked::mark), Some(Mark::Added | Mark::Deleted)))
 }
 
 /// Every folder above a marked path, up to and not including the root, with the count of marks beneath it, the
 /// strongest of them and the earliest "since" among them (tree changes clear on push, rule 12); and the root's total.
 /// Call it after dropping the marks under marked folders.
-pub fn rollups(root: &Path, marks: &BTreeMap<PathBuf, (Kind, Mark)>, since_of: &dyn Fn(&Path) -> Millis) -> (Vec<FolderRollup>, u32) {
+pub fn rollups<T: Marked>(root: &Path, marks: &BTreeMap<PathBuf, T>, since_of: &dyn Fn(&Path) -> Millis) -> (Vec<FolderRollup>, u32) {
     let mut folders: HashMap<&Path, (u32, Mark, Millis)> = HashMap::new();
-    for (path, &(_, mark)) in marks {
+    for (path, marked) in marks {
+        let mark = marked.mark();
         let since = since_of(path);
         for folder in path.ancestors().skip(1).take_while(|a| *a != root && a.starts_with(root)) {
             let entry = folders.entry(folder).or_insert((0, mark, since));

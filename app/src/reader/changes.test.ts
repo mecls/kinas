@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChangeEntry, DirEntry, TreeChanges } from "../api.ts";
-import { captionFor, createChangesStore, folderMarksOf, mergeDeleted, sinceLabel, wordsFor } from "./changes.ts";
+import { captionFor, createChangesStore, folderMarksOf, mergeDeleted, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
 
 const at1402 = new Date(2026, 8, 23, 14, 2).getTime();
 
@@ -16,8 +16,8 @@ const summary = (over: Partial<TreeChanges> = {}): TreeChanges => ({
   ...over,
 });
 
-const file = (path: string, mark: "A" | "M" | "D", since_ms = at1402): ChangeEntry => ({ path, kind: "file", mark, since_ms });
-const dir = (path: string, mark: "A" | "M" | "D", since_ms = at1402): ChangeEntry => ({ path, kind: "dir", mark, since_ms });
+const file = (path: string, mark: "A" | "M" | "D", since_ms = at1402, waits = false): ChangeEntry => ({ path, kind: "file", mark, since_ms, waits });
+const dir = (path: string, mark: "A" | "M" | "D", since_ms = at1402, waits = false): ChangeEntry => ({ path, kind: "dir", mark, since_ms, waits });
 const listed = (path: string, kind: "file" | "dir" = "file"): DirEntry => ({ name: path.slice(path.lastIndexOf("/") + 1), path, kind });
 
 describe("the words a tree says (tree changes rules 8, 10 and 11)", () => {
@@ -27,12 +27,26 @@ describe("the words a tree says (tree changes rules 8, 10 and 11)", () => {
   });
 
   test("wordsFor_says_each_mark_and_the_time", () => {
-    expect(wordsFor("new-note.md", "A", null, "14:02")).toBe("new-note.md, added since 14:02");
-    expect(wordsFor("overview.md", "M", null, "14:02")).toBe("overview.md, modified since 14:02");
-    expect(wordsFor("old-plan.md", "D", null, "14:02")).toBe("old-plan.md, deleted since 14:02");
-    expect(wordsFor("docs", null, { path: "/p/kinas/docs", count: 3, strongest: "D", since_ms: at1402 }, "14:02")).toBe("docs, 3 changes inside since 14:02");
-    expect(wordsFor("app", null, { path: "/p/kinas/app", count: 1, strongest: "M", since_ms: at1402 }, "14:02")).toBe("app, 1 change inside since 14:02");
-    expect(wordsFor("README.md", null, null, "14:02")).toBeNull();
+    expect(wordsFor("new-note.md", "A", null, "14:02", false)).toBe("new-note.md, added since 14:02");
+    expect(wordsFor("overview.md", "M", null, "14:02", false)).toBe("overview.md, modified since 14:02");
+    expect(wordsFor("old-plan.md", "D", null, "14:02", false)).toBe("old-plan.md, deleted since 14:02");
+    expect(wordsFor("docs", null, { path: "/p/kinas/docs", count: 3, strongest: "D", since_ms: at1402 }, "14:02", false)).toBe("docs, 3 changes inside since 14:02");
+    expect(wordsFor("app", null, { path: "/p/kinas/app", count: 1, strongest: "M", since_ms: at1402 }, "14:02", false)).toBe("app, 1 change inside since 14:02");
+    expect(wordsFor("README.md", null, null, "14:02", false)).toBeNull();
+  });
+
+  test("wordsFor_says_waits_as_not_pushed", () => {
+    // Tree changes clear on push (rule 13): a mark a push would clear says so; a roll-up never does.
+    expect(wordsFor("overview.md", "M", null, "14:02", true)).toBe("overview.md, modified since 14:02, not pushed");
+    expect(wordsFor("new-note.md", "A", null, "15:31", true)).toBe("new-note.md, added since 15:31, not pushed");
+    expect(wordsFor("build-spec.md", "M", null, "14:02", false)).toBe("build-spec.md, modified since 14:02");
+    expect(wordsFor("docs", null, { path: "/p/kinas/docs", count: 3, strongest: "M", since_ms: at1402 }, "14:02", true)).toBe("docs, 3 changes inside since 14:02");
+  });
+
+  test("waitingCount_counts_waiting_entries", () => {
+    const s = summary({ total: 3, entries: [file("/p/kinas/a.md", "M", at1402, true), file("/p/kinas/b.md", "M"), dir("/p/kinas/new", "A", at1402, true)] });
+    expect(waitingCount(s)).toBe(2);
+    expect(waitingCount(summary())).toBe(0);
   });
 
   test("captionFor_counts_and_pluralises", () => {
@@ -104,6 +118,11 @@ describe("the marks a folder's rows read", () => {
     expect(pushed.sinceOf("/p/kinas/research/deep/idea.md")).toBe("15:31");
     expect(pushed.sinceOf("/p/kinas/docs")).toBe("14:02");
     expect(pushed.sinceOf("/p/kinas/README.md")).toBe("");
+  });
+
+  test("a row waits for a push as its entry, or its added folder, says", () => {
+    const marks = folderMarksOf(summary({ total: 2, entries: [file("/p/kinas/a.md", "M", at1402, true), dir("/p/kinas/notes", "A")] }), () => 0);
+    expect([marks.waitsOf("/p/kinas/a.md"), marks.waitsOf("/p/kinas/notes/n.md"), marks.waitsOf("/p/kinas/README.md")]).toEqual([true, false, false]);
   });
 
   test("no summary, or one with nothing in it, marks nothing but still follows re-listing", () => {

@@ -28,6 +28,8 @@ export interface FolderMarks {
    * else its roll-up's; "" for a row with none.
    */
   sinceOf(path: string): string;
+  /** Whether a row's mark waits for a push: its entry's, else the added folder's above it; false for none. */
+  waitsOf(path: string): boolean;
 }
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
@@ -42,11 +44,12 @@ export function sinceLabel(ms: number): string {
 const MARK_WORD = { A: "added", M: "modified", D: "deleted" } as const;
 
 /**
- * A marked row's accessible name and tooltip: "overview.md, modified since 14:02", or for a folder's roll-up "docs, 3
- * changes inside since 14:02". Null for a row with neither.
+ * A marked row's accessible name and tooltip: "overview.md, modified since 14:02", and ", not pushed" when a push would
+ * clear it (tree changes clear on push, rule 13); for a folder's roll-up "docs, 3 changes inside since 14:02". Null for
+ * a row with neither.
  */
-export function wordsFor(name: string, mark: Mark | null, rollup: FolderRollup | null, since: string): string | null {
-  if (mark) return `${name}, ${MARK_WORD[mark]} since ${since}`;
+export function wordsFor(name: string, mark: Mark | null, rollup: FolderRollup | null, since: string, waits: boolean): string | null {
+  if (mark) return `${name}, ${MARK_WORD[mark]} since ${since}${waits ? ", not pushed" : ""}`;
   if (rollup) return `${name}, ${rollup.count} ${rollup.count === 1 ? "change" : "changes"} inside since ${since}`;
   return null;
 }
@@ -112,10 +115,14 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
       const ms = (byPath.get(path) ?? addedAbove(path) ?? rollups.get(path))?.since_ms;
       return ms === undefined ? "" : sinceLabel(ms);
     },
+    waitsOf: (path) => (byPath.get(path) ?? addedAbove(path))?.waits ?? false,
   };
 }
 
-const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "" };
+const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false };
+
+/** How many of a root's marks wait for a push, an added folder counting once (the palette's "2 changes not pushed yet"). */
+export const waitingCount = (summary: TreeChanges): number => summary.entries.filter((e) => e.waits).length;
 
 /**
  * The summaries, keyed by the root's real path, with the path each tree asked for mapped onto it. A store of its own
@@ -204,14 +211,17 @@ export function watchRoot(root: string): void {
 }
 
 /**
- * Refresh (rule 15): the root's marks, deleted rows and caption go, and its expanded folders re-list. A root that is
- * not watched has nothing to clear.
+ * ↻ (tree changes clear on push, rule 9): what is pushed or can never be pushed goes, what waits for a push stays, and
+ * the root's expanded folders re-list. Answers the summary it installed, or null when there was none: a root not
+ * watched, no longer readable, or still busy — its marks stay as they were.
  */
-export async function refreshRoot(root: string): Promise<void> {
+export async function refreshRoot(root: string): Promise<TreeChanges | null> {
   try {
-    store.reset(root, await treeChangesRefresh(root));
+    const summary = await treeChangesRefresh(root);
+    store.reset(root, summary);
+    return summary;
   } catch {
-    // Not watched, or no longer readable: there is nothing of it on screen to clear.
+    return null;
   }
 }
 

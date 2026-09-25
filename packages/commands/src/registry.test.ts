@@ -45,8 +45,11 @@ describe("the registry (R36, CLI v0)", () => {
   test("files.refresh is palette-only and says so with no folder", async () => {
     const command = commands.find((c) => c.id === "files.refresh")!;
     expect([...command.doors]).toEqual(["palette"]);
-    expect(await command.run({ now: 0, refreshFiles: async () => false })).toEqual({ lines: ["No folder in Files to refresh"] });
-    expect(await command.run({ now: 0, refreshFiles: async () => true })).toEqual({});
+    expect(await command.run({ now: 0, refreshFiles: async () => null })).toEqual({ lines: ["No folder in Files to refresh"] });
+    expect(await command.run({ now: 0, refreshFiles: async () => 0 })).toEqual({});
+    // Tree changes clear on push (rule 15): what ↻ left waiting for a push.
+    expect(await command.run({ now: 0, refreshFiles: async () => 1 })).toEqual({ lines: ["1 change not pushed yet"] });
+    expect(await command.run({ now: 0, refreshFiles: async () => 2 })).toEqual({ lines: ["2 changes not pushed yet"] });
     await expect(command.run({ now: 0 })).rejects.toThrow("refreshing files is not available here");
   });
 

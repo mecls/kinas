@@ -21,7 +21,7 @@ export interface CommandContext {
   firstMate?: () => void;
   refresh?: () => Promise<void>;
   /** Refreshes the tree Files shows (tree changes rule 16); false when Files shows no folder. */
-  refreshFiles?: () => Promise<boolean>;
+  refreshFiles?: () => Promise<number | null>;
   toggleSidebar?: () => void;
   openSettings?: () => void;
 }
@@ -111,8 +111,10 @@ export const commands: readonly Command[] = [
     title: "Refresh files",
     doors: ["palette"],
     async run(ctx) {
-      const refreshed = await need(ctx.refreshFiles, "refreshing files")();
-      return refreshed ? {} : { lines: ["No folder in Files to refresh"] };
+      // Tree changes clear on push (rule 15): null is no folder in Files; a count is the marks ↻ left waiting for a push.
+      const left = await need(ctx.refreshFiles, "refreshing files")();
+      if (left === null) return { lines: ["No folder in Files to refresh"] };
+      return left > 0 ? { lines: [`${left} ${left === 1 ? "change" : "changes"} not pushed yet`] } : {};
     },
   },
   {

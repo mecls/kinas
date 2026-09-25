@@ -178,7 +178,7 @@ export const STORIES: Story[] = [
     component: "ChangeMark",
     states: [
       { name: "added", node: withMark("new-note.md", <ChangeMark mark="A" words="new-note.md, added since 14:02" />) },
-      { name: "modified", node: withMark("overview.md", <ChangeMark mark="M" words="overview.md, modified since 14:02" />) },
+      { name: "modified", node: withMark("overview.md", <ChangeMark mark="M" words="overview.md, modified since 14:02, not pushed" />) },
       { name: "deleted", node: withMark("old-plan.md", <ChangeMark mark="D" words="old-plan.md, deleted since 14:02" />) },
       { name: "rollup", node: withMark("docs", <ChangeMark mark="D" count={3} words="docs, 3 changes inside since 14:02" />) },
       { name: "rollup-many", node: withMark("app", <ChangeMark mark="M" count={150} words="app, 150 changes inside since 14:02" />) },

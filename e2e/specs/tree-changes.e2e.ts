@@ -1,10 +1,10 @@
 import { browser, expect } from "@wdio/globals";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { hook, openReaderMenu, runReaderMenuItem, typeLine, waitForShell } from "../helpers.ts";
-import { git, OLD_TEXT, PUSHING_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
+import { BRANCH, git, OLD_TEXT, PUSHING_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
 
 // Tree changes (tasks/tree-changes/prd.md §5): marks in the sidebar's tree as files are written, deleted and put
 // back, with their words, roll-ups and the caption; then Refresh and a reload clear them, and the terminal pane is the
@@ -33,6 +33,7 @@ const COUNT_LINES = [
   /^tree changes: could not watch a folder \([a-z ]+\)$/,
   // Tree changes clear on push.
   /^tree changes: a push cleared \d+ marks in \d+ ms$/,
+  /^tree changes: a refresh cleared \d+ marks, \d+ left, in \d+ ms$/,
 ];
 
 function kinas(...args: string[]) {
@@ -325,7 +326,7 @@ describe("Tree changes", () => {
         return b ? { label: b.getAttribute("aria-label"), title: b.title, marked: b.dataset.marked !== undefined, opacity: getComputedStyle(b).opacity } : null;
       });
     // While the tree has marks, the ↻ is in sight without pointing at the head.
-    expect(await button()).toEqual({ label: "Refresh repo", title: "Refresh repo: clear its changes and start counting again", marked: true, opacity: "1" });
+    expect(await button()).toEqual({ label: "Refresh repo", title: "Refresh repo: clear what's pushed or can't be pushed", marked: true, opacity: "1" });
     // Expanded, so the deleted row is on screen to be cleared.
     await browser.execute(() => [...document.querySelectorAll<HTMLButtonElement>(".sidebar .reader-files .tree-dir")].find((b) => b.title.endsWith("/repo/docs"))!.click());
     await until(async () => (await row(OLD))?.gone === true, `${OLD} drawn struck through`, 5000);
@@ -352,6 +353,8 @@ describe("Tree changes", () => {
     expect(await marked()).toEqual([]);
     writeFileSync(join(pushing, README), `${PUSHING_TEXT}A line not pushed yet ${TOKEN}.\n`);
     await until(async () => (await row(README))?.mark === "M", `${README} marked M`);
+    // A push would clear it, and its words say so.
+    expect((await row(README))?.label).toBe(`${README}, modified since ${await since()}, not pushed`);
     git(pushing, "commit", "-q", "-am", "an edit");
     // A commit moves no remote-tracking ref: nothing may clear the mark, however long it waits.
     await browser.pause(CEILING);
@@ -370,13 +373,62 @@ describe("Tree changes", () => {
     await until(async () => (await row(README))?.mark === "M", `${README} marked M again`);
     const at = await since();
     expect([clock(pushedAt), clock(pushedAt + 60_000)]).toContain(at);
-    expect((await row(README))?.label).toBe(`${README}, modified since ${at}`);
+    expect((await row(README))?.label).toBe(`${README}, modified since ${at}, not pushed`);
     await clickRow(join(pushing, README));
     await until(async () => (await changes()).showing && (await changes()).summary !== null, "the reader on Changes", 10000);
     const view = await changes();
     // Against the pushed text: the line that went up in push 1 is context now, not an addition.
     expect(view.summary).toBe(`+1 −0 since ${at}`);
     expect(view.rows.filter((r) => !r.startsWith("context"))).toEqual([`add + Another line ${TOKEN}.`]);
+    await openInFiles("repo", README);
+  });
+
+  it("push 3: ↻ clears what git ignores and keeps what waits for a push; the palette says how many", async () => {
+    await openInFiles("pushing", README);
+    // README is still M from push 2, waiting for a push.
+    await until(async () => (await row(README))?.mark === "M", `${README} still M`);
+    mkdirSync(join(pushing, "notes"), { recursive: true });
+    writeFileSync(join(pushing, "notes", `x-${TOKEN}.md`), `# Ignored ${TOKEN}\n`);
+    await until(async () => (await row("notes"))?.mark === "A", "the ignored folder marked A");
+    // Git ignores it: no push will clear it, and its words do not say "not pushed".
+    expect((await row("notes"))?.label).toMatch(/^notes, added since \d\d:\d\d$/);
+    expect(await browser.execute(() => document.querySelector<HTMLButtonElement>(".sidebar .reader-files .tree-refresh")?.title)).toBe("Refresh pushing: clear what's pushed or can't be pushed");
+
+    await browser.execute(() => document.querySelector<HTMLButtonElement>(".sidebar .reader-files .tree-refresh")!.click());
+    await until(async () => (await row("notes"))?.mark === null, "the ignored folder cleared");
+    expect(await marked()).toEqual([`${README} M M`]);
+
+    // The palette's Refresh files does what ↻ does, and says what is left.
+    await browser.waitUntil(
+      async () => {
+        await browser.keys(["Meta", "k"]);
+        return (await browser.execute(() => document.querySelector(".palette") !== null)) || (await browser.pause(500), await browser.execute(() => document.querySelector(".palette") !== null));
+      },
+      { timeout: 20000, interval: 1000, timeoutMsg: "⌘K never opened the palette" },
+    );
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('[data-command="files.refresh"]')!.click());
+    await browser.waitUntil(async () => (await browser.execute(() => document.querySelector('[data-testid="palette-output"]')?.textContent ?? null)) !== null, { timeout: 10000, timeoutMsg: "Refresh files printed nothing" });
+    expect(await browser.execute(() => document.querySelector('[data-testid="palette-output"]')?.textContent)).toBe("1 change not pushed yet");
+    await browser.keys(["Escape"]);
+    await browser.waitUntil(async () => !(await browser.execute(() => document.querySelector(".palette") !== null)), { timeout: 5000, timeoutMsg: "the palette stayed open" });
+    expect(await marked()).toEqual([`${README} M M`]);
+  });
+
+  it("push 4: a pull of text already on the remote marks nothing", async () => {
+    // Someone else's push, from a clone outside the projects folder.
+    const other = join(dirname(root), `other-${TOKEN}`);
+    git(dirname(root), "clone", "-q", "-b", BRANCH, join(dirname(root), `remote-${TOKEN}.git`), other);
+    const plan = join("docs", `plan-${TOKEN}.md`);
+    writeFileSync(join(other, plan), `# Plan ${TOKEN}\n\nFrom elsewhere ${TOKEN}.\n`);
+    git(other, "commit", "-q", "-am", "from elsewhere");
+    git(other, "push", "-q");
+    rmSync(other, { recursive: true, force: true });
+
+    git(pushing, "pull", "-q", "--ff-only");
+    expect(readFileSync(join(pushing, plan), "utf8")).toContain(`From elsewhere ${TOKEN}.`);
+    await browser.pause(CEILING);
+    // docs is collapsed: a mark on the plan would roll up on it.
+    expect(await marked()).toEqual([`${README} M M`]);
     await openInFiles("repo", README);
   });
 

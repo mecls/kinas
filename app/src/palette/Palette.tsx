@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { paletteMatches, statusFromStore, statusLines, type Command } from "@kinas/commands";
 import { dispatchAppAction } from "../actions.ts";
 import { getUsageSnapshot, refreshReadings } from "../api.ts";
-import { refreshRoot } from "../reader/changes.ts";
+import { refreshRoot, waitingCount } from "../reader/changes.ts";
 import { snapshotAdapter } from "./snapshotAdapter.ts";
 
 // The ⌘K palette (R36, §3.7): the registry's palette door. Esc closes it and hands focus back to whatever had
@@ -44,9 +44,9 @@ export function Palette({ onClose, filesFolder, onFirstMate }: { onClose: () => 
         firstMate: onFirstMate,
         refresh: () => refreshReadings(),
         refreshFiles: async () => {
-          if (filesFolder === null) return false;
-          await refreshRoot(filesFolder);
-          return true;
+          if (filesFolder === null) return null;
+          const summary = await refreshRoot(filesFolder);
+          return summary ? waitingCount(summary) : 0;
         },
         toggleSidebar: () => dispatchAppAction("sidebar"),
         openSettings: () => dispatchAppAction("settings"),

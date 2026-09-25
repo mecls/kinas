@@ -351,10 +351,11 @@ folder with no remote, as the fixture's `repo` is; the push's own lines follow i
       `automated (step 3's view, step 4's click; the real clipboard, saved and put back)`
 - [x] ↻, Refresh files and a window reload clear every mark — `automated (steps 7 and 13; palette.e2e.ts for Refresh
       files with no folder)`
-- [ ] A commit keeps a mark, a push clears it within 2 s, and an edit after the push counts from it — `outstanding —
-      tree-changes.e2e.ts, push 1 and push 2, being built`
-- [ ] ↻ clears a file git ignores and keeps an unpushed one; Refresh files says how many wait — `outstanding — push 3`
-- [ ] A pull of text already on the remote marks nothing — `outstanding — push 4`
+- [x] A commit keeps a mark, a push clears it within 2 s, and an edit after the push counts from it; a mark waiting for
+      a push says "not pushed" — `automated (tree-changes.e2e.ts, push 1 and push 2)`
+- [x] ↻ clears a folder git ignores and keeps an unpushed file; Refresh files says "1 change not pushed yet" —
+      `automated (push 3)`
+- [x] A pull of text already on the remote marks nothing — `automated (push 4)`
 - [ ] Median from `git push` exiting to the mark gone, over 10 pushes: under 1 s — `outstanding — the push timing case`
 - [ ] A push from the Herdr pane in the Kinas repository clears an M, on the installed build — `outstanding — needs the
       captain`

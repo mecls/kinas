@@ -142,6 +142,26 @@ impl Git {
         }
     }
 
+    /// Which of these files and folders git ignores — asked by name, so a path that is gone is answered too. A folder
+    /// is asked with a trailing slash: a `notes/` pattern matches a folder only, and git cannot tell a folder that is
+    /// gone from a file without it (checked 2026-09-25). A tracked file inside an ignored folder is not ignored: git
+    /// would push it. Exit 1 is "none of them".
+    pub fn ignored(&self, repo: &Path, files: &[PathBuf], folders: &[PathBuf]) -> Result<HashSet<PathBuf>, GitError> {
+        let mut stdin = Vec::new();
+        for (path, slash) in files.iter().map(|f| (f, false)).chain(folders.iter().map(|d| (d, true))) {
+            stdin.extend_from_slice(path.strip_prefix(repo).unwrap_or(path).as_os_str().as_bytes());
+            if slash {
+                stdin.push(b'/');
+            }
+            stdin.push(0);
+        }
+        match self.run(repo, "check-ignore", &["-z", "--stdin"], Some(stdin)) {
+            Ok(out) => Ok(out.split(|&b| b == 0).filter(|p| !p.is_empty()).map(|p| repo.join(OsStr::from_bytes(p.strip_suffix(b"/").unwrap_or(p)))).collect()),
+            Err(GitError { exit: Some(1) }) => Ok(HashSet::new()),
+            Err(e) => Err(e),
+        }
+    }
+
     /// A file's text at `commit`, as a checkout would write it: filters and line endings applied.
     pub fn blob_text(&self, repo: &Path, commit: &str, file: &Path) -> Result<Vec<u8>, GitError> {
         let rel = file.strip_prefix(repo).unwrap_or(file);
@@ -243,6 +263,7 @@ pub(crate) mod tests {
         assert_eq!(argv(repo, "symbolic-ref", &["-q", "--short", "HEAD"]), ["-C", "/p/repo", "symbolic-ref", "-q", "--short", "HEAD"].map(OsString::from));
         assert_eq!(argv(repo, "rev-parse", &["--verify", "-q", "@{upstream}"]), ["-C", "/p/repo", "rev-parse", "--verify", "-q", "@{upstream}"].map(OsString::from));
         assert_eq!(argv(repo, "remote", &[]), ["-C", "/p/repo", "remote"].map(OsString::from));
+        assert_eq!(argv(repo, "check-ignore", &["-z", "--stdin"]), ["-C", "/p/repo", "check-ignore", "-z", "--stdin"].map(OsString::from));
     }
 
     /// A repository at `dir` with these files committed on `main`, and a bare remote beside it (`<dir>.git`'s
@@ -304,6 +325,26 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn ignored_names_ignored_paths_even_deleted_ones() {
+        let (_dir, root) = temp();
+        repo_with(&root, &[(".gitignore", b"notes/\n*.log\n"), ("docs/a.md", b"# A\n")]);
+        // Tracked although its pattern says ignore: git would still push it.
+        std::fs::write(root.join("kept.log"), "tracked\n").unwrap();
+        git(&root, &["add", "-f", "kept.log"]);
+        git(&root, &["commit", "-q", "-m", "a tracked log"]);
+        std::fs::create_dir(root.join("notes")).unwrap();
+        std::fs::write(root.join("notes/x.md"), "# X\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let asked = ["notes/x.md", "notes/gone.md", "docs/a.md", "kept.log", "new.log", "new.md"].map(|p| root.join(p));
+        let ignored = g.ignored(&root, &asked, &[root.join("notes"), root.join("docs")]).unwrap();
+        assert_eq!(ignored, HashSet::from(["notes/x.md", "notes/gone.md", "new.log", "notes"].map(|p| root.join(p))));
+        // A folder that is gone is still answered, by its trailing slash.
+        std::fs::remove_dir_all(root.join("notes")).unwrap();
+        assert_eq!(g.ignored(&root, &[], &[root.join("notes")]), Ok(HashSet::from([root.join("notes")])));
+        assert_eq!(g.ignored(&root, &[root.join("docs/a.md")], &[]), Ok(HashSet::new()), "none ignored is an answer, not a failure");
+    }
+
+    #[test]
     fn the_new_calls_never_write() {
         let (_dir, root) = temp();
         let repo = root.join("repo");
@@ -322,6 +363,7 @@ pub(crate) mod tests {
         g.commit_of(&repo, "@{upstream}").unwrap();
         g.commit_of(&repo, "refs/remotes/origin/main").unwrap();
         g.has_remote(&repo).unwrap();
+        g.ignored(&repo, &[repo.join("README.md"), repo.join("notes/x.md")], &[repo.join("notes")]).unwrap();
         assert_eq!(state(), before, "no object, index, config or ref was written");
     }
 

@@ -557,6 +557,8 @@ export interface ChangeEntry {
   mark: Mark;
   /** Since when this path counts: the tree's first showing, or the push that last made it its starting point. */
   since_ms: number;
+  /** A push would clear it: git does not ignore it, and its repository can push. Its words end ", not pushed". */
+  waits: boolean;
 }
 
 /** A folder that existed at both moments, with changes beneath it: their count and the strongest of them. */
@@ -588,7 +590,10 @@ export interface TreeChanges {
 
 /** Starts following a folder's tree, or answers with what it already follows: the first showing is the baseline. */
 export const treeChangesWatch = (root: string) => invoke<TreeChanges>("tree_changes_watch", { root });
-/** Clears one root's marks and starts its baseline again, now. Refused for a root not watched. */
+/**
+ * ↻: judges every mark of one root again — what is pushed or can never be pushed goes, what waits for a push stays —
+ * and starts the root again from now when nothing is left. Refused for a root not watched, or `busy`.
+ */
 export const treeChangesRefresh = (root: string) => invoke<TreeChanges>("tree_changes_refresh", { root });
 
 export type DiffRowKind = "context" | "add" | "remove";

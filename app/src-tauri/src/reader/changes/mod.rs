@@ -19,7 +19,7 @@ pub mod compare;
 pub mod diff;
 pub mod git;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -32,7 +32,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use super::access::{self, Kind};
 use super::{checked, listable_file, off_main, ReaderError, ReaderState};
 use baseline::{BaseEntry, BaseText, Baseline, Head, NoCopy, Rebase, Stat};
-use compare::Now;
+use compare::{Now, Tag};
 use git::Git;
 
 /// Emitted with a root's whole summary after every burst that names something the tree lists.
@@ -44,22 +44,27 @@ pub const DEBOUNCE: Duration = Duration::from_millis(75);
 pub const BURST_CEILING: Duration = Duration::from_millis(500);
 /// Every copy of every watched root, together (rule 20): 17 times the whole projects folder, measured 2026-09-23.
 pub const COPY_BUDGET_BYTES: u64 = 64 * 1024 * 1024;
+/// How long ↻ waits for the root's thread before it answers `busy` (tree changes clear on push, Journey E): two git
+/// timeouts, so a ↻ behind a slow repository still lands, and one behind a rescan of a huge root does not hang.
+pub const REFRESH_WAIT: Duration = Duration::from_secs(20);
 
 pub type Millis = i64;
 
-/// What reaches a root's thread: a path an event named (the root itself for a rescan, as `heard` says), or word that
-/// the upstream of one of its repositories moved.
+/// What reaches a root's thread: a path an event named (the root itself for a rescan, as `heard` says), word that the
+/// upstream of one of its repositories moved, or a ↻ waiting for its answer.
 #[derive(Debug)]
 pub enum Heard {
     Path(PathBuf),
     Upstream(PathBuf),
+    Refresh(Sender<Result<TreeChanges, ReaderError>>),
 }
 
 /// What the root's thread is handed: a debounced burst of paths, or a message on its own (`debounce_heard`).
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Handed {
     Burst(BTreeSet<PathBuf>),
     Upstream(PathBuf),
+    Refresh(Sender<Result<TreeChanges, ReaderError>>),
 }
 
 /// What a repository's checked-out branch has on its remote, as this Mac's refs say (PRD rules 1–3). Kinas never
@@ -115,6 +120,8 @@ pub struct ChangeEntry {
     pub mark: Mark,
     /// Since when this path counts: the tree's first showing, or the push that last made it its starting point.
     pub since_ms: Millis,
+    /// A push would clear it: git does not ignore it, and its repository can push (PRD rule 13, ", not pushed").
+    pub waits: bool,
 }
 
 /// A folder that existed at both moments, with changes beneath it (rule 10).
@@ -156,7 +163,7 @@ struct Record {
     baseline: Option<Arc<Baseline>>,
     /// Paths named by bursts before the baseline was in. A file here when its turn to be copied comes gets no copy.
     queued: BTreeSet<PathBuf>,
-    marks: BTreeMap<PathBuf, (Kind, Mark)>,
+    marks: BTreeMap<PathBuf, Tag>,
     /// Held only to keep the watch alive. Dropping the record drops it and `feed`, the channel's two senders, which
     /// ends the burst thread.
     #[allow(dead_code)]
@@ -201,10 +208,17 @@ impl ChangesState {
     }
 }
 
-fn summary(record: &Record, touched: Vec<PathBuf>) -> TreeChanges {
+/// The root's summary. Whether a mark waits for a push is said here, from its repository's upstream as it is now: the
+/// first push of a branch, or a remote removed, changes it without the path changing.
+fn summary(record: &Record, repos: &HashMap<PathBuf, Repo>, touched: Vec<PathBuf>) -> TreeChanges {
     let since_of = |path: &Path| record.baseline.as_ref().map_or(record.since_ms, |b| b.since_of(path, record.since_ms));
+    let waits = |path: &Path, tag: &Tag| !tag.ignored && record.baseline.as_ref().and_then(|b| b.repo_of(path)).and_then(|r| repos.get(&r.top)).is_some_and(|repo| !matches!(repo.upstream, Upstream::CannotPush));
     let (folders, total) = compare::rollups(&record.root, &record.marks, &since_of);
-    let entries: Vec<ChangeEntry> = record.marks.iter().map(|(path, &(kind, mark))| ChangeEntry { path: path.display().to_string(), kind, mark, since_ms: since_of(path) }).collect();
+    let entries: Vec<ChangeEntry> = record
+        .marks
+        .iter()
+        .map(|(path, tag)| ChangeEntry { path: path.display().to_string(), kind: tag.kind, mark: tag.mark, since_ms: since_of(path), waits: waits(path, tag) })
+        .collect();
     TreeChanges {
         root: record.root.display().to_string(),
         since_ms: entries.iter().map(|e| e.since_ms).min().unwrap_or(record.since_ms),
@@ -231,23 +245,41 @@ pub async fn tree_changes_watch(app: AppHandle, root: String) -> Result<TreeChan
     .await
 }
 
-/// Refresh (rule 15): one root's marks, deleted rows and copies go, and its baseline becomes now. Other roots keep
-/// theirs. A root whose watch had failed tries to start it again (PRD §3). Refused for a root not watched: nothing
-/// else starts a watch but a tree being shown.
+/// Refresh (tree changes clear on push, PRD rule 9): every mark under the root is judged again, on the root's own
+/// thread — what is pushed and what no push will clear go, what waits for a push stays — and only when nothing is left
+/// does the root start again from now, as before. Other roots keep theirs. A root whose watch had failed has no thread,
+/// and tries to start its watch again (tree changes PRD §3). Refused for a root not watched: nothing else starts a
+/// watch but a tree being shown.
 #[tauri::command]
 pub async fn tree_changes_refresh(app: AppHandle, root: String) -> Result<TreeChanges, ReaderError> {
     off_main(move || {
         let real = checked_dir(&app, &root)?;
-        let Some((answer, generation, retry)) = reset(&app.state::<ChangesState>(), &real, crate::store::now_ms()) else {
-            return Err(ReaderError::new("not_watched", format!("Kinas is not following changes in {}", real.display())));
+        let state = app.state::<ChangesState>();
+        let feed = state.lock().roots.get(&real).map(|r| r.feed.clone());
+        let Some(feed) = feed else {
+            return Err(not_watched(&real));
         };
-        if retry {
-            return Ok(follow(&app, &real, generation, answer));
+        let Some(feed) = feed else {
+            let Some((answer, generation, retry)) = reset(&state, &real, crate::store::now_ms()) else {
+                return Err(not_watched(&real));
+            };
+            if retry {
+                return Ok(follow(&app, &real, generation, answer));
+            }
+            spawn_baseline(&app, &real, generation, Git::find());
+            return Ok(answer);
+        };
+        let (tx, rx) = mpsc::channel();
+        if feed.send(Heard::Refresh(tx)).is_err() {
+            return Err(not_watched(&real));
         }
-        spawn_baseline(&app, &real, generation, Git::find());
-        Ok(answer)
+        rx.recv_timeout(REFRESH_WAIT).unwrap_or_else(|_| Err(ReaderError::new("busy", "Kinas is still checking this folder — try ↻ again")))
     })
     .await
+}
+
+fn not_watched(real: &Path) -> ReaderError {
+    ReaderError::new("not_watched", format!("Kinas is not following changes in {}", real.display()))
 }
 
 /// The Changes view of one changed file (rules 20–25): its text now against its text at the baseline. It answers only
@@ -335,8 +367,8 @@ fn changed_file(state: &ChangesState, path: &Path) -> Option<(PathBuf, Millis, M
         .filter(|r| path.starts_with(&r.root) && path != r.root)
         .filter_map(|r| {
             let baseline = r.baseline.clone()?;
-            let own = r.marks.get(path).map(|&(_, mark)| mark);
-            let inside_added = || path.ancestors().skip(1).take_while(|a| *a != r.root).any(|a| matches!(r.marks.get(a), Some((_, Mark::Added))));
+            let own = r.marks.get(path).map(|t| t.mark);
+            let inside_added = || path.ancestors().skip(1).take_while(|a| *a != r.root).any(|a| matches!(r.marks.get(a), Some(Tag { mark: Mark::Added, .. })));
             let mark = own.or_else(|| inside_added().then_some(Mark::Added))?;
             Some((r.root.clone(), baseline.since_of(path, r.since_ms), mark, baseline))
         })
@@ -387,11 +419,11 @@ fn checked_dir(app: &AppHandle, root: &str) -> Result<PathBuf, ReaderError> {
 fn register(state: &ChangesState, real: &Path, now: Millis) -> (TreeChanges, Option<u64>) {
     let mut changes = state.lock();
     if let Some(record) = changes.roots.get(real) {
-        return (summary(record, Vec::new()), None);
+        return (summary(record, &changes.repos, Vec::new()), None);
     }
     let generation = changes.next_generation();
     let record = Record::new(real.to_path_buf(), now, generation);
-    let first = summary(&record, Vec::new());
+    let first = summary(&record, &changes.repos, Vec::new());
     changes.roots.insert(real.to_path_buf(), record);
     (first, Some(generation))
 }
@@ -401,7 +433,7 @@ fn register(state: &ChangesState, real: &Path, now: Millis) -> (TreeChanges, Opt
 fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges, u64, bool)> {
     let mut changes = state.lock();
     let generation = changes.next_generation();
-    let Changes { roots, budget_used, .. } = &mut *changes;
+    let Changes { roots, budget_used, repos, .. } = &mut *changes;
     let record = roots.get_mut(real)?;
     *budget_used = budget_used.saturating_sub(record.copy_bytes);
     record.generation = generation;
@@ -410,7 +442,7 @@ fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges,
     record.queued.clear();
     record.marks.clear();
     record.copy_bytes = 0;
-    Some((summary(record, Vec::new()), generation, !record.watching))
+    Some((summary(record, repos, Vec::new()), generation, !record.watching))
 }
 
 /// Every record and every refs watch out of the state, the repositories forgotten, the budget back to nothing. The
@@ -435,8 +467,24 @@ fn follow(app: &AppHandle, real: &Path, generation: u64, fallback: TreeChanges) 
     let started = start(real, feed.clone(), rx, move |handed| {
         let state = burst_app.state::<ChangesState>();
         let summary = match handed {
-            Handed::Burst(paths) => apply_burst(&state, &burst_root, burst_git.as_ref(), paths),
+            Handed::Burst(paths) => apply_burst(&state, &burst_root, burst_git.as_ref(), paths, crate::store::now_ms()),
             Handed::Upstream(top) => apply_upstream(&state, &burst_root, burst_git.as_ref(), &top, crate::store::now_ms()),
+            Handed::Refresh(reply) => {
+                let answer = match refresh_marks(&state, &burst_root, burst_git.as_ref(), crate::store::now_ms()) {
+                    Some(Refreshed::Kept(summary)) => Ok(summary),
+                    Some(Refreshed::Emptied { answer, generation }) => {
+                        spawn_baseline(&burst_app, &burst_root, generation, burst_git.clone());
+                        Ok(answer)
+                    }
+                    None => Err(not_watched(&burst_root)),
+                };
+                // A repository ↻ found since the baseline gets its refs watched too.
+                for common in commons_of(&state, &burst_root) {
+                    ensure_ref_watch(&burst_app, &common);
+                }
+                let _ = reply.send(answer);
+                None
+            }
         };
         if let Some(summary) = summary {
             let _ = burst_app.emit(TREE_CHANGED, summary);
@@ -446,8 +494,9 @@ fn follow(app: &AppHandle, real: &Path, generation: u64, fallback: TreeChanges) 
     let (answer, failed) = {
         let state = app.state::<ChangesState>();
         let mut changes = state.lock();
+        let Changes { roots, repos, .. } = &mut *changes;
         // Gone already, or refreshed: whatever took it owns it now. This watcher drops here.
-        let Some(record) = changes.roots.get_mut(real).filter(|r| r.generation == generation) else {
+        let Some(record) = roots.get_mut(real).filter(|r| r.generation == generation) else {
             return fallback;
         };
         let failed = match started {
@@ -462,7 +511,7 @@ fn follow(app: &AppHandle, real: &Path, generation: u64, fallback: TreeChanges) 
                 Some(e)
             }
         };
-        (summary(record, Vec::new()), failed)
+        (summary(record, repos, Vec::new()), failed)
     };
     match failed {
         // The kind only: notify's own message names the path.
@@ -571,7 +620,7 @@ fn install_baseline(state: &ChangesState, root: &Path, generation: u64, mut take
     record.copy_bytes = taken.copy_bytes;
     record.baseline = Some(Arc::new(taken));
     let queued = std::mem::take(&mut record.queued);
-    Some((summary(record, Vec::new()), queued, record.feed.clone()))
+    Some((summary(record, repos, Vec::new()), queued, record.feed.clone()))
 }
 
 /// Each repository of a baseline just taken, resolved — from the state's answer when another root already knows it, so
@@ -623,17 +672,33 @@ fn resolve(git: &Git, top: &Path, before: Option<&Upstream>) -> Upstream {
 }
 
 /// Installs a repository's newly resolved upstream when it differs from the one held, and answers the channels of
-/// the roots whose baseline holds that repository, to be told with no guard held. Unchanged: nobody is told.
-fn note_upstream(state: &ChangesState, top: &Path, upstream: Upstream) -> Vec<Sender<Heard>> {
+/// the roots whose baseline holds that repository, to be told with no guard held. None: unchanged, nobody to tell.
+fn note_upstream(state: &ChangesState, top: &Path, upstream: Upstream) -> Option<Vec<Sender<Heard>>> {
     let mut changes = state.lock();
-    let Some(repo) = changes.repos.get_mut(top) else {
-        return Vec::new();
-    };
+    let repo = changes.repos.get_mut(top)?;
     if repo.upstream.same(&upstream) {
-        return Vec::new();
+        return None;
     }
     repo.upstream = upstream;
-    changes.roots.values().filter(|r| r.baseline.as_ref().is_some_and(|b| b.repos.iter().any(|x| x.top == top))).filter_map(|r| r.feed.clone()).collect()
+    Some(changes.roots.values().filter(|r| r.baseline.as_ref().is_some_and(|b| b.repos.iter().any(|x| x.top == top))).filter_map(|r| r.feed.clone()).collect())
+}
+
+/// A repository ↻ found (or found again), with its upstream resolved just now: a new one joins the state; a known one
+/// is noted as the refs thread would. Answers who to tell.
+fn know_repo(state: &ChangesState, found: &baseline::RepoAt, upstream: Upstream) -> Vec<Sender<Heard>> {
+    {
+        let mut changes = state.lock();
+        if !changes.repos.contains_key(&found.top) {
+            changes.repos.insert(found.top.clone(), Repo { common: found.common.clone(), upstream });
+            return Vec::new();
+        }
+    }
+    note_upstream(state, &found.top, upstream).unwrap_or_default()
+}
+
+/// The shared git folders of a root's repositories, as its baseline has them.
+fn commons_of(state: &ChangesState, root: &Path) -> Vec<PathBuf> {
+    state.lock().roots.get(root).and_then(|r| r.baseline.clone()).map(|b| b.repos.iter().map(|r| r.common.clone()).collect()).unwrap_or_default()
 }
 
 /// Whether an event under a shared git folder can move an upstream: a remote-tracking ref, `packed-refs` (where `git
@@ -708,58 +773,34 @@ fn on_refs(state: &ChangesState, common: &Path, git: Option<&Git>) {
     let tops: Vec<(PathBuf, Upstream)> = state.lock().repos.iter().filter(|(_, r)| r.common == common).map(|(top, r)| (top.clone(), r.upstream.clone())).collect();
     for (top, before) in tops {
         let upstream = resolve(git, &top, Some(&before));
-        for feed in note_upstream(state, &top, upstream) {
+        for feed in note_upstream(state, &top, upstream).unwrap_or_default() {
             let _ = feed.send(Heard::Upstream(top.clone()));
         }
     }
 }
 
 /// An Upstream message for one root (PRD rules 4 and 6): its marks in that repository checked against the upstream now.
-/// Each one pushed loses its mark, and its baseline becomes the upstream's text from `now`. Returns the summary to emit,
-/// or None when nothing changed. The baseline is cloned, rebaselined and installed whole, after checking a full reset
-/// did not replace it meanwhile.
+/// Each one pushed loses its mark, and its baseline becomes the upstream's text from `now`. Returns the summary to emit
+/// whenever the root has marks there — a moved upstream may change whether they wait for a push even when none is
+/// cleared — or None. The baseline is cloned, rebaselined and installed whole, after checking a full reset did not
+/// replace it meanwhile.
 fn apply_upstream(state: &ChangesState, root: &Path, git: Option<&Git>, top: &Path, now: Millis) -> Option<TreeChanges> {
-    let git = git?;
-    let (baseline, marked, upstream) = {
+    let (baseline, marked, upstreams) = {
         let changes = state.lock();
         let record = changes.roots.get(root)?;
         let baseline = record.baseline.clone()?;
         let upstream = changes.repos.get(top)?.upstream.clone();
-        let marked: BTreeMap<PathBuf, (Kind, Mark)> = record.marks.iter().filter(|(p, _)| baseline.repo_of(p).is_some_and(|r| r.top == top)).map(|(p, &m)| (p.clone(), m)).collect();
-        (baseline, marked, upstream)
-    };
-    let Upstream::At { commit, blobs } = &upstream else {
-        return None;
+        let marked: BTreeMap<PathBuf, Tag> = record.marks.iter().filter(|(p, _)| baseline.repo_of(p).is_some_and(|r| r.top == top)).map(|(p, &t)| (p.clone(), t)).collect();
+        (baseline, marked, HashMap::from([(top.to_path_buf(), upstream)]))
     };
     if marked.is_empty() {
         return None;
     }
     let started = Instant::now();
-    let head = Arc::new(Head { repo: top.to_path_buf(), commit: commit.clone() });
-    let (next, judged) = settle_pushed(git, top, &head, blobs, &baseline, marked.clone(), now);
-    if judged.is_empty() {
-        return None;
-    }
-    let cleared = marked.keys().filter(|p| matches!(judged.get(*p), Some(None))).count();
-
-    let summary = {
-        let mut changes = state.lock();
-        let Changes { roots, budget_used, .. } = &mut *changes;
-        let record = roots.get_mut(root).filter(|r| r.baseline.as_ref().is_some_and(|b| Arc::ptr_eq(b, &baseline)))?;
-        let touched: BTreeSet<PathBuf> = judged.keys().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
-        for (path, mark) in judged {
-            match mark {
-                Some(mark) => record.marks.insert(path, mark),
-                None => record.marks.remove(&path),
-            };
-        }
-        let before_pruning = record.marks.clone();
-        record.marks.retain(|p, _| !compare::under_marked_folder(root, p, &before_pruning));
-        *budget_used = budget_used.saturating_sub(record.copy_bytes) + next.copy_bytes;
-        record.copy_bytes = next.copy_bytes;
-        record.baseline = Some(Arc::new(next));
-        summary(record, touched.into_iter().collect())
-    };
+    let judged = marked.iter().map(|(p, t)| (p.clone(), Some((t.kind, t.mark)))).collect();
+    let settled = settle(&baseline, &marked, judged, git, &upstreams, now);
+    let cleared = marked.keys().filter(|p| matches!(settled.marks.get(*p), Some(None))).count();
+    let summary = install_settled(state, root, &baseline, settled, false)?;
     if cleared > 0 {
         // Counts and a duration, never a path.
         log::info!("tree changes: a push cleared {cleared} marks in {} ms", started.elapsed().as_millis());
@@ -767,15 +808,216 @@ fn apply_upstream(state: &ChangesState, root: &Path, git: Option<&Git>, top: &Pa
     Some(summary)
 }
 
+/// Paths with what was judged of each: a mark, or None for none.
+type Judged = BTreeMap<PathBuf, Option<(Kind, Mark)>>;
+
+/// What settling judged paths decided (architecture 5): a new baseline when something was rebaselined, and every
+/// path's mark as the record will keep it (None: no mark).
+struct Settled {
+    next: Option<Baseline>,
+    marks: BTreeMap<PathBuf, Option<Tag>>,
+}
+
+/// The one check (architecture 5), with no guard held. Every path judged marked that its repository's upstream holds
+/// as it is now is rebaselined to it and unmarked (PRD rules 2, 4, 6 and 8) — so a pull's text, already on the remote,
+/// never marks. Every mark left learns whether git ignores its path: carried from `before` for one marked already,
+/// asked of git once per repository for the rest.
+fn settle(baseline: &Baseline, before: &BTreeMap<PathBuf, Tag>, mut judged: Judged, git: Option<&Git>, upstreams: &HashMap<PathBuf, Upstream>, now: Millis) -> Settled {
+    let mut next: Option<Baseline> = None;
+    if let Some(git) = git {
+        let mut by_top: BTreeMap<PathBuf, BTreeMap<PathBuf, (Kind, Mark)>> = BTreeMap::new();
+        for (path, mark) in &judged {
+            if let (Some(mark), Some(repo)) = (mark, baseline.repo_of(path)) {
+                by_top.entry(repo.top.clone()).or_default().insert(path.clone(), *mark);
+            }
+        }
+        for (top, candidates) in by_top {
+            let Some(Upstream::At { commit, blobs }) = upstreams.get(&top) else { continue };
+            let head = Arc::new(Head { repo: top.clone(), commit: commit.clone() });
+            if let Some((settled, decided)) = settle_pushed(git, &top, &head, blobs, next.as_ref().unwrap_or(baseline), candidates, now) {
+                next = Some(settled);
+                judged.extend(decided);
+            }
+        }
+    }
+    let marks = tags(judged, before, next.as_ref().unwrap_or(baseline), git);
+    Settled { next, marks }
+}
+
+/// Each judged mark as the record keeps it. Whether git ignores the path is carried from `before` when it was marked
+/// already, and asked of git — once per repository — for the new ones. Outside any repository, with no git, or when
+/// git does not answer, nothing is ignored: it reads as waiting for a push, M when unsure.
+fn tags(judged: Judged, before: &BTreeMap<PathBuf, Tag>, baseline: &Baseline, git: Option<&Git>) -> BTreeMap<PathBuf, Option<Tag>> {
+    // Per repository: the new marks' files, and their folders — asked apart, a folder with its trailing slash.
+    let mut ask: BTreeMap<PathBuf, (Vec<PathBuf>, Vec<PathBuf>)> = BTreeMap::new();
+    for (path, mark) in &judged {
+        if let (Some((kind, _)), false) = (mark, before.contains_key(path)) {
+            if let Some(repo) = baseline.repo_of(path) {
+                let (files, folders) = ask.entry(repo.top.clone()).or_default();
+                if *kind == Kind::Dir { folders } else { files }.push(path.clone());
+            }
+        }
+    }
+    let mut ignored = HashSet::new();
+    if let Some(git) = git {
+        for (top, (files, folders)) in ask {
+            ignored.extend(git.ignored(&top, &files, &folders).unwrap_or_default());
+        }
+    }
+    judged
+        .into_iter()
+        .map(|(path, mark)| {
+            let tag = mark.map(|(kind, mark)| Tag { kind, mark, ignored: before.get(&path).map_or_else(|| ignored.contains(&path), |t| t.ignored) });
+            (path, tag)
+        })
+        .collect()
+}
+
+/// Installs what `settle` decided, if the root still has the baseline it started from: the marks (pruned under a
+/// marked folder), and the new baseline with its copies counted against the budget. Answers the summary to emit.
+/// `from_disk`: a burst, after which every folder it judged re-lists — the disk changed there, marked or not (a pulled
+/// file is a new row with no mark). Otherwise only the folders of paths whose mark changed.
+fn install_settled(state: &ChangesState, root: &Path, from: &Arc<Baseline>, settled: Settled, from_disk: bool) -> Option<TreeChanges> {
+    let mut changes = state.lock();
+    let Changes { roots, budget_used, repos, .. } = &mut *changes;
+    // Judged against a baseline a refresh has since replaced: the new one will judge these paths itself.
+    let record = roots.get_mut(root).filter(|r| r.baseline.as_ref().is_some_and(|b| Arc::ptr_eq(b, from)))?;
+    let touched: BTreeSet<PathBuf> = settled.marks.iter().filter(|(p, tag)| from_disk || record.marks.get(*p) != tag.as_ref()).filter_map(|(p, _)| p.parent().map(Path::to_path_buf)).collect();
+    for (path, tag) in settled.marks {
+        match tag {
+            Some(tag) => record.marks.insert(path, tag),
+            None => record.marks.remove(&path),
+        };
+    }
+    let before_pruning = record.marks.clone();
+    record.marks.retain(|p, _| !compare::under_marked_folder(root, p, &before_pruning));
+    if let Some(next) = settled.next {
+        *budget_used = budget_used.saturating_sub(record.copy_bytes) + next.copy_bytes;
+        record.copy_bytes = next.copy_bytes;
+        record.baseline = Some(Arc::new(next));
+    }
+    Some(summary(record, repos, touched.into_iter().collect()))
+}
+
+/// What ↻ did with a root: kept the marks that wait for a push, or — none left — reset it to start again from now.
+enum Refreshed {
+    Kept(TreeChanges),
+    Emptied { answer: TreeChanges, generation: u64 },
+}
+
+/// ↻ on the root's thread (PRD rule 9). With nothing marked, or no baseline yet, it resets as ↻ always did. Otherwise
+/// it looks for the root's repositories again (one made or cloned under it since is found now) and resolves each one's
+/// upstream, in case a push went unseen; settles every mark; then clears each one no push will clear — ignored, outside
+/// any repository, or in one that cannot push — making its path as it is now the starting point. When nothing is left,
+/// the root resets, so what follows counts from now as before.
+fn refresh_marks(state: &ChangesState, root: &Path, git: Option<&Git>, now: Millis) -> Option<Refreshed> {
+    let snapshot = {
+        let changes = state.lock();
+        let record = changes.roots.get(root)?;
+        record.baseline.clone().map(|b| (b, record.marks.clone()))
+    };
+    let Some((baseline, before)) = snapshot.filter(|(_, marks)| !marks.is_empty()) else {
+        return reset_fully(state, root, now, before_count_of(state, root), Instant::now());
+    };
+    let started = Instant::now();
+    let mut base = (*baseline).clone();
+    if let Some(g) = git {
+        base.repos = baseline::find_repos(root, &baseline::walk(root).repo_tops, g);
+        for found in &base.repos {
+            let known = state.lock().repos.get(&found.top).map(|r| r.upstream.clone());
+            let upstream = resolve(g, &found.top, known.as_ref());
+            for feed in know_repo(state, found, upstream) {
+                let _ = feed.send(Heard::Upstream(found.top.clone()));
+            }
+        }
+    }
+    let (upstreams, budget_left) = {
+        let changes = state.lock();
+        let upstreams: HashMap<PathBuf, Upstream> = base.repos.iter().filter_map(|r| changes.repos.get(&r.top).map(|known| (r.top.clone(), known.upstream.clone()))).collect();
+        (upstreams, COPY_BUDGET_BYTES.saturating_sub(changes.budget_used))
+    };
+    let judged = before.iter().map(|(p, t)| (p.clone(), Some((t.kind, t.mark)))).collect();
+    let mut settled = settle(&base, &before, judged, git, &upstreams, now);
+    let mut next = settled.next.take().unwrap_or(base);
+    let never: Vec<PathBuf> = settled.marks.iter().filter(|(path, tag)| tag.is_some_and(|t| no_push_clears(path, &t, &next, &upstreams))).map(|(path, _)| path.clone()).collect();
+    let mut taken = 0;
+    for path in never {
+        taken += keep_as_now(&mut next, &path, budget_left.saturating_sub(taken), now);
+        settled.marks.insert(path, None);
+    }
+    let left = settled.marks.values().filter(|t| t.is_some()).count();
+    if left == 0 {
+        return reset_fully(state, root, now, before.len(), started);
+    }
+    settled.next = Some(next);
+    let summary = install_settled(state, root, &baseline, settled, false)?;
+    // Counts and a duration, never a path.
+    log::info!("tree changes: a refresh cleared {} marks, {} left, in {} ms", before.len().saturating_sub(summary.entries.len()), summary.entries.len(), started.elapsed().as_millis());
+    Some(Refreshed::Kept(summary))
+}
+
+fn before_count_of(state: &ChangesState, root: &Path) -> usize {
+    state.lock().roots.get(root).map_or(0, |r| r.marks.len())
+}
+
+/// ↻ with nothing left to keep: the root starts again from now, as ↻ always did.
+fn reset_fully(state: &ChangesState, root: &Path, now: Millis, cleared: usize, started: Instant) -> Option<Refreshed> {
+    let (answer, generation, _) = reset(state, root, now)?;
+    log::info!("tree changes: a refresh cleared {cleared} marks, 0 left, in {} ms", started.elapsed().as_millis());
+    Some(Refreshed::Emptied { answer, generation })
+}
+
+/// Whether no push will ever clear this mark (PRD rule 9): git ignores it, no repository holds it, or its repository
+/// cannot push. An upstream git could not read (`Unknown`) keeps the mark: M when unsure.
+fn no_push_clears(path: &Path, tag: &Tag, baseline: &Baseline, upstreams: &HashMap<PathBuf, Upstream>) -> bool {
+    tag.ignored || baseline.repo_of(path).is_none_or(|r| matches!(upstreams.get(&r.top), Some(Upstream::CannotPush)))
+}
+
+/// ↻'s rebaseline of a path no push will clear: the path as it is now becomes its starting point — a file's text copied
+/// within what the budget has left, a folder and everything the tree lists in it, or a tombstone for what is gone.
+/// Answers the bytes of the copies taken.
+fn keep_as_now(next: &mut Baseline, path: &Path, budget_left: u64, now: Millis) -> u64 {
+    let mut taken = 0;
+    let mut keep_file = |next: &mut Baseline, file: &Path, stat: Stat| {
+        let text = baseline::copy(file, stat, budget_left.saturating_sub(taken), &|_| false);
+        if let BaseText::Copy(bytes) = &text {
+            taken += bytes.len() as u64;
+        }
+        next.rebase(file, Rebase::Kept { stat, text }, now);
+    };
+    match Stat::of(path) {
+        None => {
+            next.rebase(path, Rebase::Gone, now);
+        }
+        Some(stat) if stat.kind == Kind::Dir => {
+            next.rebase(path, Rebase::Folder { stat }, now);
+            for (inside, stat) in baseline::walk(path).entries {
+                if stat.kind == Kind::Dir {
+                    next.rebase(&inside, Rebase::Folder { stat }, now);
+                } else {
+                    keep_file(next, &inside, stat);
+                }
+            }
+        }
+        Some(stat) => keep_file(next, path, stat),
+    }
+    taken
+}
+
 /// PRD rules 2 and 6: each candidate of one repository that its upstream holds as it is now is rebaselined to it,
 /// from `now`. An added folder the upstream holds has what is inside judged path by path, and those settled in turn,
 /// down to the last folder — each folder walked once, since once rebaselined it has an entry and is no longer a mark.
-/// Answers the new baseline and every path whose mark it decided (None: no mark now), with no guard held.
-fn settle_pushed(git: &Git, top: &Path, head: &Arc<Head>, blobs: &BTreeMap<PathBuf, String>, baseline: &Baseline, mut candidates: BTreeMap<PathBuf, (Kind, Mark)>, now: Millis) -> (Baseline, BTreeMap<PathBuf, Option<(Kind, Mark)>>) {
+/// Answers the new baseline and every path whose mark it decided (None: no mark now), with no guard held; None when
+/// the upstream holds none of the candidates, so nothing is cloned.
+fn settle_pushed(git: &Git, top: &Path, head: &Arc<Head>, blobs: &BTreeMap<PathBuf, String>, baseline: &Baseline, mut candidates: BTreeMap<PathBuf, (Kind, Mark)>, now: Millis) -> Option<(Baseline, Judged)> {
+    let first = pushed_rebases(git, top, head, blobs, &candidates);
+    if first.is_empty() {
+        return None;
+    }
     let mut next = baseline.clone();
     let mut judged = BTreeMap::new();
-    while !candidates.is_empty() {
-        let rebases = pushed_rebases(git, top, head, blobs, &candidates);
+    let mut rebases = first;
+    loop {
         let folders: Vec<PathBuf> = rebases.iter().filter(|(_, r)| matches!(r, Rebase::Folder { .. })).map(|(p, _)| p.clone()).collect();
         for (path, rebase) in rebases {
             next.rebase(&path, rebase, now);
@@ -797,8 +1039,12 @@ fn settle_pushed(git: &Git, top: &Path, head: &Arc<Head>, blobs: &BTreeMap<PathB
             }
         }
         candidates = inside;
+        if candidates.is_empty() {
+            break;
+        }
+        rebases = pushed_rebases(git, top, head, blobs, &candidates);
     }
-    (next, judged)
+    Some((next, judged))
 }
 
 /// Which candidates of one repository its upstream holds as they are now (PRD rule 2), each with what its baseline
@@ -836,15 +1082,16 @@ fn pushed_rebases(git: &Git, top: &Path, head: &Arc<Head>, blobs: &BTreeMap<Path
 ///
 /// A burst that names the root itself is a rescan: events were dropped, so nobody can say which paths changed, and
 /// every path is judged — each the baseline had, each the walk finds now, and each already marked.
-fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTreeSet<PathBuf>) -> Option<TreeChanges> {
+fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTreeSet<PathBuf>, now: Millis) -> Option<TreeChanges> {
     let rescan = paths.contains(root);
     let mut paths: BTreeSet<PathBuf> = paths.into_iter().filter(|p| compare::listable_path(root, p)).collect();
     if paths.is_empty() && !rescan {
         return None;
     }
-    let (baseline, before) = {
+    let (baseline, before, upstreams) = {
         let mut changes = state.lock();
-        let record = changes.roots.get_mut(root)?;
+        let Changes { roots, repos, .. } = &mut *changes;
+        let record = roots.get_mut(root)?;
         let Some(baseline) = record.baseline.clone() else {
             // The rescan waits with the paths, and goes back through the burst thread with them.
             record.queued.extend(paths);
@@ -853,12 +1100,13 @@ fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTre
             }
             return None;
         };
-        let before: BTreeMap<PathBuf, (Kind, Mark)> = if rescan {
+        let before: BTreeMap<PathBuf, Tag> = if rescan {
             record.marks.clone()
         } else {
             paths.iter().filter_map(|p| record.marks.get(p).map(|&m| (p.clone(), m))).collect()
         };
-        (baseline, before)
+        let upstreams: HashMap<PathBuf, Upstream> = baseline.repos.iter().filter_map(|r| repos.get(&r.top).map(|known| (r.top.clone(), known.upstream.clone()))).collect();
+        (baseline, before, upstreams)
     };
 
     // The disk, with no guard held.
@@ -868,25 +1116,14 @@ fn apply_burst(state: &ChangesState, root: &Path, git: Option<&Git>, paths: BTre
         paths.extend(baseline::walk_root(root).entries.into_iter().map(|(p, _)| p));
         paths.extend(before.keys().cloned());
     }
-    let judged = judge_all(&baseline, git, &paths, &before);
+    let judged_before = before.iter().map(|(p, t)| (p.clone(), (t.kind, t.mark))).collect();
+    let judged = judge_all(&baseline, git, &paths, &judged_before);
     if rescan {
         // Counts and a duration, never a path.
         log::info!("tree changes: rescanned {} entries in {} ms", judged.len(), started.elapsed().as_millis());
     }
-    let touched: BTreeSet<PathBuf> = judged.keys().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
-
-    let mut changes = state.lock();
-    // Judged against a baseline a refresh has since replaced: the new one will judge these paths itself.
-    let record = changes.roots.get_mut(root).filter(|r| r.baseline.as_ref().is_some_and(|b| Arc::ptr_eq(b, &baseline)))?;
-    for (path, mark) in judged {
-        match mark {
-            Some(mark) => record.marks.insert(path, mark),
-            None => record.marks.remove(&path),
-        };
-    }
-    let before_pruning = record.marks.clone();
-    record.marks.retain(|p, _| !compare::under_marked_folder(root, p, &before_pruning));
-    Some(summary(record, touched.into_iter().collect()))
+    let settled = settle(&baseline, &before, judged, git, &upstreams, now);
+    install_settled(state, root, &baseline, settled, true)
 }
 
 /// Every path of a burst, judged against the baseline. A folder whose own mark changed — it appeared, vanished or came
@@ -1016,6 +1253,10 @@ pub fn debounce_heard(rx: &Receiver<Heard>, quiet: Duration, ceiling: Duration, 
                 fire(Handed::Upstream(top));
                 continue;
             }
+            Heard::Refresh(reply) => {
+                fire(Handed::Refresh(reply));
+                continue;
+            }
         };
         let opened = Instant::now();
         let mut burst = BTreeSet::from([first]);
@@ -1116,7 +1357,7 @@ mod tests {
     }
 
     fn burst(state: &ChangesState, root: &Path, names: &[&str]) -> TreeChanges {
-        apply_burst(state, root, None, names.iter().map(|n| root.join(n)).collect()).expect("a summary to emit")
+        apply_burst(state, root, None, names.iter().map(|n| root.join(n)).collect(), 2_000).expect("a summary to emit")
     }
 
     fn marked(summary: &TreeChanges, root: &Path) -> Vec<String> {
@@ -1133,7 +1374,7 @@ mod tests {
         std::fs::write(root.join("docs/photo.bin"), b"\x00\x01\x02").unwrap();
         std::fs::write(root.join("docs/new.bin"), b"\x00\x09").unwrap();
 
-        let answer = apply_burst(&state, &root, None, [".git/index", "node_modules/x.md", ".hidden.md", "docs/photo.bin", "docs/new.bin"].iter().map(|n| root.join(n)).collect());
+        let answer = apply_burst(&state, &root, None, [".git/index", "node_modules/x.md", ".hidden.md", "docs/photo.bin", "docs/new.bin"].iter().map(|n| root.join(n)).collect(), 2_000);
         let (total, entries) = answer.map(|s| (s.total, s.entries)).unwrap_or_default();
         assert_eq!((total, entries), (0, vec![]));
     }
@@ -1151,7 +1392,7 @@ mod tests {
         assert_eq!(answer.touched, [root.join("docs").display().to_string()]);
 
         // A root no longer watched answers nothing, so nothing is emitted for it.
-        assert_eq!(apply_burst(&ChangesState::default(), &root, None, BTreeSet::from([root.join("docs/overview.md")])), None);
+        assert_eq!(apply_burst(&ChangesState::default(), &root, None, BTreeSet::from([root.join("docs/overview.md")]), 2_000), None);
     }
 
     #[test]
@@ -1233,14 +1474,14 @@ mod tests {
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
 
-        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("busy.md")])), None);
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("busy.md")]), 2_000), None);
         let taken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
         assert_eq!(taken.entries[&root.join("busy.md")].text, BaseText::NoCopy(NoCopy::ChangedDuringCopy));
         let (ready, queued, _) = install_baseline(&state, &root, 0, taken, HashMap::new()).unwrap();
         assert!(ready.ready);
         assert_eq!(queued, BTreeSet::from([root.join("busy.md")]));
         // Applied now, the file that changed around its copy is M: Kinas cannot tell, so it says modified.
-        assert_eq!(marked(&apply_burst(&state, &root, None, queued).unwrap(), &root), ["M busy.md"]);
+        assert_eq!(marked(&apply_burst(&state, &root, None, queued, 2_000).unwrap(), &root), ["M busy.md"]);
     }
 
     #[test]
@@ -1264,11 +1505,11 @@ mod tests {
         std::fs::remove_file(root.join("docs/b.md")).unwrap();
         std::fs::write(root.join("docs/new.md"), "# New\n").unwrap();
 
-        let answer = apply_burst(&state, &root, None, BTreeSet::from([root.clone()])).expect("a summary to emit");
+        let answer = apply_burst(&state, &root, None, BTreeSet::from([root.clone()]), 2_000).expect("a summary to emit");
         assert_eq!(marked(&answer, &root), ["M a.md", "D docs/b.md", "A docs/new.md"]);
         assert!(answer.touched.contains(&root.join("docs").display().to_string()), "the folder re-lists: {:?}", answer.touched);
         // Nothing changed since: a second rescan says the same.
-        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])).unwrap().entries, answer.entries);
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()]), 2_000).unwrap().entries, answer.entries);
     }
 
     #[test]
@@ -1279,11 +1520,11 @@ mod tests {
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
 
-        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])), None);
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()]), 2_000), None);
         let (_, queued, _) = install_baseline(&state, &root, 0, baseline::take(&root, None, 1024, &|_| false), HashMap::new()).unwrap();
         assert_eq!(queued, BTreeSet::from([root.clone()]), "the rescan goes back through the burst thread with the paths");
         std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
-        assert_eq!(marked(&apply_burst(&state, &root, None, queued).unwrap(), &root), ["M a.md"]);
+        assert_eq!(marked(&apply_burst(&state, &root, None, queued, 2_000).unwrap(), &root), ["M a.md"]);
     }
 
     #[test]
@@ -1295,7 +1536,7 @@ mod tests {
         std::os::unix::fs::symlink(outside.path().join("secret.md"), root.join("link.md")).unwrap();
         assert_eq!(burst(&state, &root, &["link", "link.md"]).entries, vec![]);
         // The rescan walks the whole root, and not through a link either (rule 6).
-        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])).unwrap().entries, vec![]);
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()]), 2_000).unwrap().entries, vec![]);
     }
 
     #[test]
@@ -1346,11 +1587,11 @@ mod tests {
         assert_eq!(state.lock().budget_used, 0);
         assert_eq!(state.lock().roots[&other].since_ms, 2_000, "the other root is untouched");
         // A burst now waits for the new baseline, which does not know a.md: new.md is part of the new "before".
-        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("new.md")])), None);
+        assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("new.md")]), 2_000), None);
         let retaken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
         let (ready, queued, _) = install_baseline(&state, &root, generation, retaken, HashMap::new()).unwrap();
         assert_eq!((ready.ready, ready.total), (true, 0));
-        let after = apply_burst(&state, &root, None, queued).unwrap();
+        let after = apply_burst(&state, &root, None, queued, 2_000).unwrap();
         assert_eq!(marked(&after, &root), ["M new.md"], "written around its copy, so modified: Kinas cannot tell");
 
         assert_eq!(reset(&state, Path::new("/p/never-shown"), 9_000), None);
@@ -1425,7 +1666,7 @@ mod tests {
     }
 
     fn git_burst(state: &ChangesState, root: &Path, g: &Git, names: &[&str]) -> TreeChanges {
-        apply_burst(state, root, Some(g), names.iter().map(|n| root.join(n)).collect()).expect("a summary to emit")
+        apply_burst(state, root, Some(g), names.iter().map(|n| root.join(n)).collect(), 2_000).expect("a summary to emit")
     }
 
     #[test]
@@ -1607,12 +1848,16 @@ mod tests {
         tx.send(Heard::Path(PathBuf::from("b.md"))).unwrap();
         tx.send(Heard::Upstream(PathBuf::from("/p/repo"))).unwrap();
         tx.send(Heard::Path(PathBuf::from("c.md"))).unwrap();
+        let (reply, _answer) = mpsc::channel();
+        tx.send(Heard::Refresh(reply)).unwrap();
         sleep(Duration::from_millis(250));
         drop(tx);
         thread.join().unwrap();
+        let (reply, _) = mpsc::channel();
+        let handed: Vec<String> = fired.lock().unwrap().iter().map(|h| format!("{h:?}")).collect();
         assert_eq!(
-            *fired.lock().unwrap(),
-            vec![Handed::Burst(BTreeSet::from(["a.md", "b.md"].map(PathBuf::from))), Handed::Upstream(PathBuf::from("/p/repo")), Handed::Burst(BTreeSet::from([PathBuf::from("c.md")]))],
+            handed,
+            [format!("{:?}", Handed::Burst(BTreeSet::from(["a.md", "b.md"].map(PathBuf::from)))), format!("{:?}", Handed::Upstream(PathBuf::from("/p/repo"))), format!("{:?}", Handed::Burst(BTreeSet::from([PathBuf::from("c.md")]))), format!("{:?}", Handed::Refresh(reply))],
             "what arrived first is applied first"
         );
     }
@@ -1710,8 +1955,10 @@ mod tests {
         let mut last = None;
         for top in tops {
             let before = state.lock().repos[&top].upstream.clone();
-            note_upstream(state, &top, resolve(g, &top, Some(&before)));
-            last = apply_upstream(state, root, Some(g), &top, now).or(last);
+            // As the refs thread: only an upstream that moved is news.
+            if note_upstream(state, &top, resolve(g, &top, Some(&before))).is_some() {
+                last = apply_upstream(state, root, Some(g), &top, now).or(last);
+            }
         }
         last
     }
@@ -1828,10 +2075,10 @@ mod tests {
 
     #[test]
     fn a_pushed_added_folder_judges_its_contents_one_by_one() {
-        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n")]);
+        let (_dir, root, state, g) = watched_pushed(&[(".gitignore", b"*.tmp\n"), ("README.md", b"# Read me\n")]);
         std::fs::create_dir_all(root.join("research/deep")).unwrap();
         std::fs::create_dir_all(root.join("research/draft")).unwrap();
-        for (name, text) in [("research/a.md", "# A\n"), ("research/b.md", "# B\n"), ("research/deep/c.md", "# C\n"), ("research/draft/d.md", "# D\n")] {
+        for (name, text) in [("research/a.md", "# A\n"), ("research/b.md", "# B\n"), ("research/deep/c.md", "# C\n"), ("research/draft/d.md", "# D\n"), ("research/scratch.tmp", "scratch\n")] {
             std::fs::write(root.join(name), text).unwrap();
         }
         assert_eq!(marked(&git_burst(&state, &root, &g, &["research"]), &root), ["A research"]);
@@ -1841,12 +2088,151 @@ mod tests {
         git::tests::git(&root, &["push", "-q"]);
 
         let after = push_seen(&state, &root, &g, 5_000).expect("the push settled the folder");
-        assert_eq!(marked(&after, &root), ["A research/b.md", "A research/draft"], "the rest is marked on its own rows");
-        assert_eq!(after.entries.iter().map(|e| e.since_ms).collect::<Vec<_>>(), [5_000, 5_000], "counting from the push that settled their folder");
-        assert_eq!(after.folders, [FolderRollup { path: root.join("research").display().to_string(), count: 2, strongest: Mark::Added, since_ms: 5_000 }]);
+        assert_eq!(marked(&after, &root), ["A research/b.md", "A research/draft", "A research/scratch.tmp"], "the rest is marked on its own rows");
+        assert_eq!(after.entries.iter().map(|e| e.since_ms).collect::<Vec<_>>(), [5_000, 5_000, 5_000], "counting from the push that settled their folder");
+        assert_eq!(after.entries.iter().map(|e| e.waits).collect::<Vec<_>>(), [true, true, false], "what git ignores waits for no push");
+        assert_eq!(after.folders, [FolderRollup { path: root.join("research").display().to_string(), count: 3, strongest: Mark::Added, since_ms: 5_000 }]);
         assert!(after.touched.contains(&root.join("research").display().to_string()));
         // What the push holds is quiet: saved unchanged, still no mark.
         std::fs::write(root.join("research/deep/c.md"), "# C\n").unwrap();
-        assert_eq!(marked(&git_burst(&state, &root, &g, &["research/deep/c.md"]), &root), ["A research/b.md", "A research/draft"]);
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["research/deep/c.md"]), &root), ["A research/b.md", "A research/draft", "A research/scratch.tmp"]);
+    }
+
+    /// A clone of `root`'s remote beside it, with `name` changed to `text`, committed and pushed from there — someone
+    /// else's push. Answers the new commit.
+    fn pushed_elsewhere(root: &Path, name: &str, text: &str) -> String {
+        let remote = root.with_file_name("repo-remote.git");
+        let other = root.with_file_name("other");
+        if !other.exists() {
+            git::tests::git(root.parent().unwrap(), &["clone", "-q", &remote.to_string_lossy(), "other"]);
+        }
+        std::fs::write(other.join(name), text).unwrap();
+        git::tests::git(&other, &["commit", "-qam", "from elsewhere"]);
+        git::tests::git(&other, &["push", "-q"]);
+        git::tests::git(&other, &["rev-parse", "HEAD"])
+    }
+
+    #[test]
+    fn a_pull_of_pushed_text_makes_no_mark() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n"), ("docs/plan.md", b"# Plan\n")]);
+        let theirs = pushed_elsewhere(&root, "docs/plan.md", "# Plan, from elsewhere\n");
+        // A pull: the fetch moves the ref first, with nothing marked yet; then the merge rewrites the file.
+        git::tests::git(&root, &["fetch", "-q"]);
+        assert_eq!(push_seen(&state, &root, &g, 5_000), None, "nothing was marked to clear");
+        git::tests::git(&root, &["merge", "-q", "--ff-only", "@{upstream}"]);
+        let after = git_burst(&state, &root, &g, &["docs/plan.md"]);
+        assert_eq!(after.entries, vec![], "its text is already on the remote");
+        assert!(after.touched.contains(&root.join("docs").display().to_string()), "its folder still re-lists");
+        let entry = state.lock().roots[&root].baseline.as_ref().unwrap().entries[&root.join("docs/plan.md")].clone();
+        assert!(matches!(entry.text, BaseText::Blob { ref head, .. } if head.commit == theirs), "the pulled text is its starting point");
+    }
+
+    #[test]
+    fn a_pull_seen_before_its_upstream_is_settled_by_the_upstream_behind_it() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n"), ("docs/plan.md", b"# Plan\n")]);
+        pushed_elsewhere(&root, "docs/plan.md", "# Plan, from elsewhere\n");
+        git::tests::git(&root, &["pull", "-q", "--ff-only"]);
+        // The burst is judged before the refs thread has installed the moved upstream: M, for an instant.
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["docs/plan.md"]), &root), ["M docs/plan.md"]);
+        let after = push_seen(&state, &root, &g, 5_000).expect("the Upstream message behind the burst");
+        assert_eq!(after.entries, vec![]);
+    }
+
+    fn waits_of(summary: &TreeChanges, root: &Path) -> Vec<(String, bool)> {
+        summary.entries.iter().map(|e| (Path::new(&e.path).strip_prefix(root).unwrap().display().to_string(), e.waits)).collect()
+    }
+
+    #[test]
+    fn waits_is_false_for_ignored_outside_a_repository_and_cannot_push() {
+        let (_dir, root, state, g) = watched_pushed(&[(".gitignore", b"notes/\n"), ("README.md", b"# Read me\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        std::fs::create_dir(root.join("notes")).unwrap();
+        std::fs::write(root.join("notes/n.md"), "# N\n").unwrap();
+        let summary = git_burst(&state, &root, &g, &["README.md", "notes", "notes/n.md"]);
+        assert_eq!(waits_of(&summary, &root), [("README.md".into(), true), ("notes".into(), false)]);
+
+        let (_plain_dir, plain, plain_state) = watched(&[("a.md", b"# A\n")], 1024);
+        std::fs::write(plain.join("a.md"), "# A, edited\n").unwrap();
+        assert_eq!(waits_of(&burst(&plain_state, &plain, &["a.md"]), &plain), [("a.md".into(), false)], "no repository: nothing to push");
+
+        let (_repo_dir, repo, repo_state, g2) = watched_repo(&[("a.md", b"# A\n")]);
+        std::fs::write(repo.join("a.md"), "# A, edited\n").unwrap();
+        assert_eq!(waits_of(&git_burst(&repo_state, &repo, &g2, &["a.md"]), &repo), [("a.md".into(), false)], "no remote: it cannot push");
+    }
+
+    fn kept(refreshed: Option<Refreshed>) -> TreeChanges {
+        match refreshed {
+            Some(Refreshed::Kept(summary)) => summary,
+            Some(Refreshed::Emptied { .. }) => panic!("emptied, not kept"),
+            None => panic!("not watched"),
+        }
+    }
+
+    #[test]
+    fn refresh_clears_ignored_and_no_remote_and_keeps_waiting() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        git::tests::pushed_repo_with(&root, &[(".gitignore", b"notes/\ninner/\n"), ("README.md", b"# Read me\n"), ("pushed.md", b"# Pushed\n"), ("notes/n.md", b"# Notes\n")]);
+        std::fs::create_dir_all(root.join("notes")).unwrap();
+        std::fs::write(root.join("notes/n.md"), "# Notes\n").unwrap();
+        std::fs::create_dir(root.join("inner")).unwrap();
+        git::tests::repo_with(&root.join("inner"), &[("inside.md", b"# Inside\n")]);
+        let g = Git::find().expect("git is installed");
+        let state = ChangesState::default();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
+        install_with_git(&state, &root, &g);
+
+        std::fs::write(root.join("README.md"), "# Read me, not pushed\n").unwrap();
+        std::fs::write(root.join("notes/n.md"), "# Notes, ignored\n").unwrap();
+        std::fs::write(root.join("inner/inside.md"), "# Inside, with no remote\n").unwrap();
+        std::fs::write(root.join("pushed.md"), "# Pushed, and the push not seen\n").unwrap();
+        git_burst(&state, &root, &g, &["README.md", "notes/n.md", "inner/inside.md", "pushed.md"]);
+        git::tests::git(&root, &["commit", "-q", "-m", "pushed", "pushed.md"]);
+        git::tests::git(&root, &["push", "-q"]);
+
+        let after = kept(refresh_marks(&state, &root, Some(&g), 9_000));
+        assert_eq!(marked(&after, &root), ["M README.md"], "only what waits for a push stays");
+        assert_eq!((after.entries[0].since_ms, after.entries[0].waits), (1_000, true), "a kept mark keeps its moment");
+        // What was cleared counts from the ↻: the ignored file's text now is its starting point.
+        std::fs::write(root.join("notes/n.md"), "# Notes, ignored, edited again\n").unwrap();
+        let again = git_burst(&state, &root, &g, &["notes/n.md"]);
+        assert_eq!(marked(&again, &root), ["M README.md", "M notes/n.md"]);
+        let notes = view(&state, &root.join("notes/n.md"), Some(&g)).unwrap();
+        assert_eq!((notes.since_ms, rows(&notes)), (9_000, vec!["Remove # Notes, ignored".to_string(), "Add # Notes, ignored, edited again".to_string()]));
+    }
+
+    #[test]
+    fn refresh_with_nothing_left_resets_as_today() {
+        let (_dir, root, state) = watched(&[("a.md", &[b'a'; 100])], 1024);
+        std::fs::write(root.join("a.md"), "# edited\n").unwrap();
+        burst(&state, &root, &["a.md"]);
+        let Some(Refreshed::Emptied { answer, generation }) = refresh_marks(&state, &root, None, 9_000) else { panic!("a root with no git keeps nothing") };
+        assert_eq!((answer.since_ms, answer.ready, answer.total), (9_000, false, 0));
+        assert_eq!(state.lock().budget_used, 0, "its copies given back");
+        assert_eq!(state.lock().roots[&root].generation, generation);
+        assert!(refresh_marks(&state, Path::new("/p/never-shown"), None, 9_000).is_none());
+    }
+
+    #[test]
+    fn refresh_finds_a_repository_made_after_the_baseline() {
+        let (dir, root, state, g) = watched_pushed(&[(".gitignore", b"sub/\n"), ("README.md", b"# Read me\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, not pushed\n").unwrap();
+        let sub = root.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("s.md"), "# S\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["README.md", "sub", "sub/s.md"]), &root), ["M README.md", "A sub"]);
+        // Made a repository and pushed, after the baseline: its remote outside the root.
+        let remote = dir.path().canonicalize().unwrap().join("sub-remote.git");
+        std::fs::create_dir(&remote).unwrap();
+        git::tests::git(&remote, &["init", "-q", "--bare"]);
+        git::tests::repo_with(&sub, &[]);
+        git::tests::git(&sub, &["remote", "add", "origin", &remote.to_string_lossy()]);
+        git::tests::git(&sub, &["push", "-q", "-u", "origin", "main"]);
+
+        let after = kept(refresh_marks(&state, &root, Some(&g), 9_000));
+        assert_eq!(marked(&after, &root), ["M README.md"], "sub is its own repository now, and pushed");
+        assert!(state.lock().repos.contains_key(&sub));
+        assert!(state.lock().roots[&root].baseline.as_ref().unwrap().repos.iter().any(|r| r.top == sub));
     }
 }

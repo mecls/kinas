@@ -29,7 +29,9 @@
 - [x] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1 — *shipped
   2026-09-25 on the captain's push: rebased onto `7e917ff` (the drawn title bar), check green, the full e2e alone green
   (31 specs, 183 cases); PR #38, `main` at `c5209fa`; installed in `/Applications`, schema 5, AC-21's median 36 ms*
-- [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
+- [x] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section —
+  *2026-09-25: AC-4, AC-6, AC-7 green in crew-board.e2e.ts; check green; the crew, usage, stories, screens, shell,
+  title-bar and reader-panel specs green alone*
 - [ ] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
   menu bar)
 - [ ] Slice 6 · the order log
@@ -39,7 +41,7 @@
 
 ## Notes for a fresh session
 
-- **Next: slice 4, the board (`tasks.md` 4.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
+- **Next: slice 5, the Inbox (`tasks.md` 5.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
   `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1); commits after ship point 1 stay
   local until the captain says push. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;

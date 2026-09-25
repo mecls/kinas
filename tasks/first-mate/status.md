@@ -41,13 +41,17 @@
 - [x] Slice 7 · Home: the crew's night and Waiting on you — *2026-09-25: AC-15's Home half green in crew-home.e2e.ts;
   home and screens unchanged with no crew; check green*
 - [x] Slice 8 · Add to crew — *2026-09-25: AC-17 green in crew-add.e2e.ts; folders green; check green*
-- [ ] Slice 9 · reconciliation, the context packet, the sweep → ship point 2
+- [x] Slice 9 · reconciliation, the context packet, the sweep → ship point 2 — *shipped 2026-09-25 on the captain's
+  push: AC-9 green in crew-reconcile-a/-b, AC-13 in crew-collector, AC-19 in features and mirror tests; rebased onto
+  `375c759`, check green, the full e2e alone green (38 specs, 201 cases); the PR, the install and AC-21/22 in
+  `build-spec.md` §19*
 
 ## Notes for a fresh session
 
-- **Next: slice 9, reconciliation, the context packet, the sweep → ship point 2 (`tasks.md` 9.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
-  `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1); commits after ship point 1 stay
-  local until the captain says push. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
+- **Build 3 is done: both ship points are on `main` (PR #38 and ship point 2's).** What is left is the captain's —
+  `build-spec.md` §19 "Needs the captain" and `docs/smoke-test.md` "The crew: needs the captain". The worktree
+  `.claude/worktrees/design-system` and its branch `feat/crew` go when the captain says so. Read `build-spec.md` §0
+  before anything else; `tasks.md` is the task list, ticked as the work happened.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;
   its §7 records the captain's answers of 2026-09-22 and 2026-09-23 and the probe's. Where it and `build-spec.md`
   differ, the build spec wins and its §17 says why.
@@ -66,7 +70,7 @@
 - **DESIGN.md 1.4 and 1.7 and `keymap.md`'s Build 3 amendments** were written with the PRD and its reopening.
 - **Firstmate.** The pin is `f9f74a1d91cc7e105ec3df2249eda4e07f9ba540` (reviewed monthly; the fleet ledger is worth
   adopting at the next review, after this build ships — §17). Read the pin from a scratch clone and run none of its
-  scripts outside a throwaway probe. Kinas's own clone will live under the data directory
+  scripts outside a throwaway probe. Kinas's own clone lives under the data directory
   (`docs/external/firstmate-home.md`).
 - **Standing rules.** Kinas never runs `quota-axi`, writes nothing under Firstmate's home, and runs none of its scripts
   that change anything — `fm-send.sh` included (ADR 0016); the captain's answers go on the clipboard for the first

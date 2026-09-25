@@ -4,7 +4,7 @@ import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { hook, openReaderMenu, runReaderMenuItem, typeLine, waitForShell } from "../helpers.ts";
-import { OLD_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
+import { git, OLD_TEXT, PUSHING_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
 
 // Tree changes (tasks/tree-changes/prd.md §5): marks in the sidebar's tree as files are written, deleted and put
 // back, with their words, roll-ups and the caption; then Refresh and a reload clear them, and the terminal pane is the
@@ -14,6 +14,8 @@ import { OLD_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
 const CLI = join(process.cwd(), "app/src-tauri/binaries/kinas-cli-aarch64-apple-darwin");
 const root = realpathSync(process.env.KINAS_ROOT!);
 const repo = join(root, "repo");
+/** A repository with a remote, its branch pushed with -u (tasks/tree-changes-push/prd.md). */
+const pushing = join(root, "pushing");
 const README = `README-${TOKEN}.md`;
 const NEW = `new-${TOKEN}.md`;
 const OLD = `old-${TOKEN}.md`;
@@ -29,6 +31,8 @@ const COUNT_LINES = [
   /^tree changes: a slow walk, \d+ entries in \d+ ms$/,
   /^tree changes: exported \d+ bytes in \d+ ms$/,
   /^tree changes: could not watch a folder \([a-z ]+\)$/,
+  // Tree changes clear on push.
+  /^tree changes: a push cleared \d+ marks in \d+ ms$/,
 ];
 
 function kinas(...args: string[]) {
@@ -338,6 +342,22 @@ describe("Tree changes", () => {
     await until(async () => (await row(`later-${TOKEN}.md`))?.mark === "A", "a write after the refresh marked A");
     expect([clock(pressed), clock(pressed + 60_000)]).toContain(await since());
     expect(await marked()).toEqual([`later-${TOKEN}.md A A`]);
+  });
+
+  it("push 1: a commit keeps a mark, and a push clears it within 2 s", async () => {
+    await openInFiles("pushing", README);
+    await browser.pause(500);
+    expect(await marked()).toEqual([]);
+    writeFileSync(join(pushing, README), `${PUSHING_TEXT}A line not pushed yet ${TOKEN}.\n`);
+    await until(async () => (await row(README))?.mark === "M", `${README} marked M`);
+    git(pushing, "commit", "-q", "-am", "an edit");
+    // A commit moves no remote-tracking ref: nothing may clear the mark, however long it waits.
+    await browser.pause(CEILING);
+    expect((await row(README))?.mark).toBe("M");
+    git(pushing, "push", "-q");
+    await until(async () => (await row(README))?.mark === null && (await caption()) === null, "the pushed file unmarked, and no caption");
+    // Back where step 13 expects Files to be.
+    await openInFiles("repo", README);
   });
 
   it("12: the terminal pane is the process it was at step 1", async () => {

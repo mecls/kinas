@@ -83,19 +83,59 @@ impl BaseEntry {
     }
 }
 
-#[derive(Debug, Default)]
+/// A repository reaching into a root: its top (a worktree's own folder, for a worktree) and the git folder every
+/// worktree of it shares, where the refs a push moves live (tree changes clear on push, architecture 4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RepoAt {
+    pub top: PathBuf,
+    pub common: PathBuf,
+}
+
+/// What one path's baseline becomes once it is found on its branch's remote, or can never be pushed (tree changes
+/// clear on push, architecture 3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Rebase {
+    /// On the upstream: its text is the upstream's blob, read from git when it is needed; no copy is kept.
+    Pushed { head: Arc<Head>, blob: String, stat: Stat },
+}
+
+/// Cloned, never edited in place once installed: the root's thread rebaselines a copy and installs it whole, so a diff
+/// reading the old one meanwhile reads a baseline that was true (architecture 3). The clone shares every copy's bytes.
+#[derive(Clone, Debug, Default)]
 pub struct Baseline {
     /// Ordered, so everything beneath a folder is one range.
     pub entries: BTreeMap<PathBuf, BaseEntry>,
     pub copy_bytes: u64,
     /// The copies in the order they were taken, breadth first, so a trim drops the deepest first.
     copied: Vec<PathBuf>,
+    /// Every repository reaching into the root, deepest first, so a path asks the nearest.
+    pub repos: Vec<RepoAt>,
 }
 
 impl Baseline {
     /// The entries beneath `dir`, not `dir` itself.
     pub fn beneath<'a>(&'a self, dir: &'a Path) -> impl Iterator<Item = (&'a PathBuf, &'a BaseEntry)> + 'a {
         self.entries.range(dir.to_path_buf()..).skip_while(move |(p, _)| p.as_path() == dir).take_while(move |(p, _)| p.starts_with(dir))
+    }
+
+    /// The nearest repository holding `path`, if any.
+    pub fn repo_of(&self, path: &Path) -> Option<&RepoAt> {
+        self.repos.iter().find(|r| path.starts_with(&r.top))
+    }
+
+    /// Makes `path`'s baseline what `rebase` says. Answers the change in copy bytes: negative when a copy is given back.
+    pub fn rebase(&mut self, path: &Path, rebase: Rebase) -> i64 {
+        let given_back = match self.entries.get(path) {
+            Some(BaseEntry { text: BaseText::Copy(bytes), .. }) => bytes.len() as u64,
+            _ => 0,
+        };
+        match rebase {
+            Rebase::Pushed { head, blob, stat } => {
+                self.entries.insert(path.to_path_buf(), BaseEntry { stat, text: BaseText::Blob { head, blob } });
+            }
+        }
+        self.copy_bytes -= given_back;
+        -(given_back as i64)
     }
 
     /// Drops copies, deepest first, until what is kept fits `left`: two roots taking their baselines at once each
@@ -176,14 +216,23 @@ struct Repo {
     clean: HashMap<PathBuf, String>,
 }
 
-/// The root's own repository and every one beneath it, deepest first, so a file asks the nearest. A repository git
-/// cannot read is left out, and its files are copied like any others.
-fn repositories(root: &Path, tops: &[PathBuf], git: &Git) -> Vec<Repo> {
+/// The root's own repository — whose top may be above the root — and every one the walk found beneath it, deepest
+/// first, each with its shared git folder. One git cannot place is left out.
+pub fn find_repos(root: &Path, tops: &[PathBuf], git: &Git) -> Vec<RepoAt> {
     let mut all: Vec<PathBuf> = git.toplevel(root).into_iter().chain(tops.iter().cloned()).collect();
     all.sort();
     all.dedup();
-    let mut repos: Vec<Repo> = all
-        .into_iter()
+    let mut repos: Vec<RepoAt> = all.into_iter().filter_map(|top| Some(RepoAt { common: git.common_dir(&top)?, top })).collect();
+    repos.sort_by_key(|r| std::cmp::Reverse(r.top.components().count()));
+    repos
+}
+
+/// Each repository's HEAD and the files under the root it vouches for, deepest first, so a file asks the nearest. A
+/// repository git cannot read is left out, and its files are copied like any others.
+fn repositories(root: &Path, found: &[RepoAt], git: &Git) -> Vec<Repo> {
+    let mut repos: Vec<Repo> = found
+        .iter()
+        .map(|r| r.top.clone())
         .filter_map(|top| {
             let head = git.head(&top).ok()?;
             let clean = match &head {
@@ -213,8 +262,9 @@ fn clean_blob(repos: &[Repo], path: &Path) -> Option<BaseText> {
 /// because the copy might already hold the change. Without `git`, every listed text file is copied.
 pub fn take(root: &Path, git: Option<&Git>, budget_left: u64, changed: &dyn Fn(&Path) -> bool) -> Baseline {
     let walked = walk_root(root);
-    let repos = git.map(|g| repositories(root, &walked.repo_tops, g)).unwrap_or_default();
-    let mut baseline = Baseline::default();
+    let found = git.map(|g| find_repos(root, &walked.repo_tops, g)).unwrap_or_default();
+    let repos = git.map(|g| repositories(root, &found, g)).unwrap_or_default();
+    let mut baseline = Baseline { repos: found, ..Baseline::default() };
     for (path, stat) in walked.entries {
         let text = match stat.kind {
             Kind::Dir => BaseText::NotText,
@@ -431,6 +481,35 @@ mod tests {
         let g = Git::find().expect("git is installed");
         let baseline = take(&root, Some(&g), 1024, NOTHING_CHANGED);
         assert_eq!(baseline.entries[&root.join("draft.md")].text, BaseText::Copy(Arc::from(&b"# Draft\n"[..])));
+    }
+
+    #[test]
+    fn the_repositories_reaching_into_a_root_are_kept_deepest_first_with_their_shared_git_folder() {
+        let (_dir, top) = tree(&[]);
+        repo_with(&top, &[(".gitignore", b"docs/inner/\n"), ("docs/guide.md", b"# Guide\n")]);
+        let inner = top.join("docs/inner");
+        std::fs::create_dir_all(&inner).unwrap();
+        repo_with(&inner, &[("inside.md", b"# Inside\n")]);
+        let g = Git::find().expect("git is installed");
+        let baseline = take(&top.join("docs"), Some(&g), 1024, NOTHING_CHANGED);
+        assert_eq!(baseline.repos, [RepoAt { top: inner.clone(), common: inner.join(".git") }, RepoAt { top: top.clone(), common: top.join(".git") }]);
+        assert_eq!(baseline.repo_of(&inner.join("inside.md")).map(|r| &r.top), Some(&inner));
+        assert_eq!(baseline.repo_of(&top.join("docs/guide.md")).map(|r| &r.top), Some(&top));
+        assert_eq!(take(&top.join("docs"), None, 1024, NOTHING_CHANGED).repos, [], "no git, no repository");
+    }
+
+    #[test]
+    fn a_pushed_rebase_gives_its_copy_back_and_leaves_the_old_baseline_as_it_was() {
+        let (_dir, root) = tree(&[("a.md", &[b'a'; 100])]);
+        let before = take(&root, None, 1024, NOTHING_CHANGED);
+        let mut after = before.clone();
+        let stat = Stat::of(&root.join("a.md")).unwrap();
+        let head = Arc::new(Head { repo: root.clone(), commit: "c0ffee".into() });
+        assert_eq!(after.rebase(&root.join("a.md"), Rebase::Pushed { head: head.clone(), blob: "b10b".into(), stat }), -100);
+        assert_eq!(after.copy_bytes, 0);
+        assert_eq!(after.entries[&root.join("a.md")].text, BaseText::Blob { head, blob: "b10b".into() });
+        assert!(matches!(before.entries[&root.join("a.md")].text, BaseText::Copy(_)), "the clone was rebaselined, not the original");
+        assert_eq!(before.copy_bytes, 100);
     }
 
     #[test]

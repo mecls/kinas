@@ -2,6 +2,7 @@
 //! up. No disk, no clock, no lock — the burst does the disk work and hands the answers here.
 
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Bound;
 use std::path::{Component, Path, PathBuf};
 
 use super::baseline::BaseEntry;
@@ -54,6 +55,32 @@ pub fn mark_of(base: Option<&BaseEntry>, now: Now, same: bool) -> Option<(Kind, 
         // A file replaced by a folder of the same name, or the reverse: the new kind, added.
         (Some(_), Some(kind)) => Some((kind, Mark::Added)),
     }
+}
+
+/// Tree changes clear on push, PRD rule 2: whether a path as it is now is what its branch's remote holds. `blobs` is
+/// every regular file at the upstream's commit, by absolute path; `hash` is git's own hash of the file now, filters
+/// applied — so "the same text" is git's judgement, never a size or a time.
+///
+/// | now | at the upstream | pushed |
+/// |---|---|---|
+/// | a file | a file with the same blob | yes |
+/// | a file | another blob, or nothing | no |
+/// | nothing | nothing | yes |
+/// | nothing | a file, or a folder | no |
+/// | a folder | a folder (a blob beneath it) | yes |
+pub fn pushed(now: Now, hash: Option<&str>, path: &Path, blobs: &BTreeMap<PathBuf, String>) -> bool {
+    match now {
+        Now::File { .. } => hash.is_some_and(|h| blobs.get(path).is_some_and(|b| b == h)),
+        Now::Absent => !blobs.contains_key(path) && !folder_at(blobs, path),
+        Now::Dir => folder_at(blobs, path),
+    }
+}
+
+/// Whether a folder is at the upstream: some blob lies beneath it. Git keeps no empty folder, and `ls-tree` on a
+/// folder beside a file in it names only the file (checked 2026-09-25), so a blob beneath is the only answer.
+pub fn folder_at(blobs: &BTreeMap<PathBuf, String>, dir: &Path) -> bool {
+    // Paths order by component, so the first key after `dir` is beneath it if anything is.
+    blobs.range::<Path, _>((Bound::Excluded(dir), Bound::Unbounded)).next().is_some_and(|(p, _)| p.starts_with(dir))
 }
 
 /// Deleted over modified over added: a deletion is the change least likely to be noticed any other way (rule 10).
@@ -127,6 +154,37 @@ mod tests {
         ] {
             assert!(!listable_path(root, Path::new(hidden)), "{hidden} must not be listable");
         }
+    }
+
+    #[test]
+    fn pushed_table_every_row() {
+        let blobs: BTreeMap<PathBuf, String> = [("/r/README.md", "aaa"), ("/r/docs/a.md", "bbb")].into_iter().map(|(p, b)| (PathBuf::from(p), b.to_string())).collect();
+        let at = |p: &str| PathBuf::from(p);
+        // A file: the same blob is pushed; another blob, no hash (git did not answer) or no blob there is not.
+        assert!(pushed(TEXT, Some("aaa"), &at("/r/README.md"), &blobs));
+        assert!(!pushed(TEXT, Some("ccc"), &at("/r/README.md"), &blobs));
+        assert!(!pushed(TEXT, None, &at("/r/README.md"), &blobs));
+        assert!(!pushed(TEXT, Some("aaa"), &at("/r/new.md"), &blobs));
+        // Nothing here: pushed only when there is nothing there either — no file, and no folder of that name.
+        assert!(pushed(Now::Absent, None, &at("/r/gone.md"), &blobs));
+        assert!(!pushed(Now::Absent, None, &at("/r/README.md"), &blobs));
+        assert!(!pushed(Now::Absent, None, &at("/r/docs"), &blobs));
+        // A folder: pushed when the upstream has one there.
+        assert!(pushed(Now::Dir, None, &at("/r/docs"), &blobs));
+        assert!(!pushed(Now::Dir, None, &at("/r/research"), &blobs));
+        // A file here where the upstream has a folder of that name is not pushed.
+        assert!(!pushed(TEXT, Some("bbb"), &at("/r/docs"), &blobs));
+    }
+
+    #[test]
+    fn folder_at_is_a_blob_beneath_not_a_prefix() {
+        let blobs: BTreeMap<PathBuf, String> = [("/r/docs/a.md", "a"), ("/r/docs-old.md", "b"), ("/r/doc/x/y.md", "c")].into_iter().map(|(p, b)| (PathBuf::from(p), b.to_string())).collect();
+        assert!(folder_at(&blobs, Path::new("/r/docs")));
+        assert!(folder_at(&blobs, Path::new("/r/doc")));
+        assert!(folder_at(&blobs, Path::new("/r/doc/x")));
+        assert!(!folder_at(&blobs, Path::new("/r/do")), "a name's prefix is not a folder");
+        assert!(!folder_at(&blobs, Path::new("/r/docs/a.md")), "a file is not a folder");
+        assert!(!folder_at(&blobs, Path::new("/r/docs-old")));
     }
 
     #[test]

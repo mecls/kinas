@@ -722,6 +722,12 @@ fn ensure_ref_watch(app: &AppHandle, common: &Path) {
     if state.lock().refs.contains_key(common) {
         return;
     }
+    // A debug build started with KINAS_E2E_WATCH_FAIL=1 refuses this watch too, as it refuses a root's.
+    #[cfg(debug_assertions)]
+    if std::env::var("KINAS_E2E_WATCH_FAIL").as_deref() == Ok("1") {
+        log::warn!("tree changes: could not watch a repository's refs (generic)");
+        return;
+    }
     let (tx, rx) = mpsc::channel::<PathBuf>();
     let filter = common.to_path_buf();
     let watched = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
@@ -2234,5 +2240,100 @@ mod tests {
         assert_eq!(marked(&after, &root), ["M README.md"], "sub is its own repository now, and pushed");
         assert!(state.lock().repos.contains_key(&sub));
         assert!(state.lock().roots[&root].baseline.as_ref().unwrap().repos.iter().any(|r| r.top == sub));
+    }
+
+    #[test]
+    fn a_root_below_its_top_and_a_worktree_both_see_the_push() {
+        let (dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n"), ("docs/a.md", b"# A\n")]);
+        let docs = root.join("docs");
+        state.lock().roots.insert(docs.clone(), Record::new(docs.clone(), 1_000, 0));
+        install_with_git(&state, &docs, &g);
+        let wt = dir.path().canonicalize().unwrap().join("wt");
+        git::tests::git(&root, &["worktree", "add", "-q", &wt.to_string_lossy(), "-b", "side"]);
+        git::tests::git(&wt, &["push", "-q", "-u", "origin", "side"]);
+        state.lock().roots.insert(wt.clone(), Record::new(wt.clone(), 1_000, 0));
+        install_with_git(&state, &wt, &g);
+        let common = root.join(".git");
+        {
+            // One guard for both reads: two in one statement would wait on each other.
+            let changes = state.lock();
+            assert_eq!((&changes.repos[&root].common, &changes.repos[&wt].common), (&common, &common), "a worktree's refs are its main repository's");
+        }
+
+        let feeds: Vec<(PathBuf, Receiver<Heard>)> = [&root, &docs, &wt]
+            .into_iter()
+            .map(|r| {
+                let (tx, rx) = mpsc::channel();
+                state.lock().roots.get_mut(r).unwrap().feed = Some(tx);
+                (r.clone(), rx)
+            })
+            .collect();
+        std::fs::write(root.join("docs/a.md"), "# A, on main\n").unwrap();
+        git_burst(&state, &root, &g, &["docs/a.md"]);
+        git_burst(&state, &docs, &g, &["a.md"]);
+        std::fs::write(wt.join("README.md"), "# Read me, on side\n").unwrap();
+        git_burst(&state, &wt, &g, &["README.md"]);
+        git::tests::git(&root, &["commit", "-qam", "main"]);
+        git::tests::git(&root, &["push", "-q"]);
+        git::tests::git(&wt, &["commit", "-qam", "side"]);
+        git::tests::git(&wt, &["push", "-q"]);
+
+        // What the refs thread does for the one shared git folder, then each root's own thread.
+        on_refs(&state, &common, Some(&g));
+        for (r, rx) in &feeds {
+            while let Ok(Heard::Upstream(top)) = rx.try_recv() {
+                apply_upstream(&state, r, Some(&g), &top, 5_000);
+            }
+            assert_eq!(state.lock().roots[r].marks.len(), 0, "{} saw its push", r.display());
+        }
+    }
+
+    #[test]
+    fn git_failing_keeps_every_mark_and_refresh_keeps_them() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        git_burst(&state, &root, &g, &["README.md"]);
+        git::tests::git(&root, &["commit", "-qam", "edited"]);
+        git::tests::git(&root, &["push", "-q"]);
+        // The refs thread could not read the upstream: it cannot say, so nothing is pushed and nothing "cannot push".
+        state.lock().repos.get_mut(&root).unwrap().upstream = Upstream::Unknown;
+        let after = apply_upstream(&state, &root, Some(&g), &root, 5_000).expect("its marks are said again");
+        assert_eq!(waits_of(&after, &root), [("README.md".into(), true)], "M when unsure, and read as waiting");
+        // A ↻ with no git to ask keeps it too.
+        let refreshed = kept(refresh_marks(&state, &root, None, 9_000));
+        assert_eq!(waits_of(&refreshed, &root), [("README.md".into(), true)]);
+    }
+
+    /// The §15 stop rule's measurement, not a check: how many times a `git gc` wakes the refs thread. Run by hand on a
+    /// scratch clone: `KINAS_GC_REPO=<a repository> cargo test --lib gc_wakes -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn gc_wakes_the_refs_thread_this_many_times() {
+        let source = std::env::var("KINAS_GC_REPO").expect("KINAS_GC_REPO names a repository to clone");
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        git::tests::git(&base, &["clone", "-q", &source, "scratch"]);
+        let common = base.join("scratch/.git");
+        let (tx, rx) = mpsc::channel::<PathBuf>();
+        let filter = common.clone();
+        let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+            if let Ok(event) = event {
+                for path in event.paths.into_iter().filter(|p| ref_path(&filter, p)) {
+                    let _ = tx.send(path);
+                }
+            }
+        })
+        .unwrap();
+        watcher.watch(&common, RecursiveMode::Recursive).unwrap();
+        let wakes = Arc::new(Mutex::new(0u32));
+        let counter = wakes.clone();
+        let thread = std::thread::spawn(move || debounce_paths(&rx, DEBOUNCE, BURST_CEILING, |_| *counter.lock().unwrap() += 1));
+        sleep(Duration::from_millis(300));
+        let started = Instant::now();
+        git::tests::git(&base.join("scratch"), &["gc", "-q"]);
+        sleep(Duration::from_secs(2));
+        drop(watcher);
+        thread.join().unwrap();
+        println!("git gc took {} ms and woke the refs thread {} times", started.elapsed().as_millis() - 2_000, wakes.lock().unwrap());
     }
 }

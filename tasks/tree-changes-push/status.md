@@ -7,8 +7,9 @@
   (`tasks/tree-changes-push/architecture.md`), with its three PRD clarifications written into `prd.md` as dated
   notes (rules 1, 2 and 12). The ADR it offers (0018, "Kinas reads a repository's own refs and never fetches") is
   not written: the captain approved the gate without a word on it
-- Gate 3 · Program design: in progress — `build-spec.md` §11, private, in the main checkout beside `architecture.md`
-- Gate 4 · Slice plan: pending
+- Gate 3 · Program design: APPROVED 2026-09-25 — `build-spec.md` §11, private, in the main checkout beside
+  `architecture.md`, approved as written
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12
 
 ## Slices
 - [ ] Slice 0 · ground: branch, docs first (DESIGN.md, keymap.md, README.md, smoke-test.md)

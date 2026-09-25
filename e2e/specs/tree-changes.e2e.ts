@@ -34,6 +34,7 @@ const COUNT_LINES = [
   // Tree changes clear on push.
   /^tree changes: a push cleared \d+ marks in \d+ ms$/,
   /^tree changes: a refresh cleared \d+ marks, \d+ left, in \d+ ms$/,
+  /^tree changes: could not watch a repository's refs \([a-z ]+\)$/,
 ];
 
 function kinas(...args: string[]) {
@@ -432,6 +433,41 @@ describe("Tree changes", () => {
     await openInFiles("repo", README);
   });
 
+  it("the push timing (tree changes clear on push, rule 4): the median from a push to its mark gone, over 10 pushes, is under 1 s", async () => {
+    await openInFiles("pushing", README);
+    const path = join(pushing, README);
+    // Stamped in the page as the DOM change that takes each mark away lands, as the write timing stamps its marks.
+    await browser.execute((p: string) => {
+      const gone: number[] = [];
+      (window as unknown as { __unmarkedAt: number[] }).__unmarkedAt = gone;
+      const markedNow = () => [...document.querySelectorAll<HTMLElement>(".sidebar .reader-files .tree-row")].some((row) => row.querySelector<HTMLButtonElement>(".tree-item")?.title === p && row.dataset.mark !== undefined);
+      let was = markedNow();
+      new MutationObserver(() => {
+        const is = markedNow();
+        if (was && !is) gone.push(Date.now());
+        was = is;
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-mark"] });
+    }, path);
+    const pushed: number[] = [];
+    for (let i = 1; i <= 10; i++) {
+      writeFileSync(path, `${PUSHING_TEXT}Timed push ${i} ${TOKEN}.\n`);
+      await until(async () => (await row(README))?.mark === "M", `timed push ${i}: ${README} marked M`);
+      git(pushing, "commit", "-q", "-am", `timed push ${i}`);
+      git(pushing, "push", "-q");
+      // When `git push` has exited: the refs are written, and the mark may go.
+      pushed.push(Date.now());
+      await until(async () => (await row(README))?.mark === null, `timed push ${i}: ${README} unmarked`);
+      await browser.pause(300);
+    }
+    const gone = (await browser.execute(() => (window as unknown as { __unmarkedAt: number[] }).__unmarkedAt)) as number[];
+    expect(gone.length).toBe(10);
+    const took = pushed.map((at, i) => gone[i]! - at);
+    const median = [...took].sort((a, b) => a - b).slice(4, 6).reduce((a, b) => a + b, 0) / 2;
+    console.log(`tree changes timing: push to unmark ${took.join(", ")} ms; median ${median} ms`);
+    expect(median).toBeLessThan(1000);
+    await openInFiles("repo", README);
+  });
+
   it("12: the terminal pane is the process it was at step 1", async () => {
     expect(await hook<number>("ptyPid")).toBe(pid);
   });
@@ -457,7 +493,8 @@ describe("Tree changes", () => {
     // A log that filled during the run was rotated, and starts again from nothing.
     const written = (all.length >= logFrom ? all.subarray(logFrom) : all).toString("utf8");
     // Every name in the fixture carries the token, and so does every text but these.
-    const found = [TOKEN, "The committed text.", "A line from the pane.", "A line of a long file.", "A folder that is not a repository."].filter((needle) => written.includes(needle));
+    // Tree changes clear on push: the branch (which carries the token too, and is named here to say so) and the pushed text.
+    const found = [TOKEN, BRANCH, "The committed text.", "A line from the pane.", "A line of a long file.", "A folder that is not a repository.", "What the remote holds."].filter((needle) => written.includes(needle));
     expect(found).toEqual([]);
     const ours = written
       .split("\n")

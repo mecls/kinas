@@ -415,3 +415,12 @@ differs from this text:
   what it said then.
 - Rule 29's first paint and the Kinas repository's copies are measured on the installed build, which waits for the
   captain's install; `docs/smoke-test.md` holds them until then.
+
+**Amended, 2026-09-25** (a trailing note; the text above is as approved). `tasks/tree-changes-push/prd.md` (Gate 1
+approved 2026-09-25) changes this document:
+- A mark now goes by itself once its change is pushed to the branch's remote.
+- ↻ and "Refresh files" clear only what is pushed or can never be pushed.
+- Text that is already on the remote is never marked.
+
+That replaces rules 15, 16 and 18 here, answer 1A's "not git", and §6's line on git status. Everything else here
+stands.

@@ -33,6 +33,9 @@ be pushed, such as ignored files and folders outside git. Unpushed work stays ma
      - a repository with no remote at all, or a detached HEAD, **cannot push** (rule 9).
    - A path belongs to the deepest repository above it, as the tree changes PRD's rule 20 already finds it. That
      includes a folder under the root holding its own `.git`, and a root that is a worktree.
+   - *(Clarified at Gate 2, 2026-09-25.)* A repository that appears under the root after its baseline (a clone or a
+     `git init` inside it) is found at the next ↻. Until then its files are judged by the repository around them,
+     where they usually read as untracked and waiting for a push.
 2. **A path is pushed when it matches its upstream's commit now.**
 
    | Now on disk | At the upstream's commit | Pushed? |
@@ -45,6 +48,10 @@ be pushed, such as ignored files and folders outside git. Unpushed work stays ma
 
    "The same text" is git's own judgement, with the repository's filters and line endings applied. So a file saved
    with CRLF in a repository that normalises line endings counts as pushed when git says so.
+
+   *(Clarified at Gate 2, 2026-09-25.)* When git cannot say what the upstream holds (it fails or times out), no path
+   is pushed and none is "cannot push": marks stay, read "not pushed", and ↻ keeps them. M when unsure, as the tree
+   changes PRD's rule 3 already says.
 3. **Kinas knows only what this Mac's refs say.**
    - A `git push` from any checkout or worktree of the repository updates the remote-tracking ref here, and Kinas
      sees it.
@@ -107,6 +114,10 @@ be pushed, such as ignored files and folders outside git. Unpushed work stays ma
       the push or ↻ that last cleared it.
     - A folder's roll-up and the caption under a tree's head say the **earliest** "since" among the marks they
       count: "3 changes since 11:44".
+    - *(Clarified at Gate 2, 2026-09-25.)* A path's "since" is inherited from a folder above it that was
+      rebaselined later, such as the files inside an added folder a push cleared. A deletion that was pushed keeps
+      its moment, so a file made again at that path says "added since" the push, not since the tree's first
+      showing.
 13. **A mark that is waiting for a push says so.**
 
     | The mark | Words: tooltip and accessible name |

@@ -441,6 +441,16 @@ Answers copied for the first mate's chat, and one waiting count (2026-09-25, sli
       first item opens the Inbox — `automated (crew-inbox.e2e.ts)` for the three counts; the menu item by hand —
       `outstanding — needs Miguel`
 
+## The crew: the order log
+
+What the captain types at a worker, on its task's timeline (2026-09-25, slice 6).
+
+- [ ] A line typed with a worker's pane focused, then Enter, is an `order` on that task's timeline within a second;
+      one typed at the first mate is not; a token in a line reads `[redacted]` — `automated (crew-orders.e2e.ts,
+      AC-8)`; at a real worker in `default` — `outstanding — needs Miguel`
+- [ ] The terminal behaves exactly as before while it is watched: typing, paste, ⌫ over a selection, ⌃C —
+      `automated (keyboard.e2e.ts, selection.e2e.ts, reader-terminal.e2e.ts)`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

@@ -10,6 +10,8 @@ import { onThemeChange, resolvedToken } from "../theme.ts";
 import { writeClipboard } from "./clipboard.ts";
 import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
+import { EMPTY, feed } from "./orderLine.ts";
+import { recordOrder } from "../api.ts";
 import { parseOsc52 } from "./osc52.ts";
 import { type SelectionSnapshot, selectionDeleteBytes } from "./selectionDelete.ts";
 import { registerTerminalCopy } from "../shell/focus.ts";
@@ -159,6 +161,15 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
     let keyLog: string[] = [];
 
     const send = (data: string) => void invoke("pty_write", { data }).catch(() => {});
+    // The order log (build spec §6.10): the line being typed, rebuilt beside `send` from the same bytes — it observes and
+    // never changes what reaches the PTY. A finished line goes to Rust, which records it only when the focused Herdr
+    // pane is a crew worker's; the recording is not awaited.
+    let orderLine = EMPTY;
+    const observe = (data: string) => {
+      const r = feed(orderLine, data);
+      orderLine = r.line;
+      if (r.submitted !== null) void recordOrder(r.submitted).catch(() => {});
+    };
 
     // What ⌫ over a selection needs to know. decideKey only asks for it on a plain ⌫, before xterm clears the
     // selection on input.
@@ -198,7 +209,10 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
           return false;
         case "pty":
           ev.preventDefault();
-          if (!exited) send(decision.data);
+          if (!exited) {
+            send(decision.data);
+            observe(decision.data);
+          }
           // The app's bytes stand in for the key, so the selection goes, as xterm clears it on any input.
           xterm.clearSelection();
           return false;
@@ -238,6 +252,7 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
         return;
       }
       send(data);
+      observe(data);
     });
     xterm.onBinary((data) => {
       if (!exited) void invoke("pty_write_binary", { data: Array.from(data, (c) => c.charCodeAt(0) & 0xff) }).catch(() => {});

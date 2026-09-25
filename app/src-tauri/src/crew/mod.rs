@@ -7,6 +7,7 @@ pub(crate) mod config;
 pub(crate) mod firstmate;
 pub(crate) mod home;
 pub(crate) mod launch;
+pub(crate) mod orders;
 pub(crate) mod pin;
 pub(crate) mod read;
 pub(crate) mod repo;
@@ -184,6 +185,38 @@ pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer
     })
     .await
     .map_err(|e| CrewError::internal(format!("the answer did not finish: {e}")))?
+}
+
+/// A line the captain finished typing in the Work pane (§11.3 An order; AC-8): cleaned, then attributed against a fresh
+/// Herdr view — recorded as one `order` event on the worker's task when the focused pane is a worker's, and dropped
+/// otherwise, with no row and no log line. Resolves whether it was recorded. The words are never logged.
+#[tauri::command]
+pub async fn crew_record_order(app: AppHandle, text: String) -> Result<bool, CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(text) = orders::clean(&text) else { return Ok(false) };
+        if crate::readers::crew::attached_session().is_none() {
+            return Ok(false);
+        }
+        let Some(herdr) = crate::herdr::find_herdr() else { return Ok(false) };
+        let Ok(view) = crate::herdr::api_snapshot(&herdr) else { return Ok(false) };
+        let recorded = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            let workers = read::worker_panes(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the workers: {e}")))?;
+            let Some(task) = orders::attribute(view.focused_pane.as_deref(), &workers) else { return Ok(false) };
+            conn.execute(
+                "INSERT INTO crew_events (org_id, task_id, at, kind, text, dedupe_key) VALUES (?1, ?2, ?3, 'order', ?4, NULL)",
+                rusqlite::params![store.org_id(), task, now_ms(), text],
+            )
+            .map_err(|e| CrewError::internal(format!("could not record the order: {e}")))?;
+            true
+        };
+        let _ = app.emit(crate::readers::runtime::CREW_CHANGED, ());
+        log::info!("crew: order recorded");
+        Ok(recorded)
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the order did not finish: {e}")))?
 }
 
 /// `write_clipboard` on the main thread, where AppKit's pasteboard belongs, waited for from this one.

@@ -4,8 +4,12 @@ use rusqlite::{params, Connection};
 
 const REDACTED: &str = "[redacted]";
 
-/// Replaces `Bearer <token>` and `sk-ant-…` with `[redacted]`. Runs on every error string before it is
-/// stored or logged, so a credential that slips into an error message never lands on disk.
+/// GitHub's token prefixes (classic personal, OAuth, user-to-server, server-to-server, refresh, fine-grained).
+const GITHUB_PREFIXES: [&str; 6] = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"];
+
+/// Replaces `Bearer <token>`, `sk-ant-…` and GitHub's token shapes with `[redacted]`. Runs on every error string
+/// before it is stored or logged, and on every order the crew records (amended 2026-09-25, the first mate), so a
+/// credential that slips into either never lands on disk.
 pub fn redact(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
@@ -21,6 +25,14 @@ pub fn redact(input: &str) -> String {
         }
         if let Some(after) = rest.strip_prefix("sk-ant-") {
             let token_len = after.find(char::is_whitespace).unwrap_or(after.len());
+            out.push_str(REDACTED);
+            rest = &after[token_len..];
+            continue;
+        }
+        // A GitHub token starts a word: `ghp_` inside a longer word (`my_ghp_notes`) is text.
+        let at_word_start = out.chars().next_back().is_none_or(|c| !c.is_alphanumeric() && c != '_');
+        if let Some(after) = GITHUB_PREFIXES.iter().find_map(|p| rest.strip_prefix(p)).filter(|a| at_word_start && a.starts_with(|c: char| c.is_ascii_alphanumeric())) {
+            let token_len = after.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(after.len());
             out.push_str(REDACTED);
             rest = &after[token_len..];
             continue;
@@ -126,6 +138,15 @@ pub fn record_attempt(conn: &Connection, org_id: &str, reader: Reader, now: i64)
 mod tests {
     use super::*;
     use crate::store::Store;
+
+    #[test]
+    fn github_tokens() {
+        for token in ["ghp_FAKE0123456789abcdef", "gho_FAKEabc", "ghu_FAKEabc", "ghs_FAKEabc", "ghr_FAKEabc", "github_pat_11FAKE_abc0123"] {
+            assert_eq!(redact(&format!("push with {token} now")), "push with [redacted] now", "{token}");
+            assert_eq!(redact(&format!("({token})")), "([redacted])", "{token} in brackets");
+        }
+        assert_eq!(redact("see my_ghp_notes and ghp_ alone"), "see my_ghp_notes and ghp_ alone", "not a token");
+    }
 
     #[test]
     fn redacts_bearer_tokens_and_anthropic_keys() {

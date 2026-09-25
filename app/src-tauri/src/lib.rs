@@ -120,6 +120,7 @@ pub fn run() {
             crew::crew_task,
             crew::crew_focus_pane,
             crew::crew_answer,
+            crew::crew_record_order,
             tray::tray_title,
             crew::crew_pane_state,
             commands::ollama_key_status,

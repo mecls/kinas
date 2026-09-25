@@ -326,6 +326,13 @@ pub(crate) fn fresh_worker(conn: &Connection, org: &str, task: &str, now: i64) -
     .optional()
 }
 
+/// Every worker's pane, for attributing an order (§6.10): the cache the collector rewrites each cycle.
+pub(crate) fn worker_panes(conn: &Connection, org: &str) -> rusqlite::Result<Vec<crate::crew::orders::WorkerFacts>> {
+    let mut stmt = conn.prepare("SELECT task_id, pane_id FROM crew_workers WHERE org_id = ?1")?;
+    let rows = stmt.query_map(params![org], |r| Ok(crate::crew::orders::WorkerFacts { task_id: r.get(0)?, pane_id: r.get(1)? }))?;
+    rows.collect()
+}
+
 /// Each worker's pane → its task's word and harness: the chrome's badge (§4 Work), kept in memory by the collector.
 pub(crate) fn worker_words(conn: &Connection, org: &str) -> rusqlite::Result<HashMap<String, (&'static str, Option<String>)>> {
     let sql = format!("SELECT w.pane_id, t.harness, {STORED_COLUMNS} FROM crew_workers w JOIN crew_tasks t ON t.org_id = w.org_id AND t.id = w.task_id WHERE w.org_id = ?1");

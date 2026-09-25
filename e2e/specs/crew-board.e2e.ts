@@ -59,7 +59,8 @@ function fleet(tasks: Spec[]): string {
       backend: "herdr",
       paths: { worktree: { path: `__FM_HOME__/../treehouse/${t.project}/1`, present: t.worktree ?? true }, report: { path: null, present: false } },
       current_state: { state: t.state, source: "status-log", detail: "running the tests 9c2e", observed_at: new Date().toISOString() },
-      endpoint: { target: t.target ?? null, exists: !!t.target, status: "unknown" },
+      // No target, no endpoint facts: `exists: false` would say the worker's pane went away, a Reconcile line.
+      ...(t.target ? { endpoint: { target: t.target, exists: true, status: "unknown" } } : {}),
       pr: { url: t.pr ?? null },
       hints: { pending_decision: false, blocked_event: false, open_decisions: [] },
     }));

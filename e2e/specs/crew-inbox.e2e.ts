@@ -85,7 +85,9 @@ function fleet(tasks: Spec[]): string {
       harness: "claude",
       project: `__FM_HOME__/projects/shop-9c2e`,
       current_state: { state: t.state, source: "status-log", detail: "waiting 9c2e", observed_at: new Date().toISOString() },
-      endpoint: { target: t.target ?? null, exists: !!t.target, status: "unknown" },
+      // A worker Firstmate has not recorded has no endpoint facts; `exists: false` would say its pane went away, a
+      // Reconcile line (slice 9).
+      ...(t.target ? { endpoint: { target: t.target, exists: true, status: "unknown" } } : {}),
       paths: { worktree: { path: null, present: true } },
       pr: { url: null },
       hints: {

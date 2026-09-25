@@ -37,7 +37,6 @@ const task = (id: string, state: string, backlog: string, decisions: ReturnType<
     harness: "claude",
     project: "__FM_HOME__/projects/alpha-9c2e",
     current_state: { state, source: "status-log", detail: "9c2e", observed_at: new Date().toISOString() },
-    endpoint: { target: null, exists: false, status: "unknown" },
     hints: { pending_decision: decisions.length > 0, blocked_event: false, open_decisions: decisions },
   },
 });

@@ -1,0 +1,30 @@
+# Status: Tree changes clear on push — a mark goes when its change is pushed; ↻ clears only what no push will
+
+- Gate 1 · Product: in progress — `prd.md`, from the captain's answers 1A, 2A, 3A (§7), awaiting approval
+  - Mockups: in progress — `mockups/sidebar-push.html`
+- Gate 2 · Architecture: pending
+- Gate 3 · Program design: pending
+- Gate 4 · Slice plan: pending
+
+## Slices
+- [ ] Slice 0 · ground: branch, docs first (DESIGN.md, keymap.md, README.md, smoke-test.md)
+- [ ] Slice 1 · tracer bullet: the upstream, a watch on the repository's refs, and a push clears an M
+- [ ] Slice 2 · rebaselining: each mark's own "since", the diff from the pushed text, D and added folders
+- [ ] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words → ship point
+- [ ] Slice 4 · edges and the record: nested repositories, a root below its repository, worktrees, the timings
+
+(The slices are a draft until Gate 4.)
+
+## Notes for a fresh session
+
+- The feature amends the shipped tree changes (`tasks/tree-changes/prd.md`): its rules 15, 16 and 18, answer 1A
+  and the §6 line on git. That PRD gets a dated closing note pointing here once this Gate 1 is approved, and is not
+  otherwise edited.
+- Worktree `.claude/worktrees/tree-changes-push`, branch **`feat/tree-changes-push`**, from `origin/main` at
+  `c5209fa`, made with `--no-track` so a bare `git push` can never reach `main`. Nothing is pushed without the
+  captain's word.
+- The `tree-changes` worktree (`docs/tree-changes-installed`) belongs to another session. Leave it alone.
+- The main checkout stays at `73c70fd`, with another session's untracked `docs/overview.md` and
+  `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.
+- The captain's screenshot that started this showed four marks, all on git-ignored private documents
+  (`tasks/*/build-spec.md`). That is why answer 1A matters: a push can never clear those, and ↻ must.

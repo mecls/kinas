@@ -26,8 +26,8 @@
   `-watch-fail` green, run alone
 - [x] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings —
   2026-09-25, rebased onto `49e6e03`; `bun run check` green (719 bun, 365 Rust); **the full e2e alone, 38 of 38 specs,
-  206 cases**; push-to-unmark median 122 ms. **Ship point reached; not pushed** — waiting on the captain's word to push,
-  merge and install
+  206 cases**; push-to-unmark median 122 ms. **Pushed on the captain's word, PR #40**; lands by the captain's own push;
+  **not installed** (the captain's word)
 
 ## Notes for a fresh session
 

@@ -4,6 +4,11 @@
 //! Firstmate's home and runs `claude` there. The pane command is exactly `claude`, or `claude '<sentence>'` with ADR
 //! 0017's one sentence; nothing else is ever run or typed, and Kinas's own pane is never touched. Serialised by
 //! `herdr::OPENING` with Open in the terminal, so two clicks never make two workspaces.
+//!
+//! Amended 2026-09-25 (slice 5): the command is typed into an existing pane only when that pane is known to be a shell
+//! — its foreground a shell and nothing else — and not within 30 s of the launcher typing into it, while the program it
+//! started may still be on its way; a pane Herdr cannot describe is focused and never typed into. The Inbox's spec found
+//! a second answer, seconds after the first made the workspace, typing the command into the first mate's own input.
 
 use super::home::{self, PinState};
 use super::pin::WORKSPACE_LABEL;
@@ -12,6 +17,53 @@ use super::CrewError;
 use crate::herdr::{self, View, NOT_INSTALLED, NOT_RUNNING, OPENING};
 use serde::Serialize;
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// How long a pane the launcher typed into is left alone: a login shell can take seconds to reach its prompt, and the
+/// program it starts some more, and until then a second command would land in that program's input.
+const STARTING: Duration = Duration::from_secs(30);
+
+/// The pane the launcher last typed into, and when.
+static TYPED: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+
+/// The shells a command may be typed into (a login shell's `argv0` carries a leading `-`).
+const SHELLS: [&str; 7] = ["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh"];
+
+fn is_shell(argv0: &str) -> bool {
+    let name = argv0.rsplit('/').next().unwrap_or(argv0).trim_start_matches('-');
+    SHELLS.contains(&name)
+}
+
+/// What the launcher does with an existing `firstmate` workspace's pane (§6.16): focus it and leave the pane alone,
+/// or focus it and type the command. Only a pane whose foreground Herdr reports, which is a shell and nothing else, and
+/// which the launcher has not just typed into, is typed into.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Existing {
+    Running,
+    Leave,
+    Type,
+}
+
+pub(crate) fn existing(foreground: &Result<Vec<String>, String>, typed_recently: bool) -> Existing {
+    let Ok(procs) = foreground else { return Existing::Leave };
+    if procs.iter().any(|a| a == "claude" || a.ends_with("/claude")) {
+        return Existing::Running;
+    }
+    if !typed_recently && !procs.is_empty() && procs.iter().all(|a| is_shell(a)) {
+        Existing::Type
+    } else {
+        Existing::Leave
+    }
+}
+
+fn typed_recently(pane: &str) -> bool {
+    TYPED.lock().unwrap_or_else(|p| p.into_inner()).as_ref().is_some_and(|(p, at)| p == pane && at.elapsed() < STARTING)
+}
+
+fn remember_typed(pane: &str) {
+    *TYPED.lock().unwrap_or_else(|p| p.into_inner()) = Some((pane.to_string(), Instant::now()));
+}
 
 /// What the pane is asked, besides starting: nothing, or ADR 0017's Add to crew sentence (built by `repo::sentence`).
 pub(crate) enum Ask {
@@ -68,13 +120,6 @@ pub(crate) fn first_mate_pane<'a>(v: &'a View, workspace: &str) -> Option<&'a he
     panes.iter().find(|p| p.focused).or(panes.first()).copied()
 }
 
-/// The first mate's pane when `claude` is among its foreground programs (by `argv0`, slice 0).
-pub(crate) fn first_mate_running(v: &View, fg: impl Fn(&str) -> Vec<String>) -> Option<String> {
-    let ws = herdr::workspace_with_label(v, WORKSPACE_LABEL)?;
-    let pane = first_mate_pane(v, &ws.id)?;
-    fg(&pane.id).iter().any(|a| a == "claude" || a.ends_with("/claude")).then(|| pane.id.clone())
-}
-
 fn refuse(code: &'static str, message: impl Into<String>) -> CrewError {
     CrewError { code, message: message.into() }
 }
@@ -106,18 +151,19 @@ pub(crate) fn launch(home: &Path, health: &Health, ask: &Ask) -> Result<Launched
     let internal = |e: String| refuse("internal", e);
     if let Some(ws) = herdr::workspace_with_label(&view, WORKSPACE_LABEL) {
         let ws_id = ws.id.clone();
-        let pane = first_mate_pane(&view, &ws_id).map(|p| p.id.clone());
-        let running = first_mate_running(&view, |p| herdr::foreground(&herdr, p).unwrap_or_default()).is_some();
+        let pane = first_mate_pane(&view, &ws_id).map(|p| p.id.clone()).ok_or_else(|| internal("the first mate's workspace has no pane".into()))?;
+        let decision = existing(&herdr::foreground(&herdr, &pane), typed_recently(&pane));
         herdr::workspace_focus(&herdr, &ws_id).map_err(internal)?;
-        if running {
+        if decision != Existing::Type {
             return Ok(Launched::Focused);
         }
-        let pane = pane.ok_or_else(|| internal("the first mate's workspace has no pane".into()))?;
         herdr::pane_run(&herdr, &pane, &command).map_err(internal)?;
+        remember_typed(&pane);
         return Ok(Launched::Run);
     }
     let pane = herdr::workspace_create(&herdr, home, WORKSPACE_LABEL).map_err(internal)?;
     herdr::pane_run(&herdr, &pane, &command).map_err(internal)?;
+    remember_typed(&pane);
     Ok(Launched::Created)
 }
 
@@ -148,13 +194,25 @@ mod tests {
     }
 
     #[test]
-    fn the_first_mate_runs_when_claude_is_the_foreground_of_its_focused_pane() {
+    fn the_first_mate_pane_is_its_workspaces_focused_one() {
         let v = view();
-        assert_eq!(first_mate_running(&v, |p| if p == "w2:p2" { vec!["caffeinate".into(), "claude".into()] } else { vec![] }), Some("w2:p2".into()));
-        assert_eq!(first_mate_running(&v, |_| vec!["zsh".into()]), None, "a shell is not the first mate");
-        assert_eq!(first_mate_running(&v, |_| vec!["2.1.281".into()]), None, "Claude Code's name is its version, never read");
-        let none = View { workspaces: vec![], ..v };
-        assert_eq!(first_mate_running(&none, |_| vec!["claude".into()]), None);
+        assert_eq!(first_mate_pane(&v, "w2").map(|p| p.id.as_str()), Some("w2:p2"));
+        assert_eq!(first_mate_pane(&v, "w9"), None);
+    }
+
+    #[test]
+    fn only_an_idle_shell_is_typed_into() {
+        let fg = |procs: &[&str]| Ok(procs.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert_eq!(existing(&fg(&["caffeinate", "claude"]), false), Existing::Running);
+        assert_eq!(existing(&fg(&["-zsh"]), false), Existing::Type);
+        assert_eq!(existing(&fg(&["/bin/bash"]), false), Existing::Type);
+        // The negative controls: never typed into when unsure.
+        assert_eq!(existing(&fg(&["-zsh"]), true), Existing::Leave, "typed into seconds ago: its program may be starting");
+        assert_eq!(existing(&Err("herdr timed out".into()), false), Existing::Leave, "Herdr could not say");
+        assert_eq!(existing(&fg(&[]), false), Existing::Leave, "no foreground reported");
+        assert_eq!(existing(&fg(&["zsh", "vim"]), false), Existing::Leave, "a program other than the shell");
+        assert_eq!(existing(&fg(&["node"]), false), Existing::Leave);
+        assert_eq!(existing(&fg(&["2.1.281"]), false), Existing::Leave, "Claude Code's name is its version: not a shell");
     }
 
     #[test]

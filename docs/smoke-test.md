@@ -426,6 +426,21 @@ Lanes by repository, a task's PR and checks, the task in the right panel (2026-0
 - [ ] Usage's Crew section counts what is in flight by harness and what is queued, and goes when nothing is —
       `automated (crew-board.e2e.ts, AC-7)`
 
+## The crew: the Inbox
+
+Answers copied for the first mate's chat, and one waiting count (2026-09-25, slice 5).
+
+- [ ] A decision in the fleet is an item on the Inbox, with the task, its key and its age; A on it puts `On <task>
+      (<key>): Approved — go ahead.` on the clipboard, focuses the first mate's pane and gives the terminal the keys;
+      the item reads Copied and still counts until the first mate closes it — `automated (crew-inbox.e2e.ts, AC-5)` with
+      a stand-in and a clipboard file; with the real first mate, pasting the line with ⌘V and pressing Enter —
+      `outstanding — needs Miguel`
+- [ ] R and D open the box; Enter copies, ⇧Enter is a new line, Esc closes — `automated (crew-inbox.e2e.ts, AC-12,
+      AC-14)` for Enter; ⇧Enter and Esc by hand — `outstanding — needs Miguel`
+- [ ] The sidebar's Inbox, the Crew page's button and the menu bar's title (`58% · N`) show one count, and the menu's
+      first item opens the Inbox — `automated (crew-inbox.e2e.ts)` for the three counts; the menu item by hand —
+      `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

@@ -63,16 +63,26 @@ export function removeStubTool(dir: string, name: string): void {
   rmSync(join(dir, "bin", name), { force: true });
 }
 
+/** Puts an npm tool taken away by removeStubTool back, as reinstalling it would. */
+export function restoreNpmStubTool(dir: string, name: string): void {
+  rmSync(join(dir, "bin", name), { force: true });
+  symlinkSync(join(dir, "lib", "node_modules", name, "dist", "bin", `${name}.js`), join(dir, "bin", name));
+}
+
 /**
  * The first mate's stand-in for KINAS_E2E_CREW_COMMAND: a script named `claude` that appends its argument count and first
- * argument to argv.log beside it, clears the screen, and becomes `sleep` under the name `claude` — so Herdr's
- * process-info reports `argv0` `claude` and the launcher sees the first mate running (measured in a throwaway session,
- * 2026-09-24). No spec starts the real `claude`.
+ * argument to argv.log beside it, clears the screen, and becomes `cat` under the name `claude`, appending whatever
+ * reaches its stdin to stdin.log — so Herdr's process-info reports `argv0` `claude`, the launcher sees the first mate
+ * running (measured in a throwaway session, 2026-09-24), and a spec can prove nothing was typed into its pane
+ * (slice 5). No spec starts the real `claude`.
  */
 export function makeStandIn(dir: string): string {
   mkdirSync(dir, { recursive: true });
   const path = join(dir, "claude");
-  writeFileSync(path, `#!/bin/bash\nprintf '%s\\n' "$#\${1:+ $1}" >> '${join(dir, "argv.log")}'\nprintf '\\033[2J\\033[H'\nexec -a claude sleep 3600\n`);
+  writeFileSync(
+    path,
+    `#!/bin/bash\nprintf '%s\\n' "$#\${1:+ $1}" >> '${join(dir, "argv.log")}'\nprintf '\\033[2J\\033[H'\n: >> '${join(dir, "stdin.log")}'\nexec -a claude cat >> '${join(dir, "stdin.log")}'\n`,
+  );
   chmodSync(path, 0o755);
   return path;
 }

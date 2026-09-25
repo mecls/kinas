@@ -32,8 +32,10 @@
 - [x] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section —
   *2026-09-25: AC-4, AC-6, AC-7 green in crew-board.e2e.ts; check green; the crew, usage, stories, screens, shell,
   title-bar and reader-panel specs green alone*
-- [ ] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
-  menu bar)
+- [x] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
+  menu bar) — *2026-09-25: AC-5, AC-12, AC-14 green in crew-inbox.e2e.ts; the launcher now types only into an idle
+  shell; check green; the crew, palette, keyboard, settings, shell, stories, screens and reader-panel specs green
+  alone*
 - [ ] Slice 6 · the order log
 - [ ] Slice 7 · Home: the crew's night and Waiting on you
 - [ ] Slice 8 · Add to crew
@@ -41,7 +43,7 @@
 
 ## Notes for a fresh session
 
-- **Next: slice 5, the Inbox (`tasks.md` 5.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
+- **Next: slice 6, the order log (`tasks.md` 6.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
   `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1); commits after ship point 1 stay
   local until the captain says push. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;

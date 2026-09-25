@@ -33,17 +33,19 @@
   the debug build)
 - [x] Slice 9 · ← and → walk every place, and the reader's own ← goes (2026-09-24, on `5df4b7d`; the green light
   proved to fill the screen on a regular launch, by the captain)
-- [ ] Slice 10 · ship point 3, and the hand-off (2026-09-24: the reader PRD amended, the hand-off written in build spec
-  §19 and the smoke test; ship point 3's check green and its full e2e running alone from 23:27; the push, PR and
-  whether to install wait for the captain's word)
+- [x] Slice 10 · ship point 3, and the hand-off (2026-09-25: check and the full e2e green alone — 27 specs, 165 cases,
+  `staleness` rerun alone after the run crossed midnight; screenshots and the style contract retaken with the title
+  bar; pushed on the captain's word, no PR, not installed; `main` is the captain's to move. Build spec §19 is the
+  hand-off, and `docs/smoke-test.md` lists what only eyes can check)
 
 ## Notes for a fresh session
 
 - Branch `feat/reader-layout` (from `docs/reader-layout-gate-1`, rebased onto `origin/main` at `dd21e35` in slice 0),
   in the worktree `.claude/worktrees/reader-layout`. Pushed at ship point 1 on the captain's word (2026-09-24), PR
-  #33, and at ship point 2 (2026-09-24), PR #36; each time `main` was fast-forwarded to it by the captain. Parts 2 and 3 continue on this branch, and each later push,
-  PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at ship points 1 and 2. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
-  in this worktree, never there. Slices 8 and 9 sit on `5df4b7d` (tree changes' ship point 2), not pushed.
+  #33, and at ship point 2 (2026-09-24), PR #36; each time `main` was fast-forwarded to it by the captain. Ship point
+  3 (2026-09-25) is pushed as the branch only, with no PR, and `main` waits for the captain's own push. Parts 2 and 3 continue on this branch, and each later push,
+  PR or fast-forward waits for the captain's word again. Not installed: the captain said not to, at all three ship points. The main checkout's `main` is behind `origin/main` (it sits at `73c70fd`): read code
+  in this worktree, never there. Slices 8–10 sit on `5df4b7d` (tree changes' ship point 2).
 - Round 1's request came with two screenshots: the reader at about 875 px with Contents at 220 px, and the reader
   expanded on a wide screen with the text stopping at 72ch. Round 2 came, in reply to the first "Approve Gate 1",
   with an editor's tab strip, the sidebar's Recent list, and a window top bar with a sidebar icon, ← and →.

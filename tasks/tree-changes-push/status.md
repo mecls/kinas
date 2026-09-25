@@ -1,8 +1,10 @@
 # Status: Tree changes clear on push — a mark goes when its change is pushed; ↻ clears only what no push will
 
-- Gate 1 · Product: in progress — `prd.md`, from the captain's answers 1A, 2A, 3A (§7), awaiting approval
-  - Mockups: in progress — `mockups/sidebar-push.html`
-- Gate 2 · Architecture: pending
+- Gate 1 · Product: APPROVED 2026-09-25 — `prd.md`, from the captain's answers 1A, 2A, 3A (§7); approved as written,
+  so §7.1 (↻'s tooltip) and §7.2 (↻ stays shown) stand
+  - Mockups: APPROVED 2026-09-25 — `mockups/sidebar-push.html`
+- Gate 2 · Architecture: in progress — `architecture.md`, private, at its absolute path in the main checkout
+  (`tasks/tree-changes-push/architecture.md`)
 - Gate 3 · Program design: pending
 - Gate 4 · Slice plan: pending
 
@@ -18,8 +20,7 @@
 ## Notes for a fresh session
 
 - The feature amends the shipped tree changes (`tasks/tree-changes/prd.md`): its rules 15, 16 and 18, answer 1A
-  and the §6 line on git. That PRD gets a dated closing note pointing here once this Gate 1 is approved, and is not
-  otherwise edited.
+  and the §6 line on git. That PRD carries a dated closing note pointing here (2026-09-25), and is not otherwise edited.
 - Worktree `.claude/worktrees/tree-changes-push`, branch **`feat/tree-changes-push`**, from `origin/main` at
   `c5209fa`, made with `--no-track` so a bare `git push` can never reach `main`. Nothing is pushed without the
   captain's word.

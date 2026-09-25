@@ -256,10 +256,10 @@ be pushed, such as ignored files and folders outside git. Unpushed work stays ma
 
 ## 7. Open questions
 
-1. **Rule 14's tooltip words**, "clear what's pushed or can't be pushed". This is the least sure line in the
-   document. It is the captain's call at this gate.
-2. **Rule 10: should ↻ stay shown when every mark is waiting for a push?** Written as yes, because it doubles as
-   "check again". The case against: a button that visibly does nothing when pressed. The captain's call at this gate.
+1. ~~**Rule 14's tooltip words**, "clear what's pushed or can't be pushed".~~ Decided 2026-09-25: kept as written;
+   Gate 1 was approved without a change.
+2. ~~**Rule 10: should ↻ stay shown when every mark is waiting for a push?**~~ Decided 2026-09-25: yes, as written,
+   because it doubles as "check again". (The case against: a button that visibly does nothing when pressed.)
 
 **Asked before writing, 2026-09-25, and answered:**
 1. What clears marks on files git will never push (ignored files, folders outside any repository)? — **A**, ↻ clears

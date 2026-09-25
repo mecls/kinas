@@ -40,12 +40,12 @@
   reader-terminal green alone; check green*
 - [x] Slice 7 · Home: the crew's night and Waiting on you — *2026-09-25: AC-15's Home half green in crew-home.e2e.ts;
   home and screens unchanged with no crew; check green*
-- [ ] Slice 8 · Add to crew
+- [x] Slice 8 · Add to crew — *2026-09-25: AC-17 green in crew-add.e2e.ts; folders green; check green*
 - [ ] Slice 9 · reconciliation, the context packet, the sweep → ship point 2
 
 ## Notes for a fresh session
 
-- **Next: slice 8, Add to crew (`tasks.md` 8.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
+- **Next: slice 9, reconciliation, the context packet, the sweep → ship point 2 (`tasks.md` 9.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
   `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1); commits after ship point 1 stay
   local until the captain says push. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;

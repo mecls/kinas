@@ -18,7 +18,9 @@
 - [x] Slice 1 · tracer bullet: the upstream, a watch on the repository's refs, and a push clears an M — 2026-09-25,
   `bun run check` green (668 bun, 324 Rust); `tree-changes` 16 of 16 (`push 1` new), `-no-git` and `-watch-fail` green,
   run alone; the push check's negative control failed in Rust and in the e2e, as it must
-- [ ] Slice 2 · counting from the push: each mark's own "since", the diff from the pushed text, D and added folders
+- [x] Slice 2 · counting from the push: each mark's own "since", the diff from the pushed text, D and added folders —
+  2026-09-25, `bun run check` green (670 bun, 330 Rust); `tree-changes` 17 of 17 (`push 2` new), `-no-git` and
+  `-watch-fail` green, run alone
 - [ ] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words
 - [ ] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings
 

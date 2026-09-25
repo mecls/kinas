@@ -146,6 +146,8 @@ describe("Tree changes", () => {
   let pid = 0;
   /** Where the log stood when the spec began: step 11 reads only what this run wrote. */
   let logFrom = 0;
+  /** When `push 1` pushed: `push 2`'s mark counts from then. */
+  let pushedAt = 0;
 
   before(async () => {
     logFrom = existsSync(LOG) ? statSync(LOG).size : 0;
@@ -354,9 +356,27 @@ describe("Tree changes", () => {
     // A commit moves no remote-tracking ref: nothing may clear the mark, however long it waits.
     await browser.pause(CEILING);
     expect((await row(README))?.mark).toBe("M");
+    pushedAt = Date.now();
     git(pushing, "push", "-q");
     await until(async () => (await row(README))?.mark === null && (await caption()) === null, "the pushed file unmarked, and no caption");
     // Back where step 13 expects Files to be.
+    await openInFiles("repo", README);
+  });
+
+  it("push 2: edited again, the M counts from the push, and Changes shows only the new line", async () => {
+    await openInFiles("pushing", README);
+    expect(await marked()).toEqual([]);
+    writeFileSync(join(pushing, README), `${PUSHING_TEXT}A line not pushed yet ${TOKEN}.\nAnother line ${TOKEN}.\n`);
+    await until(async () => (await row(README))?.mark === "M", `${README} marked M again`);
+    const at = await since();
+    expect([clock(pushedAt), clock(pushedAt + 60_000)]).toContain(at);
+    expect((await row(README))?.label).toBe(`${README}, modified since ${at}`);
+    await clickRow(join(pushing, README));
+    await until(async () => (await changes()).showing && (await changes()).summary !== null, "the reader on Changes", 10000);
+    const view = await changes();
+    // Against the pushed text: the line that went up in push 1 is context now, not an addition.
+    expect(view.summary).toBe(`+1 −0 since ${at}`);
+    expect(view.rows.filter((r) => !r.startsWith("context"))).toEqual([`add + Another line ${TOKEN}.`]);
     await openInFiles("repo", README);
   });
 

@@ -555,6 +555,8 @@ export interface ChangeEntry {
   path: string;
   kind: ReaderKind;
   mark: Mark;
+  /** Since when this path counts: the tree's first showing, or the push that last made it its starting point. */
+  since_ms: number;
 }
 
 /** A folder that existed at both moments, with changes beneath it: their count and the strongest of them. */
@@ -562,13 +564,15 @@ export interface FolderRollup {
   path: string;
   count: number;
   strongest: Mark;
+  /** The earliest "since" among what it counts. */
+  since_ms: number;
 }
 
 /** One root's whole summary, sent after every burst: it replaces the last one, never patches it. */
 export interface TreeChanges {
   /** The root's real path. */
   root: string;
-  /** The baseline moment every caption and tooltip counts from. */
+  /** The caption's "since": the earliest among the marks, or the baseline's moment when there are none. */
   since_ms: number;
   /** False when the watch could not start: the tree works as today, without marks. */
   watching: boolean;

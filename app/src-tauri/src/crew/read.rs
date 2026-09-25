@@ -92,7 +92,7 @@ pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: b
         decisions: decisions(conn, org, None)?,
         reconcile: Vec::new(),
         waiting: waiting(conn, org)?,
-        overnight_since: now - DAY_MS,
+        overnight_since: crate::crew::focus::overnight_since(&crate::crew::focus::stamps(conn, org), now),
     })
 }
 

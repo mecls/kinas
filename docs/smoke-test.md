@@ -451,6 +451,17 @@ What the captain types at a worker, on its task's timeline (2026-09-25, slice 6)
 - [ ] The terminal behaves exactly as before while it is watched: typing, paste, ⌫ over a selection, ⌃C —
       `automated (keyboard.e2e.ts, selection.e2e.ts, reader-terminal.e2e.ts)`
 
+## The crew: Home's night
+
+What happened since the end of the last session (2026-09-25, slice 7).
+
+- [ ] Overnight's caption reads `since 23:40 yesterday, 9 h 51 m` from the last stretch of an hour without the window's
+      focus; a folder's row counts only its tasks with activity since then; selecting it opens the task that waits in
+      the panel; a quiet folder says `No work overnight in this folder.` — `automated (crew-home.e2e.ts, AC-15)` with
+      seeded stamps; the morning after a real night — `outstanding — needs Miguel`
+- [ ] Waiting on you shows the newest three decisions and `All N in Inbox`; A approves there, R and D open the item on
+      the Inbox with its box — `automated (crew-home.e2e.ts)` for R; A by hand — `outstanding — needs Miguel`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

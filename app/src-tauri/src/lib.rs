@@ -185,12 +185,25 @@ pub fn run() {
                 reader::changes::on_page_load(webview.app_handle());
             }
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|window, event| match event {
             // Closing the window hides it; the app, its readers and the terminal keep running (R28).
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            // The first mate (build spec §7 Window focus): the stamps behind Home's "since", off the main thread.
+            WindowEvent::Focused(focused) => {
+                let app = window.app_handle().clone();
+                let focused = *focused;
+                std::thread::spawn(move || {
+                    let store = app.state::<store::Store>();
+                    let conn = store.conn();
+                    if let Err(e) = crew::focus::stamp(&conn, store.org_id(), focused, store::now_ms()) {
+                        log::warn!("crew: the focus stamp was not written: {e}");
+                    }
+                });
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building Kinas");

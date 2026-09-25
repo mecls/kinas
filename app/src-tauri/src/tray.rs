@@ -39,10 +39,22 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .name("kinas-tray".into())
         .spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_secs(60));
+            stamp_while_focused(&handle);
             refresh(&handle);
         })
         .map(|_| ())
         .map_err(|e| tauri::Error::Anyhow(e.into()))
+}
+
+/// The minute's focus stamp (build spec §7 Window focus): only while the window has focus, so a stretch without it
+/// stays a gap.
+fn stamp_while_focused(app: &AppHandle) {
+    let focused = app.get_webview_window("main").and_then(|w| w.is_focused().ok()).unwrap_or(false);
+    if focused {
+        let store = app.state::<Store>();
+        let conn = store.conn();
+        let _ = crate::crew::focus::stamp(&conn, store.org_id(), false, now_ms());
+    }
 }
 
 fn show(app: &AppHandle) {

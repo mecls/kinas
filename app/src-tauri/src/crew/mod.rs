@@ -5,6 +5,7 @@
 pub(crate) mod answer;
 pub(crate) mod config;
 pub(crate) mod firstmate;
+pub(crate) mod focus;
 pub(crate) mod home;
 pub(crate) mod launch;
 pub(crate) mod orders;

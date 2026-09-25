@@ -159,8 +159,8 @@ export function App() {
 
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
-  // One crew reading for every page that shows the crew (crew/useCrew.ts); the collector runs for Crew and Inbox.
-  const { crew, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox");
+  // One crew reading for every page that shows the crew (crew/useCrew.ts): Crew, Inbox, and Home's night.
+  const { crew, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
   const [inboxRequest, setInboxRequest] = useState<(InboxBox & { seq: number }) | null>(null);
   /** The launcher is on its way: Herdr can take seconds, and a second click would only queue behind it. */
@@ -626,7 +626,19 @@ export function App() {
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
           <section className="page" data-page="home" hidden={page !== "home"}>
-            <HomePage usage={usage.snapshot} usageError={usage.error} projects={projects} folder={nav.folder} onOpen={openFromSidebar} onGo={goTo} onLaunch={launchTask} />
+            <HomePage
+              usage={usage.snapshot}
+              usageError={usage.error}
+              projects={projects}
+              folder={nav.folder}
+              onOpen={openFromSidebar}
+              onGo={goTo}
+              onLaunch={launchTask}
+              crew={crew}
+              onSelectTask={openTask}
+              onApprove={(task, key) => void answer(task, key, "approve", "")}
+              onOpenBox={openBox}
+            />
           </section>
           <section className="page" data-page="crew" hidden={page !== "crew"}>
             <CrewPage

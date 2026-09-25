@@ -13,7 +13,8 @@
   `feat/tree-changes-push`
 
 ## Slices
-- [ ] Slice 0 · ground, docs first: the worktree's build, DESIGN.md 1.8, keymap.md, README.md, smoke-test.md
+- [x] Slice 0 · ground, docs first: the worktree's build, DESIGN.md 1.8, keymap.md, README.md, smoke-test.md —
+  2026-09-25, baseline `bun run check` green (668 bun, 308 Rust, 0 clippy warnings, 67 s); docs only, `bun test` green after
 - [ ] Slice 1 · tracer bullet: the upstream, a watch on the repository's refs, and a push clears an M
 - [ ] Slice 2 · counting from the push: each mark's own "since", the diff from the pushed text, D and added folders
 - [ ] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words

@@ -131,6 +131,9 @@ marks what changed since it was first shown — a status dot and **A**, **M** or
 inside, deleted rows kept struck through — and a click on a marked file opens the reader on **Changes**, a diff against
 that moment (a deleted file shows what it said). **↻** on the tree, or **Refresh files** in the palette, clears the marks
 and starts again; so does reloading the window. Kinas only watches: nothing is committed, reverted or stored.
+Amended 2026-09-25 (tree changes clear on push): a mark goes by itself once its change is pushed to the branch's
+remote — Kinas reads this Mac's refs and never fetches — and a pull marks nothing. **↻** now clears only what is pushed
+or can never be pushed (ignored files, folders outside git), and a mark waiting for a push says "not pushed".
 **Home** (⌘1) is the first page: the night's progress per
 client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
 **Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** (⌘3) and

@@ -339,6 +339,10 @@ e2e suite ran green alone with them: 21 specs, 120 cases.
 Every file tree marks what changed since it was first shown, and the reader's Changes view diffs against that moment
 (2026-09-23, `tasks/tree-changes/prd.md`). Built 2026-09-24; the steps named are `tree-changes.e2e.ts`'s.
 
+Amended 2026-09-25 (tree changes clear on push, `tasks/tree-changes-push/prd.md`): a mark goes when its change is
+pushed, a pull marks nothing, and ↻ clears only what is pushed or can never be pushed. The ↻ line below holds for a
+folder with no remote, as the fixture's `repo` is; the push's own lines follow it.
+
 - [x] A write, an edit and a delete under an open folder mark A, M and D within a second; a collapsed folder shows the
       strongest change's dot and the count — `automated (tree-changes.e2e.ts, steps 2–4, 2 s ceilings)`
 - [x] An edit put back, and a file made then removed, leave no mark and no row — `automated (steps 5 and 6; the
@@ -347,6 +351,13 @@ Every file tree marks what changed since it was first shown, and the reader's Ch
       `automated (step 3's view, step 4's click; the real clipboard, saved and put back)`
 - [x] ↻, Refresh files and a window reload clear every mark — `automated (steps 7 and 13; palette.e2e.ts for Refresh
       files with no folder)`
+- [ ] A commit keeps a mark, a push clears it within 2 s, and an edit after the push counts from it — `outstanding —
+      tree-changes.e2e.ts, push 1 and push 2, being built`
+- [ ] ↻ clears a file git ignores and keeps an unpushed one; Refresh files says how many wait — `outstanding — push 3`
+- [ ] A pull of text already on the remote marks nothing — `outstanding — push 4`
+- [ ] Median from `git push` exiting to the mark gone, over 10 pushes: under 1 s — `outstanding — the push timing case`
+- [ ] A push from the Herdr pane in the Kinas repository clears an M, on the installed build — `outstanding — needs the
+      captain`
 - [x] With git out of reach, or the watch refused, the tree still lists and says so — `automated
       (tree-changes-no-git.e2e.ts, tree-changes-watch-fail.e2e.ts)`
 - [x] Nothing about changes reaches the log but counts — `automated (step 11: none of the fixture's names or text in

@@ -1,7 +1,7 @@
 # 0016 · The first mate is Firstmate, adopted, not built; Kinas runs none of its scripts that change anything
 
 Date: 2026-09-23
-Status: accepted
+Status: superseded by 0018
 
 ## Context
 

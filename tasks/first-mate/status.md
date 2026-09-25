@@ -73,10 +73,11 @@
   scripts outside a throwaway probe. Kinas's own clone lives under the data directory
   (`docs/external/firstmate-home.md`).
 - **Standing rules.** Kinas never runs `quota-axi`, writes nothing under Firstmate's home, and runs none of its scripts
-  that change anything — `fm-send.sh` included (ADR 0016); the captain's answers go on the clipboard for the first
+  that change anything — `fm-send.sh` included (ADR 0018, which supersedes 0016); the captain's answers go on the clipboard for the first
   mate's chat (ADR 0017). No test or probe touches Herdr's `default` session; set `HERDR_SESSION`, because Firstmate
   falls back to `default` without it. Workers start in Claude Code's Bypass Permissions mode; accepting it is the
   captain's call at their first real worker.
 - The process is `AGENTS.md`; the templates are in `tasks/_templates/`; the repository-wide decisions are
-  `docs/adr/0001`–`0017` (this feature's: 0014 and 0015, superseded by 0016 — Firstmate adopted, only its read-only
-  scripts run — and 0017 — Kinas's words to the first mate, a launch sentence or a line on the clipboard).
+  `docs/adr/0001`–`0018` (this feature's: 0014, superseded by 0016 and 0016 by 0018 — Firstmate adopted, only its
+  read-only scripts run, every read under its home listed — and 0015, superseded by 0017 — Kinas's words to the first
+  mate, a launch sentence or a line on the clipboard).

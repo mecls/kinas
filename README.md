@@ -152,7 +152,7 @@ repository to the first mate in one sentence.
 
 ## The crew
 
-Added 2026-09-24 (the first mate). The crew is Firstmate, adopted (ADR 0016): Kinas's own clone of
+Added 2026-09-24 (the first mate). The crew is Firstmate, adopted (ADR 0018): Kinas's own clone of
 `github.com/kunchenguid/firstmate` at `<data dir>/firstmate` — `~/Library/Application Support/ai.sintralabs.kinas/firstmate`
 — pinned at `f9f74a1` and reviewed monthly. That folder is Firstmate's home, and **Kinas never writes under it**: it
 runs only Firstmate's read-only scripts, with the login shell's `PATH` and `FM_HOME` set. The app keeps a read-only

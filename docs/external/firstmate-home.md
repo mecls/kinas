@@ -2,7 +2,7 @@
 
 ## What it is
 
-Firstmate (`github.com/kunchenguid/firstmate`) is the crew's conductor — the first mate — adopted, not built (ADR 0016, which supersedes 0014). It is a checkout of that repository whose `data/` (the queue, briefs, reports, learnings, `projects.md`, `backlog.md`), `state/` (windows, event logs, the session lock, `home-summary.json`) and `config/` (`backend`) are its own. Its scripts are the only contracts Kinas reads it through.
+Firstmate (`github.com/kunchenguid/firstmate`) is the crew's conductor — the first mate — adopted, not built (ADR 0018, which supersedes 0016 and, through it, 0014). It is a checkout of that repository whose `data/` (the queue, briefs, reports, learnings, `projects.md`, `backlog.md`), `state/` (windows, event logs, the session lock, `home-summary.json`) and `config/` (`backend`) are its own. Its scripts are the only contracts Kinas reads it through.
 
 ## Where
 
@@ -16,7 +16,7 @@ Firstmate (`github.com/kunchenguid/firstmate`) is the crew's conductor — the f
 
 - `packages/context/src/sources/firstmate.ts` — runs `bin/fm-fleet-snapshot.sh --json` (schema `fm-fleet-snapshot.v1`, 20 s timeout) for the launch screen and `kinas context`; reads `data/<id>/report.md` first lines for the reports list.
 - Build 3's collector (`readers/crew/`) — the snapshot; `fm-afk-contract.sh field <name>` and `fm-project-mode.sh <name>` for Settings; the `origin` in a project clone's `projects/<name>/.git/config`, to match it to a client folder; and the modification times of `data/backlog.md` and `state/home-summary.json` as triggers only (the summary's contents are not read: it is invalid during normal running).
-- Amended 2026-09-24 (the first mate, slice 2): Settings → Crew runs `fm-afk-contract.sh field entered` and `field expected_return` only while `state/.afk-contract` exists (the file is never opened), and `fm-project-mode.sh <name>` for each folder name under `projects/` — the names are listed, `data/projects.md` is not read. It also reads back `config/backend`, and `git -C <home> rev-parse HEAD` and `symbolic-ref --short -q HEAD` tell whether the clone is at the pin. These reads are not in ADR 0016's list; the build spec's §17 says why, for the captain.
+- Amended 2026-09-24 (the first mate, slice 2): Settings → Crew runs `fm-afk-contract.sh field entered` and `field expected_return` only while `state/.afk-contract` exists (the file is never opened), and `fm-project-mode.sh <name>` for each folder name under `projects/` — the names are listed, `data/projects.md` is not read. It also reads back `config/backend`, and `git -C <home> rev-parse HEAD` and `symbolic-ref --short -q HEAD` tell whether the clone is at the pin. These reads were not in ADR 0016's list; ADR 0018 (2026-09-25) lists them, with every other read under the home.
 - Amended 2026-09-25 (the first mate, slice 4): a task's clone is its `project` path from the snapshot, or — for a task
   not yet spawned, which has only Firstmate's name for its project — `projects/<name>`; either way only a path
   lexically under `<home>/projects/`, and only its `.git/config` (a `.git` file's `gitdir:` followed) is read, once per

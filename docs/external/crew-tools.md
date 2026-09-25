@@ -34,5 +34,5 @@ On the login shell's `PATH` (`~/.local/bin`, npm's global prefix — under nvm o
 
 - `curl … | sh`, or any install without an exact version — and, for a release, without its pinned checksum matching. A changed checksum for the same tag is not installed.
 - Run a tool's `setup hooks`: setup prints the line for the captain to run.
-- Run `quota-axi` from Kinas, even for its version (ADR 0016).
+- Run `quota-axi` from Kinas, even for its version (ADR 0018).
 - Move a version or a floor without moving the Firstmate pin, and the pin only with the captain.

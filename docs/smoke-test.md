@@ -356,7 +356,13 @@ folder with no remote, as the fixture's `repo` is; the push's own lines follow i
 - [x] ↻ clears a folder git ignores and keeps an unpushed file; Refresh files says "1 change not pushed yet" —
       `automated (push 3)`
 - [x] A pull of text already on the remote marks nothing — `automated (push 4)`
-- [ ] Median from `git push` exiting to the mark gone, over 10 pushes: under 1 s — `outstanding — the push timing case`
+- [x] Median from `git push` exiting to the mark gone, over 10 pushes: under 1 s — **median 122 ms** (111, 122, 122,
+      115, 119, 123, 122, 123, 128, 114), stamped in the page as each mark left the DOM, on the debug e2e build
+      2026-09-25 18:26, the full suite run alone — `automated (tree-changes.e2e.ts, the push timing case, which fails
+      at 1 s)`
+- [x] What a push costs in the Kinas repository: its upstream's file list, 590 entries, read in 24–43 ms (`ls-tree -r`,
+      three runs); a `git gc` on a scratch clone of it woke the refs watch once, in each of two runs — `measured
+      2026-09-25 (the ignored test gc_wakes_the_refs_thread_this_many_times)`
 - [ ] A push from the Herdr pane in the Kinas repository clears an M, on the installed build — `outstanding — needs the
       captain`
 - [x] With git out of reach, or the watch refused, the tree still lists and says so — `automated

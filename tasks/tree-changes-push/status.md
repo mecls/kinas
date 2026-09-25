@@ -3,9 +3,11 @@
 - Gate 1 · Product: APPROVED 2026-09-25 — `prd.md`, from the captain's answers 1A, 2A, 3A (§7); approved as written,
   so §7.1 (↻'s tooltip) and §7.2 (↻ stays shown) stand
   - Mockups: APPROVED 2026-09-25 — `mockups/sidebar-push.html`
-- Gate 2 · Architecture: in progress — `architecture.md`, private, at its absolute path in the main checkout
-  (`tasks/tree-changes-push/architecture.md`)
-- Gate 3 · Program design: pending
+- Gate 2 · Architecture: APPROVED 2026-09-25 — `architecture.md`, private, at its absolute path in the main checkout
+  (`tasks/tree-changes-push/architecture.md`), with its three PRD clarifications written into `prd.md` as dated
+  notes (rules 1, 2 and 12). The ADR it offers (0018, "Kinas reads a repository's own refs and never fetches") is
+  not written: the captain approved the gate without a word on it
+- Gate 3 · Program design: in progress — `build-spec.md` §11, private, in the main checkout beside `architecture.md`
 - Gate 4 · Slice plan: pending
 
 ## Slices

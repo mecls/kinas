@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
 import {
   addClientFolder,
+  addToCrew,
   answerCrew,
   BEFORE_COPY,
   crewErrorCode,
@@ -537,6 +538,24 @@ export function App() {
     },
     [goTo, say, reloadCrew],
   );
+  // Add to crew (§11.3; ADR 0017): Rust starts the first mate with the sentence, or — it was running — puts the sentence
+  // on the clipboard; either way the Work page shows with the terminal holding the keys. A refusal says why.
+  const addFolderToCrew = useCallback(
+    async (f: ProjectRow) => {
+      try {
+        const added = await addToCrew(f.path);
+        if (added === "copied") say("The ask is on the clipboard — paste it into the first mate's pane.");
+        wantTerminalFocus.current = true;
+        goTo("work");
+        setFocusTick((n) => n + 1);
+      } catch (e) {
+        say(crewErrorOf(e));
+      } finally {
+        reloadCrew();
+      }
+    },
+    [goTo, say, reloadCrew],
+  );
   const openBox = useCallback(
     (task: string, key: string, kind: InboxBox["kind"]) => {
       setInboxRequest((r) => ({ task, key, kind, seq: (r?.seq ?? 0) + 1 }));
@@ -622,6 +641,8 @@ export function App() {
         notice={notice}
         panelOpen={readerShowing}
         waiting={crew?.waiting ?? 0}
+        crew={{ installed: !!crew && crew.page !== "uninstalled", repos: crew?.crew_repos ?? [] }}
+        onAddToCrew={(f) => void addFolderToCrew(f)}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">

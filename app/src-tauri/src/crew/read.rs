@@ -28,6 +28,8 @@ pub struct CrewSnapshot {
     pub reconcile: Vec<String>,
     pub waiting: u32,
     pub overnight_since: i64,
+    /// Every GitHub repository already in the crew — a task's, or a clone Firstmate has — for Add to crew's reason.
+    pub crew_repos: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,6 +95,7 @@ pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: b
         reconcile: Vec::new(),
         waiting: waiting(conn, org)?,
         overnight_since: crate::crew::focus::overnight_since(&crate::crew::focus::stamps(conn, org), now),
+        crew_repos: task_repos(conn, org)?,
     })
 }
 
@@ -313,6 +316,13 @@ fn decisions(conn: &Connection, org: &str, task: Option<&str>) -> rusqlite::Resu
             copied_at: r.get(7)?,
         })
     })?;
+    rows.collect()
+}
+
+/// Every repository a task the mirror holds names, done and gone ones too.
+pub(crate) fn task_repos(conn: &Connection, org: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT DISTINCT repo FROM crew_tasks WHERE org_id = ?1 AND repo IS NOT NULL ORDER BY repo")?;
+    let rows = stmt.query_map(params![org], |r| r.get(0))?;
     rows.collect()
 }
 

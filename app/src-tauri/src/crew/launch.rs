@@ -68,7 +68,6 @@ fn remember_typed(pane: &str) {
 /// What the pane is asked, besides starting: nothing, or ADR 0017's Add to crew sentence (built by `repo::sentence`).
 pub(crate) enum Ask {
     None,
-    #[allow(dead_code)] // Add to crew, slice 8.
     Add(String),
 }
 

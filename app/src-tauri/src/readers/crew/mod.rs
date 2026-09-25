@@ -69,9 +69,16 @@ pub(crate) struct CrewLive {
     live: RwLock<LiveView>,
     /// Each PR's checks by URL as `gh` last listed them, for the task detail's ChecksList: names are not stored.
     checks: Mutex<HashMap<String, Vec<(String, String)>>>,
+    /// The GitHub repositories of Firstmate's clones under `<home>/projects/`: already in the crew, for Add to crew.
+    project_repos: Mutex<Vec<String>>,
 }
 
 impl CrewLive {
+    /// The repositories Firstmate already has a clone of, as of the last cycle.
+    pub(crate) fn project_repos(&self) -> Vec<String> {
+        self.project_repos.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
     /// A PR's checks as `gh` last listed them this run; empty before it answered.
     pub(crate) fn checks_of(&self, url: &str) -> Vec<(String, String)> {
         self.checks.lock().unwrap_or_else(|p| p.into_inner()).get(url).cloned().unwrap_or_default()
@@ -241,6 +248,8 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     }
     // The script, the clones' configs and `gh` all run with no guard held.
     let outcome = firstmate::fleet_snapshot(home).and_then(|ran| read(&ran));
+    let projects = project_repos(home, memo);
+    *app.state::<CrewLive>().project_repos.lock().unwrap_or_else(|p| p.into_inner()) = projects;
     let found = match &outcome {
         Ok(fleet) => {
             let visible = app.state::<ReaderControl>().crew_visible();
@@ -275,6 +284,22 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     };
     changed(app);
     ok
+}
+
+/// The repositories of Firstmate's clones, one per folder under `<home>/projects/`, each read once per run.
+fn project_repos(home: &Path, memo: &mut Memo) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(home.join("projects")) else { return Vec::new() };
+    let mut repos: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| {
+            let path = e.path().display().to_string();
+            memo.repos.entry(path.clone()).or_insert_with(|| repo::clone_repo(home, &path)).clone()
+        })
+        .collect();
+    repos.sort_unstable();
+    repos.dedup();
+    repos
 }
 
 /// Each task's repository by id, from its clone, read once per clone path this run (§7): only under

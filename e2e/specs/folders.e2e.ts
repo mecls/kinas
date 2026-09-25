@@ -115,7 +115,8 @@ describe("folder views (tasks/folder-views/prd.md)", () => {
 
   it("a right-click on a folder offers Hide and Add at the rows' size, keeps WebKit's menu away, and Esc closes it", async () => {
     const menu = await rightClick("acme");
-    expect(menu).toEqual({ prevented: true, items: ["Hide from sidebar", "Add a client folder…"] });
+    // 2026-09-25 (the first mate, slice 8): Add to crew follows Hide from sidebar, then a divider.
+    expect(menu).toEqual({ prevented: true, items: ["Hide from sidebar", "Add to crew", "—", "Add a client folder…"] });
     // The items are the sidebar rows' size, and the first — focused so the menu takes the keys — shows by its ground,
     // not a ring. Both slipped when the menu joined the library: base.css's ui- rules outranked the item's own.
     const look = await browser.execute(() => {
@@ -147,7 +148,7 @@ describe("folder views (tasks/folder-views/prd.md)", () => {
     expect(onHeading.items).toEqual(["Add a client folder…", "—", "Show acme"]);
     await browser.keys(["Escape"]);
     const onApp = await rightClick("app");
-    expect(onApp.items).toEqual(["Hide from sidebar", "Add a client folder…", "—", "Show acme"]);
+    expect(onApp.items).toEqual(["Hide from sidebar", "Add to crew", "—", "Add a client folder…", "—", "Show acme"]);
     expect(await chooseAndHear("Show acme")).toBe("acme is back in the sidebar");
     await waitForRows(6, "after showing acme");
     expect(Object.fromEntries(await sidebar())).toEqual(colours);

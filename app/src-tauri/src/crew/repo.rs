@@ -70,6 +70,19 @@ pub(crate) fn normalise(url: &str) -> Option<String> {
     (fine(owner) && fine(name)).then(|| format!("{owner}/{name}").to_lowercase())
 }
 
+/// `https://github.com/<owner>/<name>` for ADR 0017's sentence, only when both parts are letters, digits, `.`, `_` and
+/// `-` — anything else could break out of the one quoted launch argument, so it is refused, never escaped.
+pub(crate) fn github_url(repo: &str) -> Option<String> {
+    let (owner, name) = repo.split_once('/')?;
+    let fine = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+    (fine(owner) && fine(name)).then(|| format!("https://github.com/{owner}/{name}"))
+}
+
+/// ADR 0017's one sentence, verbatim around the URL.
+pub(crate) fn sentence(url: &str) -> String {
+    format!("Add the project {url} to the crew: clone it from GitHub, not from my desk, and ask me which mode it ships in.")
+}
+
 /// A task's repository from Firstmate's clone of its project (build spec §7): only when `project` sits lexically under
 /// `<home>/projects/`, checked before anything is read, so a snapshot cannot point Kinas at another folder's config.
 pub(crate) fn clone_repo(home: &Path, project: &str) -> Option<String> {
@@ -158,6 +171,20 @@ mod tests {
         fs::write(modules.join("config"), "[remote \"origin\"]\n\turl = https://github.com/o/lib-9c2e\n").unwrap();
         fs::write(sub.join(".git"), "gitdir: ../../.git/modules/lib\n").unwrap();
         assert_eq!(origin_repo(&sub).as_deref(), Some("o/lib-9c2e"));
+    }
+
+    #[test]
+    fn github_url_refuses_metacharacters() {
+        assert_eq!(github_url("o/alpha-9c2e").as_deref(), Some("https://github.com/o/alpha-9c2e"));
+        assert_eq!(github_url("O.rg_1/r.e-po").as_deref(), Some("https://github.com/O.rg_1/r.e-po"));
+        // The negative control: every shape that could leave the quoted argument, refused.
+        for bad in ["o/r'x", "o/r x", "o/$r", "o/r;x", "o/`r`", "o/r\"x", "o/r\nx", "o", "/r", "o/", "o/r/x"] {
+            assert_eq!(github_url(bad), None, "{bad:?}");
+        }
+        assert_eq!(
+            sentence("https://github.com/o/alpha-9c2e"),
+            "Add the project https://github.com/o/alpha-9c2e to the crew: clone it from GitHub, not from my desk, and ask me which mode it ships in."
+        );
     }
 
     #[test]

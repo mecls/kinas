@@ -174,6 +174,8 @@ export interface CrewSnapshot {
   reconcile: string[];
   waiting: number;
   overnight_since: number;
+  /** Every GitHub repository already in the crew — a task's, or a clone Firstmate has — for Add to crew. */
+  crew_repos: string[];
 }
 export interface CrewError {
   code: string;
@@ -246,6 +248,8 @@ export const crewErrorCode = (e: unknown): string | null =>
 /** The menu bar's `N waiting on you`: open a page in the window (build spec §4 Menu bar). */
 export const onAppNavigate = (handler: (page: "inbox") => void): Promise<UnlistenFn> =>
   listen<{ page: "inbox" }>("app_navigate", (e) => handler(e.payload.page));
+/** **Add to crew** on a client folder (ADR 0017): the first mate started with the sentence, or it on the clipboard. */
+export const addToCrew = (path: string) => invoke<"launched" | "copied">("crew_add", { path });
 /** A line the captain finished typing in the Work pane; Rust records it as an order only on a worker's pane. */
 export const recordOrder = (text: string) => invoke<boolean>("crew_record_order", { text });
 /** **Open its pane**: the task's worker workspace, focused in the session Kinas attaches. */

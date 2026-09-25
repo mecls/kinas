@@ -462,6 +462,18 @@ What happened since the end of the last session (2026-09-25, slice 7).
 - [ ] Waiting on you shows the newest three decisions and `All N in Inbox`; A approves there, R and D open the item on
       the Inbox with its box — `automated (crew-home.e2e.ts)` for R; A by hand — `outstanding — needs Miguel`
 
+## The crew: Add to crew
+
+A client folder handed to the first mate (2026-09-25, slice 8).
+
+- [ ] Right-click a client folder → Add to crew: with the first mate stopped, it starts with `Add the project
+      https://github.com/<owner>/<repo> to the crew: clone it from GitHub, not from my desk, and ask me which mode it
+      ships in.` as its one argument; running, that sentence goes on the clipboard, its pane is focused and nothing is
+      typed there — `automated (crew-add.e2e.ts, AC-17)` with a stand-in; with the real first mate, which then clones
+      the project and asks its mode — `outstanding — needs Miguel`
+- [ ] The item stays in place, disabled with its reason: `No GitHub remote`, `Firstmate isn't installed`, `Already in
+      the crew`; a remote the sentence cannot carry is refused — `automated (crew-add.e2e.ts, folders.test.ts)`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

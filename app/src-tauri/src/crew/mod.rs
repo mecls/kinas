@@ -63,6 +63,9 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let conn = store.conn();
         let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, running, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
         view.blocked = blocked;
+        view.crew_repos.extend(live.project_repos());
+        view.crew_repos.sort_unstable();
+        view.crew_repos.dedup();
         Ok(view)
     })
     .await
@@ -218,6 +221,55 @@ pub async fn crew_record_order(app: AppHandle, text: String) -> Result<bool, Cre
     })
     .await
     .map_err(|e| CrewError::internal(format!("the order did not finish: {e}")))?
+}
+
+/// What Add to crew did: started the first mate with the sentence, or — it was running — put the sentence on the
+/// clipboard for the captain to paste.
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Added {
+    Launched,
+    Copied,
+}
+
+/// **Add to crew** on a client folder (§11.3 Add to crew; ADR 0017, §6.11): the path rechecked as a listed client
+/// folder (ADR 0009); its `origin` read; a remote the sentence cannot carry refused, never escaped; a repository
+/// already in the crew refused; then the launcher with the sentence as `claude`'s one argument — or, the first mate
+/// already running, the sentence on the clipboard and its pane focused. Kinas types nothing into a running first mate.
+#[tauri::command]
+pub async fn crew_add(app: AppHandle, path: String) -> Result<Added, CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let started = std::time::Instant::now();
+        if !crate::projects::is_listed(&app, &path) {
+            return Err(CrewError { code: "not_a_folder", message: "Not a client folder".into() });
+        }
+        let repo = repo::origin_repo(Path::new(&path)).ok_or_else(|| CrewError { code: "no_remote", message: "No GitHub remote".into() })?;
+        let url = repo::github_url(&repo)
+            .ok_or_else(|| CrewError { code: "bad_remote", message: "Its GitHub remote has characters the first mate's sentence cannot carry".into() })?;
+        let in_crew = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            read::task_repos(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?
+        };
+        if in_crew.contains(&repo) || app.state::<CrewLive>().project_repos().contains(&repo) {
+            return Err(CrewError { code: "already_in_crew", message: "Already in the crew".into() });
+        }
+        let sentence = repo::sentence(&url);
+        let home = crew_home(&app);
+        let (health, _) = tools::health(&home, now_ms());
+        let launched = launch::launch(&home, &health, &launch::Ask::Add(sentence.clone()))?;
+        let added = if launched == launch::Launched::Focused {
+            on_main(&app, &sentence).map_err(|e| CrewError { code: "clipboard", message: format!("Could not put the ask on the clipboard: {e}") })?;
+            Added::Copied
+        } else {
+            Added::Launched
+        };
+        log::info!("crew: added ({}) in {} ms", if added == Added::Copied { "copied" } else { "launched" }, started.elapsed().as_millis());
+        app.state::<ReaderControl>().crew_herdr();
+        Ok(added)
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("Add to crew did not finish: {e}")))?
 }
 
 /// `write_clipboard` on the main thread, where AppKit's pasteboard belongs, waited for from this one.

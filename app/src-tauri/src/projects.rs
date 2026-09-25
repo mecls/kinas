@@ -265,6 +265,11 @@ fn snapshot(app: &AppHandle) -> Snapshot {
     Snapshot { root, folders, stored }
 }
 
+/// Whether a path the webview names is a client folder this listing holds (ADR 0009) — the crew's Add to crew asks.
+pub(crate) fn is_listed(app: &AppHandle, path: &str) -> bool {
+    listed(&snapshot(app), path).is_ok()
+}
+
 /// A path the webview names must be one this listing holds (ADR 0009): the webview never writes a path Rust did not
 /// list.
 fn listed(snap: &Snapshot, path: &str) -> Result<(), String> {

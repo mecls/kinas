@@ -1,4 +1,4 @@
-import { folderMenu, hiddenFolders, menuAt, seatFolders, type SeatedFolder, shownFolders } from "./folders.ts";
+import { type CrewForMenu, folderMenu, hiddenFolders, menuAt, seatFolders, type SeatedFolder, shownFolders } from "./folders.ts";
 import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
 import type { Page } from "../App.tsx";
@@ -72,6 +72,8 @@ export function Sidebar({
   notice,
   panelOpen,
   waiting = 0,
+  crew = { installed: false, repos: [] },
+  onAddToCrew = () => {},
 }: {
   hidden: boolean;
   page: Page;
@@ -100,6 +102,9 @@ export function Sidebar({
   panelOpen: boolean;
   /** The crew's one waiting count (crew::read::waiting), on the Inbox row; hidden at zero. */
   waiting?: number;
+  /** What Add to crew needs: whether Firstmate is installed, and the repositories already in the crew. */
+  crew?: CrewForMenu;
+  onAddToCrew?: (folder: ProjectRow) => void;
 }) {
   const isPinned = (path: string) => pins.some((p) => p.path === path);
   // Called, not mounted: a function made on every render is harmless as a function and would remount as a component.
@@ -158,7 +163,17 @@ export function Sidebar({
           </section>
         )}
 
-        <ClientFolders projects={projects} folder={folder} onOpen={onOpen} folderActions={folderActions} onHide={onHide} onShow={onShow} onAdd={onAdd} />
+        <ClientFolders
+          projects={projects}
+          folder={folder}
+          onOpen={onOpen}
+          folderActions={folderActions}
+          onHide={onHide}
+          onShow={onShow}
+          onAdd={onAdd}
+          crew={crew}
+          onAddToCrew={onAddToCrew}
+        />
       </div>
 
       <SidebarNotice notice={notice} panelOpen={panelOpen} />
@@ -192,6 +207,8 @@ function ClientFolders({
   onHide,
   onShow,
   onAdd,
+  crew,
+  onAddToCrew,
 }: {
   projects: readonly ProjectRow[];
   folder: string | null;
@@ -200,6 +217,8 @@ function ClientFolders({
   onHide: (folder: ProjectRow) => void;
   onShow: (folder: ProjectRow) => void;
   onAdd: () => void;
+  crew: CrewForMenu;
+  onAddToCrew: (folder: ProjectRow) => void;
 }) {
   const seated = seatFolders(projects);
   const shown = shownFolders(seated);
@@ -243,7 +262,7 @@ function ClientFolders({
       {menu && (
         // Keyed by the right-click, so a second one elsewhere mounts a fresh menu that takes the keys again.
         <div key={menu.seq} className="sidebar-menu" ref={box} style={{ left: menu.x, top: menu.y }}>
-          <Menu label={menu.target ? menu.target.name : "Client folders"} items={folderMenu(menu.target, hiddenFolders(seated), { hide: onHide, add: onAdd, show: onShow })} onClose={() => setMenu(null)} />
+          <Menu label={menu.target ? menu.target.name : "Client folders"} items={folderMenu(menu.target, hiddenFolders(seated), { hide: onHide, add: onAdd, show: onShow, addToCrew: onAddToCrew }, crew)} onClose={() => setMenu(null)} />
         </div>
       )}
     </section>

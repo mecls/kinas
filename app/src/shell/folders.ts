@@ -34,18 +34,38 @@ export const removedFolders = <T extends ProjectRow>(folders: readonly T[]): T[]
 export const hiddenFolders = <T extends ProjectRow>(folders: readonly T[]): T[] =>
   folders.filter((f) => f.hidden && !f.removed).sort((a, b) => a.name.localeCompare(b.name));
 
+/** What Add to crew needs to know about the crew: whether Firstmate is installed, and which repositories it has. */
+export interface CrewForMenu {
+  installed: boolean;
+  repos: readonly string[];
+}
+
+/** Why Add to crew cannot be used on this folder, or null when it can (build spec §4 Sidebar). */
+export function addToCrewReason(folder: ProjectRow, crew: CrewForMenu): string | null {
+  if (!folder.repo) return "No GitHub remote";
+  if (!crew.installed) return "Firstmate isn't installed";
+  if (crew.repos.includes(folder.repo)) return "Already in the crew";
+  return null;
+}
+
 /**
- * The client folders' right-click menu (DESIGN.md §3.1, 1.3): Hide from sidebar when a folder was right-clicked (the
- * heading has none), Add a client folder…, then a divider and Show for each hidden folder. Removal is not here: it
- * lives in Settings, where the Removed list and Restore are in view.
+ * The client folders' right-click menu (DESIGN.md §3.1, 1.3): Hide from sidebar and Add to crew when a folder was
+ * right-clicked (the heading has neither), a divider, Add a client folder…, then a divider and Show for each hidden
+ * folder. Add to crew stays in place, disabled with its reason, when it cannot be used (the first mate, 2026-09-25).
+ * Removal is not here: it lives in Settings, where the Removed list and Restore are in view.
  */
 export function folderMenu(
   target: ProjectRow | null,
   hidden: readonly ProjectRow[],
-  act: { hide: (f: ProjectRow) => void; add: () => void; show: (f: ProjectRow) => void },
+  act: { hide: (f: ProjectRow) => void; add: () => void; show: (f: ProjectRow) => void; addToCrew?: (f: ProjectRow) => void },
+  crew: CrewForMenu = { installed: false, repos: [] },
 ): MenuEntry[] {
   const entries: MenuEntry[] = [];
-  if (target) entries.push({ id: "hide", label: "Hide from sidebar", onSelect: () => act.hide(target) });
+  if (target) {
+    entries.push({ id: "hide", label: "Hide from sidebar", onSelect: () => act.hide(target) });
+    entries.push({ id: "crew", label: "Add to crew", disabledReason: addToCrewReason(target, crew), onSelect: () => act.addToCrew?.(target) });
+    entries.push({ id: "folder", divider: true });
+  }
   entries.push({ id: "add", label: "Add a client folder…", onSelect: act.add });
   if (hidden.length > 0) {
     entries.push({ id: "hidden", divider: true });

@@ -53,14 +53,26 @@ describe("folder views (tasks/folder-views/prd.md)", () => {
     const calls: string[] = [];
     const act = { hide: (f: ProjectRow) => calls.push(`hide ${f.name}`), add: () => calls.push("add"), show: (f: ProjectRow) => calls.push(`show ${f.name}`) };
     const labels = (entries: ReturnType<typeof folderMenu>) => entries.map((e) => ("divider" in e ? "—" : e.label));
-    expect(labels(folderMenu(row("acme"), [], act))).toEqual(["Hide from sidebar", "Add a client folder…"]);
+    expect(labels(folderMenu(row("acme"), [], act))).toEqual(["Hide from sidebar", "Add to crew", "—", "Add a client folder…"]);
     const hidden = hiddenFolders([row("zeta", { hidden: true }), row("beta", { hidden: true })]);
-    const onFolder = folderMenu(row("app"), hidden, act);
-    expect(labels(onFolder)).toEqual(["Hide from sidebar", "Add a client folder…", "—", "Show beta", "Show zeta"]);
-    // On the heading there is no folder to hide.
+    const withCrew = { ...act, addToCrew: (f: ProjectRow) => calls.push(`crew ${f.name}`) };
+    const onFolder = folderMenu(row("app", { repo: "o/app" }), hidden, withCrew, { installed: true, repos: [] });
+    expect(labels(onFolder)).toEqual(["Hide from sidebar", "Add to crew", "—", "Add a client folder…", "—", "Show beta", "Show zeta"]);
+    // On the heading there is no folder to hide or add.
     expect(labels(folderMenu(null, hidden, act))).toEqual(["Add a client folder…", "—", "Show beta", "Show zeta"]);
     for (const e of onFolder) if (!("divider" in e)) e.onSelect();
-    expect(calls).toEqual(["hide app", "add", "show beta", "show zeta"]);
+    expect(calls).toEqual(["hide app", "crew app", "add", "show beta", "show zeta"]);
+  });
+
+  test("Add to crew says why it cannot be used, and stays in place", () => {
+    const reason = (f: ProjectRow, crew: { installed: boolean; repos: string[] }) => {
+      const item = folderMenu(f, [], { hide: () => {}, add: () => {}, show: () => {} }, crew).find((e) => e.id === "crew");
+      return item && !("divider" in item) ? (item.disabledReason ?? null) : "missing";
+    };
+    expect(reason(row("a", { repo: null }), { installed: true, repos: [] })).toBe("No GitHub remote");
+    expect(reason(row("a", { repo: "o/a" }), { installed: false, repos: [] })).toBe("Firstmate isn't installed");
+    expect(reason(row("a", { repo: "o/a" }), { installed: true, repos: ["o/a"] })).toBe("Already in the crew");
+    expect(reason(row("a", { repo: "o/a" }), { installed: true, repos: ["o/b"] })).toBeNull();
   });
 
   test("a menu opened near an edge is moved back inside the window", () => {

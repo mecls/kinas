@@ -16,8 +16,8 @@ const summary = (over: Partial<TreeChanges> = {}): TreeChanges => ({
   ...over,
 });
 
-const file = (path: string, mark: "A" | "M" | "D"): ChangeEntry => ({ path, kind: "file", mark });
-const dir = (path: string, mark: "A" | "M" | "D"): ChangeEntry => ({ path, kind: "dir", mark });
+const file = (path: string, mark: "A" | "M" | "D", since_ms = at1402): ChangeEntry => ({ path, kind: "file", mark, since_ms });
+const dir = (path: string, mark: "A" | "M" | "D", since_ms = at1402): ChangeEntry => ({ path, kind: "dir", mark, since_ms });
 const listed = (path: string, kind: "file" | "dir" = "file"): DirEntry => ({ name: path.slice(path.lastIndexOf("/") + 1), path, kind });
 
 describe("the words a tree says (tree changes rules 8, 10 and 11)", () => {
@@ -30,8 +30,8 @@ describe("the words a tree says (tree changes rules 8, 10 and 11)", () => {
     expect(wordsFor("new-note.md", "A", null, "14:02")).toBe("new-note.md, added since 14:02");
     expect(wordsFor("overview.md", "M", null, "14:02")).toBe("overview.md, modified since 14:02");
     expect(wordsFor("old-plan.md", "D", null, "14:02")).toBe("old-plan.md, deleted since 14:02");
-    expect(wordsFor("docs", null, { path: "/p/kinas/docs", count: 3, strongest: "D" }, "14:02")).toBe("docs, 3 changes inside since 14:02");
-    expect(wordsFor("app", null, { path: "/p/kinas/app", count: 1, strongest: "M" }, "14:02")).toBe("app, 1 change inside since 14:02");
+    expect(wordsFor("docs", null, { path: "/p/kinas/docs", count: 3, strongest: "D", since_ms: at1402 }, "14:02")).toBe("docs, 3 changes inside since 14:02");
+    expect(wordsFor("app", null, { path: "/p/kinas/app", count: 1, strongest: "M", since_ms: at1402 }, "14:02")).toBe("app, 1 change inside since 14:02");
     expect(wordsFor("README.md", null, null, "14:02")).toBeNull();
   });
 
@@ -63,8 +63,8 @@ describe("the marks a folder's rows read", () => {
       total: 4,
       entries: [dir("/p/kinas/research", "A"), file("/p/kinas/docs/old-plan.md", "D"), file("/p/kinas/docs/overview.md", "M"), file("/p/kinas/app/main.rs", "M")],
       folders: [
-        { path: "/p/kinas/docs", count: 2, strongest: "D" },
-        { path: "/p/kinas/app", count: 1, strongest: "M" },
+        { path: "/p/kinas/docs", count: 2, strongest: "D", since_ms: at1402 },
+        { path: "/p/kinas/app", count: 1, strongest: "M", since_ms: at1402 },
       ],
     }),
     () => 0,
@@ -80,11 +80,30 @@ describe("the marks a folder's rows read", () => {
   test("own marks, roll-ups and what was deleted from each folder", () => {
     expect(marks.markOf("/p/kinas/docs/overview.md")).toBe("M");
     expect(marks.markOf("/p/kinas/README.md")).toBeNull();
-    expect(marks.rollupOf("/p/kinas/docs")).toEqual({ path: "/p/kinas/docs", count: 2, strongest: "D" });
+    expect(marks.rollupOf("/p/kinas/docs")).toEqual({ path: "/p/kinas/docs", count: 2, strongest: "D", since_ms: at1402 });
     expect(marks.rollupOf("/p/kinas/research")).toBeNull();
     expect(marks.deletedIn("/p/kinas/docs")).toEqual([file("/p/kinas/docs/old-plan.md", "D")]);
     expect(marks.deletedIn("/p/kinas")).toEqual([]);
-    expect(marks.since).toBe("14:02");
+    expect(marks.sinceOf("/p/kinas/docs/overview.md")).toBe("14:02");
+  });
+
+  test("folderMarksOf_gives_each_row_its_own_since", () => {
+    // Tree changes clear on push (rule 12): a row counts from its own moment — the tree's first showing, or the push
+    // that last made it its starting point — and a roll-up from the earliest of what it counts.
+    const at1531 = new Date(2026, 8, 25, 15, 31).getTime();
+    const pushed = folderMarksOf(
+      summary({
+        total: 3,
+        entries: [file("/p/kinas/docs/overview.md", "M", at1531), file("/p/kinas/docs/plan.md", "M"), dir("/p/kinas/research", "A", at1531)],
+        folders: [{ path: "/p/kinas/docs", count: 2, strongest: "M", since_ms: at1402 }],
+      }),
+      () => 0,
+    );
+    expect(pushed.sinceOf("/p/kinas/docs/overview.md")).toBe("15:31");
+    expect(pushed.sinceOf("/p/kinas/docs/plan.md")).toBe("14:02");
+    expect(pushed.sinceOf("/p/kinas/research/deep/idea.md")).toBe("15:31");
+    expect(pushed.sinceOf("/p/kinas/docs")).toBe("14:02");
+    expect(pushed.sinceOf("/p/kinas/README.md")).toBe("");
   });
 
   test("no summary, or one with nothing in it, marks nothing but still follows re-listing", () => {
@@ -134,15 +153,23 @@ describe("the store keeps each root's latest summary", () => {
 
   test("useMarkOf_prefers_the_deepest_root", () => {
     const store = createChangesStore();
-    store.accept(summary({ root: "/p/kinas", since_ms: 1_000, total: 1, entries: [file("/p/kinas/tasks/plan.md", "M")] }));
-    store.accept(summary({ root: "/p/kinas/tasks", since_ms: 2_000, total: 1, entries: [file("/p/kinas/tasks/plan.md", "A")] }));
+    store.accept(summary({ root: "/p/kinas", since_ms: 1_000, total: 1, entries: [file("/p/kinas/tasks/plan.md", "M", 1_000)] }));
+    store.accept(summary({ root: "/p/kinas/tasks", since_ms: 2_000, total: 1, entries: [file("/p/kinas/tasks/plan.md", "A", 2_000)] }));
     expect(store.markOf("/p/kinas/tasks/plan.md")).toEqual({ mark: "A", since_ms: 2_000 });
     // Only the outer root marks it: the outer root answers.
     store.accept(summary({ root: "/p/kinas/tasks", since_ms: 2_000 }));
     expect(store.markOf("/p/kinas/tasks/plan.md")).toEqual({ mark: "M", since_ms: 1_000 });
     // Inside an added folder, A; a root is not inside itself; unmarked is null.
-    store.accept(summary({ root: "/p/site", since_ms: 3_000, total: 1, entries: [dir("/p/site/research", "A")] }));
+    store.accept(summary({ root: "/p/site", since_ms: 3_000, total: 1, entries: [dir("/p/site/research", "A", 3_000)] }));
     expect(store.markOf("/p/site/research/deep/idea.md")).toEqual({ mark: "A", since_ms: 3_000 });
+  });
+
+  test("markOf_answers_the_entry_s_own_since", () => {
+    // Not the root's caption time: the path's own, which a push may have moved on (tree changes clear on push).
+    const store = createChangesStore();
+    store.accept(summary({ root: "/p/kinas", since_ms: 1_000, total: 2, entries: [file("/p/kinas/a.md", "M", 1_000), file("/p/kinas/b.md", "M", 5_000), dir("/p/kinas/new", "A", 7_000)] }));
+    expect(store.markOf("/p/kinas/b.md")).toEqual({ mark: "M", since_ms: 5_000 });
+    expect(store.markOf("/p/kinas/new/inside.md")).toEqual({ mark: "A", since_ms: 7_000 });
     expect(store.markOf("/p/site")).toBeNull();
     expect(store.markOf("/p/kinas/README.md")).toBeNull();
   });

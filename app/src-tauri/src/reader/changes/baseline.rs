@@ -97,6 +97,10 @@ pub struct RepoAt {
 pub enum Rebase {
     /// On the upstream: its text is the upstream's blob, read from git when it is needed; no copy is kept.
     Pushed { head: Arc<Head>, blob: String, stat: Stat },
+    /// Gone here and at the upstream: the entry and everything beneath it removed — the moment kept, as a tombstone.
+    Gone,
+    /// An added folder the upstream holds: its own entry. What is inside is judged path by path.
+    Folder { stat: Stat },
 }
 
 /// Cloned, never edited in place once installed: the root's thread rebaselines a copy and installs it whole, so a diff
@@ -110,6 +114,9 @@ pub struct Baseline {
     copied: Vec<PathBuf>,
     /// Every repository reaching into the root, deepest first, so a path asks the nearest.
     pub repos: Vec<RepoAt>,
+    /// When each rebaseline happened, for a path or a folder — a removed path's moment too, as a tombstone — so a
+    /// mark says since when it counts (PRD rule 12, Gate 2).
+    pub since: BTreeMap<PathBuf, Millis>,
 }
 
 impl Baseline {
@@ -123,19 +130,40 @@ impl Baseline {
         self.repos.iter().find(|r| path.starts_with(&r.top))
     }
 
-    /// Makes `path`'s baseline what `rebase` says. Answers the change in copy bytes: negative when a copy is given back.
-    pub fn rebase(&mut self, path: &Path, rebase: Rebase) -> i64 {
-        let given_back = match self.entries.get(path) {
-            Some(BaseEntry { text: BaseText::Copy(bytes), .. }) => bytes.len() as u64,
-            _ => 0,
-        };
+    /// A path's "since": the latest rebaseline of the path or of a folder above it, else the record's own moment.
+    pub fn since_of(&self, path: &Path, record_since: Millis) -> Millis {
+        path.ancestors().filter_map(|a| self.since.get(a)).copied().max().unwrap_or(record_since)
+    }
+
+    /// Makes `path`'s baseline what `rebase` says, from `now`. Answers the change in copy bytes: negative when copies
+    /// are given back.
+    pub fn rebase(&mut self, path: &Path, rebase: Rebase, now: Millis) -> i64 {
+        let before = self.copy_bytes;
         match rebase {
-            Rebase::Pushed { head, blob, stat } => {
-                self.entries.insert(path.to_path_buf(), BaseEntry { stat, text: BaseText::Blob { head, blob } });
+            Rebase::Pushed { head, blob, stat } => self.put(path, BaseEntry { stat, text: BaseText::Blob { head, blob } }),
+            Rebase::Gone => {
+                let gone: Vec<PathBuf> = self.entries.get_key_value(path).map(|(p, _)| p.clone()).into_iter().chain(self.beneath(path).map(|(p, _)| p.clone())).collect();
+                for p in gone {
+                    self.give_back(&p);
+                    self.entries.remove(&p);
+                }
             }
+            Rebase::Folder { stat } => self.put(path, BaseEntry { stat, text: BaseText::NotText }),
         }
-        self.copy_bytes -= given_back;
-        -(given_back as i64)
+        self.since.insert(path.to_path_buf(), now);
+        self.copy_bytes as i64 - before as i64
+    }
+
+    /// Replaces a path's entry, giving back the copy it held.
+    fn put(&mut self, path: &Path, entry: BaseEntry) {
+        self.give_back(path);
+        self.entries.insert(path.to_path_buf(), entry);
+    }
+
+    fn give_back(&mut self, path: &Path) {
+        if let Some(BaseEntry { text: BaseText::Copy(bytes), .. }) = self.entries.get(path) {
+            self.copy_bytes -= bytes.len() as u64;
+        }
     }
 
     /// Drops copies, deepest first, until what is kept fits `left`: two roots taking their baselines at once each
@@ -505,11 +533,43 @@ mod tests {
         let mut after = before.clone();
         let stat = Stat::of(&root.join("a.md")).unwrap();
         let head = Arc::new(Head { repo: root.clone(), commit: "c0ffee".into() });
-        assert_eq!(after.rebase(&root.join("a.md"), Rebase::Pushed { head: head.clone(), blob: "b10b".into(), stat }), -100);
+        assert_eq!(after.rebase(&root.join("a.md"), Rebase::Pushed { head: head.clone(), blob: "b10b".into(), stat }, 5_000), -100);
         assert_eq!(after.copy_bytes, 0);
         assert_eq!(after.entries[&root.join("a.md")].text, BaseText::Blob { head, blob: "b10b".into() });
         assert!(matches!(before.entries[&root.join("a.md")].text, BaseText::Copy(_)), "the clone was rebaselined, not the original");
         assert_eq!(before.copy_bytes, 100);
+    }
+
+    #[test]
+    fn since_of_takes_the_latest_of_the_path_and_its_folders() {
+        let (_dir, root) = tree(&[("docs/a.md", b"a"), ("docs/sub/b.md", b"b"), ("other.md", b"o")]);
+        let mut baseline = take(&root, None, 1024, NOTHING_CHANGED);
+        assert_eq!(baseline.since_of(&root.join("docs/a.md"), 1_000), 1_000, "never rebaselined: the record's moment");
+        let stat = |p: &str| Stat::of(&root.join(p)).unwrap();
+        let head = Arc::new(Head { repo: root.clone(), commit: "c0ffee".into() });
+        baseline.rebase(&root.join("docs/a.md"), Rebase::Pushed { head, blob: "b10b".into(), stat: stat("docs/a.md") }, 3_000);
+        baseline.rebase(&root.join("docs"), Rebase::Folder { stat: stat("docs") }, 5_000);
+        assert_eq!(baseline.since_of(&root.join("docs/a.md"), 1_000), 5_000, "the folder's later moment wins");
+        assert_eq!(baseline.since_of(&root.join("docs/sub/b.md"), 1_000), 5_000, "inherited from the folder above");
+        assert_eq!(baseline.since_of(&root.join("other.md"), 1_000), 1_000);
+        // Removed, the path's moment stays: a file made again there counts from it.
+        baseline.rebase(&root.join("docs/sub"), Rebase::Gone, 7_000);
+        assert!(!baseline.entries.contains_key(&root.join("docs/sub/b.md")) && !baseline.entries.contains_key(&root.join("docs/sub")));
+        assert_eq!(baseline.since_of(&root.join("docs/sub/b.md"), 1_000), 7_000, "a tombstone still answers");
+    }
+
+    #[test]
+    fn rebase_gives_copies_back() {
+        let (_dir, root) = tree(&[("a.md", &[b'a'; 100]), ("d/b.md", &[b'b'; 50]), ("d/c.md", &[b'c'; 30])]);
+        let mut baseline = take(&root, None, 1024, NOTHING_CHANGED);
+        assert_eq!(baseline.copy_bytes, 180);
+        // Gone takes the folder and everything beneath, and gives back their copies.
+        assert_eq!(baseline.rebase(&root.join("d"), Rebase::Gone, 2_000), -80);
+        // A folder where a file was gives the file's copy back.
+        std::fs::remove_file(root.join("a.md")).unwrap();
+        std::fs::create_dir(root.join("a.md")).unwrap();
+        assert_eq!(baseline.rebase(&root.join("a.md"), Rebase::Folder { stat: Stat::of(&root.join("a.md")).unwrap() }, 3_000), -100);
+        assert_eq!((baseline.copy_bytes, baseline.entries[&root.join("a.md")].text.clone()), (0, BaseText::NotText));
     }
 
     #[test]

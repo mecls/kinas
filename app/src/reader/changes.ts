@@ -23,7 +23,11 @@ export interface FolderMarks {
   deletedIn(dir: string): ChangeEntry[];
   /** Grows each time a burst changes something directly in `dir`, so an expanded folder can re-list (rule 7). */
   touchedSeq(dir: string): number;
-  since: string;
+  /**
+   * A row's own "since", "14:02" (tree changes clear on push, rule 12): its entry's, else the added folder's above it,
+   * else its roll-up's; "" for a row with none.
+   */
+  sinceOf(path: string): string;
 }
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
@@ -91,7 +95,8 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
   if (!summary || (summary.entries.length === 0 && summary.folders.length === 0)) return { ...NO_MARKS, touchedSeq };
   const byPath = new Map(summary.entries.map((entry) => [entry.path, entry]));
   const rollups = new Map(summary.folders.map((rollup) => [rollup.path, rollup]));
-  const added = summary.entries.filter((e) => e.kind === "dir" && e.mark === "A").map((e) => `${e.path}/`);
+  const added = summary.entries.filter((e) => e.kind === "dir" && e.mark === "A");
+  const addedAbove = (path: string) => added.find((dir) => path.startsWith(`${dir.path}/`));
   const deleted = new Map<string, ChangeEntry[]>();
   for (const entry of summary.entries) {
     if (entry.mark !== "D") continue;
@@ -99,15 +104,18 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
     deleted.set(dir, [...(deleted.get(dir) ?? []), entry]);
   }
   return {
-    markOf: (path) => byPath.get(path)?.mark ?? (added.some((dir) => path.startsWith(dir)) ? "A" : null),
+    markOf: (path) => byPath.get(path)?.mark ?? (addedAbove(path) ? "A" : null),
     rollupOf: (path) => rollups.get(path) ?? null,
     deletedIn: (dir) => deleted.get(dir) ?? [],
     touchedSeq,
-    since: sinceLabel(summary.since_ms),
+    sinceOf: (path) => {
+      const ms = (byPath.get(path) ?? addedAbove(path) ?? rollups.get(path))?.since_ms;
+      return ms === undefined ? "" : sinceLabel(ms);
+    },
   };
 }
 
-const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, since: "" };
+const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "" };
 
 /**
  * The summaries, keyed by the root's real path, with the path each tree asked for mapped onto it. A store of its own
@@ -151,18 +159,18 @@ export function createChangesStore() {
       return summaries.get(realOf.get(asked) ?? asked) ?? null;
     },
     /**
-     * A file's mark from every summary, and its root's baseline: the deepest root that marks it wins, so a pinned
-     * `kinas/tasks` answers for its own files over Files' `kinas`. A file inside an added folder is A. Null: unmarked.
+     * A file's mark from every summary, and its own "since": the deepest root that marks it wins, so a pinned
+     * `kinas/tasks` answers for its own files over Files' `kinas`. A file inside an added folder is A, since the
+     * folder's time. Null: unmarked.
      */
     markOf(path: string): { mark: Mark; since_ms: number } | null {
       let found: { mark: Mark; since_ms: number } | null = null;
       let depth = -1;
       for (const s of summaries.values()) {
         if (!path.startsWith(`${s.root}/`) || s.root.length <= depth) continue;
-        const own = s.entries.find((e) => e.path === path)?.mark;
-        const mark = own ?? (s.entries.some((e) => e.kind === "dir" && e.mark === "A" && path.startsWith(`${e.path}/`)) ? "A" : null);
-        if (mark) {
-          found = { mark, since_ms: s.since_ms };
+        const entry = s.entries.find((e) => e.path === path) ?? s.entries.find((e) => e.kind === "dir" && e.mark === "A" && path.startsWith(`${e.path}/`));
+        if (entry) {
+          found = { mark: entry.path === path ? entry.mark : "A", since_ms: entry.since_ms };
           depth = s.root.length;
         }
       }

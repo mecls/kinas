@@ -6,7 +6,7 @@ use std::ops::Bound;
 use std::path::{Component, Path, PathBuf};
 
 use super::baseline::BaseEntry;
-use super::{FolderRollup, Mark};
+use super::{FolderRollup, Mark, Millis};
 use crate::reader::access::Kind;
 use crate::reader::listable_name;
 
@@ -106,18 +106,21 @@ pub fn under_marked_folder(root: &Path, path: &Path, marks: &BTreeMap<PathBuf, (
         .any(|a| matches!(marks.get(a), Some((_, Mark::Added | Mark::Deleted))))
 }
 
-/// Every folder above a marked path, up to and not including the root, with the count of marks beneath it and the
-/// strongest of them; and the root's total. Call it after dropping the marks under marked folders.
-pub fn rollups(root: &Path, marks: &BTreeMap<PathBuf, (Kind, Mark)>) -> (Vec<FolderRollup>, u32) {
-    let mut folders: HashMap<&Path, (u32, Mark)> = HashMap::new();
+/// Every folder above a marked path, up to and not including the root, with the count of marks beneath it, the
+/// strongest of them and the earliest "since" among them (tree changes clear on push, rule 12); and the root's total.
+/// Call it after dropping the marks under marked folders.
+pub fn rollups(root: &Path, marks: &BTreeMap<PathBuf, (Kind, Mark)>, since_of: &dyn Fn(&Path) -> Millis) -> (Vec<FolderRollup>, u32) {
+    let mut folders: HashMap<&Path, (u32, Mark, Millis)> = HashMap::new();
     for (path, &(_, mark)) in marks {
+        let since = since_of(path);
         for folder in path.ancestors().skip(1).take_while(|a| *a != root && a.starts_with(root)) {
-            let entry = folders.entry(folder).or_insert((0, mark));
+            let entry = folders.entry(folder).or_insert((0, mark, since));
             entry.0 += 1;
             entry.1 = strongest(entry.1, mark);
+            entry.2 = entry.2.min(since);
         }
     }
-    let mut rollups: Vec<FolderRollup> = folders.into_iter().map(|(path, (count, strongest))| FolderRollup { path: path.display().to_string(), count, strongest }).collect();
+    let mut rollups: Vec<FolderRollup> = folders.into_iter().map(|(path, (count, strongest, since_ms))| FolderRollup { path: path.display().to_string(), count, strongest, since_ms }).collect();
     rollups.sort_by(|a, b| a.path.cmp(&b.path));
     (rollups, u32::try_from(marks.len()).unwrap_or(u32::MAX))
 }
@@ -154,6 +157,18 @@ mod tests {
         ] {
             assert!(!listable_path(root, Path::new(hidden)), "{hidden} must not be listable");
         }
+    }
+
+    #[test]
+    fn rollups_say_the_earliest_since() {
+        let root = Path::new("/r");
+        let m: BTreeMap<PathBuf, (Kind, Mark)> = [("/r/docs/a.md", Mark::Modified), ("/r/docs/sub/b.md", Mark::Added)].into_iter().map(|(p, mark)| (PathBuf::from(p), (Kind::File, mark))).collect();
+        let since = |p: &Path| if p.ends_with("a.md") { 9_000 } else { 1_000 };
+        let (folders, _) = rollups(root, &m, &since);
+        let of = |p: &str| folders.iter().find(|f| f.path == p).map(|f| f.since_ms);
+        assert_eq!((of("/r/docs"), of("/r/docs/sub")), (Some(1_000), Some(1_000)));
+        let (folders, _) = rollups(root, &m, &|p: &Path| if p.ends_with("a.md") { 1_000 } else { 9_000 });
+        assert_eq!(folders.iter().map(|f| (f.path.as_str(), f.since_ms)).collect::<Vec<_>>(), [("/r/docs", 1_000), ("/r/docs/sub", 9_000)]);
     }
 
     #[test]
@@ -243,9 +258,9 @@ mod tests {
         let snapshot = m.clone();
         m.retain(|p, _| !under_marked_folder(root, p, &snapshot));
         assert_eq!(m.keys().map(|p| p.display().to_string()).collect::<Vec<_>>(), ["/r/app/main.rs", "/r/docs", "/r/research"]);
-        let (folders, total) = rollups(root, &m);
+        let (folders, total) = rollups(root, &m, &|_| 0);
         assert_eq!(total, 3);
-        assert_eq!(folders, [FolderRollup { path: "/r/app".into(), count: 1, strongest: Mark::Modified }]);
+        assert_eq!(folders, [FolderRollup { path: "/r/app".into(), count: 1, strongest: Mark::Modified, since_ms: 0 }]);
     }
 
     #[test]
@@ -260,13 +275,13 @@ mod tests {
         list.push(("/r/docs/old.md".into(), Kind::File, Mark::Deleted));
         list.push(("/r/docs/sub/x.md".into(), Kind::File, Mark::Modified));
         let m: BTreeMap<PathBuf, (Kind, Mark)> = list.into_iter().map(|(p, k, mark)| (PathBuf::from(p), (k, mark))).collect();
-        let (folders, total) = rollups(root, &m);
+        let (folders, total) = rollups(root, &m, &|_| 0);
         assert_eq!(total, 152);
         assert_eq!(
             folders,
             [
-                FolderRollup { path: "/r/docs".into(), count: 152, strongest: Mark::Deleted },
-                FolderRollup { path: "/r/docs/sub".into(), count: 151, strongest: Mark::Modified },
+                FolderRollup { path: "/r/docs".into(), count: 152, strongest: Mark::Deleted, since_ms: 0 },
+                FolderRollup { path: "/r/docs/sub".into(), count: 151, strongest: Mark::Modified, since_ms: 0 },
             ]
         );
     }

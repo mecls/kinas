@@ -2,6 +2,7 @@
 //! bridge. Every command that touches a file, a process or the store runs off the main thread (`spawn_blocking`, the
 //! `list_projects` shape); `set_crew_visible` touches memory only.
 
+pub(crate) mod answer;
 pub(crate) mod config;
 pub(crate) mod firstmate;
 pub(crate) mod home;
@@ -19,7 +20,7 @@ use home::PinState;
 use read::CrewSnapshot;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tools::{Health, ToolState};
 
 /// A refusal the webview shows as it is (the `ReaderError` shape).
@@ -156,6 +157,44 @@ pub async fn crew_focus_pane(app: AppHandle, task: String) -> Result<(), CrewErr
     })
     .await
     .map_err(|e| CrewError::internal(format!("the focus did not finish: {e}")))?
+}
+
+/// An Inbox answer (§11.3 Answering; ADR 0017): the line from the open decision row onto the clipboard, `copied_at`
+/// stamped and `crew_changed` said — the item reads Copied and still counts — then the launcher, so the first mate's
+/// pane is where the captain pastes it. A launcher refusal is this command's rejection; the line stays on the
+/// clipboard. No Firstmate script runs, and the answer's words are never logged.
+#[tauri::command]
+pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer::AnswerKind, text: String) -> Result<launch::Launched, CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let main = app.clone();
+        {
+            let store = app.state::<Store>();
+            answer::copy(&store, &task, &key, kind, &text, now_ms(), |line| on_main(&main, line))?;
+        }
+        let _ = app.emit(crate::readers::runtime::CREW_CHANGED, ());
+        crate::tray::refresh(&app);
+        log::info!("crew: answer copied");
+        let started = std::time::Instant::now();
+        let home = crew_home(&app);
+        let (health, _) = tools::health(&home, now_ms());
+        let launched = launch::launch(&home, &health, &launch::Ask::None)?;
+        log::info!("crew: launched ({}) in {} ms", launched.word(), started.elapsed().as_millis());
+        app.state::<ReaderControl>().crew_herdr();
+        Ok(launched)
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the answer did not finish: {e}")))?
+}
+
+/// `write_clipboard` on the main thread, where AppKit's pasteboard belongs, waited for from this one.
+fn on_main(app: &AppHandle, line: &str) -> Result<(), String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let text = line.to_string();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(crate::commands::write_clipboard(&text));
+    })
+    .map_err(|e| format!("the main thread did not take the copy: {e}"))?;
+    rx.recv_timeout(std::time::Duration::from_secs(5)).map_err(|_| "the clipboard did not answer within 5 s".to_string())?
 }
 
 /// What the Work page's chrome says about the pane (§4 Work): the session, then the focused workspace's label — a

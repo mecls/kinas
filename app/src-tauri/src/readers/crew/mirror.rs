@@ -198,7 +198,49 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
             applied.events += event(tx, org, id, now, "gone", "gone", None)?;
         }
     }
+    applied.decisions = decisions(tx, org, fleet, now)?;
     Ok(applied)
+}
+
+/// The fleet's open decisions (§7 Decision): each task's `hints.open_decisions[]`, and each captain-held record as one
+/// decision keyed by its own id (verb `captain-hold`, the hold's question as the summary). Folded into
+/// `crew_decisions`: a new key opens a row; a key the snapshot no longer lists is closed (`closed_at`) — Firstmate
+/// answered it in its chat, never Kinas; a closed key that returns reopens the same row with `copied_at` cleared. A
+/// row that stays open keeps its `copied_at`. Never deleted. Returns how many are open.
+fn decisions(tx: &Transaction, org: &str, fleet: &Fleet, now: i64) -> rusqlite::Result<usize> {
+    let mut open: Vec<(&str, &str, &str, String)> = Vec::new();
+    for t in &fleet.tasks {
+        for (key, verb, summary) in &t.open_decisions {
+            let verb = if verb == "blocked" { "blocked" } else { "needs-decision" };
+            open.push((t.id.as_str(), key.as_str(), verb, summary.clone()));
+        }
+        if t.captain_actionable && !t.open_decisions.iter().any(|(key, _, _)| *key == t.id) {
+            let summary = t.hold_reason.clone().or_else(|| t.title.clone()).unwrap_or_default();
+            open.push((t.id.as_str(), t.id.as_str(), "captain-hold", summary));
+        }
+    }
+    let listed: HashSet<(&str, &str)> = open.iter().map(|(task, key, _, _)| (*task, *key)).collect();
+    let mut stmt = tx.prepare("SELECT task_id, key FROM crew_decisions WHERE org_id = ?1 AND closed_at IS NULL")?;
+    let was_open: Vec<(String, String)> = stmt.query_map(params![org], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+    for (task, key) in &was_open {
+        if !listed.contains(&(task.as_str(), key.as_str())) {
+            tx.execute("UPDATE crew_decisions SET closed_at = ?4 WHERE org_id = ?1 AND task_id = ?2 AND key = ?3", params![org, task, key, now])?;
+        }
+    }
+    for (task, key, verb, summary) in &open {
+        tx.execute(
+            "INSERT INTO crew_decisions (org_id, task_id, key, verb, summary, opened_at, closed_at, copied_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL)
+             ON CONFLICT (org_id, task_id, key) DO UPDATE SET
+               verb = excluded.verb, summary = excluded.summary,
+               opened_at = CASE WHEN crew_decisions.closed_at IS NULL THEN crew_decisions.opened_at ELSE excluded.opened_at END,
+               copied_at = CASE WHEN crew_decisions.closed_at IS NULL THEN crew_decisions.copied_at ELSE NULL END,
+               closed_at = NULL",
+            params![org, task, key, verb, summary, now],
+        )?;
+    }
+    Ok(open.len())
 }
 
 /// A task's repository, from its clone (§7): written when its `project` moved to a new clone, or when none is known
@@ -637,6 +679,59 @@ mod tests {
         record(&mut store.conn(), store.org_id(), &Ok(fleet), &Found::default(), T0 + 6 * MIN).unwrap();
         assert_eq!(word(&store), "PR open");
         assert_eq!(kinds("pr"), ["PR #123 opened", "PR #124 opened"]);
+    }
+
+    type DecisionRow = (String, String, String, i64, Option<i64>, Option<i64>);
+
+    fn decision_rows(store: &Store) -> Vec<DecisionRow> {
+        let conn = store.conn();
+        let mut stmt = conn.prepare("SELECT key, verb, summary, opened_at, closed_at, copied_at FROM crew_decisions ORDER BY task_id, key").unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).unwrap();
+        rows.collect::<Result<_, _>>().unwrap()
+    }
+
+    #[test]
+    fn decision_reopens() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let asking = |keys: &[&str]| {
+            let keys: Vec<serde_json::Value> = keys.iter().map(|k| serde_json::json!({ "key": k, "verb": "needs-decision", "summary": format!("{k}? 9c2e") })).collect();
+            fleet_at("working", home.path(), move |v| {
+                v["tasks"][0]["hints"]["open_decisions"] = keys.clone().into();
+                v["tasks"][0]["hints"]["pending_decision"] = true.into();
+            })
+        };
+        let cycle_with = |fleet: Fleet, now: i64| record(&mut store.conn(), store.org_id(), &Ok(fleet), &Found::default(), now).unwrap().unwrap();
+
+        assert_eq!(cycle_with(asking(&["api-shape-9c2e"]), T0).decisions, 1);
+        assert_eq!(decision_rows(&store), vec![("api-shape-9c2e".into(), "needs-decision".into(), "api-shape-9c2e? 9c2e".into(), T0, None, None)]);
+        // Copied: still open, still the same row, and the next cycle keeps the stamp.
+        store.conn().execute("UPDATE crew_decisions SET copied_at = ?1", params![T0 + MIN]).unwrap();
+        cycle_with(asking(&["api-shape-9c2e"]), T0 + 2 * MIN);
+        assert_eq!(decision_rows(&store)[0].5, Some(T0 + MIN), "an open row keeps its copied_at");
+        // The snapshot drops it: Firstmate closed it in its chat.
+        assert_eq!(cycle_with(asking(&[]), T0 + 3 * MIN).decisions, 0);
+        assert_eq!(decision_rows(&store)[0].4, Some(T0 + 3 * MIN));
+        // It comes back: the same row, reopened, its copy forgotten.
+        cycle_with(asking(&["api-shape-9c2e"]), T0 + 4 * MIN);
+        assert_eq!(decision_rows(&store), vec![("api-shape-9c2e".into(), "needs-decision".into(), "api-shape-9c2e? 9c2e".into(), T0 + 4 * MIN, None, None)]);
+        assert_eq!(store.conn().query_row("SELECT count(*) FROM crew_decisions", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_held_task_is_one_decision_keyed_by_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/firstmate-fleet-snapshot.held.captured.json");
+        let held = parse_fleet(&std::fs::read_to_string(path).unwrap()).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(held), &Found::default(), T0).unwrap();
+        let (task, key, verb, summary): (String, String, String, String) = store
+            .conn()
+            .query_row("SELECT task_id, key, verb, summary FROM crew_decisions", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .unwrap();
+        assert_eq!((task.as_str(), key.as_str(), verb.as_str()), ("scratch-readme-kinas-r8", "scratch-readme-kinas-r8", "captain-hold"));
+        assert!(summary.starts_with("Approve landing branch"));
     }
 
     #[test]

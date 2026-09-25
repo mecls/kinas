@@ -647,17 +647,28 @@ pub fn check_clipboard_text(text: &str) -> Result<(), String> {
 /// deliberately no command that reads the clipboard, so nothing running in the pane can get at it.
 #[tauri::command]
 pub fn clipboard_write_text(text: String) -> Result<(), String> {
+    write_clipboard(&text)
+}
+
+/// The one door for text Kinas puts on the clipboard: the pane's copies, and the crew's answer lines (ADR 0017, build
+/// spec §6.4). Call it on the main thread. A debug build with `KINAS_E2E_CLIPBOARD_FILE` set writes that file instead,
+/// so a spec reads what was copied and the Mac's own clipboard is left alone.
+pub(crate) fn write_clipboard(text: &str) -> Result<(), String> {
     use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
     use objc2_foundation::NSString;
 
-    if let Err(e) = check_clipboard_text(&text) {
+    if let Err(e) = check_clipboard_text(text) {
         log::warn!("clipboard: refused a write: {e}");
         return Err(e);
+    }
+    #[cfg(debug_assertions)]
+    if let Some(path) = std::env::var_os("KINAS_E2E_CLIPBOARD_FILE").filter(|p| !p.is_empty()) {
+        return std::fs::write(path, text).map_err(|e| format!("the test clipboard file could not be written: {e}"));
     }
     let pasteboard = NSPasteboard::generalPasteboard();
     pasteboard.clearContents();
     // SAFETY: NSPasteboardTypeString is an immutable AppKit constant.
-    if !pasteboard.setString_forType(&NSString::from_str(&text), unsafe { NSPasteboardTypeString }) {
+    if !pasteboard.setString_forType(&NSString::from_str(text), unsafe { NSPasteboardTypeString }) {
         log::warn!("clipboard: the pasteboard refused {} bytes", text.len());
         return Err("the pasteboard refused the text".into());
     }

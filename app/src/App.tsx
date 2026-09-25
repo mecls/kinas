@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
 import {
   addClientFolder,
+  answerCrew,
+  BEFORE_COPY,
+  crewErrorCode,
   crewErrorOf,
   focusCrewPane,
   getUiPrefs,
   launchFirstMate,
   listProjects,
+  onAppNavigate,
   onOpenPalette,
   onReaderShow,
   type PinView,
@@ -40,7 +44,7 @@ import type { Notice } from "./shell/notice.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
 import { CrewPage } from "./pages/Crew.tsx";
 import { HomePage } from "./pages/Home.tsx";
-import { InboxPage } from "./pages/Inbox.tsx";
+import { InboxPage, type AnswerKind, type InboxBox } from "./pages/Inbox.tsx";
 import { TaskDetail } from "./crew/TaskDetail.tsx";
 import { useCrew } from "./crew/useCrew.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
@@ -155,8 +159,10 @@ export function App() {
 
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
-  // One crew reading for every page that shows the crew (crew/useCrew.ts); the collector runs for the Crew page.
-  const { crew, reload: reloadCrew } = useCrew(page === "crew");
+  // One crew reading for every page that shows the crew (crew/useCrew.ts); the collector runs for Crew and Inbox.
+  const { crew, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox");
+  /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
+  const [inboxRequest, setInboxRequest] = useState<(InboxBox & { seq: number }) | null>(null);
   /** The launcher is on its way: Herdr can take seconds, and a second click would only queue behind it. */
   const openingFirstMate = useRef(false);
 
@@ -175,6 +181,7 @@ export function App() {
       else if (action === "go.usage") goTo("usage");
       else if (action === "go.work") goTo("work");
       else if (action === "go.crew") goTo("crew");
+      else if (action === "go.inbox") goTo("inbox");
       else if (action === "palette") setPalette(true);
       else if (action === "settings") {
         setPalette(false);
@@ -224,6 +231,12 @@ export function App() {
 
   // Actions raised from inside the terminal (which swallows ⌘ chords before they bubble, R31), the palette or a page.
   useEffect(() => onAppAction(run), [run]);
+
+  // The menu bar's `N waiting on you` (build spec §4 Menu bar): Rust shows the window, then asks for the Inbox.
+  useEffect(() => {
+    const stop = onAppNavigate(() => goTo("inbox"));
+    return () => void stop.then((u) => u());
+  }, [goTo]);
 
   // The global hotkey (R30) brings the window forward in Rust, then asks for the palette.
   useEffect(() => {
@@ -502,6 +515,36 @@ export function App() {
 
   const folders = useMemo(() => seatFolders(projects), [projects]);
 
+  // An Inbox answer (§11.3 Answering; ADR 0017): Rust puts the line on the clipboard, then runs the launcher; the Work
+  // page shows with the terminal holding the keys, and the notice says what to paste. A refusal says why in the
+  // notice; one from the launcher came after the copy, so the item reads Copied all the same. Resolves whether the
+  // line reached the clipboard.
+  const answer = useCallback(
+    async (task: string, key: string, kind: AnswerKind, text: string): Promise<boolean> => {
+      try {
+        await answerCrew(task, key, kind, text);
+        say("Your answer is on the clipboard — paste it into the first mate's pane.");
+        wantTerminalFocus.current = true;
+        goTo("work");
+        setFocusTick((n) => n + 1);
+        return true;
+      } catch (e) {
+        say(crewErrorOf(e));
+        return !BEFORE_COPY.has(crewErrorCode(e) ?? "internal");
+      } finally {
+        reloadCrew();
+      }
+    },
+    [goTo, say, reloadCrew],
+  );
+  const openBox = useCallback(
+    (task: string, key: string, kind: InboxBox["kind"]) => {
+      setInboxRequest((r) => ({ task, key, kind, seq: (r?.seq ?? 0) + 1 }));
+      goTo("inbox");
+    },
+    [goTo],
+  );
+
   // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane — its own pane
   // while it runs, else the Work page with the terminal holding the keys, the way Open in terminal hands them over.
   const launchTask = useCallback(() => {
@@ -578,6 +621,7 @@ export function App() {
         projects={projects}
         notice={notice}
         panelOpen={readerShowing}
+        waiting={crew?.waiting ?? 0}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
@@ -593,10 +637,11 @@ export function App() {
               onSelect={openTask}
               onOpenPane={(id) => void openPane(id)}
               onLaunch={() => void firstMate()}
+              onInbox={() => goTo("inbox")}
             />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
-            <InboxPage />
+            <InboxPage crew={crew} folders={folders} request={inboxRequest} onAnswer={answer} />
           </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
             <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} />
@@ -642,6 +687,8 @@ export function App() {
             onClose={closeReader}
             onOpenPath={openFromSidebar}
             onOpenPane={(id) => void openPane(id)}
+            onApprove={(task, key) => void answer(task, key, "approve", "")}
+            onOpenBox={openBox}
           />
         </aside>
       </div>

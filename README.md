@@ -188,6 +188,7 @@ pane that paints its own 24-bit dark theme does not follow; Claude Code, for one
 | `KINAS_E2E_EXPORT_TO=<path>` | debug | The reader's Download writes its copy there instead of raising the macOS save sheet; every rule about where a copy may go still runs |
 | `KINAS_E2E_NO_PRINT=1` | debug | Print as PDF logs a line instead of raising the macOS print sheet |
 | `KINAS_E2E_CREW_COMMAND=<path>` | debug | The launcher runs this program in the first mate's pane instead of `claude`, with the same arguments — a stand-in that records them (added 2026-09-24, the first mate) |
+| `KINAS_E2E_CLIPBOARD_FILE=<path>` | debug | Text Kinas puts on the clipboard — the pane's copies and the Inbox's answer lines — is written to this file instead, and the Mac's clipboard is left alone (added 2026-09-25, the first mate) |
 | `KINAS_E2E_TOOL_DIR=<path>` | debug | The crew's tools are looked for only there and in the system's own folders (`/usr/bin`, `/bin`, …), never on the login shell's `PATH` — stub tools for the crew specs (added 2026-09-24, the first mate) |
 
 The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug builds with the `e2e` feature and

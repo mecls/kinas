@@ -37,6 +37,7 @@ export function CrewPage({
   onSelect = () => {},
   onOpenPane = () => {},
   onLaunch,
+  onInbox = () => {},
 }: {
   crew: CrewSnapshot | null;
   active: boolean;
@@ -46,6 +47,7 @@ export function CrewPage({
   onSelect?: (id: string) => void;
   onOpenPane?: (id: string) => void;
   onLaunch?: () => void;
+  onInbox?: () => void;
 }) {
   const [settings, setSettings] = useState<CrewSettings | null>(null);
   const [copied, setCopied] = useState(false);
@@ -59,6 +61,11 @@ export function CrewPage({
   return (
     <div className="page-in crew" data-crew={page}>
       <TitleRow title="Crew">
+        {!!crew?.waiting && (
+          <Button data-testid="crew-waiting" onClick={onInbox}>
+            {crew.waiting} waiting on you
+          </Button>
+        )}
         {page === "running" && (
           <Button kind="primary" onClick={() => onLaunch?.()}>
             First mate

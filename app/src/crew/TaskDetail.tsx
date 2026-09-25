@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { crewErrorOf, getCrewTask, type CrewTaskDetail } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
-import { Button, ChecksList, PanelBody, PanelHeader, Timeline } from "../ui/index.ts";
+import type { KeyboardEvent } from "react";
+import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
+import { inboxKey } from "../ui/inboxKeys.ts";
 import { BADGE_OF, lanesOf } from "./board.ts";
 import { checksOf, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
+import { ageText, copiedText } from "./inbox.ts";
 
 // The right panel's second occupant (build spec §4 Task detail; mockup task-detail.html): what Firstmate reports about
 // one task, read from Rust with `crew_task`, beside the reader in the aside and switched by `hidden` — the reader stays
-// mounted with its tabs. Opening the brief or the report hands the panel back to the reader. The decision and its
-// actions join with the Inbox (slice 5).
+// mounted with its tabs. Opening the brief or the report hands the panel back to the reader. An open decision shows as
+// on the Inbox, and the footer acts as the Inbox does: Approve copies the answer line and goes to the first mate's pane;
+// Answer and Deny open the item's box on the Inbox page, where the reply box lives (as Home's compact items do).
 
 export function TaskDetail({
   id,
@@ -18,6 +22,8 @@ export function TaskDetail({
   onClose,
   onOpenPath,
   onOpenPane,
+  onApprove = () => {},
+  onOpenBox = () => {},
 }: {
   id: string | null;
   hidden: boolean;
@@ -27,6 +33,8 @@ export function TaskDetail({
   onClose: () => void;
   onOpenPath: (path: string) => void;
   onOpenPane: (id: string) => void;
+  onApprove?: (task: string, key: string) => void;
+  onOpenBox?: (task: string, key: string, kind: "answer" | "deny") => void;
 }) {
   /** The last answer, and the id it was for: null when the mirror never held that task. */
   const [answer, setAnswer] = useState<{ id: string; detail: CrewTaskDetail | null } | null>(null);
@@ -55,9 +63,24 @@ export function TaskDetail({
   const gone = shown?.task.word === "gone";
   const pr = shown ? prDetail(shown) : null;
   const worktree = shown ? worktreeWord(shown) : null;
+  /** The footer acts on the newest open decision. */
+  const decision = shown && !gone ? (shown.decisions[0] ?? null) : null;
+  const act = (action: "approve" | "answer" | "deny") => {
+    if (!decision) return;
+    if (action === "approve") onApprove(decision.task_id, decision.key);
+    else onOpenBox(decision.task_id, decision.key, action);
+  };
+  // A, R and D while the panel holds focus, as on a focused inbox item (keymap.md).
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!decision || (e.target instanceof HTMLElement && e.target.closest("textarea, input"))) return;
+    const action = inboxKey(e, { boxOpen: false });
+    if (!action) return;
+    e.preventDefault();
+    act(action);
+  };
 
   return (
-    <div className="crew-detail" hidden={hidden} data-task={shown?.task.id}>
+    <div className="crew-detail" hidden={hidden} data-task={shown?.task.id} onKeyDown={onKeyDown}>
       {shown && !missing && (
         <PanelHeader
           cat={lane?.cat ?? undefined}
@@ -92,6 +115,21 @@ export function TaskDetail({
             <Button className="crew-detail-action" aria-label={`Open ${shown.task.title ?? shown.task.id}'s pane`} onClick={() => onOpenPane(shown.task.id)}>
               Open its pane
             </Button>
+          )}
+
+          {shown.decisions.length > 0 && (
+            <>
+              <h4>Decision</h4>
+              {shown.decisions.map((d) => (
+                <div key={d.key} className="crew-decision" data-key={d.key}>
+                  <QuestionCard question={d.summary} />
+                  <p className="ui-ink2">
+                    {d.verb === "captain-hold" ? "held for you" : <>key <span className="ui-mono">{d.key}</span></>} · {ageText(d.opened_at, Date.now())}
+                  </p>
+                  {d.copied_at !== null && <p className="ui-ink2 inbox-copied">{copiedText(d.copied_at)}</p>}
+                </div>
+              ))}
+            </>
           )}
 
           <h4>The ask</h4>
@@ -136,6 +174,19 @@ export function TaskDetail({
             </>
           )}
         </PanelBody>
+      )}
+      {decision && (
+        <PanelFooter>
+          <Button kind="text" hint="D" onClick={() => act("deny")}>
+            Deny
+          </Button>
+          <Button hint="R" onClick={() => act("answer")}>
+            Answer
+          </Button>
+          <Button kind="primary" hint="A" onClick={() => act("approve")}>
+            Approve
+          </Button>
+        </PanelFooter>
       )}
     </div>
   );

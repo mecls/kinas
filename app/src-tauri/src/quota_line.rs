@@ -80,11 +80,17 @@ pub fn format_quota_line(q: &QuotaLineInput<'_>, now: i64) -> String {
 }
 
 /// The menu bar title (R39): `58%` fresh, `58%?` stale, `—` dead, reset or no reading.
-pub fn menu_title(reading: Option<(f64, ReadingState)>) -> String {
-    match reading {
+pub fn menu_title(reading: Option<(f64, ReadingState)>, waiting: u32) -> String {
+    let quota = match reading {
         Some((used, ReadingState::Fresh)) => format!("{}%", left_pct(used)),
         Some((used, ReadingState::Stale)) => format!("{}%?", left_pct(used)),
         _ => "—".into(),
+    };
+    // The first mate (build spec §4 Menu bar): the one waiting count after the quota, only when something waits.
+    if waiting > 0 {
+        format!("{quota} · {waiting}")
+    } else {
+        quota
     }
 }
 
@@ -147,10 +153,13 @@ mod tests {
 
     #[test]
     fn menu_titles() {
-        assert_eq!(menu_title(Some((42.0, ReadingState::Fresh))), "58%");
-        assert_eq!(menu_title(Some((2.5, ReadingState::Stale))), "97%?");
-        assert_eq!(menu_title(Some((42.0, ReadingState::Dead))), "—");
-        assert_eq!(menu_title(Some((42.0, ReadingState::Reset))), "—");
-        assert_eq!(menu_title(None), "—");
+        assert_eq!(menu_title(Some((42.0, ReadingState::Fresh)), 0), "58%");
+        assert_eq!(menu_title(Some((2.5, ReadingState::Stale)), 0), "97%?");
+        assert_eq!(menu_title(Some((42.0, ReadingState::Dead)), 0), "—");
+        assert_eq!(menu_title(Some((42.0, ReadingState::Reset)), 0), "—");
+        assert_eq!(menu_title(None, 0), "—");
+        // The crew's waiting count, after the quota, only above zero.
+        assert_eq!(menu_title(Some((42.0, ReadingState::Fresh)), 5), "58% · 5");
+        assert_eq!(menu_title(None, 1), "— · 1");
     }
 }

@@ -232,6 +232,20 @@ export interface CrewTaskDetail {
 export const getCrew = () => invoke<CrewSnapshot>("crew_snapshot");
 /** One task for the panel; null when the mirror never held it. */
 export const getCrewTask = (id: string) => invoke<CrewTaskDetail | null>("crew_task", { id });
+/**
+ * An Inbox answer (ADR 0017): Rust builds `On <task> (<key>): <answer>` from the open decision, puts it on the clipboard,
+ * marks it copied, then runs the launcher. A rejection with a launcher's code (a missing tool, Herdr) came after the
+ * copy; `empty`, `too_long`, `not_open` and `clipboard` came before it.
+ */
+export const answerCrew = (task: string, key: string, kind: "approve" | "deny" | "answer", text: string) =>
+  invoke<"focused" | "run" | "created">("crew_answer", { task, key, kind, text });
+/** The refusals that leave nothing on the clipboard. */
+export const BEFORE_COPY = new Set(["empty", "too_long", "not_open", "clipboard", "internal"]);
+export const crewErrorCode = (e: unknown): string | null =>
+  e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string" ? (e as { code: string }).code : null;
+/** The menu bar's `N waiting on you`: open a page in the window (build spec §4 Menu bar). */
+export const onAppNavigate = (handler: (page: "inbox") => void): Promise<UnlistenFn> =>
+  listen<{ page: "inbox" }>("app_navigate", (e) => handler(e.payload.page));
 /** **Open its pane**: the task's worker workspace, focused in the session Kinas attaches. */
 export const focusCrewPane = (task: string) => invoke<void>("crew_focus_pane", { task });
 export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");

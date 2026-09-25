@@ -18,7 +18,7 @@ registers it (PRD rule 5). A binding in code that is not listed here is a bug.
 | ⌘2 | Go to the Work page |
 | ⌘3 | Go to the Crew page (since 2026-09-24, the first mate) |
 | ⌘4 | Go to the Usage page |
-| ⌘5 | Go to the Inbox page (from Build 3; bound to nothing until it lands) |
+| ⌘5 | Go to the Inbox page (since 2026-09-25, the first mate) |
 | ⌘S | Hide or show the sidebar (remembered across launches) |
 | ⌘, | Open the Settings page (also the gear at the foot of the sidebar) |
 | ⌘W | Hide the window (the app, readers and terminal keep running) |
@@ -53,6 +53,8 @@ Amended 2026-09-24 (the first mate, slice 1): ⌘3 and Go to Crew landed — Go 
 Until the Inbox's slice the defaults are seven, ⌘5 is still the terminal's, and Go to Inbox is not in the palette.
 Amended 2026-09-24 (slice 3): Go to the first mate follows Go to Crew — the launcher, then the Work page with the
 terminal holding the keys, as the Crew page's First mate.
+Amended 2026-09-25 (slice 5): ⌘5 and Go to Inbox landed — Go to Inbox follows Go to Crew in the palette and in
+Settings' list; the defaults are the eight above, and ⌘5 is no longer the terminal's.
 
 ## Command palette
 
@@ -84,7 +86,7 @@ The only ⌘ chords the app handles in the pane:
 | ⌘K | Open the palette |
 | ⌘C | Copy the selection, if there is one; otherwise nothing |
 | ⌘V | Paste (bracketed when the running program enabled bracketed paste) |
-| ⌘1 / ⌘2 / ⌘3 / ⌘4 | Switch pages (⌘3 since 2026-09-24; ⌘5 from Build 3) |
+| ⌘1 / ⌘2 / ⌘3 / ⌘4 / ⌘5 | Switch pages (⌘3 since 2026-09-24; ⌘5 since 2026-09-25) |
 | ⌘S | Hide or show the sidebar |
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |
@@ -195,6 +197,9 @@ and gives the terminal the keys. Nothing is typed into any pane.
 Amended 2026-09-25 (the first mate, slice 4): a card is a button — Tab reaches it, and Enter or Space on it opens its
 detail in the right panel, as a click does; they do nothing to a control inside it (**Open its pane** is a button of
 its own). The detail's × closes the panel.
+Amended 2026-09-25 (slice 5): while a task's detail holds focus and the task has an open decision, A, R and D act on
+its newest one as on a focused inbox item — A copies the approval line and goes to the first mate's pane; R and D open
+that item's box on the Inbox page, where the reply box is.
 
 An inbox item — on the Inbox page, or compact on Home — takes these keys while it has focus (Tab or a click on it),
 never while the terminal has focus:

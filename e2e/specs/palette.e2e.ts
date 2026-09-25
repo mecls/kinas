@@ -20,7 +20,8 @@ describe("the command palette", () => {
     // keymap.md, 2026-09-22: Home joined the palette; Crew, Inbox and Reader were click-only. 2026-09-23 (tree changes):
     // "Refresh files", the Files header's ↻ for the keyboard. 2026-09-24: Go to Crew and Go to the first mate (the first
     // mate); the Inbox joins with its slice.
-    expect(ids).toEqual(["status", "refresh", "files.refresh", "go.home", "go.usage", "go.work", "go.crew", "go.firstmate", "sidebar", "settings"]);
+    // 2026-09-25: Go to Inbox (the first mate, slice 5).
+    expect(ids).toEqual(["status", "refresh", "files.refresh", "go.home", "go.usage", "go.work", "go.crew", "go.inbox", "go.firstmate", "sidebar", "settings"]);
   });
 
   it("Refresh files with no folder in Files says so and stays open", async () => {

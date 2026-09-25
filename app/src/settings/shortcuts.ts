@@ -4,7 +4,7 @@
 
 import { chordFromEvent, type ChordKey } from "./chord.ts";
 
-export const SHORTCUT_ACTIONS = ["palette", "go.home", "go.work", "go.crew", "go.usage", "sidebar", "settings"] as const;
+export const SHORTCUT_ACTIONS = ["palette", "go.home", "go.work", "go.crew", "go.usage", "go.inbox", "sidebar", "settings"] as const;
 export type AppAction = (typeof SHORTCUT_ACTIONS)[number];
 export type Shortcuts = Record<AppAction, string>;
 
@@ -14,6 +14,7 @@ export const DEFAULT_SHORTCUTS: Shortcuts = {
   "go.work": "Cmd+2",
   "go.crew": "Cmd+3",
   "go.usage": "Cmd+4",
+  "go.inbox": "Cmd+5",
   sidebar: "Cmd+S",
   settings: "Cmd+,",
 };
@@ -24,6 +25,7 @@ export const SHORTCUT_TITLES: Record<AppAction, string> = {
   "go.work": "Go to Work",
   "go.crew": "Go to Crew",
   "go.usage": "Go to Usage",
+  "go.inbox": "Go to Inbox",
   sidebar: "Hide or show the sidebar",
   settings: "Open Settings",
 };

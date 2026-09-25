@@ -71,6 +71,7 @@ export function Sidebar({
   onAdd,
   notice,
   panelOpen,
+  waiting = 0,
 }: {
   hidden: boolean;
   page: Page;
@@ -97,6 +98,8 @@ export function Sidebar({
   /** What the shell last said. Shown here only while the panel is closed — open, the reader's status line has it. */
   notice: Notice | null;
   panelOpen: boolean;
+  /** The crew's one waiting count (crew::read::waiting), on the Inbox row; hidden at zero. */
+  waiting?: number;
 }) {
   const isPinned = (path: string) => pins.some((p) => p.path === path);
   // Called, not mounted: a function made on every render is harmless as a function and would remount as a component.
@@ -113,7 +116,7 @@ export function Sidebar({
         <NavItem icon={<HomeIcon />} label="Home" current={current("home")} onClick={() => onGo("home")} title={`Home (${chord("go.home")})`} />
         <NavItem icon={<TerminalIcon />} label="Work" current={current("work")} onClick={() => onGo("work")} title={`Work (${chord("go.work")})`} />
         <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} title={`Crew (${chord("go.crew")})`} />
-        <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={0} onClick={() => onGo("inbox")} />
+        <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={waiting} onClick={() => onGo("inbox")} title={`Inbox (${chord("go.inbox")})`} />
         <NavItem icon={<GaugeIcon />} label="Usage" current={current("usage")} onClick={() => onGo("usage")} title={`Usage (${chord("go.usage")})`} />
       </div>
 

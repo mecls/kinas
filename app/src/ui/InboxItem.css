@@ -31,3 +31,54 @@
   align-items: center;
   gap: var(--space-2);
 }
+.ui-inbox-main {
+  min-width: 0;
+}
+/* The crew's quiet line keeps its key in mono (mockup inbox.html). */
+.ui-inbox-context .ui-mono {
+  font-size: inherit;
+}
+
+/* 1.7: the reply box in place of the actions — a textarea, then the hint and Copy and go on one row. */
+.ui-inbox-item[data-state="answering"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ui-inbox-answer {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.ui-inbox-answer textarea {
+  width: 100%;
+  min-height: calc(var(--row-h) * 2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.ui-inbox-answer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.ui-inbox-hint {
+  flex: 1;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* Compact (Home): the question in --text-md 500, the actions inline, tighter padding. */
+.ui-inbox-item[data-compact="true"] {
+  padding: var(--space-2) var(--space-3);
+}
+
+/* A focused item (A, R and D act on it) shows the focus ring on the whole card. */
+.ui-inbox-item:focus-visible {
+  outline: var(--focus-w) solid var(--accent);
+  outline-offset: var(--space-0);
+}

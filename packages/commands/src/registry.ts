@@ -16,7 +16,7 @@ export interface CommandContext {
   /** CLI only: `kinas crew setup` or `kinas crew status`, run by the door with its arguments; its exit code. */
   crew?: () => Promise<number>;
   /** Palette only. */
-  navigate?: (page: "home" | "usage" | "work" | "crew") => void;
+  navigate?: (page: "home" | "usage" | "work" | "crew" | "inbox") => void;
   /** Palette only: the Crew page's First mate — the launcher, then the Work page with the terminal holding the keys. */
   firstMate?: () => void;
   refresh?: () => Promise<void>;
@@ -148,6 +148,15 @@ export const commands: readonly Command[] = [
     doors: ["palette"],
     async run(ctx) {
       need(ctx.navigate, "navigation")("crew");
+      return {};
+    },
+  },
+  {
+    id: "go.inbox",
+    title: "Go to Inbox",
+    doors: ["palette"],
+    async run(ctx) {
+      need(ctx.navigate, "navigation")("inbox");
       return {};
     },
   },

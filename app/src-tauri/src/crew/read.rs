@@ -89,9 +89,9 @@ pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: b
         },
         blocked: None,
         tasks: tasks(conn, org, now)?,
-        decisions: Vec::new(),
+        decisions: decisions(conn, org, None)?,
         reconcile: Vec::new(),
-        waiting: 0,
+        waiting: waiting(conn, org)?,
         overnight_since: now - DAY_MS,
     })
 }
@@ -270,7 +270,7 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         pr_review,
         checks: Vec::new(),
         events,
-        decisions: Vec::new(),
+        decisions: decisions(conn, org, Some(id))?,
         paths: DetailPaths { report, worktree, pr_url },
     }))
 }
@@ -285,6 +285,35 @@ fn state_line(state: &str, source: Option<&str>, detail: Option<&str>) -> String
         line.push_str(&format!(" · {detail}"));
     }
     line
+}
+
+/// The one waiting count (§6.12): open decision rows, copied or not. The Crew page, the sidebar, the Inbox and the menu
+/// bar all show this number, and nothing else computes it.
+pub(crate) fn waiting(conn: &Connection, org: &str) -> rusqlite::Result<u32> {
+    conn.query_row("SELECT count(*) FROM crew_decisions WHERE org_id = ?1 AND closed_at IS NULL", params![org], |r| r.get(0))
+}
+
+/// The open decisions, newest first — every one, or one task's — with the task's title and repository.
+fn decisions(conn: &Connection, org: &str, task: Option<&str>) -> rusqlite::Result<Vec<DecisionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.task_id, d.key, d.verb, d.summary, t.title, t.repo, d.opened_at, d.copied_at
+         FROM crew_decisions d LEFT JOIN crew_tasks t ON t.org_id = d.org_id AND t.id = d.task_id
+         WHERE d.org_id = ?1 AND d.closed_at IS NULL AND (?2 IS NULL OR d.task_id = ?2)
+         ORDER BY d.opened_at DESC, d.task_id, d.key",
+    )?;
+    let rows = stmt.query_map(params![org, task], |r| {
+        Ok(DecisionRow {
+            task_id: r.get(0)?,
+            key: r.get(1)?,
+            verb: r.get(2)?,
+            summary: r.get(3)?,
+            task_title: r.get(4)?,
+            repo: r.get(5)?,
+            opened_at: r.get(6)?,
+            copied_at: r.get(7)?,
+        })
+    })?;
+    rows.collect()
 }
 
 /// A task's worker row while it is fresh: (session, workspace).
@@ -348,6 +377,29 @@ mod tests {
         cycle(&store, "empty", T0 + 20);
         let gone = snapshot_view(&store.conn(), store.org_id(), T0 + 21, true, true, None).unwrap();
         assert_eq!((gone.tasks[0].word, gone.tasks[0].overnight_word), ("gone", "done"));
+    }
+
+    #[test]
+    fn waiting_counts_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let conn = store.conn();
+        let org = store.org_id();
+        let add = |key: &str, closed: Option<i64>, copied: Option<i64>| {
+            conn.execute(
+                "INSERT INTO crew_decisions (org_id, task_id, key, verb, summary, opened_at, closed_at, copied_at) VALUES (?1, 't', ?2, 'needs-decision', 's', 1, ?3, ?4)",
+                params![org, key, closed, copied],
+            )
+            .unwrap();
+        };
+        assert_eq!(waiting(&conn, org).unwrap(), 0);
+        add("open", None, None);
+        add("copied", None, Some(5));
+        add("closed", Some(9), None);
+        assert_eq!(waiting(&conn, org).unwrap(), 2, "a copied row still counts; a closed one does not");
+        let open = decisions(&conn, org, None).unwrap();
+        assert_eq!(open.iter().map(|d| d.key.as_str()).collect::<Vec<_>>(), ["copied", "open"]);
+        assert_eq!(open[0].copied_at, Some(5));
     }
 
     #[test]

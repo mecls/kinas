@@ -376,6 +376,67 @@ export const STORIES: Story[] = [
           </Inbox>
         ),
       },
+      // 1.4 and 1.7, the first mate: a crew decision carries a question alone, then its quiet line; its answers go on
+      // the clipboard for the first mate's pane.
+      {
+        name: "decision",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={1}
+              keys
+              question="REST or GraphQL for the export listing?"
+              context={<>Export listing as CSV · <span className="ui-mono">api-shape</span> · 12 min ago</>}
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
+      {
+        name: "answering",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={1}
+              keys
+              state="answering"
+              question="Keep the CSV import as a fallback for one release?"
+              context={<>Webhook for stock changes · <span className="ui-mono">fallback</span> · 25 min ago</>}
+              answer="Yes — keep it for one release, then remove it."
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
+      {
+        name: "copied",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={2}
+              keys
+              question="Ship dark mode behind a setting or on for everyone?"
+              context={<>Dark mode for the portal · <span className="ui-mono">rollout</span> · 1 h ago</>}
+              copied="Copied 09:28 — paste it into the first mate's pane"
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
+      {
+        name: "compact",
+        node: (
+          <Inbox>
+            <InboxItem cat={3} compact keys question="Is a 2 MB export size limit acceptable?" context="How is the reader's export guarded? · 2 h ago" onApprove={noop} onAnswer={noop} onDeny={noop} />
+          </Inbox>
+        ),
+      },
     ],
   },
   {

@@ -256,7 +256,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | Card | plain, selected |
 | Lane | with-cards, empty, no-chip, internal |
 | ProgressRow | list, quiet |
-| InboxItem | plan |
+| InboxItem | plan, decision, answering, copied, compact |
 | Timeline | task |
 | Diff | modified, deleted, no-copy, too-many |
 | Toast | success, error |

@@ -9,16 +9,15 @@
   not written: the captain approved the gate without a word on it
 - Gate 3 · Program design: APPROVED 2026-09-25 — `build-spec.md` §11, private, in the main checkout beside
   `architecture.md`, approved as written
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12
+- Gate 4 · Slice plan: APPROVED 2026-09-25 — `build-spec.md` §12, five slices, one ship point at slice 4; building on
+  `feat/tree-changes-push`
 
 ## Slices
-- [ ] Slice 0 · ground: branch, docs first (DESIGN.md, keymap.md, README.md, smoke-test.md)
+- [ ] Slice 0 · ground, docs first: the worktree's build, DESIGN.md 1.8, keymap.md, README.md, smoke-test.md
 - [ ] Slice 1 · tracer bullet: the upstream, a watch on the repository's refs, and a push clears an M
-- [ ] Slice 2 · rebaselining: each mark's own "since", the diff from the pushed text, D and added folders
-- [ ] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words → ship point
-- [ ] Slice 4 · edges and the record: nested repositories, a root below its repository, worktrees, the timings
-
-(The slices are a draft until Gate 4.)
+- [ ] Slice 2 · counting from the push: each mark's own "since", the diff from the pushed text, D and added folders
+- [ ] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words
+- [ ] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings
 
 ## Notes for a fresh session
 

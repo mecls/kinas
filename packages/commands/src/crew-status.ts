@@ -23,7 +23,10 @@ interface StoredHealth {
   tools?: unknown;
 }
 
-export function crewStatusFromStore(store: CrewStore, now: number, installed: boolean): CrewStatus {
+/** The reads `kinas crew status` makes — counts and words only, never a name (§6.13). */
+export type CrewStatusStore = Pick<CrewStore, "schemaVersion" | "getCrewTasks" | "getCrewWaiting" | "getCrewHealth">;
+
+export function crewStatusFromStore(store: CrewStatusStore, now: number, installed: boolean): CrewStatus {
   const rows = store.getCrewTasks(now);
   const words = rows.map((r) => ({ row: r, word: wordOf(r) }));
   const count = (w: CrewWord) => words.filter((x) => x.word === w).length;

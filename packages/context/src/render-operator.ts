@@ -10,9 +10,13 @@ export function renderOperator(p: Packet, color: boolean): string {
   const sessions = c.sessions === null ? (p.sessions.note ?? "herdr: not read") : plural(c.sessions, "session");
   const lines = [
     `${paint("blue", `${p.instance.org} · ${p.instance.instance}`, color, true)}  ${paint("muted", [plural(c.projects, "project"), sessions, plural(c.decisions, "decision")].join(` ${glyph.sep} `), color)}`,
-    "",
-    paint("blue", "Decisions", color, true),
   ];
+  // Packet version 2 (the first mate): the features in progress, after the counts, only when there are some.
+  if (p.features.data.length > 0) {
+    lines.push("", paint("blue", "Features in progress", color, true));
+    for (const f of p.features.data) lines.push(`  ${paint("white", `${f.project} · ${f.slug}`, color)}${paint("muted", `: ${f.line}`, color)}`);
+  }
+  lines.push("", paint("blue", "Decisions", color, true));
   if (p.decisions.data.length === 0) {
     lines.push(`  ${paint("muted", "Nothing is waiting on you.", color)}`);
   } else {

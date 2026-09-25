@@ -78,7 +78,8 @@ export function loadConfig(env: Env = process.env): KinasConfig {
     instance: text("instance") ?? "operations",
     root,
     hub: expand(text("hub") ?? ".", root),
-    firstmateHome: expand(env.FM_HOME || text("firstmate_home") || "~/firstmate"),
+    // Kinas's own clone of Firstmate (the first mate, 2026-09-25): `kinas crew setup` puts it in the data folder.
+    firstmateHome: expand(env.FM_HOME || text("firstmate_home") || join(dataDir(env), "firstmate")),
     herdrSocket: expand(env.HERDR_SOCKET_PATH || text("herdr_socket") || "~/.config/herdr/herdr.sock"),
     codexHome: expand(env.CODEX_HOME || text("codex_home") || "~/.codex"),
     piAgentDir: expand(env.PI_CODING_AGENT_DIR || text("pi_agent_dir") || "~/.pi/agent"),

@@ -2,8 +2,9 @@
 // rendered three ways — the launch screen, `kinas context`, and `kinas context --agent`. Every section is stamped
 // with when its source was read, and a source that could not be read carries one honest line instead of data.
 
-/** Bump when a field changes meaning or disappears; hooks and briefs key off it. */
-export const PACKET_VERSION = 1;
+/** Bump when a field changes meaning or disappears; hooks and briefs key off it. 2 (2026-09-25, the first mate):
+ *  `features`, the features in progress from each project's `tasks/<feature>/status.md`. */
+export const PACKET_VERSION = 2;
 
 export type SectionState = "ok" | "unavailable" | "pending";
 
@@ -152,11 +153,19 @@ export interface ActivityRow {
   text: string;
 }
 
+/** One feature in progress: its project, its folder under `tasks/`, and the one line status.md reduces to. */
+export interface FeatureRow {
+  project: string;
+  slug: string;
+  line: string;
+}
+
 export interface Packet {
   version: number;
   generated_at: number;
   instance: Instance;
   projects: Section<ProjectRow[]>;
+  features: Section<FeatureRow[]>;
   artifacts: Section<ArtifactRow[]>;
   conventions: Section<ConventionDoc[]>;
   crew: Section<Crew | null>;

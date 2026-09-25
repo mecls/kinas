@@ -62,7 +62,21 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let store = app.state::<Store>();
         let conn = store.conn();
         let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, running, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
+        let facts = read::reconcile_facts(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
+        drop(conn);
         view.blocked = blocked;
+        // The reconcile lines (§7): from the mirror, Herdr's last view and the last snapshot's orphans; the worktree's
+        // display path is the sidebar's. Information only — never counted, nothing repaired.
+        let user = user_home();
+        let facts: Vec<read::ReconcileFacts> = facts
+            .into_iter()
+            .map(|(mut f, path)| {
+                f.worktree_display = path.map(|p| crate::projects::display_of(Path::new(&p), &user));
+                f
+            })
+            .collect();
+        let live_view = live.live();
+        view.reconcile = read::reconcile_lines(&facts, live_view.view.as_ref(), crate::readers::crew::attached_session().as_deref(), &live.orphans());
         view.crew_repos.extend(live.project_repos());
         view.crew_repos.sort_unstable();
         view.crew_repos.dedup();

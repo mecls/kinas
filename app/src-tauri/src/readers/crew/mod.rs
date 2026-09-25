@@ -71,9 +71,16 @@ pub(crate) struct CrewLive {
     checks: Mutex<HashMap<String, Vec<(String, String)>>>,
     /// The GitHub repositories of Firstmate's clones under `<home>/projects/`: already in the crew, for Add to crew.
     project_repos: Mutex<Vec<String>>,
+    /// The last good snapshot's `main_inventory.orphan_in_flight`, for the Reconcile group; not stored.
+    orphans: Mutex<Vec<String>>,
 }
 
 impl CrewLive {
+    /// The last good snapshot's orphans: in flight in the backlog with no task record.
+    pub(crate) fn orphans(&self) -> Vec<String> {
+        self.orphans.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
     /// The repositories Firstmate already has a clone of, as of the last cycle.
     pub(crate) fn project_repos(&self) -> Vec<String> {
         self.project_repos.lock().unwrap_or_else(|p| p.into_inner()).clone()
@@ -274,6 +281,7 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     let ok = match (&outcome, &written) {
         (Ok(fleet), Ok(_)) => {
             *app.state::<CrewLive>().generated.lock().unwrap_or_else(|p| p.into_inner()) = Some(fleet.generated.clone());
+            *app.state::<CrewLive>().orphans.lock().unwrap_or_else(|p| p.into_inner()) = fleet.orphans.clone();
             log::info!("crew: snapshot {} tasks, {} decisions in {ms} ms", fleet.tasks.len(), fleet.decision_count());
             true
         }

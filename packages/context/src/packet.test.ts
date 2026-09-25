@@ -31,6 +31,17 @@ describe("the context packet", () => {
     expect(headings(markdown)).toEqual([...AGENT_HEADINGS]);
   });
 
+  test("Features in progress follow Projects, one line each (packet version 2, the first mate)", () => {
+    expect(packet.version).toBe(2);
+    expect(packet.features.state).toBe("ok");
+    const md = renderAgentPacket({ ...packet, features: { ...packet.features, data: [{ project: "acme", slug: "a-9c2e", line: "Gate 1 · Product in progress" }] } });
+    const lines = md.split("\n");
+    const at = lines.indexOf("## Features in progress");
+    expect(at).toBeGreaterThan(lines.indexOf("## Projects"));
+    expect(at).toBeLessThan(lines.indexOf("## Artifacts"));
+    expect(lines[at + 2]).toBe("- acme · a-9c2e: Gate 1 · Product in progress");
+  });
+
   test("reads every source in the world", () => {
     expect(packet.instance).toMatchObject({ org: "Acme Ops", instance: "operations", harness: "claude" });
     expect(packet.projects.data.map((p) => [p.name, p.branch, p.dirty, p.artifacts])).toEqual([

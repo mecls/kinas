@@ -12,10 +12,12 @@ import { PACKET_VERSION, type Crew, type DecisionRow, type Instance, type Packet
 import { pending, settle, withTimeout } from "./source.ts";
 import { readAllArtifacts } from "./sources/artifacts.ts";
 import { readConventions } from "./sources/conventions.ts";
+import { featuresOf } from "./sources/features.ts";
 import { readCrew } from "./sources/firstmate.ts";
+import { crewFromStore } from "./sources/mirror.ts";
 import { readSessions } from "./sources/herdr.ts";
 import { readProjects, type CommitRef } from "./sources/projects.ts";
-import { codexQuotas, openStore, storeQuotas } from "./sources/quotas.ts";
+import { codexQuotas, openStore, storeQuotas, type StoreOpen } from "./sources/quotas.ts";
 import { KINAS_VERSION } from "./version.ts";
 
 /** The org id when the app's store has none to give (it has not run yet). */
@@ -73,9 +75,25 @@ export function harnessAndModel(config: KinasConfig, sessions: Section<Sessions 
   return { harness, model };
 }
 
+/**
+ * The Crew section: the app's mirror when it is fresh (the collector succeeded in the last five minutes), else
+ * Firstmate's snapshot as before — or, when the caller cannot wait (`skipCrew`), the last reading or pending.
+ */
+async function crewSection(store: StoreOpen, home: string, now: number, prev: Section<Crew | null> | undefined, skip: boolean): Promise<Section<Crew | null>> {
+  if (store.ok) {
+    const mirrored = await crewFromStore(store.store, now, home).catch(() => null);
+    if (mirrored) return { state: "ok", note: null, at: now, data: mirrored };
+  }
+  if (skip) return prev ?? pending<Crew | null>(null, now);
+  return settle(() => readCrew(home, now), null, now, prev);
+}
+
 export interface ComputeOptions {
   now?: number;
-  /** Leave the crew as it was (or pending): Firstmate's snapshot takes seconds, and a first launch must not wait. */
+  /**
+   * Leave the crew as it was (or pending) unless the app's mirror is fresh: Firstmate's snapshot takes seconds, and a
+   * first launch must not wait; the mirror is read in milliseconds, so it is used whenever it is fresh (slice 9).
+   */
   skipCrew?: boolean;
 }
 
@@ -113,7 +131,7 @@ export async function computePacket(config: KinasConfig, cache: ContextCache | n
       ),
       settle(() => withTimeout(readConventions(config.hub), 5_000, "conventions"), [], now, prev?.conventions),
       settle(() => readSessions(config.herdrSocket, projects.data), null, now, prev?.sessions),
-      opts.skipCrew ? Promise.resolve(prev?.crew ?? pending<Crew | null>(null, now)) : settle(() => readCrew(config.firstmateHome, now), null, now, prev?.crew),
+      crewSection(store, config.firstmateHome, now, prev?.crew, opts.skipCrew === true),
       codexQuotas(config.codexHome, now).catch(
         (e): QuotaLine[] => [{ provider: "Codex", window: null, left_pct: null, resets_at: null, updated_at: null, state: "dead", note: `Codex logs could not be read (${(e as Error).message})` }],
       ),
@@ -148,6 +166,7 @@ export async function computePacket(config: KinasConfig, cache: ContextCache | n
       generated_at: now,
       instance,
       projects,
+      features: { state: "ok", note: null, at: now, data: featuresOf(projects.data) },
       artifacts,
       conventions,
       crew,

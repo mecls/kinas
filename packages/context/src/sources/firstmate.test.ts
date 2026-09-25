@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SourceError, SourceTimeout } from "../source.ts";
 import { fixture, write } from "../testing/world.ts";
-import { crewFromSnapshot, readCrew } from "./firstmate.ts";
+import { crewEnv, crewFromSnapshot, readCrew } from "./firstmate.ts";
 
 const base = mkdtempSync(join(tmpdir(), "kinas-fm-"));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -69,4 +69,9 @@ describe("the crew from Firstmate's fleet snapshot", () => {
     expect(error).toBeInstanceOf(SourceTimeout);
     expect(error).not.toBeInstanceOf(SourceError);
   });
+});
+
+test("a crew process gets FM_HOME and none of Herdr's variables (PRD rule 29)", () => {
+  const env = crewEnv({ PATH: "/usr/bin", HOME: "/h", HERDR_SESSION: "default", HERDR_PANE_ID: "w1:p1", herdr_env: "1", FM_HOME: "/elsewhere" }, "/h/firstmate");
+  expect(env).toEqual({ PATH: "/usr/bin", HOME: "/h", FM_HOME: "/h/firstmate" });
 });

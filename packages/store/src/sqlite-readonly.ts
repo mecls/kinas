@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_VERSION } from "./schema-version.ts";
-import type { CrewStore, CrewTaskRow, HostRow, ModelRequests, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "./types.ts";
+import type { CrewDecisionRow, CrewMirrorRow, CrewStore, CrewTaskRow, HostRow, ModelRequests, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "./types.ts";
 
 export const DB_FILE = "kinas.sqlite";
 
@@ -171,6 +171,30 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
     if (!this.hasCrew) return 0;
     const row = this.db.query("SELECT count(*) AS n FROM crew_decisions WHERE org_id = ?1 AND closed_at IS NULL").get(this.orgId()) as { n: number };
     return row.n;
+  }
+
+  getCrewMirror(now: number): CrewMirrorRow[] {
+    if (!this.hasCrew) return [];
+    return this.db
+      .query(
+        `SELECT id, title, project, project_name, kind, backlog_state, state, worktree_path, report_path, report_present,
+                captain_actionable, snapshot_generated, done_at, gone_at
+         FROM crew_tasks
+         WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3)
+         ORDER BY first_seen_at, id`,
+      )
+      .all(this.orgId(), now - 86_400_000, now - 7 * 86_400_000) as CrewMirrorRow[];
+  }
+
+  getCrewDecisions(): CrewDecisionRow[] {
+    if (!this.hasCrew) return [];
+    return this.db
+      .query(
+        `SELECT d.task_id, d.verb, d.summary, t.title AS task_title
+         FROM crew_decisions d LEFT JOIN crew_tasks t ON t.org_id = d.org_id AND t.id = d.task_id
+         WHERE d.org_id = ?1 AND d.closed_at IS NULL ORDER BY d.opened_at, d.task_id, d.key`,
+      )
+      .all(this.orgId()) as CrewDecisionRow[];
   }
 
   getCrewHealth(): unknown {

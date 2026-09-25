@@ -18,7 +18,7 @@ type Json = Record<string, unknown>;
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 const list = (v: unknown): Json[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === "object") as Json[]) : []);
 
-async function firstLine(path: string): Promise<string | null> {
+export async function firstLine(path: string): Promise<string | null> {
   try {
     const text = await Bun.file(path).slice(0, 4096).text();
     return text.split("\n").map((l) => l.replace(/^#+\s*/, "").trim()).find((l) => l !== "") ?? null;
@@ -92,12 +92,24 @@ export async function crewFromSnapshot(snapshot: unknown, now: number): Promise<
   };
 }
 
+/**
+ * A crew process's environment (the first mate's PRD rule 29): the caller's, with `FM_HOME` set and every `HERDR*`
+ * variable removed — a `kinas context` run inside a Herdr pane must not point Firstmate at that pane's session. The
+ * CLI runs from the captain's shell, so its `PATH` is the login one already; stdin is closed and the run has a limit.
+ */
+export function crewEnv(env: Record<string, string | undefined>, home: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) if (v !== undefined && !k.toUpperCase().startsWith("HERDR")) out[k] = v;
+  out.FM_HOME = home;
+  return out;
+}
+
 export async function readCrew(home: string, now: number, timeoutMs = FIRSTMATE_TIMEOUT_MS): Promise<Crew> {
   const script = join(home, "bin/fm-fleet-snapshot.sh");
   if (!existsSync(script)) throw new SourceError(`firstmate: not installed (no ${script})`);
   if (!existsSync(join(home, "data/backlog.md")) && !existsSync(join(home, "state"))) throw new SourceError(`firstmate: no fleet state yet in ${home}`);
 
-  const result = await run(["bash", script, "--json"], { cwd: home, timeoutMs, env: { ...process.env, FM_HOME: home } });
+  const result = await run(["bash", script, "--json"], { cwd: home, timeoutMs, env: crewEnv(process.env, home) });
   if (result.timedOut) throw new SourceTimeout(`firstmate: the fleet snapshot took longer than ${timeoutMs / 1000} s`);
   if (!result.ok) {
     const why = result.error ?? (result.stderr.trim().split("\n").pop() || `exit ${result.code}`);

@@ -2,13 +2,15 @@
 // hooks and briefs look for them — and the order puts what rarely changes first (the instance, the artifact index,
 // the conventions) and what changes by the minute last, so providers that cache prompt prefixes can reuse it.
 //
-//   # Kinas context · ## Projects · ## Artifacts · ## Conventions · ## Crew · ## Sessions · ## Decisions ·
-//   ## Quotas · ## Recent
+//   # Kinas context · ## Projects · ## Features in progress · ## Artifacts · ## Conventions · ## Crew · ## Sessions ·
+//   ## Decisions · ## Quotas · ## Recent
+//
+// Packet version 2 (2026-09-25, the first mate): Features in progress, after Projects.
 
 import type { Packet, Section } from "./packet.ts";
 import { ago, lisbonStamp } from "./time.ts";
 
-export const AGENT_HEADINGS = ["# Kinas context", "## Projects", "## Artifacts", "## Conventions", "## Crew", "## Sessions", "## Decisions", "## Quotas", "## Recent"] as const;
+export const AGENT_HEADINGS = ["# Kinas context", "## Projects", "## Features in progress", "## Artifacts", "## Conventions", "## Crew", "## Sessions", "## Decisions", "## Quotas", "## Recent"] as const;
 
 const cell = (v: string | number | null | undefined): string => (v === null || v === undefined || v === "" ? "—" : String(v).replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " "));
 
@@ -39,7 +41,7 @@ export function renderHeader(p: Packet): string {
     `- Kinas ${i.version} · projects root ${i.root}`,
     `- Interactive sessions: ${i.harness ?? "harness not detected"} · ${i.model ?? "model not set"}`,
     "",
-    "Sections: Projects, Artifacts, Conventions, Crew, Sessions, Decisions, Quotas, Recent. A section whose source could not be read says so in one line. Times are Europe/Lisbon.",
+    "Sections: Projects, Features in progress, Artifacts, Conventions, Crew, Sessions, Decisions, Quotas, Recent. A section whose source could not be read says so in one line. Times are Europe/Lisbon.",
   ].join("\n");
 }
 
@@ -191,6 +193,13 @@ export function renderRecent(p: Packet): string {
   return `## Recent\n\n${rows.map((r) => `- ${lisbonStamp(r.at)} (${ago(r.at, p.generated_at)}) · ${r.project ?? "—"} · ${r.kind} · ${r.text}`).join("\n")}`;
 }
 
+/** Each project's features in progress, one line each, from `tasks/<feature>/status.md`. */
+export function renderFeatures(p: Packet): string {
+  const rows = p.features.data;
+  if (rows.length === 0) return "## Features in progress\n\nNone.";
+  return `## Features in progress\n\n${rows.map((f) => `- ${f.project} · ${f.slug}: ${f.line}`).join("\n")}`;
+}
+
 export function renderAgentPacket(p: Packet): string {
-  return `${[renderHeader(p), renderProjects(p), renderArtifacts(p), renderConventions(p), renderCrew(p), renderSessions(p), renderDecisions(p), renderQuotas(p), renderRecent(p)].join("\n\n")}\n`;
+  return `${[renderHeader(p), renderProjects(p), renderFeatures(p), renderArtifacts(p), renderConventions(p), renderCrew(p), renderSessions(p), renderDecisions(p), renderQuotas(p), renderRecent(p)].join("\n\n")}\n`;
 }

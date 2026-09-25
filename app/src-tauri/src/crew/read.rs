@@ -319,6 +319,74 @@ fn decisions(conn: &Connection, org: &str, task: Option<&str>) -> rusqlite::Resu
     rows.collect()
 }
 
+/// What a reconcile line is made of, for one task in flight (build spec §7 Reconcile rows): derived at read time, never
+/// stored, never counted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReconcileFacts {
+    pub title: String,
+    pub endpoint_target: Option<String>,
+    pub endpoint_exists: Option<bool>,
+    pub endpoint_status: Option<String>,
+    pub worktree_display: Option<String>,
+    pub worktree_present: Option<bool>,
+}
+
+/// Every task in flight (not queued, done or gone), with the columns its reconcile lines read.
+pub(crate) fn reconcile_facts(conn: &Connection, org: &str) -> rusqlite::Result<Vec<(ReconcileFacts, Option<String>)>> {
+    let sql = format!(
+        "SELECT id, title, endpoint_target, endpoint_exists, endpoint_status, worktree_path, worktree_present, {STORED_COLUMNS}
+         FROM crew_tasks WHERE org_id = ?1 AND gone_at IS NULL AND done_at IS NULL ORDER BY first_seen_at, id"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![org], |r| {
+        let stored = stored_of(r, 7)?;
+        let word = word_of(&stored.input());
+        let id: String = r.get(0)?;
+        let title: Option<String> = r.get(1)?;
+        Ok((
+            word,
+            ReconcileFacts {
+                title: title.unwrap_or(id),
+                endpoint_target: r.get(2)?,
+                endpoint_exists: r.get(3)?,
+                endpoint_status: r.get(4)?,
+                worktree_display: None,
+                worktree_present: r.get(6)?,
+            },
+            r.get::<_, Option<String>>(5)?,
+        ))
+    })?;
+    let all: Vec<_> = rows.collect::<rusqlite::Result<_>>()?;
+    Ok(all.into_iter().filter(|(w, _, _)| !matches!(*w, "queued" | "done" | "gone")).map(|(_, f, path)| (f, path)).collect())
+}
+
+/// The four lines of §7, in that order for each task: an endpoint Firstmate reports absent or dead; a worktree that is
+/// gone; an orphan in the backlog (by id); a pane Firstmate names in the session Kinas views that a fresh Herdr view does
+/// not have. A healthy task has none. Information only: nothing is repaired, nothing is counted.
+pub(crate) fn reconcile_lines(tasks: &[ReconcileFacts], view: Option<&crate::herdr::View>, session: Option<&str>, orphans: &[String]) -> Vec<String> {
+    let mut lines = Vec::new();
+    for t in tasks {
+        let target = t.endpoint_target.as_deref().unwrap_or("(none)");
+        let status = t.endpoint_status.as_deref().filter(|s| matches!(*s, "absent" | "dead"));
+        if t.endpoint_exists == Some(false) || status.is_some() {
+            lines.push(format!("{}: Firstmate's endpoint {target} is {}", t.title, status.unwrap_or("absent")));
+        }
+        if t.worktree_present == Some(false) {
+            lines.push(format!("{}: worktree {} is gone", t.title, t.worktree_display.as_deref().unwrap_or("(unknown)")));
+        }
+        if t.endpoint_exists == Some(true) && status.is_none() {
+            let split = t.endpoint_target.as_deref().and_then(crate::readers::crew::snapshot::split_target);
+            if let (Some((s, pane)), Some(view), Some(attached)) = (split, view, session) {
+                if s == attached && view.pane(pane).is_none() {
+                    lines.push(format!("{}: pane {pane} not found in Herdr", t.title));
+                }
+            }
+        }
+    }
+    lines.extend(orphans.iter().map(|id| format!("{id}: in flight in the backlog but has no task record")));
+    lines
+}
+
 /// Every repository a task the mirror holds names, done and gone ones too.
 pub(crate) fn task_repos(conn: &Connection, org: &str) -> rusqlite::Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT DISTINCT repo FROM crew_tasks WHERE org_id = ?1 AND repo IS NOT NULL ORDER BY repo")?;
@@ -417,6 +485,39 @@ mod tests {
         let open = decisions(&conn, org, None).unwrap();
         assert_eq!(open.iter().map(|d| d.key.as_str()).collect::<Vec<_>>(), ["copied", "open"]);
         assert_eq!(open[0].copied_at, Some(5));
+    }
+
+    #[test]
+    fn reconcile_lines() {
+        use crate::herdr::{Pane, View};
+        let healthy = ReconcileFacts {
+            title: "Healthy 9c2e".into(),
+            endpoint_target: Some("kinas-e2e-crew:w2:p2".into()),
+            endpoint_exists: Some(true),
+            endpoint_status: Some("unknown".into()),
+            worktree_display: Some("~/t/1".into()),
+            worktree_present: Some(true),
+        };
+        let view = View {
+            focused_pane: None,
+            workspaces: vec![],
+            panes: vec![Pane { id: "w2:p2".into(), workspace_id: "w2".into(), tab_label: None, focused: false, cwd: None }],
+        };
+        let session = Some("kinas-e2e-crew");
+        assert!(super::reconcile_lines(std::slice::from_ref(&healthy), Some(&view), session, &[]).is_empty(), "a healthy task has none");
+
+        let dead = ReconcileFacts { title: "Dead 9c2e".into(), endpoint_status: Some("dead".into()), worktree_present: Some(false), ..healthy.clone() };
+        assert_eq!(
+            super::reconcile_lines(&[dead], Some(&view), session, &[]),
+            ["Dead 9c2e: Firstmate's endpoint kinas-e2e-crew:w2:p2 is dead", "Dead 9c2e: worktree ~/t/1 is gone"]
+        );
+        let absent = ReconcileFacts { title: "Absent 9c2e".into(), endpoint_exists: Some(false), ..healthy.clone() };
+        assert_eq!(super::reconcile_lines(&[absent], Some(&view), session, &[]), ["Absent 9c2e: Firstmate's endpoint kinas-e2e-crew:w2:p2 is absent"]);
+        let lost = ReconcileFacts { title: "Lost 9c2e".into(), endpoint_target: Some("kinas-e2e-crew:w9:p1".into()), ..healthy.clone() };
+        assert_eq!(super::reconcile_lines(std::slice::from_ref(&lost), Some(&view), session, &[]), ["Lost 9c2e: pane w9:p1 not found in Herdr"]);
+        assert!(super::reconcile_lines(std::slice::from_ref(&lost), Some(&view), Some("default"), &[]).is_empty(), "another session's pane is not judged");
+        assert!(super::reconcile_lines(&[lost], None, session, &[]).is_empty(), "no Herdr answer, no judgement");
+        assert_eq!(super::reconcile_lines(&[], None, None, &["t-9c2e".into()]), ["t-9c2e: in flight in the backlog but has no task record"]);
     }
 
     #[test]

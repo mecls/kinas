@@ -40,6 +40,7 @@ It finds `kinas` on `PATH`, then at `~/.local/bin/kinas` (where the app links it
 
 ## The brief convention
 
-Any brief a Kinas command writes into Firstmate's intake begins with the packet's `## Conventions` and
-`## Projects` sections (`briefPreamble` in `packages/context/src/brief.ts`), so a crewmate starts on the rails.
-No v0 command files briefs yet.
+A brief Kinas composes for the crew begins with the packet's `## Conventions` and `## Projects` sections
+(`briefPreamble` in `packages/context/src/brief.ts`), so a crewmate starts on the rails. Amended 2026-09-25 (the first
+mate, ADR 0016): Kinas writes nothing into Firstmate's home, its intake included; a brief reaches Firstmate only through
+the first mate's chat, pasted by the captain (ADR 0017). No command composes one yet.

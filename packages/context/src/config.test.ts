@@ -38,3 +38,11 @@ describe("the projects root", () => {
     expect(loadConfig(withFile("absent.json", null)).root).toBe(fallback);
   });
 });
+
+describe("Firstmate's home", () => {
+  test("FM_HOME, then the file, then Kinas's own clone in the data folder (the first mate, 2026-09-25)", () => {
+    expect(loadConfig(withFile("fm-none.json", null)).firstmateHome).toBe(join(noStore, "firstmate"));
+    expect(loadConfig(withFile("fm-file.json", '{"firstmate_home":"/from/file"}')).firstmateHome).toBe("/from/file");
+    expect(loadConfig({ ...withFile("fm-env.json", '{"firstmate_home":"/from/file"}'), FM_HOME: "/from/env" }).firstmateHome).toBe("/from/env");
+  });
+});

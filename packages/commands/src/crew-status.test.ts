@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { CrewStore, CrewTaskRow } from "@kinas/store/types";
+import type { CrewTaskRow } from "@kinas/store/types";
+import type { CrewStatusStore } from "./crew-status.ts";
 import { crewStatusFromStore, crewStatusJson, crewStatusLines } from "./crew-status.ts";
 
 const NOW = 1_790_000_000_000;
@@ -24,7 +25,7 @@ const row = (over: Partial<CrewTaskRow>): CrewTaskRow => ({
   ...over,
 });
 
-const store = (rows: CrewTaskRow[], health: unknown = null, waiting = 0): CrewStore => ({
+const store = (rows: CrewTaskRow[], health: unknown = null, waiting = 0): CrewStatusStore => ({
   schemaVersion: () => 5,
   getCrewTasks: () => rows,
   getCrewWaiting: () => waiting,

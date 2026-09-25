@@ -77,6 +77,32 @@ export interface CrewTaskRow {
   gone_at: number | null;
 }
 
+/** One task as the mirror holds it, for the context packet's Crew section (the first mate, slice 9). */
+export interface CrewMirrorRow {
+  id: string;
+  title: string | null;
+  project: string | null;
+  project_name: string | null;
+  kind: string;
+  backlog_state: string | null;
+  state: string | null;
+  worktree_path: string | null;
+  report_path: string | null;
+  report_present: number;
+  captain_actionable: number;
+  snapshot_generated: string;
+  done_at: number | null;
+  gone_at: number | null;
+}
+
+/** One open decision, with its task's title. */
+export interface CrewDecisionRow {
+  task_id: string;
+  verb: string;
+  summary: string;
+  task_title: string | null;
+}
+
 /** The crew's reads (schema 5): empty on an older store, never a failure. */
 export interface CrewStore {
   schemaVersion(): number;
@@ -86,6 +112,10 @@ export interface CrewStore {
   getCrewWaiting(): number;
   /** What the app last saw of the crew's install (the `crew_health` setting), or null. */
   getCrewHealth(): unknown;
+  /** Every task inside the board's retention, with what the context packet shows of it. */
+  getCrewMirror(now: number): CrewMirrorRow[];
+  /** The open decisions, oldest first. */
+  getCrewDecisions(): CrewDecisionRow[];
 }
 
 export interface StorageAdapter {

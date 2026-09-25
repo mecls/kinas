@@ -125,50 +125,176 @@ fn reader(conn: &Connection, org: &str) -> rusqlite::Result<ReaderView> {
     }))
 }
 
-/// Every task inside its retention, newest first; the board orders them itself.
-fn tasks(conn: &Connection, org: &str, now: i64) -> rusqlite::Result<Vec<TaskRow>> {
-    let sql = format!(
+/// A task row's columns, with the newest event that is not an order and whether a fresh worker row exists (`?4` is
+/// the freshness cut-off).
+fn task_select() -> String {
+    format!(
         "SELECT id, title, repo, project_name, kind, harness, pr_number, (SELECT e.at FROM crew_events e WHERE e.org_id = t.org_id
            AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1), (SELECT e.text FROM crew_events e
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
            {STORED_COLUMNS},
            EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4)
-         FROM crew_tasks t
-         WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3)
-         ORDER BY first_seen_at DESC, id"
+         FROM crew_tasks t"
+    )
+}
+
+fn task_row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
+    let stored = stored_of(r, 9)?;
+    let input = stored.input();
+    let pr_number: Option<u32> = r.get(6)?;
+    Ok(TaskRow {
+        id: r.get(0)?,
+        title: r.get(1)?,
+        repo: r.get(2)?,
+        project_name: r.get(3)?,
+        kind: r.get(4)?,
+        word: word_of(&input),
+        overnight_word: word_without_gone(&input),
+        harness: r.get(5)?,
+        first_seen_at: stored.first_seen_at,
+        first_working_at: stored.first_working_at,
+        done_at: stored.done_at,
+        gone_at: stored.gone_at,
+        last_event_at: r.get(7)?,
+        last_event_text: r.get(8)?,
+        pr: pr_number.map(|number| PrView {
+            number,
+            state: stored.pr_state.clone(),
+            draft: stored.pr_draft,
+            mergeable: stored.pr_mergeable.clone(),
+            checks_total: stored.pr_checks_total,
+            checks_failed: stored.pr_checks_failed,
+        }),
+        has_pane: r.get(24)?,
+    })
+}
+
+/// Every task inside its retention, newest first; the board orders them itself.
+fn tasks(conn: &Connection, org: &str, now: i64) -> rusqlite::Result<Vec<TaskRow>> {
+    let sql = format!(
+        "{} WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3) ORDER BY first_seen_at DESC, id",
+        task_select()
     );
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params![org, now - GONE_SHOWN_MS, now - DONE_SHOWN_MS, now - WORKER_FRESH_MS], |r| {
-        let stored = stored_of(r, 9)?;
-        let input = stored.input();
-        let pr_number: Option<u32> = r.get(6)?;
-        Ok(TaskRow {
-            id: r.get(0)?,
-            title: r.get(1)?,
-            repo: r.get(2)?,
-            project_name: r.get(3)?,
-            kind: r.get(4)?,
-            word: word_of(&input),
-            overnight_word: word_without_gone(&input),
-            harness: r.get(5)?,
-            first_seen_at: stored.first_seen_at,
-            first_working_at: stored.first_working_at,
-            done_at: stored.done_at,
-            gone_at: stored.gone_at,
-            last_event_at: r.get(7)?,
-            last_event_text: r.get(8)?,
-            pr: pr_number.map(|number| PrView {
-                number,
-                state: stored.pr_state.clone(),
-                draft: stored.pr_draft,
-                mergeable: stored.pr_mergeable.clone(),
-                checks_total: stored.pr_checks_total,
-                checks_failed: stored.pr_checks_failed,
-            }),
-            has_pane: r.get(24)?,
-        })
-    })?;
+    let rows = stmt.query_map(params![org, now - GONE_SHOWN_MS, now - DONE_SHOWN_MS, now - WORKER_FRESH_MS], task_row)?;
     rows.collect()
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckView {
+    pub name: String,
+    /// SUCCESS | FAILURE | PENDING | NEUTRAL | SKIPPED | …
+    pub conclusion: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EventRow {
+    pub at: i64,
+    pub kind: String,
+    pub text: String,
+}
+
+/// The right panel's task (build spec §4 Task detail): the card's row plus Firstmate's state line, the task's settings,
+/// the ask as filed, the paths the panel opens, the PR's review and checks, and the timeline. Any task the mirror holds,
+/// gone ones included — the panel says when it has left the snapshot.
+#[derive(Debug, Serialize)]
+pub struct CrewTaskDetail {
+    pub task: TaskRow,
+    /// Firstmate's `current_state` as it prints it: `state: working · source: pane · harness busy (fm-spawn)`.
+    pub state_line: Option<String>,
+    /// When Firstmate observed that state, as it wrote it (ISO 8601, UTC).
+    pub state_observed_at: Option<String>,
+    pub mode: Option<String>,
+    pub yolo: bool,
+    pub backend: Option<String>,
+    pub excerpt: Option<String>,
+    /// `<home>/data/<id>/brief.md` when it exists, filled by the command after the guard.
+    pub brief_path: Option<String>,
+    /// The scout's report, absolute, filled by the command.
+    pub report_path: Option<String>,
+    pub report_present: bool,
+    /// The worktree as the sidebar shows paths (`~/…`), filled by the command.
+    pub worktree_display: Option<String>,
+    pub worktree_present: Option<bool>,
+    pub pr_review: Option<String>,
+    /// Filled by the command from the collector's memory: check names are not stored.
+    pub checks: Vec<CheckView>,
+    /// Oldest first, orders included.
+    pub events: Vec<EventRow>,
+    pub decisions: Vec<DecisionRow>,
+    /// What the command needs and the webview does not see.
+    #[serde(skip)]
+    pub paths: DetailPaths,
+}
+
+/// The stored paths behind the detail's links, resolved by the command outside the guard.
+#[derive(Debug, Default)]
+pub struct DetailPaths {
+    pub report: Option<String>,
+    pub worktree: Option<String>,
+    pub pr_url: Option<String>,
+}
+
+/// One task for the panel, or None when the mirror has never held it.
+pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rusqlite::Result<Option<CrewTaskDetail>> {
+    // `?3` is the retention bound the board uses; one task is shown whatever its age.
+    let sql = format!("{} WHERE org_id = ?1 AND id = ?2", task_select());
+    let Some(task) = conn.query_row(&sql, params![org, id, 0, now - WORKER_FRESH_MS], task_row).optional()? else { return Ok(None) };
+    let text = |r: &rusqlite::Row, i: usize| r.get::<_, Option<String>>(i);
+    let (state, source, detail, observed_at, mode, backend, excerpt, report, worktree, pr_review, pr_url) = conn.query_row(
+        "SELECT state, state_source, state_detail, state_observed_at, mode, backend, excerpt, report_path, worktree_path,
+           pr_review, pr_url FROM crew_tasks WHERE org_id = ?1 AND id = ?2",
+        params![org, id],
+        |r| Ok((text(r, 0)?, text(r, 1)?, text(r, 2)?, text(r, 3)?, text(r, 4)?, text(r, 5)?, text(r, 6)?, text(r, 7)?, text(r, 8)?, text(r, 9)?, text(r, 10)?)),
+    )?;
+    let (yolo, report_present, worktree_present): (bool, bool, Option<bool>) = conn.query_row(
+        "SELECT yolo, report_present, worktree_present FROM crew_tasks WHERE org_id = ?1 AND id = ?2",
+        params![org, id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    let mut stmt = conn.prepare("SELECT at, kind, text FROM crew_events WHERE org_id = ?1 AND task_id = ?2 ORDER BY at, id")?;
+    let events = stmt.query_map(params![org, id], |r| Ok(EventRow { at: r.get(0)?, kind: r.get(1)?, text: r.get(2)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(Some(CrewTaskDetail {
+        task,
+        state_line: state.map(|s| state_line(&s, source.as_deref(), detail.as_deref())),
+        state_observed_at: observed_at,
+        mode,
+        yolo,
+        backend,
+        excerpt,
+        brief_path: None,
+        report_path: None,
+        report_present,
+        worktree_display: None,
+        worktree_present,
+        pr_review,
+        checks: Vec::new(),
+        events,
+        decisions: Vec::new(),
+        paths: DetailPaths { report, worktree, pr_url },
+    }))
+}
+
+/// `state: working · source: pane · harness busy (fm-spawn)`, the shape Firstmate prints as `current_state.raw`.
+fn state_line(state: &str, source: Option<&str>, detail: Option<&str>) -> String {
+    let mut line = format!("state: {state}");
+    if let Some(source) = source {
+        line.push_str(&format!(" · source: {source}"));
+    }
+    if let Some(detail) = detail {
+        line.push_str(&format!(" · {detail}"));
+    }
+    line
+}
+
+/// A task's worker row while it is fresh: (session, workspace).
+pub(crate) fn fresh_worker(conn: &Connection, org: &str, task: &str, now: i64) -> rusqlite::Result<Option<(String, Option<String>)>> {
+    conn.query_row(
+        "SELECT session, workspace_id FROM crew_workers WHERE org_id = ?1 AND task_id = ?2 AND observed_at > ?3",
+        params![org, task, now - WORKER_FRESH_MS],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()
 }
 
 /// Each worker's pane → its task's word and harness: the chrome's badge (§4 Work), kept in memory by the collector.
@@ -194,7 +320,7 @@ mod tests {
     fn cycle(store: &Store, name: &str, now: i64) {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../fixtures/crew-snapshot.{name}.synthetic.json"));
         let fleet = parse_fleet(&std::fs::read_to_string(path).unwrap());
-        record(&mut store.conn(), store.org_id(), &fleet, &[], now).unwrap();
+        record(&mut store.conn(), store.org_id(), &fleet, &Default::default(), now).unwrap();
     }
 
     #[test]
@@ -222,5 +348,31 @@ mod tests {
         cycle(&store, "empty", T0 + 20);
         let gone = snapshot_view(&store.conn(), store.org_id(), T0 + 21, true, true, None).unwrap();
         assert_eq!((gone.tasks[0].word, gone.tasks[0].overnight_word), ("gone", "done"));
+    }
+
+    #[test]
+    fn a_task_for_the_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        assert!(task_view(&store.conn(), store.org_id(), "shop-health-9c2e", T0).unwrap().is_none(), "never held → None");
+
+        cycle(&store, "queued", T0);
+        cycle(&store, "working", T0 + 60_000);
+        let d = task_view(&store.conn(), store.org_id(), "shop-health-9c2e", T0 + 60_001).unwrap().unwrap();
+        assert_eq!(d.task.word, "working");
+        assert_eq!(d.state_line.as_deref(), Some("state: working · source: status-log · running the tests 9c2e"));
+        assert_eq!(d.state_observed_at.as_deref(), Some("2026-09-24T09:00:00Z"));
+        assert_eq!((d.mode.as_deref(), d.yolo, d.backend.as_deref()), (Some("direct-pr"), false, Some("herdr")));
+        assert_eq!(d.excerpt.as_deref(), Some("Delivery: direct-pr 9c2e."));
+        assert_eq!(d.worktree_present, Some(true));
+        assert_eq!(d.paths.worktree.as_deref(), Some("__ROOT__/.treehouse/shop-9c2e-000000/1/shop-9c2e"));
+        assert_eq!(d.paths.report.as_deref(), Some("__FM_HOME__/data/shop-health-9c2e/report.md"));
+        assert!(!d.report_present);
+        let kinds: Vec<&str> = d.events.iter().map(|e| e.kind.as_str()).collect();
+        assert_eq!(kinds, ["word", "last_event", "state", "word"], "oldest first");
+
+        cycle(&store, "empty", T0 + 120_000);
+        let gone = task_view(&store.conn(), store.org_id(), "shop-health-9c2e", T0 + 30 * DAY_MS).unwrap().unwrap();
+        assert_eq!(gone.task.word, "gone", "a task long gone still opens");
     }
 }

@@ -33,6 +33,10 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
       capture once a live response has been seen.
   - `handoff/*.json` — status line hand-off files built from the documented status line schema
     (code.claude.com/docs/en/statusline): `used_percentage` 0–100, `resets_at` in epoch seconds.
+  - `crew-gh-{1,2}.json` (added 2026-09-25, the first mate) — `gh pr view <url> --json
+    number,state,isDraft,mergeable,reviewDecision,statusCheckRollup` in the shape `gh` prints it: PR #123 with four
+    checks, three check runs and one commit status, first with `test` failing, then all green and approved. The
+    e2e stub `gh` prints one of them.
 - Files ending in `.captured.json` **are** captured, from the first mate's slice-0 probe (2026-09-23): Firstmate at
   `f9f74a1` on Herdr 0.9.0, in a throwaway session with a scratch repository, never `default`. Every local path is
   rewritten — `__FM_HOME__` (Firstmate's home), `__ROOT__` (the probe's folders and `~/.treehouse`), `__HOME__` —

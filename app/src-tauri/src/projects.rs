@@ -54,6 +54,9 @@ pub struct ProjectRow {
     pub hidden: bool,
     /// Off Settings' list too, in its Removed list. A path in both lists reads as removed.
     pub removed: bool,
+    /// The folder's GitHub `origin` as `owner/name`, lower-cased, from its git config (the first mate's lanes, PRD rule
+    /// 18); None without one.
+    pub repo: Option<String>,
 }
 
 /// The last walk, kept for `CACHE_TTL` — for one root: a changed projects root walks again at once.
@@ -194,6 +197,7 @@ pub fn rows(root: &Path, home: &Path, repos: &[PathBuf], categories: &BTreeMap<S
             hidden: false,
             removed: false,
             display: display_of(path, home),
+            repo: crate::crew::repo::origin_repo(path),
             path: path.display().to_string(),
             name,
         })

@@ -3,6 +3,7 @@
 //! across the script (§6.15). Kinas reads the fleet this way only: no file under the home is opened except to learn
 //! that one of the two trigger files changed.
 
+pub mod gh;
 mod guard;
 pub mod mirror;
 pub mod schedule;
@@ -11,13 +12,14 @@ pub mod word;
 
 use super::runtime::{watch_with, ReaderControl, CREW_CHANGED};
 use crate::crew::pin::WORKSPACE_LABEL;
-use crate::crew::{firstmate, home};
+use crate::crew::{firstmate, home, repo};
 use crate::herdr::{self, View};
 use crate::proc::{Exit, Ran};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use crate::store::{now_ms, Store};
 use schedule::{CrewWake, Schedule};
-use snapshot::{parse_fleet, Fleet};
+use mirror::Found;
+use snapshot::{parse_fleet, pr_url_ok, Fleet};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -37,6 +39,9 @@ pub(crate) const HERDR_FRESH_MS: i64 = 5_000;
 const HERDR_MIN_GAP_MS: i64 = 2_000;
 /// The start focus happens only if Herdr answered within this long of the thread starting (§6.18, rule 22).
 const START_FOCUS_MS: i64 = 10_000;
+/// A PR is asked of `gh` again once its last check is this old: 60 s while the Crew page shows, 300 s otherwise.
+const PR_FRESH_VISIBLE_MS: i64 = 60_000;
+const PR_FRESH_HIDDEN_MS: i64 = 300_000;
 
 /// Herdr's last answer (build spec §11.2): the session's view and the focused pane's foreground programs, shared
 /// with the commands (the Crew page's running state, the chrome) behind a lock no one holds across a process.
@@ -62,9 +67,16 @@ impl LiveView {
 pub(crate) struct CrewLive {
     generated: Mutex<Option<String>>,
     live: RwLock<LiveView>,
+    /// Each PR's checks by URL as `gh` last listed them, for the task detail's ChecksList: names are not stored.
+    checks: Mutex<HashMap<String, Vec<(String, String)>>>,
 }
 
 impl CrewLive {
+    /// A PR's checks as `gh` last listed them this run; empty before it answered.
+    pub(crate) fn checks_of(&self, url: &str) -> Vec<(String, String)> {
+        self.checks.lock().unwrap_or_else(|p| p.into_inner()).get(url).cloned().unwrap_or_default()
+    }
+
     /// The last good snapshot's `generated`, for the Crew page's `as of` caption.
     pub(crate) fn generated(&self) -> Option<String> {
         self.generated.lock().unwrap_or_else(|p| p.into_inner()).clone()
@@ -85,7 +97,7 @@ impl CrewLive {
 
 /// The session the Work pane attaches — Herdr's own for the crew — or None when the pane is a plain shell (a debug
 /// switch), and then Kinas asks Herdr nothing: no spec's shell may reach `default`.
-fn attached_session() -> Option<String> {
+pub(crate) fn attached_session() -> Option<String> {
     let pane = crate::pty::pane_session();
     (!pane.shell).then_some(pane.session)
 }
@@ -120,9 +132,18 @@ fn start_focus(started_at: i64, answered_at: i64, view: &View) -> Option<String>
     (answered_at - started_at <= START_FOCUS_MS).then(|| herdr::workspace_with_label(view, WORKSPACE_LABEL).map(|w| w.id.clone())).flatten()
 }
 
+/// What the collector remembers between cycles, in memory only: each clone's repository (read once per `project` this
+/// run) and when each PR was last asked of `gh`.
+#[derive(Default)]
+struct Memo {
+    repos: HashMap<String, Option<String>>,
+    pr_checked: HashMap<String, i64>,
+}
+
 pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx: Receiver<CrewWake>) {
     let started_at = now_ms();
     let mut schedule = Schedule::new();
+    let mut memo = Memo::default();
     let mut watcher: Option<notify::RecommendedWatcher> = None;
     // The first cycle runs at once.
     let mut due: Option<i64> = Some(now_ms());
@@ -171,7 +192,7 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
         let cycle_at = due.map_or_else(|| schedule.run_at(&CrewWake::Tick, now), |d| d.min(schedule.run_at(&CrewWake::Tick, now)));
         if now >= cycle_at {
             // A cycle asks Herdr too, so it answers a pending Herdr ask as well.
-            let ok = cycle(&app, &home, started_at, &mut first_answer_seen);
+            let ok = cycle(&app, &home, started_at, &mut first_answer_seen, &mut memo);
             last_herdr = now_ms();
             herdr_pending = false;
             schedule.finished(now_ms(), ok);
@@ -203,7 +224,7 @@ fn first_answer(app: &AppHandle, started_at: i64, seen: &mut bool, view: Option<
 
 /// One cycle: the snapshot, the parse, Herdr's view, the write, the log line, `crew_changed`. Returns whether the
 /// snapshot succeeded.
-fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut bool) -> bool {
+fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut bool, memo: &mut Memo) -> bool {
     let started = Instant::now();
     // Herdr is asked whether or not Firstmate is installed: the chrome and the start focus need its view.
     let view = refresh_live(app);
@@ -216,13 +237,23 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
         changed(app);
         return true;
     }
-    // The script runs with no guard held.
+    // The script, the clones' configs and `gh` all run with no guard held.
     let outcome = firstmate::fleet_snapshot(home).and_then(|ran| read(&ran));
-    let workers = outcome.as_ref().map(|fleet| mirror::workers_of(fleet, view.as_ref(), attached_session().as_deref())).unwrap_or_default();
+    let found = match &outcome {
+        Ok(fleet) => {
+            let visible = app.state::<ReaderControl>().crew_visible();
+            Found {
+                workers: mirror::workers_of(fleet, view.as_ref(), attached_session().as_deref()),
+                repos: repos_of(fleet, home, memo),
+                prs: prs_of(app, fleet, memo, visible),
+            }
+        }
+        Err(_) => Found::default(),
+    };
     let written = {
         let store = app.state::<Store>();
         let mut conn = store.conn();
-        let written = mirror::record(&mut conn, store.org_id(), &outcome, &workers, now_ms());
+        let written = mirror::record(&mut conn, store.org_id(), &outcome, &found, now_ms());
         let words = crate::crew::read::worker_words(&conn, store.org_id()).unwrap_or_default();
         drop(conn);
         app.state::<CrewLive>().set_worker_words(words);
@@ -242,6 +273,53 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     };
     changed(app);
     ok
+}
+
+/// Each task clone's repository, read once per `project` this run (§7): only under `<home>/projects/`.
+fn repos_of(fleet: &Fleet, home: &Path, memo: &mut Memo) -> HashMap<String, Option<String>> {
+    fleet
+        .tasks
+        .iter()
+        .filter_map(|t| t.project.as_deref())
+        .map(|project| {
+            let repo = memo.repos.entry(project.to_string()).or_insert_with(|| repo::clone_repo(home, project)).clone();
+            (project.to_string(), repo)
+        })
+        .collect()
+}
+
+/// The PRs of tasks not yet done whose last check is older than the page's gap, each through `gh pr view` (10 s). A PR
+/// `gh` could not read keeps its last values; it is asked again after the same gap, never in a tight loop.
+fn prs_of(app: &AppHandle, fleet: &Fleet, memo: &mut Memo, visible: bool) -> Vec<gh::PrFacts> {
+    let gap = if visible { PR_FRESH_VISIBLE_MS } else { PR_FRESH_HIDDEN_MS };
+    let now = now_ms();
+    let mut urls: Vec<&str> = fleet
+        .tasks
+        .iter()
+        .filter(|t| !mirror::done_now(t))
+        .filter_map(|t| t.pr_url.as_deref())
+        .filter(|url| pr_url_ok(url) && memo.pr_checked.get(*url).is_none_or(|at| now - at >= gap))
+        .collect();
+    urls.sort_unstable();
+    urls.dedup();
+    if urls.is_empty() {
+        return Vec::new();
+    }
+    let started = Instant::now();
+    let prs: Vec<gh::PrFacts> = urls
+        .iter()
+        .filter_map(|url| {
+            memo.pr_checked.insert((*url).to_string(), now);
+            gh::pr_view(url).ok()
+        })
+        .collect();
+    log::info!("crew: gh {} PRs in {} ms", urls.len(), started.elapsed().as_millis());
+    let live = app.state::<CrewLive>();
+    let mut checks = live.checks.lock().unwrap_or_else(|p| p.into_inner());
+    for pr in &prs {
+        checks.insert(pr.url.clone(), pr.checks.clone());
+    }
+    prs
 }
 
 /// The script's answer as a fleet, or the reason it is not one — for `reader_status` and the Crew page's error line,

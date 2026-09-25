@@ -1,0 +1,13 @@
+{
+  "isDraft": false,
+  "mergeable": "MERGEABLE",
+  "number": 123,
+  "reviewDecision": "REVIEW_REQUIRED",
+  "state": "OPEN",
+  "statusCheckRollup": [
+    { "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": "SUCCESS", "workflowName": "CI" },
+    { "__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "FAILURE", "workflowName": "CI" },
+    { "__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SUCCESS", "workflowName": "CI" },
+    { "__typename": "StatusContext", "context": "ci/circleci", "state": "SUCCESS" }
+  ]
+}

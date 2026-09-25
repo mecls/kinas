@@ -117,6 +117,8 @@ pub fn run() {
             crew::set_crew_visible,
             crew::crew_settings,
             crew::crew_launch,
+            crew::crew_task,
+            crew::crew_focus_pane,
             crew::crew_pane_state,
             commands::ollama_key_status,
             commands::save_ollama_key,

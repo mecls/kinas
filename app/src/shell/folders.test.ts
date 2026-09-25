@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ProjectRow } from "../api.ts";
 import { addedLine, folderMenu, hiddenFolders, listedFolders, menuAt, removedFolders, seatFolders, shownFolders } from "./folders.ts";
 
-const row = (name: string, extra: Partial<ProjectRow> = {}): ProjectRow => ({ name, path: `/root/${name}`, display: `~/root/${name}`, category: null, internal: false, hidden: false, removed: false, ...extra });
+const row = (name: string, extra: Partial<ProjectRow> = {}): ProjectRow => ({ name, path: `/root/${name}`, display: `~/root/${name}`, category: null, internal: false, hidden: false, removed: false, repo: null, ...extra });
 
 describe("seatFolders", () => {
   test("internal folders last, each in its chosen category or the next free one its name gives", () => {

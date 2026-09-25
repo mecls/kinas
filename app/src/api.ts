@@ -296,6 +296,8 @@ export interface ProjectRow {
   hidden: boolean;
   /** Off Settings' list too, in its Removed list. Wins over `hidden`. */
   removed: boolean;
+  /** The folder's GitHub `origin` as `owner/name`, lower-cased; null without one (the first mate's lanes). */
+  repo: string | null;
 }
 /** Every repository up to three levels under the projects root, and every added folder; the walk stands for a minute in Rust. */
 export const listProjects = () => invoke<ProjectRow[]>("list_projects");

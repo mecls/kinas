@@ -2,7 +2,10 @@
 //! `reader_status`. Tasks are upserted with Kinas's own stamps — when it first saw a task, first saw it working, saw it
 //! done, saw it leave — and never deleted: a task the snapshot stops listing gains `gone_at`, cleared if it comes back.
 //! Events append, deduplicated where Firstmate repeats itself. A failed cycle writes `reader_status` and nothing else.
+//! What the cycle learned beside the fleet — Herdr's workers, each clone's repository, GitHub's PRs — arrives in
+//! `Found`, all of it read before the guard was taken (§6.15).
 
+use super::gh::{checks_text, PrFacts};
 use super::snapshot::{pr_number, Fleet, TaskFacts};
 use super::word::{word_of, word_without_gone, PrWordInput, WordInput};
 use crate::redact::{write_reader_status, Outcome, Reader};
@@ -20,14 +23,25 @@ pub(crate) struct Applied {
     pub events: usize,
 }
 
+/// What a cycle found beside the fleet, read with no guard held.
+#[derive(Debug, Default)]
+pub(crate) struct Found {
+    pub workers: Vec<Worker>,
+    /// Each task clone's repository by its `project` path (`crew::repo::clone_repo`), None when it has no GitHub
+    /// `origin`.
+    pub repos: HashMap<String, Option<String>>,
+    /// The PRs `gh` answered for this cycle; a PR it did not answer keeps its last values.
+    pub prs: Vec<PrFacts>,
+}
+
 /// A cycle's outcome, written under the caller's one guard (§6.15): the fleet and a success, or an error and nothing
 /// else — the mirror keeps its last good reading (ADR 0004).
-pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, String>, workers: &[Worker], now: i64) -> rusqlite::Result<Option<Applied>> {
+pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, String>, found: &Found, now: i64) -> rusqlite::Result<Option<Applied>> {
     let tx = conn.transaction()?;
     let applied = match outcome {
         Ok(fleet) => {
-            let applied = apply(&tx, org, fleet, now)?;
-            write_workers(&tx, org, workers, now)?;
+            let applied = apply(&tx, org, fleet, found, now)?;
+            write_workers(&tx, org, &found.workers, now)?;
             write_reader_status(&tx, org, Reader::Crew, Outcome::Success, now)?;
             Some(applied)
         }
@@ -119,21 +133,27 @@ impl Stored {
     }
 }
 
-pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, now: i64) -> rusqlite::Result<Applied> {
+/// Done comes from the backlog: a worker whose own state is `done` may still be waiting for the captain to land it
+/// (slice 0's held capture), so only a task with no backlog record is done on its state alone (§17).
+pub(crate) fn done_now(facts: &TaskFacts) -> bool {
+    facts.backlog_state.as_deref() == Some("done") || (facts.backlog_state.is_none() && facts.state.as_deref() == Some("done"))
+}
+
+pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, now: i64) -> rusqlite::Result<Applied> {
     let priors = priors(tx, org)?;
+    let places = places(tx, org)?;
     let mut applied = Applied { tasks: fleet.tasks.len(), ..Applied::default() };
     let listed: HashSet<&str> = fleet.tasks.iter().map(|t| t.id.as_str()).collect();
 
     for facts in &fleet.tasks {
         let prior = priors.get(&facts.id);
         let working = facts.state.as_deref() == Some("working");
-        // Done comes from the backlog: a worker whose own state is `done` may still be waiting for the captain to land
-        // it (slice 0's held capture), so only a task with no backlog record is done on its state alone (§17).
-        let done_now = facts.backlog_state.as_deref() == Some("done") || (facts.backlog_state.is_none() && facts.state.as_deref() == Some("done"));
         let first_seen_at = prior.map_or(now, |p| p.first_seen_at);
         let first_working_at = prior.and_then(|p| p.first_working_at).or(working.then_some(now));
-        let done_at = prior.and_then(|p| p.done_at).or(done_now.then_some(now));
+        let done_at = prior.and_then(|p| p.done_at).or(done_now(facts).then_some(now));
         upsert(tx, org, facts, &fleet.generated, first_seen_at, first_working_at, now, done_at)?;
+        repository(tx, org, facts, places.get(&facts.id), found)?;
+        applied.events += pull_request(tx, org, facts, prior, found, now)?;
 
         let after = priors_one(tx, org, &facts.id)?.expect("the row was just written");
         let word = word_of(&after.input());
@@ -168,6 +188,50 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, now: i64) -> rus
         }
     }
     Ok(applied)
+}
+
+/// A task's repository, from its clone (§7): read when the task is new, its `project` moved, or none is known yet —
+/// and kept when the snapshot stops naming the clone, so a finished task stays in its lane.
+fn repository(tx: &Transaction, org: &str, facts: &TaskFacts, place: Option<&Place>, found: &Found) -> rusqlite::Result<()> {
+    let Some(project) = facts.project.as_deref() else { return Ok(()) };
+    let moved = place.is_none_or(|(p, repo)| p.as_deref() != Some(project) || repo.is_none());
+    if moved {
+        let repo = found.repos.get(project).cloned().flatten();
+        tx.execute("UPDATE crew_tasks SET repo = ?3 WHERE org_id = ?1 AND id = ?2", params![org, facts.id, repo])?;
+    }
+    Ok(())
+}
+
+/// GitHub's word on a task's PR (§7): a new URL clears what `gh` said about the old one; `gh`'s answer this cycle sets
+/// the state, mergeability, review and check counts. Events: `PR #123 opened` once per PR, and the checks line when it
+/// changes. Returns how many events it added.
+fn pull_request(tx: &Transaction, org: &str, facts: &TaskFacts, prior: Option<&Stored>, found: &Found, now: i64) -> rusqlite::Result<usize> {
+    let Some(url) = facts.pr_url.as_deref() else { return Ok(0) };
+    let mut added = 0;
+    if prior.is_some_and(|p| p.pr_url.as_deref().is_some_and(|old| old != url)) {
+        tx.execute(
+            "UPDATE crew_tasks SET pr_state = NULL, pr_draft = NULL, pr_mergeable = NULL, pr_review = NULL, pr_checks_total = NULL,
+               pr_checks_failed = NULL, pr_checked_at = NULL WHERE org_id = ?1 AND id = ?2",
+            params![org, facts.id],
+        )?;
+    }
+    if let Some(number) = pr_number(url) {
+        added += event(tx, org, &facts.id, now, "pr", &format!("PR #{number} opened"), Some(url))?;
+    }
+    let Some(pr) = found.prs.iter().find(|p| p.url == url) else { return Ok(added) };
+    let (total, failed) = (pr.checks_total(), pr.checks_failed());
+    tx.execute(
+        "UPDATE crew_tasks SET pr_state = ?3, pr_draft = ?4, pr_mergeable = ?5, pr_review = ?6, pr_checks_total = ?7,
+           pr_checks_failed = ?8, pr_checked_at = ?9 WHERE org_id = ?1 AND id = ?2",
+        params![org, facts.id, pr.state, pr.draft, pr.mergeable, pr.review, total, failed, now],
+    )?;
+    let before = prior
+        .filter(|p| p.pr_url.as_deref() == Some(url))
+        .and_then(|p| checks_text(p.pr_checks_total.unwrap_or(0), p.pr_checks_failed.unwrap_or(0)));
+    if let Some(text) = checks_text(total, failed).filter(|t| before.as_ref() != Some(t)) {
+        added += event(tx, org, &facts.id, now, "checks", &text, None)?;
+    }
+    Ok(added)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -278,6 +342,16 @@ fn priors(conn: &Connection, org: &str) -> rusqlite::Result<HashMap<String, Stor
     rows.collect()
 }
 
+/// A task's `project` and `repo` as the mirror holds them.
+type Place = (Option<String>, Option<String>);
+
+/// Each task's place before a cycle.
+fn places(conn: &Connection, org: &str) -> rusqlite::Result<HashMap<String, Place>> {
+    let mut stmt = conn.prepare("SELECT id, project, repo FROM crew_tasks WHERE org_id = ?1")?;
+    let rows = stmt.query_map(params![org], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?))))?;
+    rows.collect()
+}
+
 fn priors_one(conn: &Connection, org: &str, id: &str) -> rusqlite::Result<Option<Stored>> {
     conn.query_row(&format!("SELECT {STORED_COLUMNS} FROM crew_tasks WHERE org_id = ?1 AND id = ?2"), params![org, id], |r| stored_of(r, 0))
         .optional()
@@ -323,7 +397,7 @@ mod tests {
 
     fn cycle(store: &Store, name: &str, now: i64) -> Applied {
         let mut conn = store.conn();
-        record(&mut conn, store.org_id(), &Ok(fleet(name)), &[], now).unwrap().unwrap()
+        record(&mut conn, store.org_id(), &Ok(fleet(name)), &Found::default(), now).unwrap().unwrap()
     }
 
     type Row = (Option<String>, Option<String>, i64, Option<i64>, i64, Option<i64>, Option<i64>);
@@ -389,6 +463,7 @@ mod tests {
             ev(t2, "state", "working"),
             ev(t2, "word", "working"),
             ev(t2 - 30_000, "last_event", "working: running the tests 9c2e"),
+            ev(t3, "pr", "PR #12 opened"),
             ev(t3, "word", "done"),
             ev(t4, "gone", "gone"),
         ];
@@ -416,7 +491,7 @@ mod tests {
         let store = Store::open(dir.path()).unwrap();
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/firstmate-fleet-snapshot.held.captured.json");
         let held = parse_fleet(&std::fs::read_to_string(path).unwrap()).unwrap();
-        record(&mut store.conn(), store.org_id(), &Ok(held), &[], T0).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(held), &Found::default(), T0).unwrap();
         let conn = store.conn();
         let ship = priors_one(&conn, store.org_id(), "scratch-readme-kinas-r8").unwrap().unwrap();
         assert_eq!((ship.done_at, word_of(&ship.input())), (None, "needs decision"));
@@ -438,10 +513,112 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).unwrap();
-        record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &workers, T0).unwrap();
-        record(&mut store.conn(), store.org_id(), &Ok(fleet), &[], T0 + MIN).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &Found { workers, ..Found::default() }, T0).unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &Found::default(), T0 + MIN).unwrap();
         let n: i64 = store.conn().query_row("SELECT count(*) FROM crew_workers", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0, "the cache is rewritten whole each cycle");
+    }
+
+    /// A synthetic snapshot with Firstmate's home at `home`, edited as a JSON value first.
+    fn fleet_at(name: &str, home: &std::path::Path, edit: impl Fn(&mut serde_json::Value)) -> Fleet {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../fixtures/crew-snapshot.{name}.synthetic.json"));
+        let text = std::fs::read_to_string(path).unwrap().replace("__FM_HOME__", &home.display().to_string());
+        let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        edit(&mut v);
+        parse_fleet(&v.to_string()).unwrap()
+    }
+
+    /// Each clone's repository, as the collector reads it before the guard.
+    fn found(fleet: &Fleet, home: &std::path::Path, prs: Vec<PrFacts>) -> Found {
+        let repos = fleet.tasks.iter().filter_map(|t| t.project.clone()).map(|p| (p.clone(), crate::crew::repo::clone_repo(home, &p))).collect();
+        Found { repos, prs, ..Found::default() }
+    }
+
+    fn clone_with(dir: &std::path::Path, config: &str) {
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::write(dir.join(".git").join("config"), config).unwrap();
+    }
+
+    fn repo_of(store: &Store) -> Option<String> {
+        store.conn().query_row("SELECT repo FROM crew_tasks WHERE id = ?1", params![ID], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn a_task_repository_from_its_clone() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let home = tempfile::tempdir().unwrap();
+        clone_with(&home.path().join("projects").join("shop-9c2e"), "[remote \"origin\"]\n\turl = git@github.com:Acme-9c2e/shop-9c2e.git\n");
+        let apply = |fleet: Fleet, now: i64| {
+            let f = found(&fleet, home.path(), Vec::new());
+            record(&mut store.conn(), store.org_id(), &Ok(fleet), &f, now).unwrap();
+        };
+
+        apply(fleet_at("queued", home.path(), |_| {}), T0);
+        assert_eq!(repo_of(&store), None, "queued: no clone named yet");
+        apply(fleet_at("working", home.path(), |_| {}), T0 + MIN);
+        assert_eq!(repo_of(&store).as_deref(), Some("acme-9c2e/shop-9c2e"), "from the clone's origin");
+        apply(fleet_at("done", home.path(), |_| {}), T0 + 2 * MIN);
+        assert_eq!(repo_of(&store).as_deref(), Some("acme-9c2e/shop-9c2e"), "kept when the snapshot stops naming the clone");
+
+        // A project outside the home's projects: never read, even though its config names a repository.
+        let elsewhere = tempfile::tempdir().unwrap();
+        clone_with(elsewhere.path(), "[remote \"origin\"]\n\turl = https://github.com/o/elsewhere-9c2e\n");
+        let outside = elsewhere.path().display().to_string();
+        apply(fleet_at("working", home.path(), |v| v["tasks"][0]["project"] = outside.clone().into()), T0 + 3 * MIN);
+        assert_eq!(repo_of(&store), None, "a moved project is read again, and outside the home it is nothing");
+
+        // A clone with no origin: the lane falls back to the project's folder name.
+        let delta = home.path().join("projects").join("delta-9c2e");
+        clone_with(&delta, "[core]\n\tbare = false\n");
+        let delta = delta.display().to_string();
+        apply(fleet_at("working", home.path(), |v| v["tasks"][0]["project"] = delta.clone().into()), T0 + 4 * MIN);
+        assert_eq!(repo_of(&store), None);
+        let name: Option<String> = store.conn().query_row("SELECT project_name FROM crew_tasks WHERE id = ?1", params![ID], |r| r.get(0)).unwrap();
+        assert_eq!(name.as_deref(), Some("delta-9c2e"));
+    }
+
+    #[test]
+    fn a_pr_its_checks_and_their_events() {
+        const URL: &str = "https://github.com/acme-9c2e/shop-9c2e/pull/123";
+        let gh = |n: u32| {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../fixtures/crew-gh-{n}.json"));
+            super::super::gh::parse(URL, &std::fs::read_to_string(path).unwrap()).unwrap()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let with_pr = || fleet_at("working", home.path(), |v| v["tasks"][0]["pr"]["url"] = URL.into());
+        let cycle_with = |prs: Vec<PrFacts>, now: i64| {
+            let fleet = with_pr();
+            let f = found(&fleet, home.path(), prs);
+            record(&mut store.conn(), store.org_id(), &Ok(fleet), &f, now).unwrap();
+        };
+
+        cycle(&store, "working", T0);
+        cycle_with(Vec::new(), T0 + MIN);
+        assert_eq!(word(&store), "PR open", "the URL alone, before gh answers");
+        cycle_with(vec![gh(1)], T0 + 2 * MIN);
+        assert_eq!(word(&store), "CI red");
+        cycle_with(vec![gh(2)], T0 + 3 * MIN);
+        assert_eq!(word(&store), "ready");
+        cycle_with(Vec::new(), T0 + 4 * MIN);
+        assert_eq!(word(&store), "ready", "gh not answering keeps the last values");
+        cycle_with(vec![gh(2)], T0 + 5 * MIN);
+
+        let kinds = |kind: &str| events(&store).into_iter().filter(|e| e.1 == kind).map(|e| e.2).collect::<Vec<_>>();
+        assert_eq!(kinds("pr"), ["PR #123 opened"]);
+        assert_eq!(kinds("checks"), ["checks 3/4 · 1 failing", "checks 4/4"]);
+        let (review, checked): (Option<String>, Option<i64>) =
+            store.conn().query_row("SELECT pr_review, pr_checked_at FROM crew_tasks WHERE id = ?1", params![ID], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((review.as_deref(), checked), (Some("APPROVED"), Some(T0 + 5 * MIN)));
+
+        // Another PR: what gh said of the old one is gone until gh speaks of the new one.
+        let other = "https://github.com/acme-9c2e/shop-9c2e/pull/124";
+        let fleet = fleet_at("working", home.path(), |v| v["tasks"][0]["pr"]["url"] = other.into());
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &Found::default(), T0 + 6 * MIN).unwrap();
+        assert_eq!(word(&store), "PR open");
+        assert_eq!(kinds("pr"), ["PR #123 opened", "PR #124 opened"]);
     }
 
     #[test]
@@ -457,7 +634,7 @@ mod tests {
         assert_eq!(before.2, Some(T0));
 
         let refused = parse_fleet(r#"{"schema":"fm-fleet-snapshot.v2"}"#);
-        let written = record(&mut store.conn(), store.org_id(), &refused, &[], T0 + MIN).unwrap();
+        let written = record(&mut store.conn(), store.org_id(), &refused, &Found::default(), T0 + MIN).unwrap();
         assert_eq!(written, None);
         assert_eq!(snapshot(&store), before, "every crew row as it was, and the last success kept");
         let (state, attempt, error): (String, i64, String) = store

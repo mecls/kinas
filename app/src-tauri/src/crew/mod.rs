@@ -8,6 +8,7 @@ pub(crate) mod home;
 pub(crate) mod launch;
 pub(crate) mod pin;
 pub(crate) mod read;
+pub(crate) mod repo;
 pub(crate) mod tools;
 
 use crate::readers::crew::{CrewLive, HERDR_FRESH_MS};
@@ -88,6 +89,73 @@ pub async fn crew_launch(app: AppHandle) -> Result<launch::Launched, CrewError> 
     })
     .await
     .map_err(|e| CrewError::internal(format!("the launcher did not finish: {e}")))?
+}
+
+/// The right panel's task (§4 Task detail): the mirror's row under one guard, then — with the guard released — the
+/// files it links to and the checks `gh` last listed. None when the mirror never held the id.
+#[tauri::command]
+pub async fn crew_task(app: AppHandle, id: String) -> Result<Option<read::CrewTaskDetail>, CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = crew_home(&app);
+        let detail = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            read::task_view(&conn, store.org_id(), &id, now_ms()).map_err(|e| CrewError::internal(format!("could not read the task: {e}")))?
+        };
+        let Some(mut detail) = detail else { return Ok(None) };
+        let task_id = detail.task.id.clone();
+        detail.brief_path = safe_id(&task_id)
+            .then(|| home.join("data").join(&task_id).join("brief.md"))
+            .filter(|p| p.is_file())
+            .map(|p| p.display().to_string());
+        detail.report_path = detail.paths.report.as_deref().filter(|_| detail.report_present).and_then(|p| under_home(&home, p)).map(|p| p.display().to_string());
+        detail.worktree_display = detail.paths.worktree.as_deref().map(|w| crate::projects::display_of(Path::new(w), &user_home()));
+        if let Some(url) = detail.paths.pr_url.as_deref() {
+            let checks = app.state::<CrewLive>().checks_of(url);
+            detail.checks = checks.into_iter().map(|(name, conclusion)| read::CheckView { name, conclusion }).collect();
+        }
+        Ok(Some(detail))
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the task did not finish reading: {e}")))?
+}
+
+/// A Firstmate task id, safe to name a folder under `<home>/data/`: letters, digits, `.`, `_` and `-`, not starting
+/// with a dot.
+fn safe_id(id: &str) -> bool {
+    !id.is_empty() && !id.starts_with('.') && id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// A path Firstmate reported, relative to its home or absolute, only when it stays lexically inside the home.
+fn under_home(home: &Path, reported: &str) -> Option<PathBuf> {
+    let path = Path::new(reported);
+    let path = if path.is_absolute() { path.to_path_buf() } else { home.join(path) };
+    let clean = !path.components().any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::CurDir));
+    (clean && path.starts_with(home)).then_some(path)
+}
+
+/// **Open its pane** on a card or in the panel (§4, §6.8, rule 22's clicks): the task's worker row — fresh, in the
+/// session Kinas attaches — and its workspace focused. Never a pane found by tab label or folder, never typed into.
+#[tauri::command]
+pub async fn crew_focus_pane(app: AppHandle, task: String) -> Result<(), CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let worker = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            read::fresh_worker(&conn, store.org_id(), &task, now_ms()).map_err(|e| CrewError::internal(format!("could not read the worker: {e}")))?
+        };
+        let session = crate::readers::crew::attached_session();
+        let workspace = worker
+            .filter(|(s, _)| session.as_deref() == Some(s.as_str()))
+            .and_then(|(_, workspace)| workspace)
+            .ok_or_else(|| CrewError { code: "no_task", message: "That task has no pane in this session".into() })?;
+        let herdr = crate::herdr::find_herdr().ok_or_else(|| CrewError { code: "herdr_not_installed", message: crate::herdr::NOT_INSTALLED.into() })?;
+        crate::herdr::workspace_focus(&herdr, &workspace).map_err(|_| CrewError { code: "herdr_not_running", message: crate::herdr::NOT_RUNNING.into() })?;
+        app.state::<ReaderControl>().crew_herdr();
+        Ok(())
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the focus did not finish: {e}")))?
 }
 
 /// What the Work page's chrome says about the pane (§4 Work): the session, then the focused workspace's label — a
@@ -238,6 +306,20 @@ mod tests {
         assert_eq!((old.word, old.stale), (None, true), "a stale view drops the badge");
         let none = pane_state_of("default".into(), &LiveView::default(), now);
         assert_eq!((none.workspace, none.stale), (None, true));
+    }
+
+    #[test]
+    fn the_panels_paths_stay_in_the_home() {
+        assert!(safe_id("shop-health-9c2e") && safe_id("a.b_c"));
+        for bad in ["", ".hidden", "a/b", "../x", "a b", "a\u{0}"] {
+            assert!(!safe_id(bad), "{bad:?}");
+        }
+        let home = Path::new("/h/firstmate");
+        assert_eq!(under_home(home, "data/t/report.md"), Some(PathBuf::from("/h/firstmate/data/t/report.md")));
+        assert_eq!(under_home(home, "/h/firstmate/data/t/report.md"), Some(PathBuf::from("/h/firstmate/data/t/report.md")));
+        assert_eq!(under_home(home, "/etc/passwd"), None);
+        assert_eq!(under_home(home, "data/../../x"), None);
+        assert_eq!(under_home(home, "/h/firstmate-old/x"), None, "a sibling that shares the prefix is outside");
     }
 
     #[test]

@@ -26,9 +26,9 @@
 - [x] Slice 2 · installed: `kinas crew setup`, the tools, Settings grouped with the Crew card — *2026-09-24: the real
   setup ran on this Mac (Firstmate at f9f74a1, backend herdr); check green; crew-collector, crew-settings, settings,
   stories, screens and shell green alone*
-- [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1 — *2026-09-24:
-  code in, rebased onto `origin/main` `7e917ff` (the reader's layout's ship point 3, the drawn title bar); check
-  green, and the full e2e alone green — 31 specs, 183 cases; ship point 1 on the captain's push, 2026-09-25*
+- [x] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1 — *shipped
+  2026-09-25 on the captain's push: rebased onto `7e917ff` (the drawn title bar), check green, the full e2e alone green
+  (31 specs, 183 cases); PR #38, `main` at `c5209fa`; installed in `/Applications`, schema 5, AC-21's median 36 ms*
 - [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
 - [ ] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
   menu bar)
@@ -39,9 +39,9 @@
 
 ## Notes for a fresh session
 
-- **Next: ship point 1 when the captain says push (`build-spec.md` §16's procedure), then slice 4 (`tasks.md` 4.0).** The work is in the worktree
-  `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1), local commits only — nothing
-  pushed. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
+- **Next: slice 4, the board (`tasks.md` 4.0); ship point 1 is on `main` (PR #38).** The work is in the worktree
+  `.claude/worktrees/design-system` on branch `feat/crew` (`build-spec.md` §17, 0.1); commits after ship point 1 stay
+  local until the captain says push. Read `build-spec.md` §0 before anything else; `tasks.md` is the task list, ticked as the work happens.
 - **Read `prd.md` first.** It was revised on 2026-09-23, reopened the same day by slice 0's probe and approved again;
   its §7 records the captain's answers of 2026-09-22 and 2026-09-23 and the probe's. Where it and `build-spec.md`
   differ, the build spec wins and its §17 says why.

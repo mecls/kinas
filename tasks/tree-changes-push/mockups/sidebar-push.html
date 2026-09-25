@@ -1,0 +1,461 @@
+<!doctype html>
+<!--
+  A Gate 1 mockup: one plain HTML file per screen, throwaway by design — no framework, no build
+  step, no script tag. Style it with DESIGN.md's semantic tokens only (the <style> below opens with every
+  token of app/src/styles/tokens.css, written by `bun scripts/mockup-template.ts` — re-run it when a token
+  changes; do not add a raw hex, a raw px size or a raw spacing value).
+  Review it inside Kinas with `kinas open tasks/<feature-slug>/mockups/<screen>.html`: the reader
+  renders it in a sandbox that allows inline styles and nothing external, so keep no link tag, no
+  web font and no script tag — the brand fonts fall back to the system stack there. Iterate until
+  the captain says "yes, that"; where DESIGN.md and this file disagree, DESIGN.md wins and the
+  mockup is corrected before Gate 1 is approved. Nothing about a screen is decided in a component
+  before it was decided here. DESIGN.md's `--text-md 13/20` is `--fs-md` / `--lh-md` below.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tree changes clear on push · Sidebar tree</title>
+<style>
+/* ===== Tokens, generated from app/src/styles/tokens.css by scripts/mockup-template.ts — do not edit ===== */
+:root{
+  --brand-accent: #00549e;
+  --brand-font-ui: "Inter";
+  --brand-font-mono: "JetBrains Mono";
+  --brand-font-display: "Bricolage Grotesque";
+  --bg: #f4f2ec;
+  --surface: #ffffff;
+  --surface-2: #edeae2;
+  --line: #e3dfd5;
+  --line-strong: #cfc9bc;
+  --ink: #1b1f27;
+  --ink-2: #5b6170;
+  --ink-3: #8a8f9b;
+  --accent: var(--brand-accent);
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --meter: #5b6170;
+  --meter-track: #e9e5dc;
+  --ok: #2e8b57;
+  --warn: #b87a12;
+  --danger: #c4262e;
+  --stale: #7c818d;
+  --ok-soft: color-mix(in oklab, var(--ok) 12%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, var(--surface));
+  --cat-1: #3e7c8a;
+  --cat-2: #7a62b0;
+  --cat-3: #8a6a4e;
+  --cat-4: #6b6f2a;
+  --cat-5: #a8527a;
+  --cat-6: #4e5f8c;
+  --shadow-float: 0 8px 24px rgb(20 23 30 / 0.12), 0 1px 3px rgb(20 23 30 / 0.08);
+  --scrim: rgb(10 20 32 / 0.3);
+  --term-bg: #f4f2ec;
+  --term-fg: #0a1420;
+  --term-selection: #ccddec;
+  --ansi-black: #e3dfd5;
+  --ansi-red: #a61b23;
+  --ansi-green: #1f6b47;
+  --ansi-yellow: #855c00;
+  --ansi-blue: #1d5f9e;
+  --ansi-magenta: #8a2a80;
+  --ansi-cyan: #0f6674;
+  --ansi-white: #3a4553;
+  --ansi-bright-black: #5b6170;
+  --ansi-bright-red: #c4262e;
+  --ansi-bright-green: #1d7a4f;
+  --ansi-bright-yellow: #6f4e00;
+  --ansi-bright-blue: #00549e;
+  --ansi-bright-magenta: #7b2f73;
+  --ansi-bright-cyan: #0b5561;
+  --ansi-bright-white: #0a1420;
+  --font-ui: var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: var(--brand-font-mono), "SF Mono", ui-monospace, Menlo, monospace;
+  --font-display: var(--brand-font-display), var(--font-ui);
+  --fs-xs: 11px;
+  --lh-xs: 16px;
+  --fs-sm: 12px;
+  --lh-sm: 18px;
+  --fs-md: 13px;
+  --lh-md: 20px;
+  --fs-lg: 15px;
+  --lh-lg: 22px;
+  --fs-xl: 20px;
+  --lh-xl: 28px;
+  --fs-num: 28px;
+  --lh-num: 32px;
+  --m-fs-sm: 13px;
+  --m-lh-sm: 18px;
+  --m-fs-body: 15px;
+  --m-lh-body: 22px;
+  --m-fs-title: 20px;
+  --m-lh-title: 26px;
+  --m-fs-large: 28px;
+  --m-lh-large: 34px;
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-1h: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --sidebar-w: 220px;
+  --panel-w: 360px;
+  --panel-w-min: 320px;
+  --pane-min: 280px;
+  --chrome-h: 32px;
+  --strip-h: 96px;
+  --page-max: 1120px;
+  --row-h: 36px;
+  --row-h-progress: 56px;
+  --hit: 28px;
+  --hit-touch: 44px;
+  --tabbar-h: 49px;
+  --focus-w: 2px;
+  --icon: 16px;
+  --icon-sm: 14px;
+  --dot: 7px;
+  --dot-ring: 1.75px;
+  --chip: 10px;
+  --bar-h: 4px;
+  --bar-h-inline: 2px;
+  --dur-fast: 150ms;
+  --dur-slow: 200ms;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]){
+    --bg: #14171e;
+    --surface: #1b1f27;
+    --surface-2: #232833;
+    --line: #2b3140;
+    --line-strong: #3a4152;
+    --ink: #edeef2;
+    --ink-2: #a1a7b4;
+    --ink-3: #6e7482;
+    --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+    --accent-ink: #0e1420;
+    --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --meter: #a1a7b4;
+    --meter-track: #2b3140;
+    --ok: #4fb37a;
+    --warn: #d9a03a;
+    --danger: #e5575e;
+    --stale: #7c818d;
+    --ok-soft: color-mix(in oklab, var(--ok) 18%, var(--surface));
+    --danger-soft: color-mix(in oklab, var(--danger) 18%, var(--surface));
+    --cat-1: #5fa3b2;
+    --cat-2: #9d88d6;
+    --cat-3: #b08e70;
+    --cat-4: #a3a85a;
+    --cat-5: #cf7aa0;
+    --cat-6: #7688b8;
+    --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --scrim: rgb(5 6 8 / 0.55);
+    --term-bg: #10192b;
+    --term-fg: #e7eef7;
+    --term-selection: #18406b;
+    --ansi-black: #2b3140;
+    --ansi-red: #e5575e;
+    --ansi-green: #4fb286;
+    --ansi-yellow: #dfae3c;
+    --ansi-blue: #3d8fd9;
+    --ansi-magenta: #c27ab8;
+    --ansi-cyan: #4ab3c2;
+    --ansi-white: #c9c6bf;
+    --ansi-bright-black: #a1a7b4;
+    --ansi-bright-red: #f06a70;
+    --ansi-bright-green: #7fd3a8;
+    --ansi-bright-yellow: #f0c96a;
+    --ansi-bright-blue: #72b0ea;
+    --ansi-bright-magenta: #dca2d4;
+    --ansi-bright-cyan: #7fd0db;
+    --ansi-bright-white: #e7eef7;
+    color-scheme:dark;
+  }
+}
+/* Set data-theme="dark" on <html> to check the other theme. */
+:root[data-theme="dark"]{
+  --bg: #14171e;
+  --surface: #1b1f27;
+  --surface-2: #232833;
+  --line: #2b3140;
+  --line-strong: #3a4152;
+  --ink: #edeef2;
+  --ink-2: #a1a7b4;
+  --ink-3: #6e7482;
+  --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+  --accent-ink: #0e1420;
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter: #a1a7b4;
+  --meter-track: #2b3140;
+  --ok: #4fb37a;
+  --warn: #d9a03a;
+  --danger: #e5575e;
+  --stale: #7c818d;
+  --ok-soft: color-mix(in oklab, var(--ok) 18%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 18%, var(--surface));
+  --cat-1: #5fa3b2;
+  --cat-2: #9d88d6;
+  --cat-3: #b08e70;
+  --cat-4: #a3a85a;
+  --cat-5: #cf7aa0;
+  --cat-6: #7688b8;
+  --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --scrim: rgb(5 6 8 / 0.55);
+  --term-bg: #10192b;
+  --term-fg: #e7eef7;
+  --term-selection: #18406b;
+  --ansi-black: #2b3140;
+  --ansi-red: #e5575e;
+  --ansi-green: #4fb286;
+  --ansi-yellow: #dfae3c;
+  --ansi-blue: #3d8fd9;
+  --ansi-magenta: #c27ab8;
+  --ansi-cyan: #4ab3c2;
+  --ansi-white: #c9c6bf;
+  --ansi-bright-black: #a1a7b4;
+  --ansi-bright-red: #f06a70;
+  --ansi-bright-green: #7fd3a8;
+  --ansi-bright-yellow: #f0c96a;
+  --ansi-bright-blue: #72b0ea;
+  --ansi-bright-magenta: #dca2d4;
+  --ansi-bright-cyan: #7fd0db;
+  --ansi-bright-white: #e7eef7;
+  color-scheme:dark;
+}
+/* ===== End of the generated tokens ===== */
+
+/* ===== Base ===== */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 var(--fs-md)/var(--lh-md) var(--font-ui);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.ink2,.unit{color:var(--ink-2)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+/* ===== This screen (semantic tokens only) ===== */
+.frame{display:flex;gap:var(--space-5);align-items:flex-start;flex-wrap:wrap;padding:var(--space-5)}
+.cap{margin:0 0 var(--space-1);color:var(--ink);font-size:var(--fs-sm);line-height:var(--lh-sm);font-weight:500}
+.sub{margin:0 0 var(--space-2);color:var(--ink-2);font-size:var(--fs-xs);line-height:var(--lh-xs);max-width:var(--sidebar-w)}
+.note{max-width:var(--page-max);margin:0;color:var(--ink-2)}
+h1{margin:0 0 var(--space-2);font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600}
+h2{margin:0 0 var(--space-3);font-size:var(--fs-lg);line-height:var(--lh-lg);font-weight:600}
+
+/* The sidebar's Files section, as shell.css draws it */
+.sidebar{width:var(--sidebar-w);padding:var(--space-3) var(--space-2);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-md)}
+.head{display:flex;align-items:center;gap:var(--space-1)}
+.label{flex:1;min-width:0;margin:0 0 0 var(--space-2);color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act{display:grid;place-items:center;width:var(--hit);height:var(--hit);border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ink-2);padding:0}
+.act svg{width:var(--icon-sm);height:var(--icon-sm)}
+.act.hover-only{opacity:0}
+.head:hover .act.hover-only{opacity:1}
+.act:hover{background:var(--surface-2);color:var(--ink)}
+.since{margin:0 0 var(--space-1) var(--space-2);color:var(--ink-2);font-size:var(--fs-xs);line-height:var(--lh-xs)}
+
+/* The tree, as reader.css draws it, plus the marks */
+.tree{margin:0;padding:0;list-style:none}
+.tree .tree{padding-left:var(--space-3)}
+.row{display:flex;align-items:center;gap:var(--space-1);width:100%;border:0;border-radius:calc(var(--radius-sm) - var(--space-0));padding:var(--space-1) var(--space-1h);background:transparent;color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm);text-align:left}
+.row:hover{color:var(--ink)}
+.row[aria-current="true"]{background:var(--line);color:var(--ink)}
+.caret{flex:none;width:var(--space-3);color:var(--ink-2)}
+.name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mark{flex:none;display:inline-flex;align-items:center;gap:var(--space-1)}
+.dot{width:var(--dot);height:var(--dot);border-radius:50%;background:var(--c)}
+.letter{min-width:var(--space-3);color:var(--ink-2);font-family:var(--font-mono);font-size:var(--fs-xs);line-height:var(--lh-xs);text-align:right;font-variant-numeric:tabular-nums}
+.add{--c:var(--ok)} .mod{--c:var(--warn)} .del{--c:var(--danger)}
+
+/* The words */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4);max-width:var(--page-max)}
+.states{border-collapse:collapse;font-size:var(--fs-sm);line-height:var(--lh-sm)}
+.states th{padding:0 var(--space-3) var(--space-2) 0;color:var(--ink-2);font-weight:500;text-align:left;border-bottom:1px solid var(--line)}
+.states td{padding:var(--space-2) var(--space-3) var(--space-2) 0;border-bottom:1px solid var(--line);vertical-align:middle}
+.states td.cell{width:var(--sidebar-w);background:var(--bg)}
+.states .words{color:var(--ink)}
+.states .why{color:var(--ink-2)}
+.new{color:var(--ink);font-weight:500}
+</style>
+</head>
+<body>
+<div class="frame" style="padding-bottom:0">
+  <div>
+    <h1>Tree changes clear on push · the sidebar</h1>
+    <p class="note">Files is open on <span class="mono">kinas</span>, first shown at 11:44. An agent rewrote
+      <span class="mono">docs/overview.md</span> (tracked, and open in the reader), added
+      <span class="mono">docs/new-note.md</span>, and rewrote <span class="mono">tasks/reader-layout/build-spec.md</span>,
+      which git ignores. The dots and letters are exactly today's. What changes is when a mark goes, and the words: point
+      at a row to read its tooltip.</p>
+  </div>
+</div>
+
+<div class="frame">
+  <!-- 1. Edited and committed -->
+  <div>
+    <p class="cap">1 · Edited and committed, 11:52</p>
+    <p class="sub">The commit moved no remote ref, so every mark stays (rule 5).</p>
+    <section class="sidebar" aria-label="Files, edited and committed">
+      <div class="head">
+        <h2 class="label" style="margin-bottom:0">kinas</h2>
+        <button class="act" aria-label="Refresh kinas" title="Refresh kinas: clear what's pushed or can't be pushed"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg></button>
+      </div>
+      <p class="since">3 changes since 11:44</p>
+      <ul class="tree">
+        <li><div class="row"><span class="caret">▸</span><span class="name">app</span></div></li>
+        <li><div class="row" title="docs, 2 changes inside since 11:44"><span class="caret">▾</span><span class="name">docs</span><span class="mark mod"><span class="dot"></span><span class="letter">2</span></span></div>
+          <ul class="tree">
+            <li><div class="row"><span class="caret">▸</span><span class="name">adr</span></div></li>
+            <li><div class="row" title="new-note.md, added since 11:44, not pushed"><span class="name">new-note.md</span><span class="mark add"><span class="dot"></span><span class="letter">A</span></span></div></li>
+            <li><div class="row" aria-current="true" title="overview.md, modified since 11:44, not pushed"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></li>
+            <li><div class="row"><span class="name">smoke-test.md</span></div></li>
+          </ul>
+        </li>
+        <li><div class="row" title="tasks, 1 change inside since 11:44"><span class="caret">▾</span><span class="name">tasks</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+          <ul class="tree">
+            <li><div class="row" title="reader-layout, 1 change inside since 11:44"><span class="caret">▾</span><span class="name">reader-layout</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+              <ul class="tree">
+                <li><div class="row"><span class="name">architecture.md</span></div></li>
+                <li><div class="row" title="build-spec.md, modified since 11:44"><span class="name">build-spec.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><div class="row"><span class="name">README.md</span></div></li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- 2. After git push -->
+  <div>
+    <p class="cap">2 · After <span class="mono">git push</span>, 15:31</p>
+    <p class="sub">Within a second, the two pushed files go quiet. The ignored file can't be pushed, so it stays until ↻.</p>
+    <section class="sidebar" aria-label="Files, after the push">
+      <div class="head">
+        <h2 class="label" style="margin-bottom:0">kinas</h2>
+        <button class="act" aria-label="Refresh kinas" title="Refresh kinas: clear what's pushed or can't be pushed"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg></button>
+      </div>
+      <p class="since">1 change since 11:44</p>
+      <ul class="tree">
+        <li><div class="row"><span class="caret">▸</span><span class="name">app</span></div></li>
+        <li><div class="row"><span class="caret">▾</span><span class="name">docs</span></div>
+          <ul class="tree">
+            <li><div class="row"><span class="caret">▸</span><span class="name">adr</span></div></li>
+            <li><div class="row"><span class="name">new-note.md</span></div></li>
+            <li><div class="row" aria-current="true"><span class="name">overview.md</span></div></li>
+            <li><div class="row"><span class="name">smoke-test.md</span></div></li>
+          </ul>
+        </li>
+        <li><div class="row" title="tasks, 1 change inside since 11:44"><span class="caret">▾</span><span class="name">tasks</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+          <ul class="tree">
+            <li><div class="row" title="reader-layout, 1 change inside since 11:44"><span class="caret">▾</span><span class="name">reader-layout</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+              <ul class="tree">
+                <li><div class="row"><span class="name">architecture.md</span></div></li>
+                <li><div class="row" title="build-spec.md, modified since 11:44"><span class="name">build-spec.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><div class="row"><span class="name">README.md</span></div></li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- 3. Edited again after the push -->
+  <div>
+    <p class="cap">3 · Edited again, 15:40</p>
+    <p class="sub">overview.md counts from the push now: its Changes view shows only the new edit, "+2 −0 since 15:31" (rule 7). The caption keeps the earliest time.</p>
+    <section class="sidebar" aria-label="Files, edited again">
+      <div class="head">
+        <h2 class="label" style="margin-bottom:0">kinas</h2>
+        <button class="act" aria-label="Refresh kinas" title="Refresh kinas: clear what's pushed or can't be pushed"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg></button>
+      </div>
+      <p class="since">2 changes since 11:44</p>
+      <ul class="tree">
+        <li><div class="row"><span class="caret">▸</span><span class="name">app</span></div></li>
+        <li><div class="row" title="docs, 1 change inside since 15:31"><span class="caret">▾</span><span class="name">docs</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+          <ul class="tree">
+            <li><div class="row"><span class="caret">▸</span><span class="name">adr</span></div></li>
+            <li><div class="row"><span class="name">new-note.md</span></div></li>
+            <li><div class="row" aria-current="true" title="overview.md, modified since 15:31, not pushed"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></li>
+            <li><div class="row"><span class="name">smoke-test.md</span></div></li>
+          </ul>
+        </li>
+        <li><div class="row" title="tasks, 1 change inside since 11:44"><span class="caret">▾</span><span class="name">tasks</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+          <ul class="tree">
+            <li><div class="row" title="reader-layout, 1 change inside since 11:44"><span class="caret">▾</span><span class="name">reader-layout</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+              <ul class="tree">
+                <li><div class="row"><span class="name">architecture.md</span></div></li>
+                <li><div class="row" title="build-spec.md, modified since 11:44"><span class="name">build-spec.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><div class="row"><span class="name">README.md</span></div></li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- 4. After ↻ -->
+  <div>
+    <p class="cap">4 · After ↻, 15:42</p>
+    <p class="sub">↻ clears the ignored file. overview.md is waiting for a push, so it stays. "Refresh files" in the palette would answer "1 change not pushed yet".</p>
+    <section class="sidebar" aria-label="Files, after refresh">
+      <div class="head">
+        <h2 class="label" style="margin-bottom:0">kinas</h2>
+        <button class="act" aria-label="Refresh kinas" title="Refresh kinas: clear what's pushed or can't be pushed"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg></button>
+      </div>
+      <p class="since">1 change since 15:31</p>
+      <ul class="tree">
+        <li><div class="row"><span class="caret">▸</span><span class="name">app</span></div></li>
+        <li><div class="row" title="docs, 1 change inside since 15:31"><span class="caret">▾</span><span class="name">docs</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div>
+          <ul class="tree">
+            <li><div class="row"><span class="caret">▸</span><span class="name">adr</span></div></li>
+            <li><div class="row"><span class="name">new-note.md</span></div></li>
+            <li><div class="row" aria-current="true" title="overview.md, modified since 15:31, not pushed"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></li>
+            <li><div class="row"><span class="name">smoke-test.md</span></div></li>
+          </ul>
+        </li>
+        <li><div class="row"><span class="caret">▾</span><span class="name">tasks</span></div>
+          <ul class="tree">
+            <li><div class="row"><span class="caret">▾</span><span class="name">reader-layout</span></div>
+              <ul class="tree">
+                <li><div class="row"><span class="name">architecture.md</span></div></li>
+                <li><div class="row"><span class="name">build-spec.md</span></div></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><div class="row"><span class="name">README.md</span></div></li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<div class="frame" style="padding-top:0">
+  <div class="panel">
+    <h2>Every new word</h2>
+    <table class="states">
+      <thead><tr><th>Where</th><th>Words</th><th>When</th></tr></thead>
+      <tbody>
+        <tr><td class="cell"><div class="row"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></td><td class="words">overview.md, modified since 11:44<span class="new">, not pushed</span></td><td class="why">waiting for a push: tracked, or untracked and not ignored, in a repository that can push</td></tr>
+        <tr><td class="cell"><div class="row"><span class="name">new-note.md</span><span class="mark add"><span class="dot"></span><span class="letter">A</span></span></div></td><td class="words">new-note.md, added since 11:44<span class="new">, not pushed</span></td><td class="why">the same, for an added file</td></tr>
+        <tr><td class="cell"><div class="row"><span class="name">build-spec.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></td><td class="words">build-spec.md, modified since 11:44</td><td class="why">git ignores it, or no repository holds it: as today, and ↻ clears it</td></tr>
+        <tr><td class="cell"><div class="row"><span class="name">overview.md</span><span class="mark mod"><span class="dot"></span><span class="letter">M</span></span></div></td><td class="words">overview.md, modified since <span class="new">15:31</span>, not pushed</td><td class="why">edited again after a push seen at 15:31: each mark has its own "since"</td></tr>
+        <tr><td class="cell"><div class="row"><span class="caret">▸</span><span class="name">docs</span><span class="mark mod"><span class="dot"></span><span class="letter">1</span></span></div></td><td class="words">docs, 1 change inside since 15:31</td><td class="why">a roll-up says the earliest "since" among what it counts</td></tr>
+        <tr><td class="cell"><p class="since" style="margin:0">2 changes since 11:44</p></td><td class="words">the caption, as today</td><td class="why">the earliest "since" among the tree's marks</td></tr>
+        <tr><td class="cell"><div class="head"><span class="label">kinas</span><span class="act" style="opacity:1"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.55"/><path d="M13 2.5v3h-3"/></svg></span></div></td><td class="words">Refresh kinas: <span class="new">clear what's pushed or can't be pushed</span></td><td class="why">↻'s tooltip; its label stays "Refresh kinas"</td></tr>
+        <tr><td class="cell"><span class="mono ink2" style="padding-left:var(--space-2)">Refresh files</span></td><td class="words"><span class="new">1 change not pushed yet</span></td><td class="why">the palette's answer when ↻ left marks waiting for a push; nothing when it left none</td></tr>
+        <tr><td class="cell"><span class="mono ink2" style="padding-left:var(--space-2)">+2 −0 since 15:31</span></td><td class="words">the Changes view's summary</td><td class="why">that path's own "since": the push it was last cleared by</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

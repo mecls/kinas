@@ -24,15 +24,19 @@
 - [x] Slice 3 · bursts and ↻: a pull is no mark, ↻ clears only what no push will, the words — 2026-09-25,
   `bun run check` green (673 bun, 338 Rust); `tree-changes` 19 of 19 (`push 3`, `push 4` new), `-no-git` and
   `-watch-fail` green, run alone
-- [ ] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings
+- [x] Slice 4 · edges and the record → ship point: worktrees, a root below its repository, git failing, the timings —
+  2026-09-25, rebased onto `49e6e03`; `bun run check` green (719 bun, 365 Rust); **the full e2e alone, 38 of 38 specs,
+  206 cases**; push-to-unmark median 122 ms. **Ship point reached; not pushed** — waiting on the captain's word to push,
+  merge and install
 
 ## Notes for a fresh session
 
 - The feature amends the shipped tree changes (`tasks/tree-changes/prd.md`): its rules 15, 16 and 18, answer 1A
   and the §6 line on git. That PRD carries a dated closing note pointing here (2026-09-25), and is not otherwise edited.
 - Worktree `.claude/worktrees/tree-changes-push`, branch **`feat/tree-changes-push`**, from `origin/main` at
-  `c5209fa`, made with `--no-track` so a bare `git push` can never reach `main`. Nothing is pushed without the
-  captain's word.
+  `c5209fa`, made with `--no-track` so a bare `git push` can never reach `main`, and rebased onto `49e6e03` (the first
+  mate's ship point 2) for its ship point. Nothing is pushed without the captain's word. The PR body is drafted in the
+  job's tmp (`pr-tree-changes-push.md`).
 - The `tree-changes` worktree (`docs/tree-changes-installed`) belongs to another session. Leave it alone.
 - The main checkout stays at `73c70fd`, with another session's untracked `docs/overview.md` and
   `tasks/design-system/`: never pull, switch, stash or commit there while worktrees exist.

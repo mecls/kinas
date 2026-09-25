@@ -27,8 +27,8 @@ pub(crate) struct Applied {
 #[derive(Debug, Default)]
 pub(crate) struct Found {
     pub workers: Vec<Worker>,
-    /// Each task clone's repository by its `project` path (`crew::repo::clone_repo`), None when it has no GitHub
-    /// `origin`.
+    /// Each task's repository by task id, from its clone (`crew::repo::clone_repo`): the `project` path, or for a task
+    /// not yet spawned, `<home>/projects/<project name>`. None when the clone has no GitHub `origin`.
     pub repos: HashMap<String, Option<String>>,
     /// The PRs `gh` answered for this cycle; a PR it did not answer keeps its last values.
     pub prs: Vec<PrFacts>,
@@ -133,6 +133,17 @@ impl Stored {
     }
 }
 
+/// Where a task's clone is: its `project`, or — for a task not yet spawned, which has only Firstmate's name for its
+/// project — `<home>/projects/<name>`, when the name is one folder name. `repo::clone_repo` still checks the path.
+pub(crate) fn clone_path(facts: &TaskFacts, home: &std::path::Path) -> Option<String> {
+    if let Some(project) = &facts.project {
+        return Some(project.clone());
+    }
+    let name = facts.project_name.as_deref()?;
+    let one_folder = !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\0');
+    one_folder.then(|| home.join("projects").join(name).display().to_string())
+}
+
 /// Done comes from the backlog: a worker whose own state is `done` may still be waiting for the captain to land it
 /// (slice 0's held capture), so only a task with no backlog record is done on its state alone (§17).
 pub(crate) fn done_now(facts: &TaskFacts) -> bool {
@@ -190,14 +201,15 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
     Ok(applied)
 }
 
-/// A task's repository, from its clone (§7): read when the task is new, its `project` moved, or none is known yet —
-/// and kept when the snapshot stops naming the clone, so a finished task stays in its lane.
+/// A task's repository, from its clone (§7): written when its `project` moved to a new clone, or when none is known
+/// yet and the clone names one — and kept when the snapshot stops naming the clone, so a finished task stays in its
+/// lane.
 fn repository(tx: &Transaction, org: &str, facts: &TaskFacts, place: Option<&Place>, found: &Found) -> rusqlite::Result<()> {
-    let Some(project) = facts.project.as_deref() else { return Ok(()) };
-    let moved = place.is_none_or(|(p, repo)| p.as_deref() != Some(project) || repo.is_none());
-    if moved {
-        let repo = found.repos.get(project).cloned().flatten();
-        tx.execute("UPDATE crew_tasks SET repo = ?3 WHERE org_id = ?1 AND id = ?2", params![org, facts.id, repo])?;
+    let read = found.repos.get(&facts.id).cloned().flatten();
+    let moved = facts.project.as_deref().is_some_and(|p| place.is_none_or(|(before, _)| before.as_deref() != Some(p)));
+    let unknown = place.is_none_or(|(_, repo)| repo.is_none());
+    if moved || (unknown && read.is_some()) {
+        tx.execute("UPDATE crew_tasks SET repo = ?3 WHERE org_id = ?1 AND id = ?2", params![org, facts.id, read])?;
     }
     Ok(())
 }
@@ -530,7 +542,11 @@ mod tests {
 
     /// Each clone's repository, as the collector reads it before the guard.
     fn found(fleet: &Fleet, home: &std::path::Path, prs: Vec<PrFacts>) -> Found {
-        let repos = fleet.tasks.iter().filter_map(|t| t.project.clone()).map(|p| (p.clone(), crate::crew::repo::clone_repo(home, &p))).collect();
+        let repos = fleet
+            .tasks
+            .iter()
+            .filter_map(|t| Some((t.id.clone(), crate::crew::repo::clone_repo(home, &clone_path(t, home)?))))
+            .collect();
         Found { repos, prs, ..Found::default() }
     }
 
@@ -554,8 +570,10 @@ mod tests {
             record(&mut store.conn(), store.org_id(), &Ok(fleet), &f, now).unwrap();
         };
 
-        apply(fleet_at("queued", home.path(), |_| {}), T0);
-        assert_eq!(repo_of(&store), None, "queued: no clone named yet");
+        apply(fleet_at("queued", home.path(), |v| v["backlog"]["records"][0]["repo"] = "nowhere-9c2e".into()), T0);
+        assert_eq!(repo_of(&store), None, "queued on a project Firstmate has no clone of");
+        apply(fleet_at("queued", home.path(), |_| {}), T0 + MIN / 2);
+        assert_eq!(repo_of(&store).as_deref(), Some("acme-9c2e/shop-9c2e"), "queued: its project's clone, by Firstmate's name for it");
         apply(fleet_at("working", home.path(), |_| {}), T0 + MIN);
         assert_eq!(repo_of(&store).as_deref(), Some("acme-9c2e/shop-9c2e"), "from the clone's origin");
         apply(fleet_at("done", home.path(), |_| {}), T0 + 2 * MIN);

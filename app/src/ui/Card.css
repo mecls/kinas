@@ -39,6 +39,10 @@
   line-height: var(--lh-xs);
   color: var(--ink-2);
 }
+/* The crew's counts (1.4): the words in the body face, the numbers in mono (.ui-num). */
+.ui-lane-slots[data-form="counts"] {
+  font-family: inherit;
+}
 .ui-lane-empty {
   color: var(--ink-2);
   font-size: var(--fs-sm);

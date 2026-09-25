@@ -13,6 +13,10 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
+/* × sits at the crumb row's end. */
+.ui-panel-close {
+  margin-left: auto;
+}
 .ui-panel-h h3 {
   margin: var(--space-2) 0;
   font-size: var(--fs-lg);

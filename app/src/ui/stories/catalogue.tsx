@@ -327,6 +327,17 @@ export const STORIES: Story[] = [
           </Lane>
         ),
       },
+      {
+        // 1.4, the first mate: an internal folder's lane, counted in Firstmate's words.
+        name: "internal",
+        node: (
+          <Lane name="kinas" cat={3} internal counts="1 in flight · 2 queued">
+            <Card title="Which pages load slowest?">
+              <StatusBadge state="working" />
+            </Card>
+          </Lane>
+        ),
+      },
     ],
   },
   {
@@ -434,19 +445,17 @@ export const STORIES: Story[] = [
         name: "task-detail",
         node: (
           <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", maxWidth: "var(--panel-w)" }}>
-            <PanelHeader cat={1} folder="ar-watches" title="Inventory sync rewrite" state="decision" />
+            {/* 1.4, the first mate: what Firstmate reports and nothing it does not — no plan, no recommendation. */}
+            <PanelHeader cat={1} folder="ar-watches" title="Inventory sync rewrite" state="decision" onClose={() => {}} />
             <PanelBody>
-              <h4>Brief</h4>
+              <h4>State</h4>
+              <p>
+                <span className="ui-mono">state: parked · source: status-log · waiting on the captain</span>
+              </p>
+              <h4>The ask</h4>
               <p>Replace the nightly CSV import with the supplier's webhook so stock changes land within a minute.</p>
-              <h4>Plan</h4>
-              <ol>
-                <li>Replace the nightly CSV import with the supplier's webhook.</li>
-                <li>Verify each payload with a signed secret.</li>
-                <li>Write stock changes to Convex and log them per watch.</li>
-                <li>Keep the CSV import as a fallback for one release.</li>
-              </ol>
-              <h4>Question</h4>
-              <QuestionCard question="Store the webhook secret in Convex env or the VPS keychain?" recommendation="Recommendation: Convex env, so preview deploys get it too." />
+              <h4>Decision</h4>
+              <QuestionCard question="Store the webhook secret in Convex env or the VPS keychain?" />
               <h4>Checks</h4>
               <ChecksList checks={[{ state: "done", name: "build", result: "1 m 12 s" }, { state: "red", name: "next build", result: "failed", error: "next build: Type error in app/booking/page.tsx:41" }]} />
               <h4>Timeline</h4>
@@ -455,7 +464,7 @@ export const STORIES: Story[] = [
             <PanelFooter>
               <Button kind="text">Deny</Button>
               <Button>Answer</Button>
-              <Button kind="primary">Approve plan</Button>
+              <Button kind="primary">Approve</Button>
             </PanelFooter>
           </div>
         ),

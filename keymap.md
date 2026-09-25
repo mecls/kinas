@@ -192,6 +192,9 @@ pane**, **First mate** / **Launch the first mate**, the waiting count, **Copy** 
 and reachable by Tab; the task detail's controls likewise. **Open its pane** and **First mate** move you the way
 **Open in the terminal** does: Kinas asks Herdr, through its CLI, to focus that workspace, then shows the Work page
 and gives the terminal the keys. Nothing is typed into any pane.
+Amended 2026-09-25 (the first mate, slice 4): a card is a button — Tab reaches it, and Enter or Space on it opens its
+detail in the right panel, as a click does; they do nothing to a control inside it (**Open its pane** is a button of
+its own). The detail's × closes the panel.
 
 An inbox item — on the Inbox page, or compact on Home — takes these keys while it has focus (Tab or a click on it),
 never while the terminal has focus:

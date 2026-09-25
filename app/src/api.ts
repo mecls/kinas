@@ -204,7 +204,36 @@ export interface CrewSettings {
   installed: boolean;
   blocked: string | null;
 }
+/** The right panel's task (build spec §4 Task detail): the card's row plus what Firstmate says about it. */
+export interface CrewTaskDetail {
+  task: CrewTask;
+  /** Firstmate's state line as it prints it: `state: working · source: pane · harness busy (fm-spawn)`. */
+  state_line: string | null;
+  /** When Firstmate observed that state (ISO 8601). */
+  state_observed_at: string | null;
+  mode: string | null;
+  yolo: boolean;
+  backend: string | null;
+  excerpt: string | null;
+  /** `<home>/data/<id>/brief.md` when it exists. */
+  brief_path: string | null;
+  /** The scout's report, when Firstmate says it is written. */
+  report_path: string | null;
+  report_present: boolean;
+  worktree_display: string | null;
+  worktree_present: boolean | null;
+  pr_review: string | null;
+  /** Each check as `gh` last listed it this run: SUCCESS, FAILURE, PENDING, NEUTRAL, SKIPPED, … */
+  checks: { name: string; conclusion: string }[];
+  /** Oldest first, orders included. */
+  events: { at: number; kind: string; text: string }[];
+  decisions: CrewDecision[];
+}
 export const getCrew = () => invoke<CrewSnapshot>("crew_snapshot");
+/** One task for the panel; null when the mirror never held it. */
+export const getCrewTask = (id: string) => invoke<CrewTaskDetail | null>("crew_task", { id });
+/** **Open its pane**: the task's worker workspace, focused in the session Kinas attaches. */
+export const focusCrewPane = (task: string) => invoke<void>("crew_focus_pane", { task });
 export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");
 /** The launcher: "focused" (it was running), "run" (its workspace was there without it), "created". */
 export const launchFirstMate = () => invoke<"focused" | "run" | "created">("crew_launch");

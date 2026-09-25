@@ -5,7 +5,7 @@ import "./StatusBadge.css";
 // DESIGN.md §4's table, exactly: the word, the dot's kind and its colour per state. Solid is what the system is
 // doing, a ring is waiting on a person, a cross is dead.
 
-export type BadgeState = "queued" | "working" | "blocked" | "red" | "done" | "stale" | "dead" | "decision" | "pr" | "ready";
+export type BadgeState = "queued" | "working" | "blocked" | "red" | "done" | "stale" | "dead" | "decision" | "pr" | "ready" | "failed" | "paused" | "unknown" | "gone";
 
 export const BADGE: Record<BadgeState, { word: string; color: string; kind: DotKind }> = {
   queued: { word: "queued", color: "--stale", kind: "solid" },
@@ -18,6 +18,11 @@ export const BADGE: Record<BadgeState, { word: string; color: string; kind: DotK
   decision: { word: "needs decision", color: "--warn", kind: "ring" },
   pr: { word: "PR open", color: "--meter", kind: "ring" },
   ready: { word: "ready", color: "--ok", kind: "ring" },
+  // 1.4, the first mate: the crew's words Firstmate reports beyond the ten.
+  failed: { word: "failed", color: "--danger", kind: "solid" },
+  paused: { word: "paused", color: "--stale", kind: "solid" },
+  unknown: { word: "unknown", color: "--stale", kind: "solid" },
+  gone: { word: "gone", color: "--ink-3", kind: "cross" },
 };
 
 export function StatusBadge({ state, count }: { state: BadgeState; count?: number }) {

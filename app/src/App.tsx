@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onAppAction, type AppAction } from "./actions.ts";
 import {
   addClientFolder,
   crewErrorOf,
+  focusCrewPane,
   getUiPrefs,
   launchFirstMate,
   listProjects,
@@ -34,12 +35,13 @@ import { SIDE_DEFAULT } from "./reader/side.ts";
 import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { back, canBack, canForward, EMPTY_HISTORY, forward, type History, patchScroll, type Place, readerAtOf, record, samePlace } from "./shell/history.ts";
-import { addedLine } from "./shell/folders.ts";
+import { addedLine, seatFolders } from "./shell/folders.ts";
 import type { Notice } from "./shell/notice.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
 import { CrewPage } from "./pages/Crew.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { InboxPage } from "./pages/Inbox.tsx";
+import { TaskDetail } from "./crew/TaskDetail.tsx";
 import { useCrew } from "./crew/useCrew.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
@@ -51,12 +53,18 @@ export type Page = "home" | "work" | "crew" | "inbox" | "usage" | "settings";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
-/** The panel on the right of the window. Its one occupant is the reader; it stays mounted while closed. */
+/**
+ * The panel on the right of the window. It holds one thing at a time (DESIGN.md 1.4): the reader, or a crew task's
+ * detail — both stay mounted, switched by `occupant`, so the reader keeps its tabs while a task shows.
+ */
 interface PanelState {
   open: boolean;
   /** The panel has the whole stage; the page and the divider are out of the layout (shell.css). Session state only. */
   expanded: boolean;
   request: ReaderRequest | null;
+  occupant: "reader" | "task";
+  /** The crew task the detail shows, when it is the occupant. */
+  task: string | null;
 }
 
 // Shortcuts come from Settings (keymap.md; by default ⌘1 / ⌘2 switch pages, ⌘S hides or shows the sidebar, ⌘K opens
@@ -71,7 +79,7 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [sidebar, setSidebar] = useState(true);
   const [shortcuts, setShortcuts] = useState<Shortcuts>(DEFAULT_SHORTCUTS);
-  const [reader, setReader] = useState<PanelState>({ open: false, expanded: false, request: null });
+  const [reader, setReader] = useState<PanelState>({ open: false, expanded: false, request: null, occupant: "reader", task: null });
   const readerSeq = useRef(0);
   const [readerWidth, setReaderWidth] = useState(DEFAULT_PANEL_PCT);
   /** The reader's side column: whether Files and Contents show while it is wide, and its width. */
@@ -81,7 +89,7 @@ export function App() {
   const navRef = useRef(nav);
   navRef.current = nav;
   const readerOpen = useRef(reader.open);
-  readerOpen.current = reader.open;
+  readerOpen.current = reader.open && reader.occupant === "reader";
   /** The places ← and → walk (shell/history.ts): in memory only, like the tabs, and gone on quit. */
   const [history, setHistory] = useState<History<Page>>(EMPTY_HISTORY);
   const historyRef = useRef(history);
@@ -232,7 +240,7 @@ export function App() {
       const inTerminal = had instanceof HTMLElement && terminalHasFocus();
       const seq = ++readerSeq.current;
       pending.current = { seq, target: null, leaving: null };
-      setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "show", ...event, seq } }));
+      setReader((r) => ({ ...r, open: true, expanded: r.open && r.expanded, request: { type: "show", ...event, seq }, occupant: "reader" }));
       if (inTerminal) {
         // Bringing the window forward can move focus when the app activates, after this frame; put it back then too.
         const restore = () => {
@@ -388,12 +396,13 @@ export function App() {
   const openFromSidebar = useCallback((path: string, view?: "changes") => {
     const seq = ++readerSeq.current;
     pending.current = { seq, target: null, leaving: null };
-    setReader((r) => ({ open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq, view } }));
+    setReader((r) => ({ ...r, open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq, view }, occupant: "reader" }));
   }, []);
 
   // A place is the page showing and what the reader shows (reader-layout PRD rule 29): recorded whenever either
   // changes, except while a request or a ← or → is on its way, and never for a file that could not be shown.
-  const placeNow: Place<Page> = { page, reader: readerAtOf(nav, reader.open) };
+  const readerShowing = reader.open && reader.occupant === "reader";
+  const placeNow: Place<Page> = { page, reader: readerAtOf(nav, readerShowing) };
   const placeKey = `${page} ${placeNow.reader.kind} ${placeNow.reader.kind === "none" ? "" : placeNow.reader.path}`;
   useEffect(() => {
     const going = pending.current;
@@ -436,7 +445,7 @@ export function App() {
       const seq = ++readerSeq.current;
       pending.current = { seq, target: to, leaving: h.at };
       const reader = to.reader;
-      setReader((prev) => ({ open: true, expanded: prev.open && prev.expanded, request: { type: "place", reader, seq } }));
+      setReader((prev) => ({ ...prev, open: true, expanded: prev.open && prev.expanded, request: { type: "place", reader, seq }, occupant: "reader" }));
     },
     [goTo, closeReader],
   );
@@ -468,6 +477,30 @@ export function App() {
       reloadCrew();
     }
   }, [goTo, say, reloadCrew]);
+
+  // A card on Crew (build spec §4 Task detail): its detail takes the panel, beside whichever page is showing.
+  const openTask = useCallback((id: string) => {
+    expandedRef.current = false;
+    setReader((r) => ({ ...r, open: true, expanded: false, occupant: "task", task: id }));
+  }, []);
+
+  // **Open its pane** (§4, rule 22's clicks): Rust focuses the task's worker workspace, and only when that worked does
+  // the Work page show with the terminal holding the keys. A refusal says why in the notice.
+  const openPane = useCallback(
+    async (id: string) => {
+      try {
+        await focusCrewPane(id);
+        wantTerminalFocus.current = true;
+        goTo("work");
+        setFocusTick((n) => n + 1);
+      } catch (e) {
+        say(crewErrorOf(e));
+      }
+    },
+    [goTo, say],
+  );
+
+  const folders = useMemo(() => seatFolders(projects), [projects]);
 
   // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane — its own pane
   // while it runs, else the Work page with the terminal holding the keys, the way Open in terminal hands them over.
@@ -544,7 +577,7 @@ export function App() {
         onAdd={addFolder}
         projects={projects}
         notice={notice}
-        panelOpen={reader.open}
+        panelOpen={readerShowing}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
@@ -552,13 +585,21 @@ export function App() {
             <HomePage usage={usage.snapshot} usageError={usage.error} projects={projects} folder={nav.folder} onOpen={openFromSidebar} onGo={goTo} onLaunch={launchTask} />
           </section>
           <section className="page" data-page="crew" hidden={page !== "crew"}>
-            <CrewPage crew={crew} active={page === "crew"} onLaunch={() => void firstMate()} />
+            <CrewPage
+              crew={crew}
+              active={page === "crew"}
+              folders={folders}
+              selected={reader.open && reader.occupant === "task" ? reader.task : null}
+              onSelect={openTask}
+              onOpenPane={(id) => void openPane(id)}
+              onLaunch={() => void firstMate()}
+            />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
             <InboxPage />
           </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
-            <UsagePage snapshot={usage.snapshot} error={usage.error} />
+            <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} />
           </section>
           <section className="page" data-page="work" hidden={page !== "work"}>
             <WorkPage active={page === "work"} shortcuts={shortcuts} />
@@ -569,8 +610,15 @@ export function App() {
         </main>
         <div className="stage-divider" hidden={!reader.open} {...split.divider} />
         {/* `reader` is kept beside `shell-panel`: reader.css styles it, and the e2e finds the panel as `aside.reader`. */}
-        {/* Expanded, the width is shell.css's: an inline flex-basis would out-rank it. */}
-        <aside className="shell-panel reader" aria-label="Reader" hidden={!reader.open} style={reader.expanded ? undefined : { flexBasis: `${split.pct}%` }}>
+        {/* Expanded, the width is shell.css's: an inline flex-basis would out-rank it. The occupant switches the
+            reader and the task detail by `data-occupant` and `hidden`; both stay mounted (crew.css). */}
+        <aside
+          className="shell-panel reader"
+          aria-label={reader.occupant === "task" ? "Task" : "Reader"}
+          data-occupant={reader.occupant}
+          hidden={!reader.open}
+          style={reader.expanded ? undefined : { flexBasis: `${split.pct}%` }}
+        >
           <Reader
             request={reader.request}
             onClose={closeReader}
@@ -585,6 +633,15 @@ export function App() {
             notice={notice}
             side={side}
             onSide={changeSide}
+          />
+          <TaskDetail
+            id={reader.task}
+            hidden={reader.occupant !== "task"}
+            version={crew?.now ?? 0}
+            folders={folders}
+            onClose={closeReader}
+            onOpenPath={openFromSidebar}
+            onOpenPane={(id) => void openPane(id)}
           />
         </aside>
       </div>

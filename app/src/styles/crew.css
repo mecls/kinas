@@ -21,11 +21,52 @@
   justify-items: start;
 }
 
-/* A word the status badge does not draw yet (failed, paused, unknown, gone: slice 4). */
-.crew-word {
+.crew-card {
+  cursor: pointer;
+}
+.crew-card .ui-card-title {
+  font-weight: 500;
+}
+/* A card's rows (mockup board.html): the badge beside the quiet line, the PR line in mono, Open its pane. */
+.crew-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.crew-meta {
   color: var(--ink-2);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
+}
+.crew-pr {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* The panel's two occupants (DESIGN.md 1.4): the reader stays mounted while a task shows, only out of the layout, so
+   its tabs and its place are kept. */
+.shell-panel[data-occupant="task"] > .reader-frame {
+  display: none;
+}
+.crew-detail {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.crew-detail-note {
+  margin: var(--space-3) var(--space-5) 0;
+}
+.crew-detail-action {
+  margin-top: var(--space-2);
+}
+.crew-quiet {
+  color: var(--ink-2);
 }
 
 /* The collector's last failure, above the last good board (§4 Crew page, Error). */

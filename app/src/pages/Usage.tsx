@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { dispatchAppAction } from "../actions.ts";
-import type { HostView, ProviderMetricView, QuotaView, ReaderId, ReaderView, UsageSnapshot } from "../api.ts";
+import type { CrewSnapshot, HostView, ProviderMetricView, QuotaView, ReaderId, ReaderView, UsageSnapshot } from "../api.ts";
 import * as convex from "../usage/convex.ts";
 import { asOf, gb, gib, tone, usedPct, WINDOW_LABEL } from "../usage/format.ts";
 import * as hostinger from "../usage/hostinger.ts";
 import { asOfOldest, QuotaGauge, quotaDetail, shownUsed, sourcesOf } from "../usage/QuotaGauge.tsx";
+import { CrewSection } from "../usage/CrewSection.tsx";
 import { UsageChart } from "../usage/UsageChart.tsx";
 import { Card, EmptyState, Gauges, MetricRow, Rows, Section, SectionHeader, Table, TitleRow } from "../ui/index.ts";
 
@@ -17,8 +18,9 @@ type Provider = (typeof PROVIDERS)[number];
 /** The windows in the order a provider's gauges read; the hero takes the first one Ollama reports. */
 const WINDOW_ORDER = ["week", "session", "month_credits"] as const;
 const OLLAMA_ORDER = ["session", "week", "month_credits"] as const;
-/** The snapshot comes from App's one poller (usage/useUsageSnapshot.ts), shared with Home. */
-export function UsagePage({ snapshot, error }: { snapshot: UsageSnapshot | null; error: string | null }) {
+/** The snapshot comes from App's one poller (usage/useUsageSnapshot.ts), shared with Home; the crew from App's one crew
+ *  reading (crew/useCrew.ts). */
+export function UsagePage({ snapshot, error, crew = null }: { snapshot: UsageSnapshot | null; error: string | null; crew?: CrewSnapshot | null }) {
   if (!snapshot) {
     return (
       <div className="usage">
@@ -64,6 +66,8 @@ export function UsagePage({ snapshot, error }: { snapshot: UsageSnapshot | null;
       <HostingerSection metrics={snapshot.provider_metrics} reader={reader("hostinger")} now={snapshot.now} />
 
       <MacSection host={snapshot.host} reader={reader("host")} now={snapshot.now} />
+
+      <CrewSection crew={crew} />
     </div>
   );
 }

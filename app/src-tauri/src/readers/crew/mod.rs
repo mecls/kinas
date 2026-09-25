@@ -275,15 +275,16 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     ok
 }
 
-/// Each task clone's repository, read once per `project` this run (§7): only under `<home>/projects/`.
+/// Each task's repository by id, from its clone, read once per clone path this run (§7): only under
+/// `<home>/projects/`.
 fn repos_of(fleet: &Fleet, home: &Path, memo: &mut Memo) -> HashMap<String, Option<String>> {
     fleet
         .tasks
         .iter()
-        .filter_map(|t| t.project.as_deref())
-        .map(|project| {
-            let repo = memo.repos.entry(project.to_string()).or_insert_with(|| repo::clone_repo(home, project)).clone();
-            (project.to_string(), repo)
+        .filter_map(|t| {
+            let path = mirror::clone_path(t, home)?;
+            let repo = memo.repos.entry(path.clone()).or_insert_with(|| repo::clone_repo(home, &path)).clone();
+            Some((t.id.clone(), repo))
         })
         .collect()
 }

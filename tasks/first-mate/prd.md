@@ -378,7 +378,7 @@ the privacy check (AC-10).
   folder name, neither with a chip; a `project` path outside `<home>/projects/` is not read; Usage's Crew section
   reads `claude · 2 in flight` and `Queued · 1 task`; with every task done, the section is gone.
 - **AC-8 · Orders.** Typed into the worker's pane, `deploy the thing` + Enter is an order on its timeline within
-  1,000 ms; `hello` typed into the first mate's pane leaves no row; `token Bearer abc123` is stored as
+  1,000 ms; `hello` typed into the first mate's pane leaves no row; `token Bearer <value>` is stored as
   `token [redacted]`.
 - **AC-9 · A restart lists and repairs nothing.** Two launches over one data directory: the Reconcile group lists
   exactly the two lines for the task with a dead pane and a gone worktree, none for the healthy one; the fake home is

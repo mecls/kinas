@@ -7,6 +7,12 @@
 //! state's guard only to update the marks (ADR 0005). A second thread takes the baseline (`baseline.rs`) while the
 //! watch already runs: bursts that arrive first wait in the record, and go back through the burst thread once the
 //! baseline is in, so one thread applies every burst, in order.
+//!
+//! Tree changes clear on push (`tasks/tree-changes-push/prd.md`): a mark goes once its text is on the branch's remote.
+//! Each repository's upstream is resolved and kept in the state; a watch on its shared git folder, filtered to the
+//! refs, re-resolves it when a push (or a fetch) moves them, and hands every root in that repository an Upstream
+//! message on the same channel its bursts come through — so the root's one thread applies bursts and push checks
+//! alike, in order, and the baseline can change after it is installed without a second lock rule (architecture 1).
 
 pub mod baseline;
 pub mod compare;
@@ -25,7 +31,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::access::{self, Kind};
 use super::{checked, listable_file, off_main, ReaderError, ReaderState};
-use baseline::{BaseEntry, BaseText, Baseline, NoCopy, Stat};
+use baseline::{BaseEntry, BaseText, Baseline, Head, NoCopy, Rebase, Stat};
 use compare::Now;
 use git::Git;
 
@@ -40,6 +46,57 @@ pub const BURST_CEILING: Duration = Duration::from_millis(500);
 pub const COPY_BUDGET_BYTES: u64 = 64 * 1024 * 1024;
 
 pub type Millis = i64;
+
+/// What reaches a root's thread: a path an event named (the root itself for a rescan, as `heard` says), or word that
+/// the upstream of one of its repositories moved.
+#[derive(Debug)]
+pub enum Heard {
+    Path(PathBuf),
+    Upstream(PathBuf),
+}
+
+/// What the root's thread is handed: a debounced burst of paths, or a message on its own (`debounce_heard`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Handed {
+    Burst(BTreeSet<PathBuf>),
+    Upstream(PathBuf),
+}
+
+/// What a repository's checked-out branch has on its remote, as this Mac's refs say (PRD rules 1–3). Kinas never
+/// fetches: a push made elsewhere is seen at the next fetch here.
+#[derive(Clone, Debug)]
+pub enum Upstream {
+    /// `@{upstream}`, or else `refs/remotes/origin/<branch>`: its commit, and every regular file in it with its blob.
+    At { commit: String, blobs: Arc<BTreeMap<PathBuf, String>> },
+    /// On a branch with neither, in a repository with a remote: its first push is still to come.
+    Waiting,
+    /// A detached HEAD, or no remote at all: nothing here will be pushed.
+    CannotPush,
+    /// Git failed or timed out: nothing is judged pushed, and nothing "cannot push" (Gate 2).
+    Unknown,
+}
+
+impl Upstream {
+    /// The same answer: the same kind, and for `At` the same commit. The blobs follow from the commit.
+    fn same(&self, other: &Upstream) -> bool {
+        match (self, other) {
+            (Upstream::At { commit: a, .. }, Upstream::At { commit: b, .. }) => a == b,
+            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+        }
+    }
+}
+
+/// A repository some baseline found: its shared git folder, and its upstream as last resolved.
+struct Repo {
+    common: PathBuf,
+    upstream: Upstream,
+}
+
+/// The watch on one shared git folder, held only to keep it alive: dropping it ends its thread.
+struct RefWatch {
+    #[allow(dead_code)]
+    watcher: RecommendedWatcher,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum Mark {
@@ -100,8 +157,8 @@ struct Record {
     /// ends the burst thread.
     #[allow(dead_code)]
     watcher: Option<RecommendedWatcher>,
-    /// The burst thread's channel, for the queued paths once the baseline is in.
-    feed: Option<Sender<PathBuf>>,
+    /// The burst thread's channel: the queued paths once the baseline is in, and the Upstream messages.
+    feed: Option<Sender<Heard>>,
     copy_bytes: u64,
 }
 
@@ -118,6 +175,10 @@ pub struct Changes {
     budget_used: u64,
     /// The last generation handed out. Never reset — not even by a reload, whose old threads may still be running.
     last_generation: u64,
+    /// Every repository a baseline found, by its top.
+    repos: HashMap<PathBuf, Repo>,
+    /// One watch per shared git folder, however many roots and worktrees use it.
+    refs: HashMap<PathBuf, RefWatch>,
 }
 
 impl Changes {
@@ -346,11 +407,13 @@ fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges,
     Some((summary(record, Vec::new()), generation, !record.watching))
 }
 
-/// Every record out of the state, the budget back to nothing. The caller drops them, with no guard held.
-fn drop_all(state: &ChangesState) -> HashMap<PathBuf, Record> {
+/// Every record and every refs watch out of the state, the repositories forgotten, the budget back to nothing. The
+/// caller drops them, with no guard held.
+fn drop_all(state: &ChangesState) -> (HashMap<PathBuf, Record>, HashMap<PathBuf, RefWatch>) {
     let mut changes = state.lock();
     changes.budget_used = 0;
-    std::mem::take(&mut changes.roots)
+    changes.repos.clear();
+    (std::mem::take(&mut changes.roots), std::mem::take(&mut changes.refs))
 }
 
 /// The watch, the burst thread and the baseline thread, for a record that has none: its first showing, or a refresh
@@ -359,12 +422,17 @@ fn drop_all(state: &ChangesState) -> HashMap<PathBuf, Record> {
 fn follow(app: &AppHandle, real: &Path, generation: u64, fallback: TreeChanges) -> TreeChanges {
     // Found once per watch; None on a machine without git, or in an e2e launch that says so.
     let git = Git::find();
-    let (feed, rx) = mpsc::channel::<PathBuf>();
+    let (feed, rx) = mpsc::channel::<Heard>();
     let burst_app = app.clone();
     let burst_root = real.to_path_buf();
     let burst_git = git.clone();
-    let started = start(real, feed.clone(), rx, move |paths| {
-        if let Some(summary) = apply_burst(&burst_app.state::<ChangesState>(), &burst_root, burst_git.as_ref(), paths) {
+    let started = start(real, feed.clone(), rx, move |handed| {
+        let state = burst_app.state::<ChangesState>();
+        let summary = match handed {
+            Handed::Burst(paths) => apply_burst(&state, &burst_root, burst_git.as_ref(), paths),
+            Handed::Upstream(top) => apply_upstream(&state, &burst_root, burst_git.as_ref(), &top),
+        };
+        if let Some(summary) = summary {
             let _ = burst_app.emit(TREE_CHANGED, summary);
         }
     });
@@ -408,7 +476,7 @@ fn spawn_baseline(app: &AppHandle, real: &Path, generation: u64, git: Option<Git
 
 /// The recursive watch and its burst thread. The callback does no disk work (rule 28): it drops what the tree could
 /// never list — `.git`, `node_modules`, a build folder — so a build streaming into `target/` never delays a burst.
-fn start(root: &Path, tx: Sender<PathBuf>, rx: Receiver<PathBuf>, on_burst: impl FnMut(BTreeSet<PathBuf>) + Send + 'static) -> notify::Result<RecommendedWatcher> {
+fn start(root: &Path, tx: Sender<Heard>, rx: Receiver<Heard>, on_handed: impl FnMut(Handed) + Send + 'static) -> notify::Result<RecommendedWatcher> {
     // A debug build started with KINAS_E2E_WATCH_FAIL=1 refuses every watch, so the e2e can see the tree say so.
     #[cfg(debug_assertions)]
     if std::env::var("KINAS_E2E_WATCH_FAIL").as_deref() == Ok("1") {
@@ -418,14 +486,14 @@ fn start(root: &Path, tx: Sender<PathBuf>, rx: Receiver<PathBuf>, on_burst: impl
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
         if let Ok(event) = event {
             for path in heard(&filter_root, event) {
-                let _ = tx.send(path);
+                let _ = tx.send(Heard::Path(path));
             }
         }
     })?;
     watcher.watch(root, RecursiveMode::Recursive)?;
     std::thread::Builder::new()
         .name("tree-changes-burst".into())
-        .spawn(move || debounce_paths(&rx, DEBOUNCE, BURST_CEILING, on_burst))
+        .spawn(move || debounce_heard(&rx, DEBOUNCE, BURST_CEILING, on_handed))
         .map_err(notify::Error::io)?;
     Ok(watcher)
 }
@@ -460,14 +528,19 @@ fn take_baseline(app: &AppHandle, root: PathBuf, generation: u64, git: Option<&G
     let started = Instant::now();
     let taken = baseline::take(&root, git, left, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
     let (copies, bytes) = (taken.entries.values().filter(|e| matches!(e.text, BaseText::Copy(_))).count(), taken.copy_bytes);
-    let Some((summary, queued, feed)) = install_baseline(&state, &root, generation, taken) else {
+    let upstreams = git.map(|g| upstreams_of(&state, &taken, g)).unwrap_or_default();
+    let commons: Vec<PathBuf> = taken.repos.iter().map(|r| r.common.clone()).collect();
+    let Some((summary, queued, feed)) = install_baseline(&state, &root, generation, taken, upstreams) else {
         return;
     };
+    for common in commons {
+        ensure_ref_watch(app, &common);
+    }
     // Counts and a duration, never a path.
     log::info!("tree changes: baseline taken in {} ms, {copies} copies, {bytes} bytes", started.elapsed().as_millis());
     if let Some(feed) = feed {
         for path in queued {
-            let _ = feed.send(path);
+            let _ = feed.send(Heard::Path(path));
         }
     }
     let _ = app.emit(TREE_CHANGED, summary);
@@ -476,17 +549,228 @@ fn take_baseline(app: &AppHandle, root: PathBuf, generation: u64, git: Option<&G
 /// Installs a taken baseline, trimmed to what the window's budget still holds — another root may have installed its
 /// own since this one's copies started. Returns the summary to emit, and the queued paths with the channel they go
 /// back through; None when the root is no longer watched, or was refreshed after this baseline began.
-fn install_baseline(state: &ChangesState, root: &Path, generation: u64, mut taken: Baseline) -> Option<(TreeChanges, BTreeSet<PathBuf>, Option<Sender<PathBuf>>)> {
+///
+/// Its repositories join the state with the upstreams resolved for them, unless another baseline already brought them:
+/// then the refs thread keeps that one current, and it is at least as new as these.
+fn install_baseline(state: &ChangesState, root: &Path, generation: u64, mut taken: Baseline, mut upstreams: HashMap<PathBuf, Upstream>) -> Option<(TreeChanges, BTreeSet<PathBuf>, Option<Sender<Heard>>)> {
     let mut changes = state.lock();
     let left = COPY_BUDGET_BYTES.saturating_sub(changes.budget_used);
-    let Changes { roots, budget_used, .. } = &mut *changes;
+    let Changes { roots, budget_used, repos, .. } = &mut *changes;
     let record = roots.get_mut(root).filter(|r| r.generation == generation)?;
+    for found in &taken.repos {
+        repos.entry(found.top.clone()).or_insert_with(|| Repo { common: found.common.clone(), upstream: upstreams.remove(&found.top).unwrap_or(Upstream::Unknown) });
+    }
     taken.trim_to(left);
     *budget_used += taken.copy_bytes;
     record.copy_bytes = taken.copy_bytes;
     record.baseline = Some(Arc::new(taken));
     let queued = std::mem::take(&mut record.queued);
     Some((summary(record, Vec::new()), queued, record.feed.clone()))
+}
+
+/// Each repository of a baseline just taken, resolved — from the state's answer when another root already knows it, so
+/// an unmoved upstream's blobs are not read again.
+fn upstreams_of(state: &ChangesState, taken: &Baseline, git: &Git) -> HashMap<PathBuf, Upstream> {
+    taken
+        .repos
+        .iter()
+        .map(|r| {
+            let before = state.lock().repos.get(&r.top).map(|known| known.upstream.clone());
+            (r.top.clone(), resolve(git, &r.top, before.as_ref()))
+        })
+        .collect()
+}
+
+/// PRD rule 1, in its order: the branch (none: a detached HEAD cannot push), then `@{upstream}`, then
+/// `refs/remotes/origin/<branch>`; with neither, a repository with a remote waits for its first push and one without
+/// cannot push. The upstream's files are read once per commit: an unmoved one keeps `before`'s. Any failure: Unknown.
+fn resolve(git: &Git, top: &Path, before: Option<&Upstream>) -> Upstream {
+    let branch = match git.branch(top) {
+        Ok(Some(branch)) => branch,
+        Ok(None) => return Upstream::CannotPush,
+        Err(_) => return Upstream::Unknown,
+    };
+    let commit = match git.commit_of(top, "@{upstream}") {
+        Ok(Some(commit)) => Some(commit),
+        Ok(None) => match git.commit_of(top, &format!("refs/remotes/origin/{branch}")) {
+            Ok(commit) => commit,
+            Err(_) => return Upstream::Unknown,
+        },
+        Err(_) => return Upstream::Unknown,
+    };
+    let Some(commit) = commit else {
+        return match git.has_remote(top) {
+            Ok(true) => Upstream::Waiting,
+            Ok(false) => Upstream::CannotPush,
+            Err(_) => Upstream::Unknown,
+        };
+    };
+    if let Some(Upstream::At { commit: had, blobs }) = before {
+        if *had == commit {
+            return Upstream::At { commit, blobs: blobs.clone() };
+        }
+    }
+    match git.tree_blobs(top, &commit) {
+        Ok(blobs) => Upstream::At { commit, blobs: Arc::new(blobs.into_iter().collect()) },
+        Err(_) => Upstream::Unknown,
+    }
+}
+
+/// Installs a repository's newly resolved upstream when it differs from the one held, and answers the channels of
+/// the roots whose baseline holds that repository, to be told with no guard held. Unchanged: nobody is told.
+fn note_upstream(state: &ChangesState, top: &Path, upstream: Upstream) -> Vec<Sender<Heard>> {
+    let mut changes = state.lock();
+    let Some(repo) = changes.repos.get_mut(top) else {
+        return Vec::new();
+    };
+    if repo.upstream.same(&upstream) {
+        return Vec::new();
+    }
+    repo.upstream = upstream;
+    changes.roots.values().filter(|r| r.baseline.as_ref().is_some_and(|b| b.repos.iter().any(|x| x.top == top))).filter_map(|r| r.feed.clone()).collect()
+}
+
+/// Whether an event under a shared git folder can move an upstream: a remote-tracking ref, `packed-refs` (where `git
+/// pack-refs` moves them), a HEAD (a checkout changes which branch's upstream applies) or `config` (where
+/// `--set-upstream-to` writes). Everything else — objects, the index, logs, local branches — is dropped before the
+/// channel, so a commit or a `git gc` does not wake the refs thread for nothing.
+fn ref_path(common: &Path, path: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(common) else {
+        return false;
+    };
+    rel.starts_with("refs/remotes")
+        || [Path::new("packed-refs"), Path::new("HEAD"), Path::new("config")].contains(&rel)
+        || (rel.starts_with("worktrees") && rel.components().count() == 3 && rel.file_name().is_some_and(|n| n == "HEAD"))
+}
+
+/// The watch on a shared git folder and its `tree-changes-refs` thread, started once however many roots and worktrees
+/// use it. The root's own watch drops `.git`, and a root below its repository's top, or a worktree, never sees the
+/// refs at all (architecture 4). A watch that cannot start is logged by its kind: marks then clear at a ↻ or a burst.
+fn ensure_ref_watch(app: &AppHandle, common: &Path) {
+    let state = app.state::<ChangesState>();
+    if state.lock().refs.contains_key(common) {
+        return;
+    }
+    let (tx, rx) = mpsc::channel::<PathBuf>();
+    let filter = common.to_path_buf();
+    let watched = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        if let Ok(event) = event {
+            // Dropped events: any of them may have been a ref.
+            if event.need_rescan() {
+                let _ = tx.send(filter.clone());
+            }
+            for path in event.paths.into_iter().filter(|p| ref_path(&filter, p)) {
+                let _ = tx.send(path);
+            }
+        }
+    })
+    .and_then(|mut watcher| watcher.watch(common, RecursiveMode::Recursive).map(|()| watcher));
+    let watcher = match watched {
+        Ok(watcher) => watcher,
+        Err(e) => {
+            log::warn!("tree changes: could not watch a repository's refs ({})", error_kind(&e));
+            return;
+        }
+    };
+    let thread_app = app.clone();
+    let thread_common = common.to_path_buf();
+    let spawned = std::thread::Builder::new().name("tree-changes-refs".into()).spawn(move || {
+        let git = Git::find();
+        debounce_paths(&rx, DEBOUNCE, BURST_CEILING, |_| on_refs(&thread_app.state::<ChangesState>(), &thread_common, git.as_ref()));
+    });
+    if let Err(e) = spawned {
+        log::error!("tree changes: could not start the refs thread: {e}");
+        return;
+    }
+    // Two baselines on one repository may both have started one: the second gives its own back, outside the guard.
+    let spare = {
+        let mut changes = state.lock();
+        if changes.refs.contains_key(common) {
+            Some(watcher)
+        } else {
+            changes.refs.insert(common.to_path_buf(), RefWatch { watcher });
+            None
+        }
+    };
+    drop(spare);
+}
+
+/// The refs thread's work after a debounced burst: every repository on this shared git folder resolved again, with no
+/// guard held, and each root of one whose upstream moved told so, on its own channel.
+fn on_refs(state: &ChangesState, common: &Path, git: Option<&Git>) {
+    let Some(git) = git else { return };
+    let tops: Vec<(PathBuf, Upstream)> = state.lock().repos.iter().filter(|(_, r)| r.common == common).map(|(top, r)| (top.clone(), r.upstream.clone())).collect();
+    for (top, before) in tops {
+        let upstream = resolve(git, &top, Some(&before));
+        for feed in note_upstream(state, &top, upstream) {
+            let _ = feed.send(Heard::Upstream(top.clone()));
+        }
+    }
+}
+
+/// An Upstream message for one root (PRD rule 4): its marks in that repository checked against the upstream now.
+/// Each one pushed loses its mark, and its baseline becomes the upstream's blob. Returns the summary to emit, or None
+/// when nothing changed. The baseline is cloned, rebaselined and installed whole, after checking a full reset did not
+/// replace it meanwhile.
+fn apply_upstream(state: &ChangesState, root: &Path, git: Option<&Git>, top: &Path) -> Option<TreeChanges> {
+    let git = git?;
+    let (baseline, marked, upstream) = {
+        let changes = state.lock();
+        let record = changes.roots.get(root)?;
+        let baseline = record.baseline.clone()?;
+        let upstream = changes.repos.get(top)?.upstream.clone();
+        let marked: BTreeMap<PathBuf, (Kind, Mark)> = record.marks.iter().filter(|(p, _)| baseline.repo_of(p).is_some_and(|r| r.top == top)).map(|(p, &m)| (p.clone(), m)).collect();
+        (baseline, marked, upstream)
+    };
+    let started = Instant::now();
+    let rebases = pushed_files(git, top, &upstream, &marked);
+    if rebases.is_empty() {
+        return None;
+    }
+    let cleared = rebases.len();
+
+    let summary = {
+        let mut changes = state.lock();
+        let Changes { roots, budget_used, .. } = &mut *changes;
+        let record = roots.get_mut(root).filter(|r| r.baseline.as_ref().is_some_and(|b| Arc::ptr_eq(b, &baseline)))?;
+        let mut next = (*baseline).clone();
+        let mut touched = BTreeSet::new();
+        for (path, rebase) in rebases {
+            next.rebase(&path, rebase);
+            record.marks.remove(&path);
+            touched.extend(path.parent().map(Path::to_path_buf));
+        }
+        *budget_used = budget_used.saturating_sub(record.copy_bytes) + next.copy_bytes;
+        record.copy_bytes = next.copy_bytes;
+        record.baseline = Some(Arc::new(next));
+        summary(record, touched.into_iter().collect())
+    };
+    // Counts and a duration, never a path.
+    log::info!("tree changes: a push cleared {cleared} marks in {} ms", started.elapsed().as_millis());
+    Some(summary)
+}
+
+/// The marked files of one repository that its upstream holds as they are now, each with its new baseline: the
+/// upstream's blob. One `hash-object` answers for all of them; a repository that does not answer clears nothing.
+fn pushed_files(git: &Git, top: &Path, upstream: &Upstream, marked: &BTreeMap<PathBuf, (Kind, Mark)>) -> Vec<(PathBuf, Rebase)> {
+    let Upstream::At { commit, blobs } = upstream else {
+        return Vec::new();
+    };
+    let files: Vec<(PathBuf, Stat)> = marked.keys().filter(|p| blobs.contains_key(*p)).filter_map(|p| Stat::of(p).filter(|s| s.kind == Kind::File).map(|s| (p.clone(), s))).collect();
+    if files.is_empty() {
+        return Vec::new();
+    }
+    let paths: Vec<PathBuf> = files.iter().map(|(p, _)| p.clone()).collect();
+    let Ok(hashes) = git.hash_objects(top, &paths) else {
+        return Vec::new();
+    };
+    let head = Arc::new(Head { repo: top.to_path_buf(), commit: commit.clone() });
+    files
+        .into_iter()
+        .zip(hashes)
+        .filter(|((path, _), hash)| compare::pushed(Now::File { listable: true }, Some(hash), path, blobs))
+        .map(|((path, stat), blob)| (path, Rebase::Pushed { head: head.clone(), blob, stat }))
+        .collect()
 }
 
 /// One burst for one root. Returns the summary to emit, or None when the root is no longer watched, its baseline is
@@ -656,6 +940,47 @@ pub fn debounce_paths(rx: &Receiver<PathBuf>, quiet: Duration, ceiling: Duration
     }
 }
 
+/// `debounce_paths` for a root's channel: paths are collected into a burst as there; any other message closes the open
+/// burst, which is handed over first, and is then handed over on its own — so what arrived first is applied first.
+pub fn debounce_heard(rx: &Receiver<Heard>, quiet: Duration, ceiling: Duration, mut fire: impl FnMut(Handed)) {
+    let mut next: Option<Heard> = None;
+    loop {
+        let first = match next.take() {
+            Some(heard) => heard,
+            None => match rx.recv() {
+                Ok(heard) => heard,
+                Err(_) => return,
+            },
+        };
+        let first = match first {
+            Heard::Path(path) => path,
+            Heard::Upstream(top) => {
+                fire(Handed::Upstream(top));
+                continue;
+            }
+        };
+        let opened = Instant::now();
+        let mut burst = BTreeSet::from([first]);
+        loop {
+            let left = ceiling.saturating_sub(opened.elapsed());
+            if left.is_zero() {
+                break;
+            }
+            match rx.recv_timeout(quiet.min(left)) {
+                Ok(Heard::Path(path)) => {
+                    burst.insert(path);
+                }
+                Ok(other) => {
+                    next = Some(other);
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+        fire(Handed::Burst(burst));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,7 +1053,7 @@ mod tests {
         }
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
-        install_baseline(&state, &root, 0, baseline::take(&root, None, budget, &|_| false)).unwrap();
+        install_baseline(&state, &root, 0, baseline::take(&root, None, budget, &|_| false), HashMap::new()).unwrap();
         (dir, root, state)
     }
 
@@ -853,7 +1178,7 @@ mod tests {
         assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("busy.md")])), None);
         let taken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
         assert_eq!(taken.entries[&root.join("busy.md")].text, BaseText::NoCopy(NoCopy::ChangedDuringCopy));
-        let (ready, queued, _) = install_baseline(&state, &root, 0, taken).unwrap();
+        let (ready, queued, _) = install_baseline(&state, &root, 0, taken, HashMap::new()).unwrap();
         assert!(ready.ready);
         assert_eq!(queued, BTreeSet::from([root.join("busy.md")]));
         // Applied now, the file that changed around its copy is M: Kinas cannot tell, so it says modified.
@@ -897,7 +1222,7 @@ mod tests {
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
 
         assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.clone()])), None);
-        let (_, queued, _) = install_baseline(&state, &root, 0, baseline::take(&root, None, 1024, &|_| false)).unwrap();
+        let (_, queued, _) = install_baseline(&state, &root, 0, baseline::take(&root, None, 1024, &|_| false), HashMap::new()).unwrap();
         assert_eq!(queued, BTreeSet::from([root.clone()]), "the rescan goes back through the burst thread with the paths");
         std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
         assert_eq!(marked(&apply_burst(&state, &root, None, queued).unwrap(), &root), ["M a.md"]);
@@ -926,7 +1251,7 @@ mod tests {
         let taken = baseline::take(&other_root, None, 1024, &|_| false);
         // As if the budget had been 150 when the second baseline was installed.
         state.lock().budget_used = COPY_BUDGET_BYTES - 50;
-        install_baseline(&state, &other_root, 0, taken).unwrap();
+        install_baseline(&state, &other_root, 0, taken, HashMap::new()).unwrap();
         let changes = state.lock();
         let record = &changes.roots[&other_root];
         assert_eq!(record.copy_bytes, 0);
@@ -965,7 +1290,7 @@ mod tests {
         // A burst now waits for the new baseline, which does not know a.md: new.md is part of the new "before".
         assert_eq!(apply_burst(&state, &root, None, BTreeSet::from([root.join("new.md")])), None);
         let retaken = baseline::take(&root, None, 1024, &|p| state.lock().roots.get(&root).is_some_and(|r| r.queued.contains(p)));
-        let (ready, queued, _) = install_baseline(&state, &root, generation, retaken).unwrap();
+        let (ready, queued, _) = install_baseline(&state, &root, generation, retaken, HashMap::new()).unwrap();
         assert_eq!((ready.ready, ready.total), (true, 0));
         let after = apply_burst(&state, &root, None, queued).unwrap();
         assert_eq!(marked(&after, &root), ["M new.md"], "written around its copy, so modified: Kinas cannot tell");
@@ -983,13 +1308,13 @@ mod tests {
         // The first baseline is still being taken when the refresh comes.
         let slow = baseline::take(&root, None, 1024, &|_| false);
         let (_, second, _) = reset(&state, &root, 2_000).unwrap();
-        assert!(install_baseline(&state, &root, first.unwrap(), slow).is_none(), "the old thread installs nothing");
+        assert!(install_baseline(&state, &root, first.unwrap(), slow, HashMap::new()).is_none(), "the old thread installs nothing");
         {
             let changes = state.lock();
             assert_eq!((changes.budget_used, changes.roots[&root].baseline.is_none()), (0, true));
         }
         let fresh = baseline::take(&root, None, 1024, &|_| false);
-        assert!(install_baseline(&state, &root, second, fresh).unwrap().0.ready);
+        assert!(install_baseline(&state, &root, second, fresh, HashMap::new()).unwrap().0.ready);
         assert_eq!(state.lock().budget_used, 100);
     }
 
@@ -999,7 +1324,7 @@ mod tests {
         std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
         let old = state.lock().roots[&root].baseline.clone().unwrap();
         let (_, generation, _) = reset(&state, &root, 2_000).unwrap();
-        install_baseline(&state, &root, generation, baseline::take(&root, None, 1024, &|_| false)).unwrap();
+        install_baseline(&state, &root, generation, baseline::take(&root, None, 1024, &|_| false), HashMap::new()).unwrap();
         // As if this burst had judged against the old baseline while the refresh ran.
         let judged = judge_all(&old, None, &BTreeSet::from([root.join("a.md")]), &BTreeMap::new());
         assert_eq!(judged[&root.join("a.md")], Some((Kind::File, Mark::Modified)));
@@ -1012,11 +1337,14 @@ mod tests {
         register(&state, Path::new("/p/other"), 2_000);
         let before = state.lock().last_generation;
         assert!(before > 0);
-        let dropped = drop_all(&state);
+        state.lock().repos.insert(PathBuf::from("/p/repo"), Repo { common: PathBuf::from("/p/repo/.git"), upstream: Upstream::Waiting });
+        let (dropped, refs) = drop_all(&state);
         assert_eq!(dropped.len(), 2);
         assert!(dropped.contains_key(&root));
+        assert!(refs.is_empty());
         let changes = state.lock();
         assert_eq!((changes.roots.len(), changes.budget_used, changes.last_generation), (0, 0, before), "generations keep counting across a reload");
+        assert!(changes.repos.is_empty() && changes.refs.is_empty(), "the repositories and their refs watches go with the records");
     }
 
     /// As `watched`, but the root is a git repository with these files committed, and git answers for them.
@@ -1027,8 +1355,15 @@ mod tests {
         let g = Git::find().expect("git is installed");
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
-        install_baseline(&state, &root, 0, baseline::take(&root, Some(&g), 1024, &|_| false)).unwrap();
+        install_with_git(&state, &root, &g);
         (dir, root, state, g)
+    }
+
+    /// A baseline taken with git and installed with its repositories' upstreams, as the baseline thread does.
+    fn install_with_git(state: &ChangesState, root: &Path, g: &Git) {
+        let taken = baseline::take(root, Some(g), 1024, &|_| false);
+        let upstreams = upstreams_of(state, &taken, g);
+        install_baseline(state, root, 0, taken, upstreams).unwrap();
     }
 
     fn git_burst(state: &ChangesState, root: &Path, g: &Git, names: &[&str]) -> TreeChanges {
@@ -1072,7 +1407,7 @@ mod tests {
         let g = Git::find().expect("git is installed");
         let state = ChangesState::default();
         state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
-        install_baseline(&state, &root, 0, baseline::take(&root, Some(&g), 1024, &|_| false)).unwrap();
+        install_with_git(&state, &root, &g);
 
         // Saved unchanged, the inner repository's own blob says it is what it was; changed, it is M.
         std::fs::write(inner.join("inside.md"), "# Inside\n").unwrap();
@@ -1179,8 +1514,10 @@ mod tests {
         std::fs::create_dir_all(root.join("docs")).unwrap();
         let (feed, rx) = mpsc::channel();
         let (sets, seen_rx) = mpsc::channel();
-        let watcher = start(&root, feed, rx, move |set| {
-            let _ = sets.send(set);
+        let watcher = start(&root, feed, rx, move |handed| {
+            if let Handed::Burst(set) = handed {
+                let _ = sets.send(set);
+            }
         })
         .expect("FSEvents watches a temp folder");
 
@@ -1198,5 +1535,196 @@ mod tests {
         drop(watcher);
         assert!(seen.contains(&root.join("docs/note.md")), "the save arrived: {seen:?}");
         assert!(seen.iter().all(|p| !p.starts_with(root.join(".git"))), "nothing under .git arrived: {seen:?}");
+    }
+
+    // Tree changes clear on push (tasks/tree-changes-push/prd.md).
+
+    #[test]
+    fn a_control_message_closes_the_open_burst_first() {
+        let (tx, rx) = mpsc::channel();
+        let fired = Arc::new(Mutex::new(Vec::new()));
+        let sink = fired.clone();
+        let thread = std::thread::spawn(move || debounce_heard(&rx, Duration::from_millis(75), Duration::from_secs(5), move |handed| sink.lock().unwrap().push(handed)));
+        tx.send(Heard::Path(PathBuf::from("a.md"))).unwrap();
+        tx.send(Heard::Path(PathBuf::from("b.md"))).unwrap();
+        tx.send(Heard::Upstream(PathBuf::from("/p/repo"))).unwrap();
+        tx.send(Heard::Path(PathBuf::from("c.md"))).unwrap();
+        sleep(Duration::from_millis(250));
+        drop(tx);
+        thread.join().unwrap();
+        assert_eq!(
+            *fired.lock().unwrap(),
+            vec![Handed::Burst(BTreeSet::from(["a.md", "b.md"].map(PathBuf::from))), Handed::Upstream(PathBuf::from("/p/repo")), Handed::Burst(BTreeSet::from([PathBuf::from("c.md")]))],
+            "what arrived first is applied first"
+        );
+    }
+
+    fn kind_of(upstream: &Upstream) -> String {
+        match upstream {
+            Upstream::At { commit, .. } => format!("at {commit}"),
+            other => format!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_follows_rule_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        let repo = base.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        git::tests::repo_with(&repo, &[("README.md", b"# Read me\n")]);
+        let g = Git::find().expect("git is installed");
+        assert_eq!(kind_of(&resolve(&g, &repo, None)), "CannotPush", "no remote at all");
+
+        let remote = base.join("remote.git");
+        std::fs::create_dir(&remote).unwrap();
+        git::tests::git(&remote, &["init", "-q", "--bare"]);
+        git::tests::git(&repo, &["remote", "add", "origin", &remote.to_string_lossy()]);
+        assert_eq!(kind_of(&resolve(&g, &repo, None)), "Waiting", "a remote, and the branch not pushed yet");
+
+        git::tests::git(&repo, &["push", "-q", "origin", "main"]);
+        let one = git::tests::git(&repo, &["rev-parse", "HEAD"]);
+        assert_eq!(kind_of(&resolve(&g, &repo, None)), format!("at {one}"), "pushed without -u: origin/<branch>");
+
+        std::fs::write(repo.join("README.md"), "# Read me, pushed\n").unwrap();
+        git::tests::git(&repo, &["commit", "-qam", "two"]);
+        git::tests::git(&repo, &["push", "-q", "-u", "origin", "main"]);
+        let Upstream::At { commit, blobs } = resolve(&g, &repo, None) else { panic!("an upstream") };
+        assert_eq!(commit, git::tests::git(&repo, &["rev-parse", "HEAD"]));
+        assert_eq!(blobs[&repo.join("README.md")], git::tests::git(&repo, &["rev-parse", "HEAD:README.md"]));
+
+        git::tests::git(&repo, &["checkout", "-q", "--detach"]);
+        assert_eq!(kind_of(&resolve(&g, &repo, None)), "CannotPush", "a detached HEAD");
+    }
+
+    #[test]
+    fn resolve_reads_the_blobs_once_per_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().canonicalize().unwrap().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        git::tests::pushed_repo_with(&repo, &[("README.md", b"# Read me\n")]);
+        let g = Git::find().expect("git is installed");
+        let first = resolve(&g, &repo, None);
+        let again = resolve(&g, &repo, Some(&first));
+        let (Upstream::At { blobs: a, .. }, Upstream::At { blobs: b, .. }) = (&first, &again) else { panic!("upstreams") };
+        assert!(Arc::ptr_eq(a, b), "an unmoved upstream's files are not read again");
+        assert!(first.same(&again));
+
+        std::fs::write(repo.join("README.md"), "# Read me, pushed\n").unwrap();
+        git::tests::git(&repo, &["commit", "-qam", "two"]);
+        git::tests::git(&repo, &["push", "-q"]);
+        let moved = resolve(&g, &repo, Some(&first));
+        let Upstream::At { blobs: c, .. } = &moved else { panic!("an upstream") };
+        assert!(!Arc::ptr_eq(a, c));
+        assert!(!first.same(&moved));
+    }
+
+    #[test]
+    fn ref_path_keeps_refs_and_drops_objects() {
+        let common = Path::new("/p/repo/.git");
+        for kept in ["refs/remotes/origin/main", "refs/remotes/origin/main.lock", "packed-refs", "HEAD", "config", "worktrees/wt/HEAD"] {
+            assert!(ref_path(common, &common.join(kept)), "{kept} can move an upstream");
+        }
+        for dropped in ["objects/ab/cdef01", "index", "refs/heads/main", "logs/HEAD", "logs/refs/remotes/origin/main", "worktrees/wt/index", "FETCH_HEAD", "ORIG_HEAD"] {
+            assert!(!ref_path(common, &common.join(dropped)), "{dropped} cannot");
+        }
+        assert!(!ref_path(common, Path::new("/p/repo/README.md")), "outside the git folder");
+    }
+
+    /// A repository pushed to a bare remote with `-u`, watched, its baseline installed with its upstream. The
+    /// repository is a folder inside the temp dir, so the remote beside it goes with the temp dir.
+    fn watched_pushed(files: &[(&str, &[u8])]) -> (tempfile::TempDir, PathBuf, ChangesState, Git) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        git::tests::pushed_repo_with(&root, files);
+        let g = Git::find().expect("git is installed");
+        let state = ChangesState::default();
+        state.lock().roots.insert(root.clone(), Record::new(root.clone(), 1_000, 0));
+        install_with_git(&state, &root, &g);
+        (dir, root, state, g)
+    }
+
+    /// What the refs thread and the root's thread do after a push, without a watch: each of the root's repositories
+    /// resolved again and noted, then its Upstream message applied. The last summary that changed anything.
+    fn push_seen(state: &ChangesState, root: &Path, g: &Git) -> Option<TreeChanges> {
+        let tops: Vec<PathBuf> = state.lock().roots[root].baseline.as_ref().unwrap().repos.iter().map(|r| r.top.clone()).collect();
+        let mut last = None;
+        for top in tops {
+            let before = state.lock().repos[&top].upstream.clone();
+            note_upstream(state, &top, resolve(g, &top, Some(&before)));
+            last = apply_upstream(state, root, Some(g), &top).or(last);
+        }
+        last
+    }
+
+    #[test]
+    fn a_commit_keeps_every_mark() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["README.md"]), &root), ["M README.md"]);
+        git::tests::git(&root, &["commit", "-qam", "edited"]);
+        assert_eq!(push_seen(&state, &root, &g), None, "a commit moves no remote-tracking ref, and clears nothing");
+        assert_eq!(state.lock().roots[&root].marks.len(), 1);
+    }
+
+    #[test]
+    fn a_push_clears_and_rebaselines_to_the_pushed_blob() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n"), ("docs/a.md", b"# A\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        std::fs::write(root.join("docs/a.md"), "# A, edited\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["README.md", "docs/a.md"]), &root), ["M README.md", "M docs/a.md"]);
+        git::tests::git(&root, &["commit", "-q", "-m", "the readme", "README.md"]);
+        git::tests::git(&root, &["push", "-q"]);
+
+        let after = push_seen(&state, &root, &g).expect("the push cleared a mark");
+        assert_eq!(marked(&after, &root), ["M docs/a.md"], "only what was pushed goes");
+        assert_eq!(after.touched, [root.display().to_string()]);
+        let pushed = git::tests::git(&root, &["rev-parse", "HEAD"]);
+        let entry = state.lock().roots[&root].baseline.as_ref().unwrap().entries[&root.join("README.md")].clone();
+        let BaseText::Blob { head, blob } = entry.text else { panic!("the pushed blob is its baseline") };
+        assert_eq!((head.repo.clone(), head.commit.clone(), blob), (root.clone(), pushed, git::tests::git(&root, &["rev-parse", "HEAD:README.md"])));
+
+        // Saved again unchanged it is still what was pushed; edited, it is M again.
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["README.md"]), &root), ["M docs/a.md"]);
+        std::fs::write(root.join("README.md"), "# Read me, edited twice\n").unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["README.md"]), &root), ["M README.md", "M docs/a.md"]);
+    }
+
+    #[test]
+    fn a_push_to_another_branch_clears_nothing() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n")]);
+        std::fs::write(root.join("README.md"), "# Read me, edited\n").unwrap();
+        git_burst(&state, &root, &g, &["README.md"]);
+        git::tests::git(&root, &["commit", "-qam", "edited"]);
+        git::tests::git(&root, &["push", "-q", "origin", "HEAD:side"]);
+        assert_eq!(push_seen(&state, &root, &g), None, "main's upstream did not move");
+        assert_eq!(state.lock().roots[&root].marks.len(), 1);
+    }
+
+    #[test]
+    fn a_moved_upstream_tells_every_root_of_its_repository_once() {
+        let (_dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n"), ("docs/a.md", b"# A\n")]);
+        let docs = root.join("docs");
+        state.lock().roots.insert(docs.clone(), Record::new(docs.clone(), 1_000, 0));
+        install_with_git(&state, &docs, &g);
+        let (tx_root, rx_root) = mpsc::channel();
+        let (tx_docs, rx_docs) = mpsc::channel();
+        state.lock().roots.get_mut(&root).unwrap().feed = Some(tx_root);
+        state.lock().roots.get_mut(&docs).unwrap().feed = Some(tx_docs);
+        let common = root.join(".git");
+        assert_eq!(state.lock().repos[&root].common, common);
+
+        on_refs(&state, &common, Some(&g));
+        assert!(rx_root.try_recv().is_err() && rx_docs.try_recv().is_err(), "nothing moved, nobody is told");
+        std::fs::write(root.join("docs/a.md"), "# A, pushed\n").unwrap();
+        git::tests::git(&root, &["commit", "-qam", "pushed"]);
+        git::tests::git(&root, &["push", "-q"]);
+        on_refs(&state, &common, Some(&g));
+        for rx in [&rx_root, &rx_docs] {
+            assert!(matches!(rx.try_recv(), Ok(Heard::Upstream(top)) if top == root), "a root below the top hears of it too");
+            assert!(rx.try_recv().is_err(), "once");
+        }
     }
 }

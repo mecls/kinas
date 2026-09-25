@@ -65,11 +65,39 @@ impl Git {
 
     /// HEAD's commit, or None when the repository has no commit yet.
     pub fn head(&self, repo: &Path) -> Result<Option<String>, GitError> {
-        match self.run(repo, "rev-parse", &["--verify", "-q", "HEAD"], None) {
+        self.commit_of(repo, "HEAD")
+    }
+
+    /// The commit `rev` names — `HEAD`, `@{upstream}`, a remote-tracking ref — or None when it names nothing (exit 1,
+    /// quietly: no commit yet, no upstream, a detached HEAD asked for its upstream).
+    pub fn commit_of(&self, repo: &Path, rev: &str) -> Result<Option<String>, GitError> {
+        match self.run(repo, "rev-parse", &["--verify", "-q", rev], None) {
             Ok(out) => Ok(Some(String::from_utf8_lossy(&out).trim().to_string())),
             Err(GitError { exit: Some(1) }) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+
+    /// The folder every worktree of `repo` shares — where the refs a push moves live. Relative in a main checkout
+    /// (`.git`), absolute in a worktree. None outside a repository.
+    pub fn common_dir(&self, repo: &Path) -> Option<PathBuf> {
+        let out = self.run(repo, "rev-parse", &["--git-common-dir"], None).ok()?;
+        let dir = PathBuf::from(OsStr::from_bytes(out.strip_suffix(b"\n").unwrap_or(&out)));
+        std::fs::canonicalize(repo.join(dir)).ok()
+    }
+
+    /// The checked-out branch's short name, or None on a detached HEAD (exit 1). A branch with no commit yet has one.
+    pub fn branch(&self, repo: &Path) -> Result<Option<String>, GitError> {
+        match self.run(repo, "symbolic-ref", &["-q", "--short", "HEAD"], None) {
+            Ok(out) => Ok(Some(String::from_utf8_lossy(&out).trim().to_string())),
+            Err(GitError { exit: Some(1) }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Whether the repository has a remote at all — somewhere a push could go.
+    pub fn has_remote(&self, repo: &Path) -> Result<bool, GitError> {
+        Ok(self.run(repo, "remote", &[], None)?.iter().any(|b| !b.is_ascii_whitespace()))
     }
 
     /// Every regular file in `commit`, with its blob. Symlinks and submodules are left out: neither is a file the
@@ -209,6 +237,92 @@ pub(crate) mod tests {
         assert!(ENV.contains(&("GIT_OPTIONAL_LOCKS", "0")));
         assert!(ENV.contains(&("GIT_TERMINAL_PROMPT", "0")));
         assert!(ENV.contains(&("LC_ALL", "C")));
+        // Tree changes clear on push: what says where a push goes, as literal argvs.
+        let repo = Path::new("/p/repo");
+        assert_eq!(argv(repo, "rev-parse", &["--git-common-dir"]), ["-C", "/p/repo", "rev-parse", "--git-common-dir"].map(OsString::from));
+        assert_eq!(argv(repo, "symbolic-ref", &["-q", "--short", "HEAD"]), ["-C", "/p/repo", "symbolic-ref", "-q", "--short", "HEAD"].map(OsString::from));
+        assert_eq!(argv(repo, "rev-parse", &["--verify", "-q", "@{upstream}"]), ["-C", "/p/repo", "rev-parse", "--verify", "-q", "@{upstream}"].map(OsString::from));
+        assert_eq!(argv(repo, "remote", &[]), ["-C", "/p/repo", "remote"].map(OsString::from));
+    }
+
+    /// A repository at `dir` with these files committed on `main`, and a bare remote beside it (`<dir>.git`'s
+    /// sibling, outside `dir`) it was pushed to with `-u`. Answers the remote's path.
+    pub(crate) fn pushed_repo_with(dir: &Path, files: &[(&str, &[u8])]) -> PathBuf {
+        let remote = dir.with_file_name(format!("{}-remote.git", dir.file_name().unwrap().to_string_lossy()));
+        std::fs::create_dir_all(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare"]);
+        repo_with(dir, files);
+        git(dir, &["remote", "add", "origin", &remote.to_string_lossy()]);
+        git(dir, &["push", "-q", "-u", "origin", "main"]);
+        remote
+    }
+
+    #[test]
+    fn common_dir_is_absolute_in_a_main_checkout_and_a_worktree() {
+        let (_dir, root) = temp();
+        let repo = root.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        repo_with(&repo, &[("README.md", b"# Read me\n")]);
+        git(&repo, &["worktree", "add", "-q", "../wt", "-b", "side"]);
+        let g = Git::find().expect("git is installed");
+        assert_eq!(g.common_dir(&repo), Some(repo.join(".git")));
+        assert_eq!(g.common_dir(&root.join("wt")), Some(repo.join(".git")), "a worktree shares the main repository's refs");
+        assert_eq!(g.common_dir(&root), None, "not a repository");
+    }
+
+    #[test]
+    fn branch_is_none_on_a_detached_head() {
+        let (_dir, root) = temp();
+        repo_with(&root, &[("README.md", b"# Read me\n")]);
+        let g = Git::find().expect("git is installed");
+        assert_eq!(g.branch(&root), Ok(Some("main".into())));
+        git(&root, &["checkout", "-q", "--detach"]);
+        assert_eq!(g.branch(&root), Ok(None));
+    }
+
+    #[test]
+    fn commit_of_answers_none_for_a_missing_rev_and_has_remote_says_whether_one_exists() {
+        let (_dir, root) = temp();
+        let repo = root.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        repo_with(&repo, &[("README.md", b"# Read me\n")]);
+        let g = Git::find().expect("git is installed");
+        assert_eq!(g.commit_of(&repo, "@{upstream}"), Ok(None), "no upstream is an answer, not a failure");
+        assert_eq!(g.has_remote(&repo), Ok(false));
+
+        let remote = root.join("remote.git");
+        std::fs::create_dir(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare"]);
+        git(&repo, &["remote", "add", "origin", &remote.to_string_lossy()]);
+        assert_eq!(g.has_remote(&repo), Ok(true));
+        git(&repo, &["push", "-q", "origin", "main"]);
+        let head = git(&repo, &["rev-parse", "HEAD"]);
+        assert_eq!(g.commit_of(&repo, "@{upstream}"), Ok(None), "pushed without -u: still no upstream");
+        assert_eq!(g.commit_of(&repo, "refs/remotes/origin/main"), Ok(Some(head.clone())));
+        git(&repo, &["branch", "-q", "--set-upstream-to", "origin/main"]);
+        assert_eq!(g.commit_of(&repo, "@{upstream}"), Ok(Some(head)));
+    }
+
+    #[test]
+    fn the_new_calls_never_write() {
+        let (_dir, root) = temp();
+        let repo = root.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        pushed_repo_with(&repo, &[("README.md", b"# Read me\n")]);
+        std::fs::write(repo.join("README.md"), "# Read me, edited\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let mtime = |name: &str| std::fs::metadata(repo.join(".git").join(name)).ok().and_then(|m| m.modified().ok());
+        let state = || (git(&repo, &["count-objects", "-v"]), mtime("index"), mtime("config"), mtime("FETCH_HEAD"), mtime("packed-refs"));
+        let before = state();
+        // Past the second, so a rewrite would show in a modification time.
+        std::thread::sleep(Duration::from_millis(1100));
+
+        g.common_dir(&repo).unwrap();
+        g.branch(&repo).unwrap();
+        g.commit_of(&repo, "@{upstream}").unwrap();
+        g.commit_of(&repo, "refs/remotes/origin/main").unwrap();
+        g.has_remote(&repo).unwrap();
+        assert_eq!(state(), before, "no object, index, config or ref was written");
     }
 
     #[test]

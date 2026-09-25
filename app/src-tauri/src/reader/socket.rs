@@ -400,6 +400,15 @@ mod tests {
         drop(first);
         // Dropping a listener leaves its file behind, as a crash would.
         assert!(path.exists());
+        // Stale means nobody holds it. A process another test spawned in the instant `first` was made can hold a copy
+        // of it until that process exits: macOS marks a socket close-on-exec only after making it, so a spawn in between
+        // inherits it, and while it runs the socket is live — `bind` rightly leaves it alone. The probe said so on
+        // 2026-09-25, once in six runs, after the tree changes tests began spawning git in parallel. So wait, briefly,
+        // for it to be stale in fact; what is asserted below is unchanged.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while UnixStream::connect(&path).is_ok() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         // Compared, not `is_ok()`: this failed once in about fifty runs on 2026-09-18 and `is_ok()` said nothing about
         // which step refused — the probe still connecting, the remove, or the bind. Next time the message will.
         assert_eq!(bind(&path).map(|_| ()), Ok(()), "a stale socket should be replaced");

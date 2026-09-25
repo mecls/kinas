@@ -27,8 +27,8 @@
   setup ran on this Mac (Firstmate at f9f74a1, backend herdr); check green; crew-collector, crew-settings, settings,
   stories, screens and shell green alone*
 - [ ] Slice 3 · launchable: the first mate in the pane, the start focus, the chrome → ship point 1 — *2026-09-24:
-  code in, rebased onto `origin/main` `5df4b7d` (tree changes' ship point 2, PR #37); check green, and the full e2e
-  alone green — 30 specs, 176 cases; ship point 1 waits for the captain's push*
+  code in, rebased onto `origin/main` `7e917ff` (the reader's layout's ship point 3, the drawn title bar); check
+  green, and the full e2e alone green — 31 specs, 183 cases; ship point 1 on the captain's push, 2026-09-25*
 - [ ] Slice 4 · the board by repository, PRs and checks, the task detail in the panel, Usage's Crew section
 - [ ] Slice 5 · the Inbox, answers copied for the first mate's chat, held tasks, one waiting count (sidebar, Crew,
   menu bar)

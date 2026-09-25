@@ -119,6 +119,33 @@ if want ac10; then
   # would turn this check into one that cannot fail.
   hits=$(grep -n -E '\.(post|put|patch|delete|head)\(' app/src-tauri/src/readers/hostinger/mod.rs | grep -v '^[0-9]*:[[:space:]]*//' || true)
   [ -z "$hits" ] && pass "the Hostinger reader sends no verb but GET" || fail "a non-GET verb is in the Hostinger reader: $hits"
+
+  # The crew (tasks/first-mate build spec §6.13, AC-10): `kinas crew status --json` carries durations, counts, words and
+  # PR numbers, never a task's id, title, repository, path, URL, worktree, home, key, summary or text — so none of those
+  # keys at any depth, and not the e2e fixtures' marker either. An app too old to answer fails rather than passes.
+  if [ -x "$KINAS" ]; then
+    json=$("$KINAS" crew status --json 2>/dev/null); code=$?
+    if [ $code -ne 0 ] || [ -z "$json" ]; then
+      fail "kinas crew status --json exited $code"
+    else
+      keys=$(printf '%s' "$json" | bun -e '
+        const bad = new Set(["id", "title", "repo", "path", "url", "worktree", "home", "key", "summary", "text"]);
+        const found = new Set();
+        const walk = (v) => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { if (bad.has(k)) found.add(k); walk(x); } };
+        walk(JSON.parse(await Bun.stdin.text()));
+        process.stdout.write([...found].join(" "));')
+      marker=$(printf '%s' "$json" | grep -c 9c2e || true)
+      [ -z "$keys" ] && [ "$marker" = "0" ] && pass "kinas crew status --json has no task key and no 9c2e" || fail "kinas crew status --json: keys '$keys', 9c2e $marker times"
+    fi
+  else
+    fail "$KINAS not installed"
+  fi
+  # The crew gave the webview no capability (§6.14): the folder is as main has it.
+  if git diff --quiet origin/main -- app/src-tauri/capabilities; then
+    pass "app/src-tauri/capabilities is unchanged from origin/main"
+  else
+    fail "app/src-tauri/capabilities differs from origin/main: $(git diff --stat origin/main -- app/src-tauri/capabilities | tail -1)"
+  fi
 fi
 
 if want ac9; then

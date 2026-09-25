@@ -474,6 +474,38 @@ A client folder handed to the first mate (2026-09-25, slice 8).
 - [ ] The item stays in place, disabled with its reason: `No GitHub remote`, `Firstmate isn't installed`, `Already in
       the crew`; a remote the sentence cannot carry is refused — `automated (crew-add.e2e.ts, folders.test.ts)`
 
+## The crew: reconcile and the context
+
+What disagrees, for information, and the crew in every new session's packet (2026-09-25, slice 9).
+
+- [ ] A task Firstmate reports with a dead or absent endpoint, a missing worktree, a worker pane Herdr does not have,
+      or in flight in the backlog with no record, is one line in the Inbox's Reconcile group, captioned
+      `information — nothing here is repaired`; nothing counts it, and it goes when the snapshot stops saying so —
+      `automated (crew-reconcile-a/-b.e2e.ts, AC-9)` across a relaunch; on the real fleet — `outstanding — needs Miguel`
+- [ ] A snapshot whose contract moved reads `Crew: unsupported snapshot contract … · showing the last reading` with
+      every card kept; an invalid `state/home-summary.json` only runs the snapshot — `automated (crew-collector.e2e.ts,
+      AC-13)`
+- [ ] `kinas context --agent` has `## Features in progress` after `## Projects`, one line per feature whose
+      `tasks/<feature>/status.md` is not done, and `## Crew` from the app's mirror while the app runs —
+      `automated (features.test.ts, mirror.test.ts)`; in a new Claude Code session on this Mac —
+      `outstanding — needs Miguel`
+- [ ] `kinas crew status --json` has no task's id, title, repository or path — `automated (scripts/acceptance.sh ac10)`
+      against the installed app
+
+## The crew: needs the captain
+
+What no spec can do, because it needs the real first mate in the real `default` session — in this order, the first
+time the crew is used for real (2026-09-25, slice 9). Each is also an `outstanding — needs Miguel` item above.
+
+- [ ] Launch the first mate from the Crew page into `default`: the `firstmate` workspace appears, `claude` starts, the
+      trust prompt is answered once, Firstmate's session start runs and takes `state/.lock`
+- [ ] The first real ask is a card within 5 s; the first real worker gets its tab and its card's Open its pane — and
+      whether to accept Claude Code's Bypass Permissions mode for workers is decided here, by the captain
+- [ ] The first real decision answered from the Inbox: A, ⌘V and Enter in the first mate's pane, and the worker goes on
+- [ ] Add to crew on a real client folder, once with the first mate stopped and once running
+- [ ] The morning after a night of crew work, read from Home and the menu bar
+- [ ] Whether the order log's redaction is enough for what is actually pasted into worker panes
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

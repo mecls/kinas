@@ -19,6 +19,9 @@ Herdr is the session runtime in the Work page's terminal (Herdr 0.9.0 today). Th
 - Amended 2026-09-25 (the first mate, slice 6): the order log asks `api snapshot` once for each line the captain
   finishes with Enter in the Work pane, to learn whether the focused pane is a worker's (`crew_record_order`); it reads
   the answer's focused pane only, and types nothing.
+- Amended 2026-09-25 (the first mate, slice 9): the Inbox's Reconcile line "pane … not found in Herdr" is drawn from
+  the crew thread's last `api snapshot` view, and only for a task whose endpoint is in the session Kinas attached;
+  it asks Herdr nothing new.
 
 ## What it can do
 

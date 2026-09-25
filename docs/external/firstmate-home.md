@@ -9,6 +9,7 @@ Firstmate (`github.com/kunchenguid/firstmate`) is the crew's conductor — the f
 - **Today** (the context packet): the `firstmate_home` entry in `~/.config/kinas/config.json` (`packages/context/src/config.ts`), overridden by the env var `FM_HOME`; default `~/firstmate`.
 - **Build 3** (the crew): Kinas's own clone at `<data dir>/firstmate` — `~/Library/Application Support/ai.sintralabs.kinas/firstmate` — at a pinned commit (`FIRSTMATE_PIN`, reviewed monthly) with `config/backend` = `herdr`; clone = home, so `FM_ROOT` (the checkout) and `FM_HOME` (the home) are the same path there. Deleting the data directory deletes the clone and the crew's project clones under it.
 - Amended 2026-09-24 (the first mate): from slice 1 the app reads the home at `<data dir>/firstmate` and nowhere else (`crew/home.rs`); `FM_HOME` and `firstmate_home` still steer only the context packet, whose default moves to the same folder with its own slice.
+- Amended 2026-09-25 (the first mate, slice 9): the context packet's default moved there too, so without `FM_HOME` or `firstmate_home` the app and the packet read the same home.
 - The captain's own clone of Firstmate, elsewhere on this Mac, holds a session lock (`state/.lock`) and is **out of bounds**: read-only, never a session, never a script, never a `git fetch` from Kinas or a build agent.
 
 ## Who reads it
@@ -21,6 +22,7 @@ Firstmate (`github.com/kunchenguid/firstmate`) is the crew's conductor — the f
   lexically under `<home>/projects/`, and only its `.git/config` (a `.git` file's `gitdir:` followed) is read, once per
   clone path per run. The task detail also checks whether `data/<id>/brief.md` exists, and resolves the report path
   Firstmate reports, only inside the home; both open in the reader on a click, read-only.
+- Amended 2026-09-25 (the first mate, slice 9): the context packet reads the crew from the app's mirror in the store while the collector's last success is under 5 minutes old, and runs `fm-fleet-snapshot.sh --json` only otherwise; either way it reads a scout report's first line, as before. The Inbox's Reconcile lines add no read: they come from the snapshot's `endpoint`, `paths.worktree.present` and `main_inventory.orphan_in_flight` and from Herdr's view; `state/home-summary.json` is still only a trigger.
 - Amended 2026-09-24 (the first mate): the snapshot runs in the app from slice 1, on the thread `kinas-crew`, at most once every 5 s, through `crew/firstmate.rs` — the only file that builds a path under `<home>/bin/` — with the login shell's `PATH`, `FM_HOME`, no inherited `HERDR*`, null stdin, and its process group killed at 20 s. The two triggers are watched on `state/` and `data/`, filtered to those two files.
 
 ## What it can do

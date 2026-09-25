@@ -1,7 +1,8 @@
 // Where the operation lives. Everything has a default; `~/.config/kinas/config.json` (or `KINAS_CONFIG`) overrides:
 //
 //   { "org": "SintraLabs", "instance": "operations", "root": "~/Documents/Projects/SintraLabs",
-//     "hub": ".", "firstmate_home": "~/firstmate", "harness": "claude", "model": "opus" }
+//     "hub": ".", "firstmate_home": "~/Library/Application Support/ai.sintralabs.kinas/firstmate",
+//     "harness": "claude", "model": "opus" }
 //
 // Environment variables win over the file: KINAS_ROOT, FM_HOME, HERDR_SOCKET_PATH, CODEX_HOME, PI_CODING_AGENT_DIR.
 

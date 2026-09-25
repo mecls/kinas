@@ -35,9 +35,10 @@ Amended 2026-09-22 (design system): Home is the first page and takes ⌘1; Usage
 Settings before that day that now equals another action's default (a saved ⌘1 for Usage, with nothing saved for
 Home) is dropped when read, so the two actions never share a chord; a pair the captain bound on purpose is kept.
 The sidebar's other entries — Crew, Inbox, Reader — are click-only and have no palette command (Reader is a panel,
-not a page; Crew and Inbox arrive with Build 3). The theme and the accent in Settings → Appearance have no key.
+not a page; Crew and Inbox took ⌘3 and ⌘5 with the first mate, below). The theme and the accent in Settings → Appearance have no key.
 Amended 2026-09-23 (folder views): the Reader row is gone; see Sidebar.
-Amended 2026-09-23 (the first mate, Gate 1 — these land with Build 3's code, `tasks/first-mate/prd.md`): ⌘3 goes to
+Amended 2026-09-23 (the first mate, Gate 1, `tasks/first-mate/prd.md`; landed with its code — ⌘3 and Go to Crew on
+2026-09-24, Go to the first mate on 2026-09-24, ⌘5 and Go to Inbox on 2026-09-25): ⌘3 goes to
 the Crew page and ⌘5 to the Inbox page. Both are defaults Settings can rebind, so the defaults are eight — ⌘K, ⌘1,
 ⌘2, ⌘3, ⌘4, ⌘5, ⌘S and ⌘, — and the rules above hold for all eight. Crew and Inbox are no longer click-only. The
 palette gains three commands: Go to Crew, Go to Inbox, and Go to the first mate (the same as the Crew page's First
@@ -100,8 +101,8 @@ The one key the app takes without ⌘:
 |---|---|
 | ⌫ | With a selection on one row, the cursor's row, on the normal screen (so not inside Herdr, vim or lazygit): remove the selected text, by moving the cursor to its end and sending one ⌫ per character. Any other time, ⌫ goes to the PTY |
 
-Amended 2026-09-23 (the first mate, Gate 1 — from Build 3): when the focused Herdr pane is a crew worker's, the line
-the captain types there is recorded as an order on its task when he presses Enter. Recording takes no key: every
+Amended 2026-09-23 (the first mate, Gate 1; landed 2026-09-25): when the focused Herdr pane is a crew worker's, the
+line the captain types there is recorded as an order on its task when they press Enter. Recording takes no key: every
 keystroke still goes to the PTY exactly as above, and the record is made beside it, never instead of it.
 
 ## Settings page
@@ -187,9 +188,10 @@ is none — then shows the Work page and gives the terminal the keys. Nothing is
 Claude Code or Pi has it, typed text would arrive as a prompt. If Herdr refuses, nothing moves and the reason is
 said in the reader's status line — or at the foot of the sidebar while the panel is closed.
 
-## Crew page and Inbox page (from Build 3)
+## Crew page and Inbox page (since 2026-09-24)
 
-Added 2026-09-23 (the first mate, Gate 1 — land with Build 3's code). The Crew page's controls — a card, **Open its
+Added 2026-09-23 (the first mate, Gate 1; the Crew page's controls landed 2026-09-24, the Inbox's keys and Add to
+crew 2026-09-25). The Crew page's controls — a card, **Open its
 pane**, **First mate** / **Launch the first mate**, the waiting count, **Copy** on the setup line — are click-only,
 and reachable by Tab; the task detail's controls likewise. **Open its pane** and **First mate** move you the way
 **Open in the terminal** does: Kinas asks Herdr, through its CLI, to focus that workspace, then shows the Work page

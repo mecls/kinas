@@ -50,7 +50,7 @@ is not Kinas's), turns on launch at login, and registers the global hotkey ⌘�
 |---|---|
 | `kinas` | The launch screen: identity on the left; projects, crew, sessions, decisions, quotas and recent activity on the right. Drawn from the cached packet (about 0.1 s), refreshed in the background. On a terminal it holds until Enter or q |
 | `kinas context` | The counts, what is waiting on you, and what changed recently |
-| `kinas context --agent` | The whole context packet as markdown: `# Kinas context`, `## Projects`, `## Artifacts`, `## Conventions`, `## Crew`, `## Sessions`, `## Decisions`, `## Quotas`, `## Recent` — rarely-changing sections first |
+| `kinas context --agent` | The whole context packet as markdown: `# Kinas context`, `## Projects`, `## Features in progress`, `## Artifacts`, `## Conventions`, `## Crew`, `## Sessions`, `## Decisions`, `## Quotas`, `## Recent` — rarely-changing sections first |
 | `kinas context --agent --cwd <dir>` | The same, or nothing when `<dir>` is outside the projects root (for session hooks) |
 | `kinas context --refresh` | Recompute the cached packet; prints nothing |
 | `kinas status [--json]` | The Usage page as text or JSON |
@@ -69,7 +69,8 @@ Where each section comes from — every source is read-only, and one that cannot
 | Projects | Every git repository up to three levels under the root, through plumbing (`symbolic-ref`, `diff-index`, `ls-files`, `hash-object`, `rev-list`) with optional locks off |
 | Artifacts | `AGENTS.md`, `README.md`, `docs/`, `plans/`, `specs/`, `con-*`, `spec-*`, `plan-*`, `epic-*` markdown: path, title, modified time |
 | Conventions | `AGENTS.md` and every `con-*.md` under the hub, in full |
-| Crew | Firstmate's `bin/fm-fleet-snapshot.sh --json` (contract `fm-fleet-snapshot.v1`), background only, 20 s deadline |
+| Features in progress | Each project's `tasks/<feature>/status.md`, read as text: the first gate not yet approved, else the first slice not yet ticked (added 2026-09-25, the first mate) |
+| Crew | The app's mirror (the store's `crew_*` tables) while its collector last succeeded under 5 minutes ago; otherwise Firstmate's `bin/fm-fleet-snapshot.sh --json` (contract `fm-fleet-snapshot.v1`), background only, 20 s deadline (amended 2026-09-25, the first mate) |
 | Sessions | Herdr's socket, `session.snapshot`, 1 s deadline |
 | Quotas | Claude and Ollama from the app's store; Codex from its session logs. Older than 15 minutes is stale |
 | Recent | Commits, crew state changes, briefs filed and artifacts written, kept in the CLI cache |
@@ -78,11 +79,13 @@ Where each section comes from — every source is read-only, and one that cannot
 
 ```json
 { "org": "SintraLabs", "instance": "operations", "root": "~/Documents/Projects/SintraLabs", "hub": ".",
-  "firstmate_home": "~/firstmate", "herdr_socket": "~/.config/herdr/herdr.sock", "codex_home": "~/.codex",
+  "firstmate_home": "~/Library/Application Support/ai.sintralabs.kinas/firstmate", "herdr_socket": "~/.config/herdr/herdr.sock", "codex_home": "~/.codex",
   "harness": "claude", "model": "opus" }
 ```
 
 `hub` is relative to `root`. Without `harness`, the launch screen shows the agent most live Herdr sessions run.
+Amended 2026-09-25 (the first mate): without `firstmate_home` or `FM_HOME`, Firstmate's home is Kinas's own clone,
+`<data dir>/firstmate` — the example's value.
 
 **Cache.** `kinas-cli.sqlite` beside the store holds the last packet and the activity log (`packet_cache`,
 `activity_log`, migrations in `packages/context/migrations/`). The store keeps one writer, the app.
@@ -130,12 +133,22 @@ that moment (a deleted file shows what it said). **↻** on the tree, or **Refre
 and starts again; so does reloading the window. Kinas only watches: nothing is committed, reverted or stored.
 **Home** (⌘1) is the first page: the night's progress per
 client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
-**Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** and
-**Inbox** wait for Build 3 and say so. Every surface is built
+**Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** (⌘3) and
+**Inbox** (⌘5) are the crew's (below). Every surface is built
 from `DESIGN.md`'s tokens and components (`app/src/ui/`); a test refuses any raw colour, size or spacing outside
 `app/src/styles/tokens.css`.
 Amended 2026-09-24 (the first mate): **Crew** (⌘3) shows the crew's fleet — a card per task the first mate knows,
-with its state, one lane per project — once Firstmate is installed (below); **Inbox** still waits for its slice.
+with its state, one lane per project — once Firstmate is installed (below). Amended 2026-09-25 (the first mate, as
+built): a lane per repository, a client folder's under its name; a card carries its PR and checks, opens the task's
+detail in the right panel, and a worker's opens its pane. **Inbox** (⌘5) lists what waits on you — each decision the
+first mate asks, and each task it holds for you. **A** puts `On <task> (<key>): Approved — go ahead.` on the clipboard
+and focuses the first mate's pane for you to paste and send; **R** and **D** open a box for an answer or a reason
+first. Kinas types nothing into any pane (ADR 0017), and an item leaves when Firstmate closes it. One count of what
+waits shows on the sidebar, the Crew page, Home and the menu bar. Below the items, **Reconcile** lists, for information,
+where Firstmate's records and what Kinas sees disagree — a dead endpoint, a missing worktree, a worker pane Herdr does
+not have, a task in flight with no record — and neither counts nor repairs any of it. **Home** reads the night since
+the last session ended from the same mirror, and a client folder's menu has **Add to crew**, which hands its GitHub
+repository to the first mate in one sentence.
 
 ## The crew
 

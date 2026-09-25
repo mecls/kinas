@@ -23,7 +23,8 @@
   `6b754ee` (the reader's layout's ship point 2, landed first on the captain's word): `bun run check` green (601 bun,
   258 Rust); `tree-changes` 15 of 15, the write-to-mark median 100 ms. **Ship point 2 verified on `dae41eb`**: the full
   e2e alone, all 26 specs green (19:52–20:37). **On `main` by fast-forward on the captain's word
-  (PR #37), 2026-09-24; not installed** — the captain installs after the first mate's build
+  (PR #37), 2026-09-24. Installed 2026-09-25** with the first mate's release build from `c5209fa` (its `strings`
+  hold none of the debug seams; warm open 36 ms); the first paint confirmed by eye
 
 ## Notes for a fresh session
 

@@ -354,12 +354,17 @@ Every file tree marks what changed since it was first shown, and the reader's Ch
 - [x] Median from a write on disk to its mark, over 10 writes: under 1 s — **median 100 ms** (94, 107, 93, 99, 95,
       100, 106, 102, 100, 102), stamped in the page as each mark reached the DOM, on the debug e2e build 2026-09-24
       19:52, run alone — `automated (tree-changes.e2e.ts, the timing case, which fails at 1 s)`
-- [ ] A folder's first paint in Files within 10 % of 46 ms (the installed build's warm open) — `outstanding — measured
-      on the installed build, which waits for the captain's install after the first mate's`
+- [x] A folder's first paint in Files does not move (rule 29) — confirmed by eye on the installed build from `c5209fa`
+      on 2026-09-25: opening folders and files feels as before. Not timed, since the app logs no paint time; the same
+      build's warm open of a file was a median of 36 ms — `confirmed by Miguel, by eye`
 - [ ] The Kinas repository opened in Files: its copies, their bytes and the time the baseline took, from the log's
-      `tree changes: baseline taken` line — `outstanding — measured on the installed build, as above`
+      `tree changes: baseline taken` line. On the installed build, a folder open in Files took its baseline in 87 ms,
+      45 copies, 1,829,092 bytes, and two rescans (FSEvents dropped events) judged its 454 entries in 122 and 40 ms
+      (2026-09-25). The log names no folder (rule 26), so which one is not recorded — `outstanding for the Kinas
+      repository itself`
 - [ ] A real agent's session read by eye: marks, roll-ups, the Changes view on markdown and code, both themes —
-      `outstanding — needs Miguel`
+      marks seen live on the installed build on 2026-09-25 (an amber dot and M on a file an agent was editing); the
+      Changes view on code and both themes are still to look at — `in part, needs Miguel`
 
 ## The reader's layout
 

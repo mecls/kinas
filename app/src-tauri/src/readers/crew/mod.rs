@@ -179,7 +179,9 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
                 let now = now_ms();
                 for wake in wakes {
                     if wake == CrewWake::Manual {
+                        // Refresh readings means fresh everything: the backoff, and every PR asked of `gh` again.
                         schedule.reset();
+                        memo.pr_checked.clear();
                     }
                     let at = schedule.run_at(&wake, now);
                     due = Some(due.map_or(at, |d| d.min(at)));

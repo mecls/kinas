@@ -411,6 +411,21 @@ The first mate in the pane (2026-09-24, slice 3).
 - [ ] The Work chrome reads `default · firstmate` and `claude` on the first mate's pane, `default · fm-<id>` with the
       task's badge on a worker's, and `shell` · `plain shell` without Herdr — `automated (crew-chrome.e2e.ts)`
 
+## The crew: the board
+
+Lanes by repository, a task's PR and checks, the task in the right panel (2026-09-25, slice 4).
+
+- [ ] A task on a client folder's repository sits in that folder's lane, with its chip; one on a repository no folder
+      matches gets a lane under the repository's name, after the folders' — `automated (crew-board.e2e.ts, AC-7)`; with
+      real tasks on real client folders — `outstanding — needs Miguel`
+- [ ] A worker's card has Open its pane, which focuses the worker's workspace and gives the terminal the keys; its PR
+      line reads `PR #<n> · checks <a>/<b>` and turns CI red or ready with no click — `automated (crew-board.e2e.ts,
+      AC-4)` over a stub `gh`; against GitHub on a real PR — `outstanding — needs Miguel`
+- [ ] A card opens its detail in the right panel; Open the brief puts the reader there with its tabs kept, and a card
+      puts the task back — `automated (crew-board.e2e.ts)`
+- [ ] Usage's Crew section counts what is in flight by harness and what is queued, and goes when nothing is —
+      `automated (crew-board.e2e.ts, AC-7)`
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

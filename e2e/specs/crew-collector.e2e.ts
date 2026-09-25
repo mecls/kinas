@@ -66,6 +66,7 @@ describe("the crew's collector", () => {
       return { task: el.getAttribute("data-task"), title: el.querySelector(".ui-card-title")?.textContent, badge: el.querySelector(".ui-badge")?.textContent };
     });
     expect(card).toEqual({ task: "shop-health-9c2e", title: TITLE, badge: "queued" });
+    // Amended 2026-09-25 (slice 4): this fake home has no clone of the project, so its lane is the project's name.
     const lane = await browser.execute(() => document.querySelector('section[data-page="crew"] .crew-lane')?.getAttribute("data-project"));
     expect(lane).toBe("shop-9c2e");
     // KINAS_E2E_SHOT=<file.png>: keep a picture of the board for a person to look at (slice 1's "show the captain").

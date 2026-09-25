@@ -1,11 +1,15 @@
 import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { TOOLS } from "../../packages/commands/src/crew-tools.ts";
 
 // Stub crew tools for the crew specs (build spec §9, §13): a folder the app is pointed at with KINAS_E2E_TOOL_DIR, so its
 // tool health never sees the tools installed on this Mac. Each release tool answers `--version` (treehouse also
 // `get --help` with --lease); each npm tool is a package.json its command links to — the app reads the version there
-// and never runs one, which the stub would log to calls.log. gh answers `auth status`; herdr, claude and node exist.
+// and never runs one, which the stub would log to calls.log. gh answers `auth status` and `pr view`; herdr, claude and
+// node exist.
+
+const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures");
 
 export interface StubOptions {
   /** Tools to leave out. */
@@ -38,9 +42,20 @@ export function makeStubTools(dir: string, opts: StubOptions = {}): string {
       );
     }
   }
-  script(join(bin, "gh"), `echo "gh $*" >> '${log}'\n${opts.signedOut ? "exit 1" : "exit 0"}`);
+  // `gh pr view <url> --json …` prints fixtures/crew-gh-<n>.json, n from the file `gh-pr` beside bin/ (setGhAnswer);
+  // with no such file it fails, as gh does for a PR it cannot see. Anything else is `auth status`.
+  const answer = join(dir, "gh-pr");
+  script(
+    join(bin, "gh"),
+    `echo "gh $*" >> '${log}'\nif [ "$1" = pr ]; then n=$(cat '${answer}' 2>/dev/null) || exit 1; cat "${fixtures}/crew-gh-$n.json"; exit $?; fi\n${opts.signedOut ? "exit 1" : "exit 0"}`,
+  );
   for (const name of ["node", "npm", "herdr", "claude"]) script(join(bin, name), `echo "${name} $*" >> '${log}'`);
   return bin;
+}
+
+/** Which of fixtures/crew-gh-<n>.json the stub `gh pr view` answers from now on. */
+export function setGhAnswer(dir: string, n: number): void {
+  writeFileSync(join(dir, "gh-pr"), `${n}\n`);
 }
 
 /** Takes one tool away, as uninstalling it would. */

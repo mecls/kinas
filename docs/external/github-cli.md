@@ -11,7 +11,7 @@ The GitHub CLI, signed in as the captain in the macOS keyring. Kinas uses it to 
 ## Who reads it
 
 - `kinas crew setup` and the app's tool health (`crew/tools.rs`): `gh auth status` — exit 0 is "signed in". Its output names the account and is never stored or logged.
-- From the crew's board slice, the collector (`readers/crew/gh.rs`): `gh pr view <url> --json number,state,isDraft,mergeable,reviewDecision,statusCheckRollup`, 10 s, only for a URL that matches `^https://github\.com/[^/]+/[^/]+/pull/\d+$`.
+- From the crew's board slice, the collector (`readers/crew/gh.rs`): `gh pr view <url> --json number,state,isDraft,mergeable,reviewDecision,statusCheckRollup`, 10 s, only for a URL that matches `^https://github\.com/[^/]+/[^/]+/pull/\d+$`. Amended 2026-09-25 (slice 4, as built): asked for the PRs of tasks not yet done, each at most once a minute while the Crew page shows and once every five minutes otherwise, and again for all of them on Refresh readings. Kept: the state, the draft flag, mergeability, the review decision and the checks' counts in the store; each check's name and conclusion in memory only, for the task detail. A PR `gh` cannot read keeps its last values. The log says `crew: gh <n> PRs in <ms> ms` and nothing else.
 - Firstmate's scripts and the crew's workers, as the captain, in their own panes.
 
 ## What it can do

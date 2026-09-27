@@ -363,8 +363,10 @@ folder with no remote, as the fixture's `repo` is; the push's own lines follow i
 - [x] What a push costs in the Kinas repository: its upstream's file list, 590 entries, read in 24–43 ms (`ls-tree -r`,
       three runs); a `git gc` on a scratch clone of it woke the refs watch once, in each of two runs — `measured
       2026-09-25 (the ignored test gc_wakes_the_refs_thread_this_many_times)`
-- [ ] A push from the Herdr pane in the Kinas repository clears an M, on the installed build — `outstanding — needs the
-      captain`
+- [x] A push from the Herdr pane in the Kinas repository clears an M, on the installed build — confirmed by eye on the
+      release build of `d5bcd13` (installed 2026-09-26) — `confirmed by the captain, by eye, 2026-09-27`
+- [x] ↻ in the main checkout clears the git-ignored private documents' marks and keeps a tracked, unpushed edit's —
+      confirmed by eye on the same build — `confirmed by the captain, by eye, 2026-09-27`
 - [x] With git out of reach, or the watch refused, the tree still lists and says so — `automated
       (tree-changes-no-git.e2e.ts, tree-changes-watch-fail.e2e.ts)`
 - [x] Nothing about changes reaches the log but counts — `automated (step 11: none of the fixture's names or text in

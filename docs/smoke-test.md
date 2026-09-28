@@ -391,15 +391,25 @@ folder with no remote, as the fixture's `repo` is; the push's own lines follow i
 What the first mate's crew has changed in its own checkouts and not pushed, marked on the captain's tree with a hollow
 dot (2026-09-28, `tasks/crew-marks/prd.md`; ADR 0019). The steps named are `crew-marks.e2e.ts`'s, as they are built.
 
-- [ ] A crew worktree's save marks the captain's row with a hollow M within 2 s, its words ending "by the crew, not
-      pushed", and the head says "The crew: 1 change not pushed" — `outstanding — crew 2`
-- [ ] A file the crew added is a dimmed crew row with a hollow A, "not in your folder" — `outstanding — crew 3`
-- [ ] A row with both marks opens the captain's Changes; "The crew's" shows the crew's copy, read-only — `outstanding —
-      crew 4`
-- [ ] The crew's push clears its marks within 2 s and leaves the captain's own — `outstanding — crew 5`
-- [ ] ↻ leaves crew marks alone, and a reload shows them again — `outstanding — crew 6`
-- [ ] Nothing about the crew's work reaches the log but counts — `outstanding — crew 7`
-- [ ] Median from a crew worktree's save to its hollow mark, over 10 saves: under 1 s — `outstanding — the crew timing`
+- [x] A crew worktree's save marks the captain's row with a hollow M within 2 s, its words ending "by the crew, not
+      pushed", and the head says "The crew: 1 change not pushed" — `automated (crew-marks.e2e.ts, crew 2)`
+- [x] A file the crew added is a dimmed crew row with a hollow A, "not in your folder" — `automated (crew 3)`
+- [x] A row with both marks opens the captain's Changes; "The crew's" shows the crew's copy, read-only — `automated
+      (crew 4)`
+- [x] The crew's push clears its marks within 2 s and leaves the captain's own — `automated (crew 5)`
+- [x] ↻ leaves crew marks alone, and a reload shows them again — `automated (crew 6)`
+- [x] Nothing about the crew's work reaches the log but counts — `automated (crew 7: no fixture path, branch or text in
+      what the run wrote, and every "tree changes:" line one of the count shapes)`
+- [x] Median from a crew worktree's save to its hollow mark, over 10 saves: under 1 s — **median 148.5 ms** (143, 148,
+      149, 137, 123, 132, 153, 150, 154, 151), stamped in the page as each mark reached the DOM, on the debug e2e build
+      2026-09-28 14:26, run alone — `automated (crew-marks.e2e.ts, the timing case, which fails at 1 s)`
+- [x] What a crew recomputation costs: every checkout's unpushed set, installed and each paired root's view derived —
+      32–79 ms on the e2e fixture (median 58 ms over the run's 24 log lines), and on a crew clone of the Kinas
+      repository (646 tracked files, a task worktree on a branch never pushed, with a commit, two edits and a new file)
+      195–204 ms, median 199 ms over five — `measured 2026-09-28 (the ignored test
+      a_crew_recomputation_on_a_repository_this_size)`
+- [ ] A folder's first paint in Files does not move (PRD §5, within 10 %). The app logs no paint time, so, as for tree
+      changes, by eye: opening folders and files feels as before — `outstanding — needs the captain`
 - [ ] A real crew task's save and push, seen on the installed build — `outstanding — needs the captain`
 
 ## The reader's layout

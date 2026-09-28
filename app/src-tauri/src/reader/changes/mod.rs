@@ -2274,6 +2274,39 @@ mod tests {
     }
 
     #[test]
+    fn refresh_and_bursts_leave_the_crew_view_alone() {
+        // Crew marks, rule 8: the crew's marks are not "since" anything. A burst, ↻ keeping or emptying, and a reset
+        // change the captain's marks alone; the crew's view stands until the crew's own checkouts move.
+        let (_dir, captain, home, _clone, worktree) = crew::tests::crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n")]);
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew\n").unwrap();
+        std::fs::write(worktree.join("notes.md"), "# Notes\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let (state, _repo, _clone) = crew::tests::crew_watched(&captain, &home, &g);
+        let crew_of = || state.lock().roots[&captain].crew.clone();
+        let before = crew_of();
+        assert_eq!(before.total, 2, "the crew's M, and the file it added");
+
+        std::fs::write(captain.join("README.md"), "# Shop, by the captain\n").unwrap();
+        let burst = git_burst(&state, &captain, &g, &["README.md"]);
+        assert_eq!((marked(&burst, &captain), burst.crew_total), (vec!["M README.md".to_string()], 2));
+        assert_eq!(crew_of(), before, "a burst");
+
+        let after = kept(refresh_marks(&state, &captain, Some(&g), 9_000));
+        assert_eq!((marked(&after, &captain), after.crew_total), (vec!["M README.md".to_string()], 2));
+        assert_eq!(crew_of(), before, "↻ keeping the captain's unpushed M");
+
+        std::fs::write(captain.join("README.md"), "# Shop\n").unwrap();
+        assert_eq!(git_burst(&state, &captain, &g, &["README.md"]).entries, vec![]);
+        let Some(Refreshed::Emptied { answer, .. }) = refresh_marks(&state, &captain, Some(&g), 10_000) else { panic!("nothing of the captain's left to keep") };
+        assert_eq!((answer.total, answer.crew_total), (0, 2));
+        assert_eq!(crew_of(), before, "↻ starting the captain's tree again");
+
+        let (answer, _, _) = reset(&state, &captain, 11_000).expect("a watched root");
+        assert_eq!(answer.crew_total, 2);
+        assert_eq!(crew_of(), before, "a reset");
+    }
+
+    #[test]
     fn a_root_below_its_top_and_a_worktree_both_see_the_push() {
         let (dir, root, state, g) = watched_pushed(&[("README.md", b"# Read me\n"), ("docs/a.md", b"# A\n")]);
         let docs = root.join("docs");

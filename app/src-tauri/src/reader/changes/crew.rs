@@ -1062,4 +1062,51 @@ pub(super) mod tests {
         let added = crew_diff(&state, &captain.join("notes.md"), &g).unwrap();
         assert_eq!((added.mark, added.added, added.removed, added.crew), (Mark::Added, 3, 0, Some(CrewOf { tasks: 1, here: false })));
     }
+
+    /// The build spec's stop rule (§15): one recomputation — every checkout's unpushed set, installed, and each paired
+    /// root's view derived — on a crew clone of `KINAS_CREW_REPO` (the Kinas repository, say), with a task worktree on a
+    /// branch never pushed holding a commit, two edits and a new file. Over 1 s, stop and record it.
+    #[test]
+    #[ignore]
+    fn a_crew_recomputation_on_a_repository_this_size() {
+        let source = std::env::var("KINAS_CREW_REPO").expect("KINAS_CREW_REPO names a repository to clone");
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        let home = base.join("data/firstmate");
+        std::fs::create_dir_all(base.join("root")).unwrap();
+        std::fs::create_dir_all(home.join("projects")).unwrap();
+        git(&base.join("root"), &["clone", "-q", &source, "big"]);
+        git(&home.join("projects"), &["clone", "-q", &source, "big"]);
+        let (captain, clone) = (base.join("root/big"), home.join("projects/big"));
+        // Both read one GitHub repository, so they pair; nothing here pushes.
+        for repo in [&captain, &clone] {
+            git(repo, &["remote", "set-url", "origin", "https://github.com/kinas-test/big.git"]);
+        }
+        let worktree = base.join("treehouse/big-1/1/big");
+        git(&clone, &["worktree", "add", "-q", &worktree.to_string_lossy(), "-b", "fm/task"]);
+        std::fs::write(worktree.join("README.md"), "# Committed by the crew\n").unwrap();
+        git(&worktree, &["commit", "-qam", "the crew's commit"]);
+        for name in ["DESIGN.md", "AGENTS.md"] {
+            let text = std::fs::read_to_string(worktree.join(name)).unwrap();
+            std::fs::write(worktree.join(name), format!("{text}\nA line by the crew.\n")).unwrap();
+        }
+        std::fs::write(worktree.join("notes.md"), "# Notes\n").unwrap();
+
+        let g = Git::find().expect("git is installed");
+        let state = watched_root(&captain);
+        install_with_git(&state, &captain, &g);
+        let (repo, clone) = pair_root(&state, &captain, &home)[0].clone();
+        let mut took: Vec<u128> = (0..5)
+            .map(|i| {
+                let at = Instant::now();
+                crew_rescan(&state, &repo, &clone, &g, 10_000 + i);
+                at.elapsed().as_millis()
+            })
+            .collect();
+        assert_eq!(state.lock().roots[&captain].crew.total, 4, "the commit, the two edits and the new file");
+        let files = git(&worktree, &["ls-files"]).lines().count();
+        println!("a crew recomputation over {files} tracked files: {took:?} ms");
+        took.sort();
+        println!("median {} ms", took[2]);
+    }
 }

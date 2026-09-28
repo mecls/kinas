@@ -20,6 +20,26 @@ export const OLD_TEXT = ["# Old", "", `One ${TOKEN}.`, `Two ${TOKEN}.`, `Three $
 export const BRANCH = `branch-${TOKEN}`;
 export const PUSHING_TEXT = `# Pushing ${TOKEN}\n\nWhat the remote holds.\n`;
 
+/**
+ * Every line tree changes may write (rule 26): counts, durations and an error's kind — never a path, never text. Here,
+ * not in the spec, so crew-marks.e2e holds its log to the same list.
+ */
+export const COUNT_LINES = [
+  /^tree changes: baseline taken in \d+ ms, \d+ copies, \d+ bytes$/,
+  /^tree changes: rescanned \d+ entries in \d+ ms$/,
+  /^tree changes: a slow walk, \d+ entries in \d+ ms$/,
+  /^tree changes: exported \d+ bytes in \d+ ms$/,
+  /^tree changes: could not watch a folder \([a-z ]+\)$/,
+  // Tree changes clear on push.
+  /^tree changes: a push cleared \d+ marks in \d+ ms$/,
+  /^tree changes: a refresh cleared \d+ marks, \d+ left, in \d+ ms$/,
+  /^tree changes: could not watch a repository's refs \([a-z ]+\)$/,
+  // Crew marks.
+  /^tree changes: the crew, \d+ checkouts, \d+ marks in \d+ ms$/,
+  /^tree changes: the crew, \d+ checkouts git could not read$/,
+  /^tree changes: could not watch a crew checkout \([a-z ]+\)$/,
+];
+
 /** Where Download writes a deleted file's text: outside the run's data folder, which a copy may never go into. */
 let out: string | undefined;
 

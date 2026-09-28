@@ -1,9 +1,11 @@
 import { browser, expect } from "@wdio/globals";
 import { spawnSync } from "node:child_process";
-import { realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { hook, waitForShell } from "../helpers.ts";
-import { git, TOKEN, worktreeOf } from "./crew-marks.setup.ts";
+import { BRANCH, git, TOKEN, worktreeOf } from "./crew-marks.setup.ts";
+import { COUNT_LINES } from "./tree-changes.setup.ts";
 
 // Crew marks (tasks/crew-marks/prd.md §5): what the first mate's crew has changed in its own worktree and not pushed,
 // marked on the captain's own tree with a hollow dot. Everything is read inside the page: a lookup costs seconds under
@@ -15,6 +17,7 @@ const worktree = worktreeOf(root);
 const README = `README-${TOKEN}.md`;
 /** The PRD's ceiling for a mark to appear or go (rule 18 allows 1 s; 2 s leaves room for the driver). */
 const CEILING = 2000;
+const LOG = join(homedir(), "Library/Logs/ai.sintralabs.kinas/kinas.log");
 
 function kinas(...args: string[]) {
   const result = spawnSync(CLI, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 20000 });
@@ -85,11 +88,18 @@ async function openInFiles(folder: string, name: string) {
 }
 
 describe("Crew marks", () => {
+  /** The terminal pane's process at crew 1: nothing here may restart it (ADR 0002). */
+  let pid = 0;
+  /** Where the log stood when the spec began: crew 7 reads only what this run wrote. */
+  let logFrom = 0;
+
   before(async () => {
+    logFrom = existsSync(LOG) ? statSync(LOG).size : 0;
     await waitForShell();
   });
 
   it("crew 1: the captain's folder, with nothing unpushed in the crew's worktree, shows no crew mark", async () => {
+    pid = await hook<number>("ptyPid");
     await openInFiles("shop", README);
     // The baseline, the pairing and the crew's first scan run in the background: give them a moment.
     await browser.pause(1000);
@@ -162,5 +172,84 @@ describe("Crew marks", () => {
     await until(async () => (await reader()).view !== "crew", "the reader off the crew's copy", 5000);
     expect(await statusLog()).toContain("No changes by the crew any more");
     expect((await reader()).views).not.toContain("The crew's");
+  });
+
+  it("the timing (rule 18): the median from a save in the crew's worktree to its hollow mark on screen, over 10 saves, is under 1 s", async () => {
+    // Stamped in the page as the DOM change that draws each crew mark lands, as tree-changes.e2e times its own marks —
+    // never by the driver's polling, which costs more than what it would measure.
+    await browser.execute(() => {
+      const seen: Record<string, number> = {};
+      (window as unknown as { __crewSeen: Record<string, number> }).__crewSeen = seen;
+      new MutationObserver(() => {
+        const at = Date.now();
+        for (const row of document.querySelectorAll<HTMLElement>(".sidebar .reader-files .tree-row[data-crew]")) {
+          const path = row.querySelector<HTMLButtonElement>(".tree-item")?.title;
+          if (path && !(path in seen)) seen[path] = at;
+        }
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-crew"] });
+    });
+    const saved: Record<string, number> = {};
+    for (let i = 1; i <= 10; i++) {
+      const name = `timed-${i}-${TOKEN}.md`;
+      saved[join(root, "shop", name)] = Date.now();
+      writeFileSync(join(worktree, name), `# Timed ${i} ${TOKEN}\n`);
+      await until(async () => (await row(name))?.crew === "A", `${name} crew-marked A`);
+      // Apart, so each save is a burst of its own and not a ride on the one before.
+      await browser.pause(300);
+    }
+    const seen = (await browser.execute(() => (window as unknown as { __crewSeen: Record<string, number> }).__crewSeen)) as Record<string, number>;
+    expect(Object.keys(saved).filter((path) => !(path in seen))).toEqual([]);
+    const took = Object.entries(saved).map(([path, at]) => seen[path]! - at);
+    const median = [...took].sort((a, b) => a - b).slice(4, 6).reduce((a, b) => a + b, 0) / 2;
+    console.log(`crew marks timing: save to hollow mark ${took.join(", ")} ms; median ${median} ms`);
+    expect(took.filter((ms) => ms < 0)).toEqual([]);
+    expect(median).toBeLessThan(1000);
+    expect(await crewCaption()).toBe("The crew: 10 changes not pushed");
+  });
+
+  it("crew 8, before the reload: the terminal pane is the process it was at crew 1", async () => {
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
+
+  it("crew 6: ↻ leaves the crew's marks alone, and a reload shows them again", async () => {
+    const crewBefore = await crewMarked();
+    expect(crewBefore.length).toBe(10);
+    // An ignored note of the captain's, which ↻ clears; their README's M waits for a push, and stays.
+    mkdirSync(join(root, "shop", "notes"), { recursive: true });
+    writeFileSync(join(root, "shop", "notes", `n-${TOKEN}.md`), `# Note ${TOKEN}\n`);
+    await until(async () => (await row("notes"))?.mark === "A", "the captain's ignored folder marked A");
+    await browser.execute(() => document.querySelector<HTMLButtonElement>(".sidebar .reader-files .tree-refresh")!.click());
+    await until(async () => (await row("notes"))?.mark === null, "the ignored folder cleared by ↻");
+    expect((await row(README))?.mark).toBe("M");
+    expect(await crewMarked()).toEqual(crewBefore);
+    expect(await crewCaption()).toBe("The crew: 10 changes not pushed");
+
+    // A reload drops every record, the crew's too; the folder shown again finds the crew's work again.
+    await browser.execute(() => location.reload());
+    // Past the old page, whose hooks would otherwise answer for the new one.
+    await browser.pause(1000);
+    await waitForShell(60000);
+    await openInFiles("shop", README);
+    await until(async () => (await crewMarked()).length === 10, "the crew's marks back after the reload", 10000);
+    expect(await crewMarked()).toEqual(crewBefore);
+    expect(await crewCaption()).toBe("The crew: 10 changes not pushed");
+    // The captain's own marks start again from the reload: none yet.
+    expect((await rows()).filter((r) => r.mark !== null)).toEqual([]);
+  });
+
+  it("crew 7, after the rest: the log holds counts alone — no fixture path, branch or text", async () => {
+    const all = existsSync(LOG) ? readFileSync(LOG) : Buffer.alloc(0);
+    // A log that filled during the run was rotated, and starts again from nothing.
+    const written = (all.length >= logFrom ? all.subarray(logFrom) : all).toString("utf8");
+    // Every name in the fixture carries the token — the worktree's path and the crew's branch too — and so does every
+    // text but these.
+    const found = [TOKEN, BRANCH, worktree, "What the remote holds.", "A line by the captain.", "A line by the crew"].filter((needle) => written.includes(needle));
+    expect(found).toEqual([]);
+    const ours = written
+      .split("\n")
+      .filter((line) => line.includes("tree changes:"))
+      .map((line) => line.slice(line.indexOf("tree changes:")).trimEnd());
+    expect(ours.filter((line) => !COUNT_LINES.some((shape) => shape.test(line)))).toEqual([]);
+    expect(ours.some((line) => /^tree changes: the crew, \d+ checkouts, \d+ marks in \d+ ms$/.test(line))).toBe(true);
   });
 });

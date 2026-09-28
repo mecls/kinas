@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, wr
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { hook, openReaderMenu, runReaderMenuItem, typeLine, waitForShell } from "../helpers.ts";
-import { BRANCH, git, OLD_TEXT, PUSHING_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
+import { BRANCH, COUNT_LINES, git, OLD_TEXT, PUSHING_TEXT, README_TEXT, TOKEN } from "./tree-changes.setup.ts";
 
 // Tree changes (tasks/tree-changes/prd.md §5): marks in the sidebar's tree as files are written, deleted and put
 // back, with their words, roll-ups and the caption; then Refresh and a reload clear them, and the terminal pane is the
@@ -24,18 +24,6 @@ const CEILING = 2000;
 /** Set it to keep the proof: `KINAS_E2E_SHOTS=<folder> bun e2e/run.ts tree-changes`. */
 const SHOTS = process.env.KINAS_E2E_SHOTS;
 const LOG = join(homedir(), "Library/Logs/ai.sintralabs.kinas/kinas.log");
-/** Every line tree changes may write (rule 26): counts, durations and an error's kind — never a path, never text. */
-const COUNT_LINES = [
-  /^tree changes: baseline taken in \d+ ms, \d+ copies, \d+ bytes$/,
-  /^tree changes: rescanned \d+ entries in \d+ ms$/,
-  /^tree changes: a slow walk, \d+ entries in \d+ ms$/,
-  /^tree changes: exported \d+ bytes in \d+ ms$/,
-  /^tree changes: could not watch a folder \([a-z ]+\)$/,
-  // Tree changes clear on push.
-  /^tree changes: a push cleared \d+ marks in \d+ ms$/,
-  /^tree changes: a refresh cleared \d+ marks, \d+ left, in \d+ ms$/,
-  /^tree changes: could not watch a repository's refs \([a-z ]+\)$/,
-];
 
 function kinas(...args: string[]) {
   const result = spawnSync(CLI, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 20000 });

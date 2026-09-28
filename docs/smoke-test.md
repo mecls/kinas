@@ -400,9 +400,10 @@ dot (2026-09-28, `tasks/crew-marks/prd.md`; ADR 0019). The steps named are `crew
 - [x] ↻ leaves crew marks alone, and a reload shows them again — `automated (crew 6)`
 - [x] Nothing about the crew's work reaches the log but counts — `automated (crew 7: no fixture path, branch or text in
       what the run wrote, and every "tree changes:" line one of the count shapes)`
-- [x] Median from a crew worktree's save to its hollow mark, over 10 saves: under 1 s — **median 148.5 ms** (143, 148,
-      149, 137, 123, 132, 153, 150, 154, 151), stamped in the page as each mark reached the DOM, on the debug e2e build
-      2026-09-28 14:26, run alone — `automated (crew-marks.e2e.ts, the timing case, which fails at 1 s)`
+- [x] Median from a crew worktree's save to its hollow mark, over 10 saves: under 1 s — **median 150.5 ms** (137, 154,
+      150, 139, 137, 146, 154, 151, 152, 152), stamped in the page as each mark reached the DOM, on the debug e2e build
+      2026-09-28, the full suite run alone (14:31–15:23) — `automated (crew-marks.e2e.ts, the timing case, which fails
+      at 1 s)`
 - [x] What a crew recomputation costs: every checkout's unpushed set, installed and each paired root's view derived —
       32–79 ms on the e2e fixture (median 58 ms over the run's 24 log lines), and on a crew clone of the Kinas
       repository (646 tracked files, a task worktree on a branch never pushed, with a commit, two edits and a new file)

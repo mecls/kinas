@@ -8,10 +8,15 @@
   1, 4, 11 and 14), and **ADR 0019**'s text (superseding 0018), to be written and locked in slice 0
 - Gate 3 · Program design: APPROVED 2026-09-28 — `build-spec.md` §11, private, in the main checkout, approved as
   written
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12
+- Gate 4 · Slice plan: APPROVED 2026-09-28 — `build-spec.md` §12, five slices, one ship point at slice 4; building on
+  `feat/crew-marks`
 
 ## Slices
-(Planned at Gate 4.)
+- [ ] Slice 0 · the probe, and docs first: ADR 0019, firstmate-home.md, DESIGN.md 1.9, keymap, README, smoke-test
+- [ ] Slice 1 · tracer bullet: a crew worktree's save marks the captain's row
+- [ ] Slice 2 · what counts, where it shows, and when it goes: rule 4 whole, crew rows, roll-ups, pushes and worktrees
+- [ ] Slice 3 · the crew's Changes view: the read-only door, the fourth view button, the guard, the stories
+- [ ] Slice 4 · the edges and the record → ship point
 
 ## Notes for a fresh session
 

@@ -561,6 +561,19 @@ export interface ChangeEntry {
   waits: boolean;
 }
 
+/**
+ * One crew mark (tasks/crew-marks/prd.md): what the first mate's crew has changed in its own checkouts and not pushed,
+ * mapped onto this tree. `here` is false for a crew row, a path the captain's folder does not have.
+ */
+export interface CrewEntry {
+  path: string;
+  kind: ReaderKind;
+  mark: Mark;
+  /** How many crew checkouts mark it. */
+  tasks: number;
+  here: boolean;
+}
+
 /** A folder that existed at both moments, with changes beneath it: their count and the strongest of them. */
 export interface FolderRollup {
   path: string;
@@ -586,6 +599,10 @@ export interface TreeChanges {
   folders: FolderRollup[];
   /** Folders whose direct children changed in this burst: an expanded one re-lists. */
   touched: string[];
+  /** The crew's marks, roll-ups and count: never "since", never cleared by ↻. */
+  crew: CrewEntry[];
+  crew_folders: FolderRollup[];
+  crew_total: number;
 }
 
 /** Starts following a folder's tree, or answers with what it already follows: the first showing is the baseline. */

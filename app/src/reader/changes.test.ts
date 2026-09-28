@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChangeEntry, DirEntry, TreeChanges } from "../api.ts";
-import { captionFor, createChangesStore, folderMarksOf, mergeDeleted, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
+import { captionFor, createChangesStore, crewWordsFor, folderMarksOf, mergeDeleted, rowWords, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
 
 const at1402 = new Date(2026, 8, 23, 14, 2).getTime();
 
@@ -13,6 +13,9 @@ const summary = (over: Partial<TreeChanges> = {}): TreeChanges => ({
   entries: [],
   folders: [],
   touched: [],
+  crew: [],
+  crew_folders: [],
+  crew_total: 0,
   ...over,
 });
 
@@ -47,6 +50,21 @@ describe("the words a tree says (tree changes rules 8, 10 and 11)", () => {
     const s = summary({ total: 3, entries: [file("/p/kinas/a.md", "M", at1402, true), file("/p/kinas/b.md", "M"), dir("/p/kinas/new", "A", at1402, true)] });
     expect(waitingCount(s)).toBe(2);
     expect(waitingCount(summary())).toBe(0);
+  });
+
+  test("crewWordsFor_says_whose_and_how_many", () => {
+    // Crew marks, PRD rule 10: whose, how many tasks, and a crew row's "not in your folder".
+    const crew = (mark: "A" | "M" | "D", tasks = 1, here = true) => ({ path: "/p/kinas/plan.md", kind: "file" as const, mark, tasks, here });
+    expect(crewWordsFor("plan.md", crew("M"), null)).toBe("plan.md, modified by the crew, not pushed");
+    expect(crewWordsFor("plan.md", crew("M", 2), null)).toBe("plan.md, modified by the crew (2 tasks), not pushed");
+    expect(crewWordsFor("old.md", crew("D"), null)).toBe("old.md, deleted by the crew, not pushed");
+    expect(crewWordsFor("notes.md", crew("A", 1, false), null)).toBe("notes.md, added by the crew, not pushed — not in your folder");
+    expect(crewWordsFor("docs", null, { path: "/p/kinas/docs", count: 3, strongest: "D", since_ms: 0 })).toBe("docs, 3 changes by the crew inside, not pushed");
+    expect(crewWordsFor("README.md", null, null)).toBeNull();
+    // Both on one row: the captain's words, then "; also" and the crew's.
+    expect(rowWords("plan.md", "plan.md, modified since 11:44, not pushed", crew("M"), null)).toBe("plan.md, modified since 11:44, not pushed; also modified by the crew, not pushed");
+    expect(rowWords("plan.md", null, crew("M"), null)).toBe("plan.md, modified by the crew, not pushed");
+    expect(rowWords("plan.md", "plan.md, modified since 11:44", null, null)).toBe("plan.md, modified since 11:44");
   });
 
   test("captionFor_counts_and_pluralises", () => {

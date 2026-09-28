@@ -16,6 +16,7 @@
 
 pub mod baseline;
 pub mod compare;
+pub mod crew;
 pub mod diff;
 pub mod git;
 
@@ -152,6 +153,10 @@ pub struct TreeChanges {
     pub folders: Vec<FolderRollup>,
     /// Folders whose direct children this burst judged, so an expanded one can re-list.
     pub touched: Vec<String>,
+    /// What the first mate's crew has changed in its own checkouts and not pushed, mapped onto this tree (crew marks).
+    pub crew: Vec<crew::CrewEntry>,
+    pub crew_folders: Vec<FolderRollup>,
+    pub crew_total: u32,
 }
 
 struct Record {
@@ -171,11 +176,15 @@ struct Record {
     /// The burst thread's channel: the queued paths once the baseline is in, and the Upstream messages.
     feed: Option<Sender<Heard>>,
     copy_bytes: u64,
+    /// Each repository top of the root paired with a crew project, by `owner/name` (crew marks, PRD rule 2).
+    crew_repos: Vec<(PathBuf, String)>,
+    /// The crew's view of this root: installed by a crew project's thread, never by ↻, a burst or a reset.
+    crew: crew::CrewView,
 }
 
 impl Record {
     fn new(root: PathBuf, since_ms: Millis, generation: u64) -> Self {
-        Record { root, since_ms, generation, watching: true, baseline: None, queued: BTreeSet::new(), marks: BTreeMap::new(), watcher: None, feed: None, copy_bytes: 0 }
+        Record { root, since_ms, generation, watching: true, baseline: None, queued: BTreeSet::new(), marks: BTreeMap::new(), watcher: None, feed: None, copy_bytes: 0, crew_repos: Vec::new(), crew: crew::CrewView::default() }
     }
 }
 
@@ -190,6 +199,8 @@ pub struct Changes {
     repos: HashMap<PathBuf, Repo>,
     /// One watch per shared git folder, however many roots and worktrees use it.
     refs: HashMap<PathBuf, RefWatch>,
+    /// The crew projects some root pairs with, by `owner/name` (crew marks).
+    crew: HashMap<String, crew::CrewProject>,
 }
 
 impl Changes {
@@ -228,6 +239,9 @@ fn summary(record: &Record, repos: &HashMap<PathBuf, Repo>, touched: Vec<PathBuf
         entries,
         folders,
         touched: touched.iter().map(|p| p.display().to_string()).collect(),
+        crew: record.crew.entries.clone(),
+        crew_folders: record.crew.folders.clone(),
+        crew_total: record.crew.total,
     }
 }
 
@@ -445,13 +459,16 @@ fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges,
     Some((summary(record, repos, Vec::new()), generation, !record.watching))
 }
 
-/// Every record and every refs watch out of the state, the repositories forgotten, the budget back to nothing. The
-/// caller drops them, with no guard held.
-fn drop_all(state: &ChangesState) -> (HashMap<PathBuf, Record>, HashMap<PathBuf, RefWatch>) {
+/// What a reload drops: every record, refs watch and crew project, dropped by the caller with no guard held.
+type Dropped = (HashMap<PathBuf, Record>, HashMap<PathBuf, RefWatch>, HashMap<String, crew::CrewProject>);
+
+/// Every record, refs watch and crew project out of the state, the repositories forgotten, the budget back to nothing.
+/// The caller drops them, with no guard held.
+fn drop_all(state: &ChangesState) -> Dropped {
     let mut changes = state.lock();
     changes.budget_used = 0;
     changes.repos.clear();
-    (std::mem::take(&mut changes.roots), std::mem::take(&mut changes.refs))
+    (std::mem::take(&mut changes.roots), std::mem::take(&mut changes.refs), std::mem::take(&mut changes.crew))
 }
 
 /// The watch, the burst thread and the baseline thread, for a record that has none: its first showing, or a refresh
@@ -599,6 +616,8 @@ fn take_baseline(app: &AppHandle, root: PathBuf, generation: u64, git: Option<&G
         }
     }
     let _ = app.emit(TREE_CHANGED, summary);
+    // Crew marks: the root's repositories paired with the crew's clones, and their view given.
+    crew::attach(app, &root);
 }
 
 /// Installs a taken baseline, trimmed to what the window's budget still holds — another root may have installed its
@@ -1643,13 +1662,22 @@ mod tests {
         let before = state.lock().last_generation;
         assert!(before > 0);
         state.lock().repos.insert(PathBuf::from("/p/repo"), Repo { common: PathBuf::from("/p/repo/.git"), upstream: Upstream::Waiting });
-        let (dropped, refs) = drop_all(&state);
+        state.lock().crew.insert("kinas-test/shop".into(), crew::CrewProject::new());
+        let (dropped, refs, crews) = drop_all(&state);
         assert_eq!(dropped.len(), 2);
         assert!(dropped.contains_key(&root));
         assert!(refs.is_empty());
+        assert_eq!(crews.len(), 1, "the crew projects go too");
         let changes = state.lock();
         assert_eq!((changes.roots.len(), changes.budget_used, changes.last_generation), (0, 0, before), "generations keep counting across a reload");
-        assert!(changes.repos.is_empty() && changes.refs.is_empty(), "the repositories and their refs watches go with the records");
+        assert!(changes.repos.is_empty() && changes.refs.is_empty() && changes.crew.is_empty(), "the repositories, their refs watches and the crew go with the records");
+    }
+
+    /// A root registered, with no baseline yet.
+    pub(crate) fn watched_root(root: &Path) -> ChangesState {
+        let state = ChangesState::default();
+        state.lock().roots.insert(root.to_path_buf(), Record::new(root.to_path_buf(), 1_000, 0));
+        state
     }
 
     /// As `watched`, but the root is a git repository with these files committed, and git answers for them.
@@ -1665,7 +1693,7 @@ mod tests {
     }
 
     /// A baseline taken with git and installed with its repositories' upstreams, as the baseline thread does.
-    fn install_with_git(state: &ChangesState, root: &Path, g: &Git) {
+    pub(crate) fn install_with_git(state: &ChangesState, root: &Path, g: &Git) {
         let taken = baseline::take(root, Some(g), 1024, &|_| false);
         let upstreams = upstreams_of(state, &taken, g);
         install_baseline(state, root, 0, taken, upstreams).unwrap();

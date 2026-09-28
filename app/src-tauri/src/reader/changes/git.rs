@@ -21,6 +21,15 @@ pub struct Git {
     exe: PathBuf,
 }
 
+/// One checkout git keeps for a clone (crew marks, ADR 0019): the clone itself, or a worktree wherever it lies.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Worktree {
+    pub top: PathBuf,
+    pub head: Option<String>,
+    /// The branch's short name; None on a detached HEAD.
+    pub branch: Option<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct GitError {
     /// None: it could not start, or did not finish within `GIT_TIMEOUT`.
@@ -162,6 +171,64 @@ impl Git {
         }
     }
 
+    /// Every checkout git keeps for `clone`, the clone first (`worktree list --porcelain -z`): a worker's worktree is
+    /// named here wherever `treehouse` put it (crew marks, ADR 0019). A bare or prunable entry is left out.
+    pub fn worktrees(&self, clone: &Path) -> Result<Vec<Worktree>, GitError> {
+        let out = self.run(clone, "worktree", &["list", "--porcelain", "-z"], None)?;
+        let mut all = Vec::new();
+        let mut current: Option<Worktree> = None;
+        let mut skip = false;
+        for field in out.split(|&b| b == 0) {
+            if field.is_empty() {
+                if let Some(wt) = current.take().filter(|_| !skip) {
+                    all.push(wt);
+                }
+                skip = false;
+                continue;
+            }
+            let text = OsStr::from_bytes(field);
+            let line = text.to_string_lossy();
+            if let Some(path) = field.strip_prefix(b"worktree ") {
+                current = Some(Worktree { top: PathBuf::from(OsStr::from_bytes(path)), head: None, branch: None });
+            } else if let (Some(wt), Some(head)) = (current.as_mut(), line.strip_prefix("HEAD ")) {
+                wt.head = Some(head.to_string());
+            } else if let (Some(wt), Some(branch)) = (current.as_mut(), line.strip_prefix("branch ")) {
+                wt.branch = Some(branch.strip_prefix("refs/heads/").unwrap_or(branch).to_string());
+            } else if line == "bare" || line.starts_with("prunable") {
+                skip = true;
+            }
+        }
+        if let Some(wt) = current.filter(|_| !skip) {
+            all.push(wt);
+        }
+        Ok(all)
+    }
+
+    /// The working tree against `base` (`diff-index -z --name-status --no-renames <base> --`): each path changed since,
+    /// as A, M or D — a type change counts as M. Stat data decides, unrefreshed, so an M may be a mere touch: the
+    /// caller confirms it by hash. Nothing is written, not even the index's stat cache.
+    pub fn changed_since(&self, repo: &Path, base: &str) -> Result<Vec<(char, PathBuf)>, GitError> {
+        let out = self.run(repo, "diff-index", &["-z", "--name-status", "--no-renames", base, "--"], None)?;
+        let mut fields = out.split(|&b| b == 0).filter(|f| !f.is_empty());
+        let mut changed = Vec::new();
+        while let (Some(status), Some(path)) = (fields.next(), fields.next()) {
+            let mark = match status.first() {
+                Some(b'A') => 'A',
+                Some(b'D') => 'D',
+                _ => 'M',
+            };
+            changed.push((mark, repo.join(OsStr::from_bytes(path))));
+        }
+        Ok(changed)
+    }
+
+    /// Files git does not track and does not ignore (`ls-files -z --others --exclude-standard`): a checkout's additions
+    /// not yet committed.
+    pub fn untracked(&self, repo: &Path) -> Result<Vec<PathBuf>, GitError> {
+        let out = self.run(repo, "ls-files", &["-z", "--others", "--exclude-standard"], None)?;
+        Ok(paths_under(repo, &out).collect())
+    }
+
     /// A file's text at `commit`, as a checkout would write it: filters and line endings applied.
     pub fn blob_text(&self, repo: &Path, commit: &str, file: &Path) -> Result<Vec<u8>, GitError> {
         let rel = file.strip_prefix(repo).unwrap_or(file);
@@ -264,6 +331,10 @@ pub(crate) mod tests {
         assert_eq!(argv(repo, "rev-parse", &["--verify", "-q", "@{upstream}"]), ["-C", "/p/repo", "rev-parse", "--verify", "-q", "@{upstream}"].map(OsString::from));
         assert_eq!(argv(repo, "remote", &[]), ["-C", "/p/repo", "remote"].map(OsString::from));
         assert_eq!(argv(repo, "check-ignore", &["-z", "--stdin"]), ["-C", "/p/repo", "check-ignore", "-z", "--stdin"].map(OsString::from));
+        // Crew marks: what the crew's checkouts are, and what they changed.
+        assert_eq!(argv(repo, "worktree", &["list", "--porcelain", "-z"]), ["-C", "/p/repo", "worktree", "list", "--porcelain", "-z"].map(OsString::from));
+        assert_eq!(argv(repo, "diff-index", &["-z", "--name-status", "--no-renames", "c0ffee", "--"]), ["-C", "/p/repo", "diff-index", "-z", "--name-status", "--no-renames", "c0ffee", "--"].map(OsString::from));
+        assert_eq!(argv(repo, "ls-files", &["-z", "--others", "--exclude-standard"]), ["-C", "/p/repo", "ls-files", "-z", "--others", "--exclude-standard"].map(OsString::from));
     }
 
     /// A repository at `dir` with these files committed on `main`, and a bare remote beside it (`<dir>.git`'s
@@ -345,6 +416,50 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn worktrees_lists_the_clone_and_each_worktree() {
+        let (_dir, root) = temp();
+        let repo = root.join("clone");
+        std::fs::create_dir(&repo).unwrap();
+        repo_with(&repo, &[("README.md", b"# Read me\n")]);
+        // Outside the clone, and with a space in the path, as `Application Support` has.
+        let far = root.join("tree house").join("1").join("shop");
+        git(&repo, &["worktree", "add", "-q", &far.to_string_lossy(), "-b", "fm/task"]);
+        let loose = root.join("loose");
+        git(&repo, &["worktree", "add", "-q", "--detach", &loose.to_string_lossy()]);
+        let g = Git::find().expect("git is installed");
+        let head = git(&repo, &["rev-parse", "HEAD"]);
+        let mut all = g.worktrees(&repo).unwrap();
+        assert_eq!(all[0], Worktree { top: repo.clone(), head: Some(head.clone()), branch: Some("main".into()) }, "the clone first");
+        // The rest in git's own order: compared as a set.
+        all[1..].sort_by(|a, b| a.top.cmp(&b.top));
+        assert_eq!(all[1..], [Worktree { top: loose, head: Some(head.clone()), branch: None }, Worktree { top: far.clone(), head: Some(head), branch: Some("fm/task".into()) }]);
+        // A worktree's own listing is the same set: they share one list.
+        assert_eq!(g.worktrees(&far).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn changed_since_and_untracked_see_committed_and_uncommitted_edits() {
+        let (_dir, root) = temp();
+        repo_with(&root, &[(".gitignore", b"notes/\n"), ("README.md", b"# Read me\n"), ("docs/old.md", b"# Old\n"), ("keep.md", b"# Keep\n")]);
+        let base = git(&root, &["rev-parse", "HEAD"]);
+        // A commit not pushed anywhere, then edits on top of it, none committed.
+        std::fs::write(root.join("README.md"), "# Read me, committed\n").unwrap();
+        std::fs::write(root.join("new.md"), "# New, committed\n").unwrap();
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "not pushed"]);
+        std::fs::remove_file(root.join("docs/old.md")).unwrap();
+        std::fs::write(root.join("keep.md"), "# Keep, edited\n").unwrap();
+        std::fs::write(root.join("loose.md"), "# Loose\n").unwrap();
+        std::fs::create_dir(root.join("notes")).unwrap();
+        std::fs::write(root.join("notes/n.md"), "# Ignored\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let mut changed = g.changed_since(&root, &base).unwrap();
+        changed.sort();
+        assert_eq!(changed, [('A', root.join("new.md")), ('D', root.join("docs/old.md")), ('M', root.join("README.md")), ('M', root.join("keep.md"))]);
+        assert_eq!(g.untracked(&root).unwrap(), [root.join("loose.md")], "the ignored file is not listed");
+    }
+
+    #[test]
     fn the_new_calls_never_write() {
         let (_dir, root) = temp();
         let repo = root.join("repo");
@@ -364,6 +479,10 @@ pub(crate) mod tests {
         g.commit_of(&repo, "refs/remotes/origin/main").unwrap();
         g.has_remote(&repo).unwrap();
         g.ignored(&repo, &[repo.join("README.md"), repo.join("notes/x.md")], &[repo.join("notes")]).unwrap();
+        g.worktrees(&repo).unwrap();
+        let head = git(&repo, &["rev-parse", "HEAD"]);
+        g.changed_since(&repo, &head).unwrap();
+        g.untracked(&repo).unwrap();
         assert_eq!(state(), before, "no object, index, config or ref was written");
     }
 

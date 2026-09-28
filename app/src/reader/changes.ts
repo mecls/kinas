@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { type ChangeEntry, type FolderRollup, type Mark, onTreeChanged, type ReaderKind, type TreeChanges, treeChangesRefresh, treeChangesWatch } from "../api.ts";
+import { type ChangeEntry, type CrewEntry, type FolderRollup, type Mark, onTreeChanged, type ReaderKind, type TreeChanges, treeChangesRefresh, treeChangesWatch } from "../api.ts";
 
 // Tree changes in the webview (tasks/tree-changes/prd.md): Rust decides every mark and sends a root's whole summary
 // after each burst; this module keeps the latest summary per root and hands the trees what to draw. Memory only, and
@@ -30,6 +30,10 @@ export interface FolderMarks {
   sinceOf(path: string): string;
   /** Whether a row's mark waits for a push: its entry's, else the added folder's above it; false for none. */
   waitsOf(path: string): boolean;
+  /** The crew's mark on a row (crew marks), or null. */
+  crewOf(path: string): CrewEntry | null;
+  /** A folder's crew roll-up, or null. */
+  crewRollupOf(path: string): FolderRollup | null;
 }
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
@@ -52,6 +56,30 @@ export function wordsFor(name: string, mark: Mark | null, rollup: FolderRollup |
   if (mark) return `${name}, ${MARK_WORD[mark]} since ${since}${waits ? ", not pushed" : ""}`;
   if (rollup) return `${name}, ${rollup.count} ${rollup.count === 1 ? "change" : "changes"} inside since ${since}`;
   return null;
+}
+
+/** What a crew mark says after the name: "modified by the crew (2 tasks), not pushed", "— not in your folder" on a crew row. */
+export function crewPhrase(entry: CrewEntry): string {
+  return `${MARK_WORD[entry.mark]} by the crew${entry.tasks > 1 ? ` (${entry.tasks} tasks)` : ""}, not pushed${entry.here ? "" : " — not in your folder"}`;
+}
+
+const rollupCrewPhrase = (rollup: FolderRollup) => `${rollup.count} ${rollup.count === 1 ? "change" : "changes"} by the crew inside, not pushed`;
+
+/**
+ * A crew mark's tooltip (crew marks, PRD rule 10): "plan.md, modified by the crew, not pushed"; a crew roll-up's "docs,
+ * 3 changes by the crew inside, not pushed". Null for a row with neither.
+ */
+export function crewWordsFor(name: string, entry: CrewEntry | null, rollup: FolderRollup | null): string | null {
+  if (entry) return `${name}, ${crewPhrase(entry)}`;
+  if (rollup) return `${name}, ${rollupCrewPhrase(rollup)}`;
+  return null;
+}
+
+/** A row's accessible name: the captain's own words, then "; also" and the crew's; either alone when the other is null. */
+export function rowWords(name: string, own: string | null, entry: CrewEntry | null, rollup: FolderRollup | null): string | null {
+  const crew = entry ? crewPhrase(entry) : rollup ? rollupCrewPhrase(rollup) : null;
+  if (own && crew) return `${own}; also ${crew}`;
+  return own ?? (crew ? `${name}, ${crew}` : null);
 }
 
 /** The line under a tree's head: "1 change since 14:02", or why there are no marks; null when there is nothing to say. */
@@ -95,9 +123,11 @@ export function mergeDeleted<T extends { name: string; path: string; kind: Reade
 
 /** The marks of one summary, indexed for the rows. Pure, so a test can hold one. */
 export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: string) => number): FolderMarks {
-  if (!summary || (summary.entries.length === 0 && summary.folders.length === 0)) return { ...NO_MARKS, touchedSeq };
+  if (!summary || (summary.entries.length === 0 && summary.folders.length === 0 && summary.crew.length === 0)) return { ...NO_MARKS, touchedSeq };
   const byPath = new Map(summary.entries.map((entry) => [entry.path, entry]));
   const rollups = new Map(summary.folders.map((rollup) => [rollup.path, rollup]));
+  const crew = new Map(summary.crew.map((entry) => [entry.path, entry]));
+  const crewFolders = new Map(summary.crew_folders.map((rollup) => [rollup.path, rollup]));
   const added = summary.entries.filter((e) => e.kind === "dir" && e.mark === "A");
   const addedAbove = (path: string) => added.find((dir) => path.startsWith(`${dir.path}/`));
   const deleted = new Map<string, ChangeEntry[]>();
@@ -116,10 +146,12 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
       return ms === undefined ? "" : sinceLabel(ms);
     },
     waitsOf: (path) => (byPath.get(path) ?? addedAbove(path))?.waits ?? false,
+    crewOf: (path) => crew.get(path) ?? null,
+    crewRollupOf: (path) => crewFolders.get(path) ?? null,
   };
 }
 
-const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false };
+const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false, crewOf: () => null, crewRollupOf: () => null };
 
 /** How many of a root's marks wait for a push, an added folder counting once (the palette's "2 changes not pushed yet"). */
 export const waitingCount = (summary: TreeChanges): number => summary.entries.filter((e) => e.waits).length;

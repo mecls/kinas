@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { type DirEntry, type DirListing, readerListDir } from "../api.ts";
 import { ChangeMark } from "../ui/index.ts";
-import { type FolderMarks, type Gone, mergeDeleted, useFolderMarks, watchRoot, wordsFor } from "./changes.ts";
+import { crewWordsFor, type FolderMarks, type Gone, mergeDeleted, rowWords, useFolderMarks, watchRoot, wordsFor } from "./changes.ts";
 
 // The folder tree (reader R35): one folder at a time from Rust, children loaded when a folder is expanded. It starts at
 // the folder that was opened and cannot go above it.
@@ -73,19 +73,24 @@ const isGone = (row: Row): row is Gone => "gone" in row;
 function FileRow({ entry, selected, onOpen, marks }: TreeProps & { entry: Row }) {
   const mark = marks.markOf(entry.path);
   const words = wordsFor(entry.name, mark, null, marks.sinceOf(entry.path), marks.waitsOf(entry.path));
+  // Crew marks: the crew's hollow mark comes first, the captain's own at the row's end.
+  const crew = marks.crewOf(entry.path);
+  const crewWords = crewWordsFor(entry.name, crew, null);
+  const label = rowWords(entry.name, words, crew, null);
   return (
     <li>
-      <div className="tree-row" data-mark={mark ?? undefined} data-gone={isGone(entry) ? "" : undefined}>
+      <div className="tree-row" data-mark={mark ?? undefined} data-crew={crew?.mark} data-gone={isGone(entry) ? "" : undefined}>
         <button
           type="button"
           className="tree-item tree-file"
           aria-current={entry.path === selected ? "true" : undefined}
-          aria-label={words ?? undefined}
+          aria-label={label ?? undefined}
           title={entry.path}
           onClick={() => onOpen(entry.path, mark ? "changes" : undefined)}
         >
           {entry.name}
         </button>
+        {crew && crewWords && <ChangeMark mark={crew.mark} words={crewWords} hollow />}
         {mark && words && <ChangeMark mark={mark} words={words} />}
       </div>
     </li>

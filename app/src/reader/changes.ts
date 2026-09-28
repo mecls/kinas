@@ -252,6 +252,20 @@ export function createChangesStore() {
       }
       return found;
     },
+    /** A file's crew mark from every summary (crew marks): the deepest root that has it wins. Null: none. */
+    crewOf(path: string): CrewEntry | null {
+      let found: CrewEntry | null = null;
+      let depth = -1;
+      for (const s of summaries.values()) {
+        if (!path.startsWith(`${s.root}/`) || s.root.length <= depth) continue;
+        const entry = s.crew.find((e) => e.path === path);
+        if (entry) {
+          found = entry;
+          depth = s.root.length;
+        }
+      }
+      return found;
+    },
     touchedSeq: (dir: string) => seqs.get(dir) ?? 0,
     epochOf: (root: string) => epochs.get(root) ?? 0,
     subscribe(listener: () => void) {
@@ -301,6 +315,23 @@ function useSummary(root: string | null): TreeChanges | null {
 export function useTreeChanges(root: string | null): TreeSummary | null {
   const summary = useSummary(root);
   return useMemo(() => (summary ? { total: summary.total, since: sinceLabel(summary.since_ms), watching: summary.watching, crewTotal: summary.crew_total } : null), [summary]);
+}
+
+/** A file's crew mark now, outside React (crew marks): the reader asks it before opening the crew's copy. */
+export function crewNow(path: string): CrewEntry | null {
+  return store.crewOf(path);
+}
+
+/**
+ * The open file's crew mark, for the reader's fourth view button (crew marks, rule 15). A primitive through the store,
+ * as `useMarkOf` is, so an unrelated burst does not re-render the reader.
+ */
+export function useCrewOf(path: string | null): CrewEntry | null {
+  const key = useSyncExternalStore(store.subscribe, () => {
+    const entry = path === null ? null : store.crewOf(path);
+    return entry ? `${entry.mark} ${entry.tasks} ${entry.here}` : null;
+  });
+  return useMemo(() => (key === null || path === null ? null : store.crewOf(path)), [key, path]);
 }
 
 /** A file's mark now, outside React: the reader asks it before choosing the door a click goes through. */

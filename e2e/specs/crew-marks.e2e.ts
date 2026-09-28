@@ -2,7 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { spawnSync } from "node:child_process";
 import { realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { waitForShell } from "../helpers.ts";
+import { hook, waitForShell } from "../helpers.ts";
 import { git, TOKEN, worktreeOf } from "./crew-marks.setup.ts";
 
 // Crew marks (tasks/crew-marks/prd.md §5): what the first mate's crew has changed in its own worktree and not pushed,
@@ -57,6 +57,23 @@ const row = async (name: string) => (await rows()).find((r) => r.name === name);
 const crewMarked = async () => (await rows()).filter((r) => r.crew !== null).map((r) => `${r.name} ${r.crew}${r.crewRow ? " row" : ""}`);
 const crewCaption = () => browser.execute(() => document.querySelector(".sidebar .reader-files .tree-crew")?.textContent ?? null);
 
+/** The reader as drawn: which view shows, its summary, its rows as `kind sign text`, and the toggle, pressed with `*`. */
+const reader = () =>
+  browser.execute(() => {
+    const doc = document.querySelector<HTMLElement>("aside.reader .reader-doc");
+    return {
+      view: doc?.dataset.view ?? null,
+      summary: doc?.querySelector(".ui-diff-summary")?.textContent ?? null,
+      rows: [...(doc?.querySelectorAll<HTMLElement>(".ui-diff-row:not([hidden])") ?? [])].map(
+        (r) => `${r.dataset.kind} ${r.querySelector(".ui-diff-sign")?.textContent ?? ""} ${r.querySelector("code")?.textContent ?? ""}`,
+      ),
+      views: [...document.querySelectorAll<HTMLButtonElement>("aside.reader .reader-view .reader-view-button")].map((b) => `${b.getAttribute("aria-label")}${b.getAttribute("aria-pressed") === "true" ? "*" : ""}`),
+    };
+  });
+const view = (label: string) => browser.execute((l: string) => document.querySelector<HTMLButtonElement>(`aside.reader .reader-view-button[aria-label="${l}"]`)!.click(), label);
+/** Every line the reader said, debug builds only: a 6 s line can come and go between two slow driver lookups. */
+const statusLog = () => hook<string>("readerStatusLog");
+
 async function until(check: () => Promise<boolean>, what: string, timeout = CEILING) {
   await browser.waitUntil(check, { timeout, interval: 100, timeoutMsg: `${what} within ${timeout} ms: ${JSON.stringify(await rows())}` });
 }
@@ -100,7 +117,39 @@ describe("Crew marks", () => {
     expect(await crewCaption()).toBe("The crew: 2 changes not pushed");
   });
 
-  it("crew 5: the crew commits and pushes, and within 2 s its marks and its row go", async () => {
+  it("crew 4: the captain edits the same file — both marks on its row, a click opens the captain's Changes, The crew's the crew's copy", async () => {
+    const captains = join(root, "shop", README);
+    writeFileSync(captains, `# Shop ${TOKEN}\n\nWhat the remote holds.\nA line by the captain.\n`);
+    await until(async () => (await row(README))?.mark === "M", `${README} marked M by the captain`);
+    const r = (await row(README))!;
+    expect([r.mark, r.crew, r.crewDrawn]).toEqual(["M", "M", "M M ring"]);
+    expect(r.label).toMatch(new RegExp(`^${README.replace(".", "\\.")}, modified since \\d\\d:\\d\\d, not pushed; also modified by the crew, not pushed$`));
+
+    // The captain's own mark decides what a click opens: their Changes.
+    await browser.execute((p: string) => [...document.querySelectorAll<HTMLButtonElement>(".sidebar .reader-files .tree-item")].find((b) => b.title === p)!.click(), captains);
+    await until(async () => (await reader()).view === "changes" && (await reader()).summary !== null, "the reader on the captain's Changes", 10000);
+    const own = await reader();
+    expect(own.summary).toMatch(/^\+1 −0 since \d\d:\d\d$/);
+    expect(own.rows).toEqual([`context  # Shop ${TOKEN}`, "context  ", "context  What the remote holds.", "add + A line by the captain."]);
+    expect(own.views).toEqual(["Rendered", "Source", "Changes*", "The crew's"]);
+
+    await view("The crew's");
+    await until(async () => (await reader()).view === "crew", "the reader on the crew's copy", 5000);
+    const crews = await reader();
+    expect(crews.summary).toBe("+1 −0 The crew's copy, not pushed");
+    expect(crews.rows).toEqual([`context  # Shop ${TOKEN}`, "context  ", "context  What the remote holds.", `add + A line by the crew ${TOKEN}.`]);
+    expect(crews.views).toEqual(["Rendered", "Source", "Changes", "The crew's*"]);
+    expect(await statusLog()).toContain("Read-only: this is the crew's copy");
+
+    // And back: Changes is the captain's again.
+    await view("Changes");
+    await until(async () => (await reader()).view === "changes", "the reader back on the captain's Changes", 5000);
+    expect((await reader()).rows.at(-1)).toBe("add + A line by the captain.");
+    await view("The crew's");
+    await until(async () => (await reader()).view === "crew", "the reader on the crew's copy again", 5000);
+  });
+
+  it("crew 5: the crew commits and pushes, and within 2 s its marks and its row go; the captain's own M stays", async () => {
     git(worktree, "add", "-A");
     git(worktree, "commit", "-q", "-m", "the crew's work");
     await browser.pause(CEILING);
@@ -108,5 +157,10 @@ describe("Crew marks", () => {
     expect((await crewMarked()).length).toBe(2);
     git(worktree, "push", "-q");
     await until(async () => (await crewMarked()).length === 0 && (await crewCaption()) === null, "the crew's marks gone after its push");
+    expect((await row(README))?.mark).toBe("M");
+    // The reader was on the crew's copy: it leaves it, and says why.
+    await until(async () => (await reader()).view !== "crew", "the reader off the crew's copy", 5000);
+    expect(await statusLog()).toContain("No changes by the crew any more");
+    expect((await reader()).views).not.toContain("The crew's");
   });
 });

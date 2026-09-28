@@ -160,6 +160,13 @@ export const ChangesIcon = (p: Props) => (
     <path d="M8 2.5v6M5 5.5h6M5 12.5h6" />
   </Icon>
 );
+/* Crew marks (1.9): the reader's view of the crew's copy — two rings, the crew mark's hollow dot, side by side. */
+export const CrewCopyIcon = (p: Props) => (
+  <Icon {...p}>
+    <circle cx="5.25" cy="8" r="2.75" />
+    <circle cx="10.75" cy="8" r="2.75" />
+  </Icon>
+);
 export const ExpandIcon = (p: Props) => (
   <Icon {...p}>
     <path d="M10 2.5h3.5V6M6 13.5H2.5V10M13.5 2.5l-4 4M2.5 13.5l4-4" />

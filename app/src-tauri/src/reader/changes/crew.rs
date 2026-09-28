@@ -20,9 +20,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use super::baseline::Stat;
 use super::compare;
 use super::git::{Git, Worktree};
-use super::{ChangesState, FolderRollup, Mark, Millis, TreeChanges, BURST_CEILING, DEBOUNCE, TREE_CHANGED};
-use crate::reader::access::Kind;
-use crate::reader::listable_file;
+use super::{diff, ChangesState, FolderRollup, Mark, Millis, TreeChanges, BURST_CEILING, DEBOUNCE, TREE_CHANGED};
+use crate::reader::access::{self, Kind};
+use crate::reader::{listable_file, off_main, ReaderError, ReaderState};
 
 /// What a checkout's unpushed set is measured against (PRD rule 4, Gate 2).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,12 +89,25 @@ pub struct CrewEntry {
     pub here: bool,
 }
 
-/// Where the crew's text of a captain-side path is read from: the checkout that changed it last.
+/// Where the crew's text of a captain-side path is read from: the checkout that changed it last, and what the crew
+/// did to it there.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
     pub checkout: PathBuf,
     pub rel: PathBuf,
     pub base: Base,
+    pub mark: Mark,
+    pub tasks: u32,
+    /// Whether the captain's folder has the path.
+    pub here: bool,
+}
+
+/// On the crew's copy of a file (crew marks, rule 14): how many checkouts mark it, and whether the captain's folder has
+/// it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct CrewOf {
+    pub tasks: u32,
+    pub here: bool,
 }
 
 /// A root's crew view, derived from the crew's checkouts and installed in its record.
@@ -301,7 +314,7 @@ pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashM
                     continue;
                 }
                 let seen = snap.seen.get(rel).copied().unwrap_or(0);
-                let source = Source { checkout: snap.top.clone(), rel: rel.clone(), base: snap.base.clone() };
+                let source = Source { checkout: snap.top.clone(), rel: rel.clone(), base: snap.base.clone(), mark, tasks: 1, here: true };
                 match acc.get_mut(&path) {
                     Some(a) => {
                         a.mark = compare::strongest(a.mark, mark);
@@ -349,8 +362,92 @@ pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashM
         entries: shown.iter().map(|(p, &(kind, mark, tasks, here))| CrewEntry { path: p.display().to_string(), kind, mark, tasks, here }).collect(),
         folders,
         total,
-        sources: acc.into_iter().map(|(p, a)| (p, a.source)).collect(),
+        sources: acc
+            .into_iter()
+            .map(|(p, a)| {
+                let here = Stat::of(&p).is_some();
+                (p, Source { mark: a.mark, tasks: a.tasks, here, ..a.source })
+            })
+            .collect(),
     }
+}
+
+/// The crew's copy of a captain-side path (crew marks, rule 14), read-only: its text at the commit its branch last
+/// pushed, and now, from the checkout that changed it last. The door answers only for a path a watched root the reader
+/// may still read has in its crew view (ADR 0009); the crew's own paths never leave Rust.
+pub(super) fn crew_text(state: &super::ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>) -> Result<(Source, Vec<u8>, Vec<u8>), ReaderError> {
+    let source = {
+        let changes = state.lock();
+        changes
+            .roots
+            .values()
+            .filter(|r| path.starts_with(&r.root) && path != r.root && permitted(&r.root))
+            .filter_map(|r| r.crew.sources.get(path).map(|s| (r.root.components().count(), s.clone())))
+            .max_by_key(|(depth, _)| *depth)
+            .map(|(_, s)| s)
+    };
+    let source = source.ok_or_else(|| ReaderError::new("not_watched", "Kinas is not following the crew's changes to this file"))?;
+    let gone = || ReaderError::new("crew_gone", "The crew's copy is gone — its task has ended");
+    let git = git.ok_or_else(gone)?;
+    let commit = match &source.base {
+        Base::Commit(c) | Base::Head(c) => c.clone(),
+        Base::Unknown => return Err(gone()),
+    };
+    if !source.checkout.is_dir() {
+        return Err(gone());
+    }
+    let file = source.checkout.join(&source.rel);
+    let before = if source.mark == Mark::Added { Vec::new() } else { git.blob_text(&source.checkout, &commit, &file).map_err(|_| gone())? };
+    let after = if source.mark == Mark::Deleted { Vec::new() } else { access::read_text(&file).map_err(|_| gone())?.text.into_bytes() };
+    Ok((source, before, after))
+}
+
+/// `tree_changes_crew_diff` without Tauri: the crew's copy as a Changes view.
+pub(super) fn crew_view(state: &super::ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>, projects: &Path, home: &Path) -> Result<diff::DiffView, ReaderError> {
+    let (source, before, after) = crew_text(state, path, permitted, git)?;
+    let (before, after) = (String::from_utf8_lossy(&before).into_owned(), String::from_utf8_lossy(&after).into_owned());
+    let (rows, folds, added, removed) = diff::diff(&before, &after, diff::DIFF_DEADLINE)
+        .map_err(|t| ReaderError::new("too_many_changes", format!("Too many changes to show — {} lines then, {} now", diff::grouped(t.before_lines), diff::grouped(t.after_lines))))?;
+    Ok(diff::DiffView {
+        path: path.display().to_string(),
+        display_path: access::display_path(path, projects, home),
+        root: access::real_root(projects).display().to_string(),
+        ext: access::ext_of(path),
+        since_ms: 0,
+        mark: source.mark,
+        added,
+        removed,
+        rows,
+        folds,
+        // What Copy and Download take: the crew's text — what it said, for a file the crew deleted.
+        baseline_text: Some(if source.mark == Mark::Deleted { before } else { after }),
+        crew: Some(CrewOf { tasks: source.tasks, here: source.here }),
+    })
+}
+
+/// The crew's copy of a file, read-only, on its Changes view (crew marks, rule 14).
+#[tauri::command]
+pub async fn tree_changes_crew_diff(app: AppHandle, path: String) -> Result<diff::DiffView, ReaderError> {
+    off_main(move || {
+        let path = crate::reader::absolute(&path)?;
+        let projects = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
+        // Cloned, so the reader's guard is never held with this module's (ADR 0005).
+        let allowed = app.state::<ReaderState>().lock().allowed.clone();
+        let permitted = |root: &Path| access::permitted(root, &projects, &allowed);
+        crew_view(&app.state::<super::ChangesState>(), &path, &permitted, Git::find().as_ref(), &projects, &crate::reader::home())
+    })
+    .await
+}
+
+/// The crew's text of a file and its name, for Download (crew marks, rule 14): through the same door as the view.
+pub(crate) fn crew_bytes(app: &AppHandle, path: &str) -> Result<(String, Vec<u8>), ReaderError> {
+    let path = crate::reader::absolute(path)?;
+    let projects = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
+    let allowed = app.state::<ReaderState>().lock().allowed.clone();
+    let permitted = |root: &Path| access::permitted(root, &projects, &allowed);
+    let (source, before, after) = crew_text(&app.state::<super::ChangesState>(), &path, &permitted, Git::find().as_ref())?;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "copy".into());
+    Ok((name, if source.mark == Mark::Deleted { before } else { after }))
 }
 
 /// Every root paired with `repo`, its crew view derived again and installed where it changed. Three steps: what to
@@ -921,5 +1018,48 @@ pub(super) mod tests {
         git(&home.join("projects"), &["-c", &format!("{instead}={url}"), "clone", "-q", url, "other"]);
         let (starts, _) = repair(&state, &home);
         assert_eq!(starts, vec![("kinas-test/other".to_string(), home.join("projects/other"))]);
+    }
+
+    const EVERYWHERE: &dyn Fn(&Path) -> bool = &|_| true;
+
+    fn crew_diff(state: &ChangesState, path: &Path, g: &Git) -> Result<diff::DiffView, ReaderError> {
+        crew_view(state, path, EVERYWHERE, Some(g), Path::new("/nowhere"), Path::new("/nowhere"))
+    }
+
+    #[test]
+    fn crew_diff_refuses_a_path_with_no_crew_mark() {
+        let (_dir, captain, home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n")]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, _) = crew_watched(&captain, &home, &g);
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        // Unmarked, outside every root, the crew's own path, or under a root the reader may no longer read: no door.
+        for path in [captain.join("docs/plan.md"), PathBuf::from("/etc/hosts"), worktree.join("README.md")] {
+            assert_eq!(crew_diff(&state, &path, &g).unwrap_err().code, "not_watched", "{}", path.display());
+        }
+        let refused = crew_view(&state, &captain.join("README.md"), &|_| false, Some(&g), Path::new("/"), Path::new("/")).unwrap_err();
+        assert_eq!(refused.code, "not_watched");
+        assert!(crew_diff(&state, &captain.join("README.md"), &g).is_ok());
+        // The task ends before the view is asked for: its copy is gone, said so.
+        git(&clone, &["worktree", "remove", "--force", &worktree.to_string_lossy()]);
+        let gone = crew_diff(&state, &captain.join("README.md"), &g).unwrap_err();
+        assert_eq!((gone.code, gone.message.as_str()), ("crew_gone", "The crew's copy is gone — its task has ended"));
+    }
+
+    #[test]
+    fn crew_diff_is_the_crew_s_text_against_its_base() {
+        let (_dir, captain, home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n\nWhat the remote holds.\n")]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, _) = crew_watched(&captain, &home, &g);
+        // The captain's own copy differs, and does not matter: the crew's text is against what the crew last pushed.
+        std::fs::write(captain.join("README.md"), "# Shop, the captain's\n").unwrap();
+        std::fs::write(worktree.join("README.md"), "# Shop\n\nWhat the remote holds.\nA line by the crew.\n").unwrap();
+        std::fs::write(worktree.join("notes.md"), "# Notes\n\nNew.\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        let v = crew_diff(&state, &captain.join("README.md"), &g).unwrap();
+        assert_eq!((v.mark, v.added, v.removed, v.crew.clone()), (Mark::Modified, 1, 0, Some(CrewOf { tasks: 1, here: true })));
+        assert_eq!(v.baseline_text.as_deref(), Some("# Shop\n\nWhat the remote holds.\nA line by the crew.\n"), "Copy takes the crew's text");
+        let added = crew_diff(&state, &captain.join("notes.md"), &g).unwrap();
+        assert_eq!((added.mark, added.added, added.removed, added.crew), (Mark::Added, 3, 0, Some(CrewOf { tasks: 1, here: false })));
     }
 }

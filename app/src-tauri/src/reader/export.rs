@@ -253,6 +253,34 @@ pub async fn reader_export(app: tauri::AppHandle, window: tauri::WebviewWindow, 
 /// The page names the path and nothing else; Rust finds the text in the record (`changes::deleted_baseline`, which
 /// answers only for a path a watched root marks deleted), opens the sheet, asks the record again after it, and
 /// writes the bytes itself.
+/// Download of the crew's copy of a file (crew marks, rule 14): the crew's text, read through the same door as its
+/// Changes view, written where the captain says, as any copy is.
+#[tauri::command]
+pub async fn tree_changes_crew_export(app: tauri::AppHandle, window: tauri::WebviewWindow, path: String) -> Result<Exported, ReaderError> {
+    let _busy = Busy::take(&app)?;
+
+    let (name, _) = {
+        let (app, path) = (app.clone(), path.clone());
+        off_main(move || super::changes::crew::crew_bytes(&app, &path)).await?
+    };
+    let Some(dest) = choose_destination(&app, &window, &name).await? else {
+        return Ok(Exported::Cancelled);
+    };
+
+    let started = std::time::Instant::now();
+    let worker = app.clone();
+    let (name, bytes) = off_main(move || {
+        // Again after the sheet: the crew may have pushed, or its task ended, while it was open.
+        let (_, text) = super::changes::crew::crew_bytes(&worker, &path)?;
+        let fallback = dest.file_name().and_then(|n| n.to_str()).unwrap_or("the copy").to_string();
+        write_bytes(&text, &dest, &protected_dirs(&worker)).map_err(|refused| refused.into_error(Path::new(&path), &fallback))
+    })
+    .await?;
+    // Counts only: never the name, never the folder.
+    log::info!("tree changes: exported {bytes} bytes in {} ms", started.elapsed().as_millis());
+    Ok(Exported::Saved { name, bytes })
+}
+
 #[tauri::command]
 pub async fn tree_changes_export(app: tauri::AppHandle, window: tauri::WebviewWindow, path: String) -> Result<Exported, ReaderError> {
     let _busy = Busy::take(&app)?;

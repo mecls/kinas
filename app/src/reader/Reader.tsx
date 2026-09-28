@@ -17,6 +17,8 @@ import {
   readerReadText,
   readerRendered,
   type ReaderSide,
+  treeChangesCrewDiff,
+  treeChangesCrewExport,
   treeChangesDiff,
   treeChangesExport,
 } from "../api.ts";
@@ -39,7 +41,7 @@ import { renderImage, renderSource } from "./source.ts";
 import { closeTab, moveTab, NO_TABS, openTab, rememberScroll, showNone, tabLabels, type Tabs } from "./tabs.ts";
 import { FileTree } from "./tree.tsx";
 import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
-import { markNow, sinceLabel, useMarkOf } from "./changes.ts";
+import { crewNow, markNow, sinceLabel, useCrewOf, useMarkOf } from "./changes.ts";
 import { renderDiff, renderRefusal } from "./diff.ts";
 import { Button, openFold, TabStrip } from "../ui/index.ts";
 import type { ReaderAt } from "../shell/history.ts";
@@ -62,7 +64,7 @@ import type { ReaderAt } from "../shell/history.ts";
  */
 export type ReaderRequest =
   | ({ type: "show" } & ReaderShow & { seq: number })
-  | { type: "follow"; path: string; seq: number; view?: "changes" }
+  | { type: "follow"; path: string; seq: number; view?: "changes" | "crew" }
   | { type: "place"; reader: Exclude<ReaderAt, { kind: "none" }>; seq: number };
 
 interface Doc {
@@ -83,6 +85,13 @@ interface Doc {
    * what it said then — what Copy copies — and Changes is its only view.
    */
   deleted?: boolean;
+  /**
+   * A crew row (crew marks, rule 11): a path the crew added or rewrote that the captain's folder lacks, opened from the
+   * crew's checkout, read-only. `text` is the crew's text, and the crew's copy is its only view.
+   */
+  crew?: boolean;
+  /** While the crew's copy shows: the crew's text, which Copy copies (crew marks, rule 14). */
+  crewText?: string;
 }
 
 /**
@@ -120,6 +129,22 @@ async function changesOf(path: string): Promise<{ rendered: Rendered; since: str
     const error = readerErrorOf(e);
     if (error.code === "not_watched") return null;
     return { rendered: renderRefusal(error.message), since: null };
+  }
+}
+
+/**
+ * The crew's copy of a file (crew marks, rule 14): its diff against what the crew last pushed, read-only, and the
+ * crew's text for Copy — or one line in its place with Rust's reason (the crew's task has ended, say). Null when no
+ * watched root has a crew mark on the file any more.
+ */
+async function crewChangesOf(path: string): Promise<{ rendered: Rendered; text: string } | null> {
+  try {
+    const view = await treeChangesCrewDiff(path);
+    return { rendered: renderDiff(view), text: view.baseline_text ?? "" };
+  } catch (e) {
+    const error = readerErrorOf(e);
+    if (error.code === "not_watched") return null;
+    return { rendered: renderRefusal(error.message), text: "" };
   }
 }
 
@@ -373,6 +398,13 @@ export function Reader({
     changesRef.current = since;
     setChanges(since);
   }, []);
+  /** Whether the open file shows the crew's copy (crew marks, rule 14). Per file, as Changes is. */
+  const [crewOn, setCrewOnState] = useState(false);
+  const crewRef = useRef(false);
+  const setCrewOn = useCallback((on: boolean) => {
+    crewRef.current = on;
+    setCrewOnState(on);
+  }, []);
 
   const frame = useRef<HTMLDivElement>(null);
   const main = useRef<HTMLDivElement>(null);
@@ -453,7 +485,7 @@ export function Reader({
   const show = useCallback(
     async function show(
       path: string,
-      opts: { fragment?: string | null; scrollTop?: number; receivedAt?: number; pageProblem?: boolean; changes?: boolean },
+      opts: { fragment?: string | null; scrollTop?: number; receivedAt?: number; pageProblem?: boolean; changes?: boolean; crew?: boolean },
     ): Promise<void> {
       const gen = ++generation.current;
       const timer = window.setTimeout(() => {
@@ -478,8 +510,9 @@ export function Reader({
             text: "",
             rendered: renderDoc("", "image", opened.ext, opened.path),
           };
-          // An image has marks but no Changes view (tree changes rule 23).
+          // An image has marks but no Changes view (tree changes rule 23), and no crew's copy.
           setChangesOn(null);
+          setCrewOn(false);
           docRef.current = next;
           setDoc(next);
           setProblem(null);
@@ -497,6 +530,8 @@ export function Reader({
         const render = opened.render ?? "source";
         // Asked to open on Changes: the diff is fetched before anything is drawn, so the usual view never flashes first.
         const diffed = opts.changes ? await changesOf(opened.path) : null;
+        // Asked for the crew's copy (crew marks, rule 14): the same, from the crew's checkout.
+        const crewed = !diffed && opts.crew ? await crewChangesOf(opened.path) : null;
         if (gen !== generation.current) return;
         const next: Doc = {
           path: opened.path,
@@ -507,9 +542,12 @@ export function Reader({
           render,
           ext: opened.ext,
           text: opened.text.text,
-          rendered: diffed?.rendered ?? renderDoc(opened.text.text, render, opened.ext, opened.path),
+          rendered: diffed?.rendered ?? crewed?.rendered ?? renderDoc(opened.text.text, render, opened.ext, opened.path),
+          crewText: crewed?.text,
         };
         setChangesOn(diffed ? (diffed.since ?? "") : null);
+        setCrewOn(crewed !== null);
+        if (crewed) say("Read-only: this is the crew's copy");
         docRef.current = next;
         setDoc(next);
         setProblem(null);
@@ -538,7 +576,7 @@ export function Reader({
     },
     // openFolder is hoisted below and only reads refs and setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [say, setChangesOn],
+    [say, setChangesOn, setCrewOn],
   );
 
   async function openFolder(path: string) {
@@ -591,6 +629,7 @@ export function Reader({
         next = { path, displayPath: baseName(path), root: "", hash: "deleted", lines: 0, render: "source", ext: "", text: "", rendered: renderRefusal(error.message), deleted: true };
         setChangesOn(markNow(path)?.since ?? "");
       }
+      setCrewOn(false);
       // A file the reader shows has a tab, a deleted one too (reader-layout rule 12); before `docRef` moves on.
       toTab(next.path, next.displayPath);
       pending.current = { mode: "new", fragment: null, scrollTop };
@@ -600,17 +639,55 @@ export function Reader({
       setOpening(null);
       setStatus((s) => (s?.sticky ? null : s));
     },
-    [say, setChangesOn],
+    [say, setChangesOn, setCrewOn],
+  );
+
+  /**
+   * A crew row (crew marks, rule 11): a path the crew added or rewrote that the captain's folder lacks. Nothing is on
+   * the captain's disk to allow or to open, so this is not `reader_allow_click`'s door — `tree_changes_crew_diff`,
+   * which answers only for a path a watched root marks for the crew, is its only one.
+   */
+  const openCrewRow = useCallback(
+    async (path: string, scrollTop = 0) => {
+      const gen = ++generation.current;
+      let next: Doc;
+      try {
+        const view = await treeChangesCrewDiff(path);
+        if (gen !== generation.current) return;
+        const text = view.baseline_text ?? "";
+        next = { path: view.path, displayPath: view.display_path, root: view.root, hash: `crew ${view.added} ${view.removed}`, lines: text.split("\n").length, render: "source", ext: view.ext, text, rendered: renderDiff(view), crew: true, crewText: text };
+      } catch (e) {
+        if (gen !== generation.current) return;
+        const message = readerErrorOf(e).message;
+        if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message });
+        else say(message);
+        return;
+      }
+      setChangesOn(null);
+      setCrewOn(true);
+      // A file the reader shows has a tab, a crew row's too (reader-layout rule 12); before `docRef` moves on.
+      toTab(next.path, next.displayPath);
+      pending.current = { mode: "new", fragment: null, scrollTop };
+      docRef.current = next;
+      setDoc(next);
+      setProblem(null);
+      setOpening(null);
+      say("Read-only: this is the crew's copy");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [say, setChangesOn, setCrewOn],
   );
 
   const follow = useCallback(
-    async (path: string, fragment: string | null, scrollTop?: number, asTab = false, view?: "changes") => {
+    async (path: string, fragment: string | null, scrollTop?: number, asTab = false, view?: "changes" | "crew") => {
       // A deleted file is on no disk to open: its row, or its tab while its D stands, opens what it said then.
       if ((view === "changes" || asTab) && markNow(path)?.mark === "D") return openDeleted(path, scrollTop);
+      // Nor is a crew row's: its row, or its tab while the crew mark stands, opens the crew's copy (crew marks).
+      if ((view === "crew" || asTab) && crewNow(path)?.here === false) return openCrewRow(path, scrollTop);
       try {
         const target = await readerAllowClick(path);
         if (target.kind === "dir") await openFolder(target.path);
-        else await show(target.path, { fragment, scrollTop, pageProblem: asTab, changes: view === "changes" });
+        else await show(target.path, { fragment, scrollTop, pageProblem: asTab, changes: view === "changes", crew: view === "crew" });
       } catch (e) {
         const message = readerErrorOf(e).message;
         // A click in the sidebar can open the panel with nothing in it yet — a pin whose file has since gone, say.
@@ -628,7 +705,7 @@ export function Reader({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [say, show, openDeleted],
+    [say, show, openDeleted, openCrewRow],
   );
 
   const loadImage = useCallback(async (img: HTMLImageElement, current: Doc) => {
@@ -849,7 +926,8 @@ export function Reader({
           hash: text.hash,
           lines: text.text.split("\n").length,
           text: text.text,
-          rendered: diffed?.rendered ?? renderDoc(text.text, current.render, current.ext, current.path),
+          // The crew's copy is the crew's text, not this file's: a save here leaves it as it is (crew marks).
+          rendered: crewRef.current ? current.rendered : (diffed?.rendered ?? renderDoc(text.text, current.render, current.ext, current.path)),
         };
         docRef.current = next;
         setDoc(next);
@@ -1050,10 +1128,29 @@ export function Reader({
       if (changesRef.current === null) void enterChanges(current);
       return;
     }
+    if (next === "crew") {
+      if (!crewRef.current) void enterCrew(current);
+      return;
+    }
     const kind = viewKindOf(current.render);
-    if (changesRef.current === null && (!kind || views[kind] === next)) return;
+    if (changesRef.current === null && !crewRef.current && (!kind || views[kind] === next)) return;
     if (kind) views[kind] = next;
     leaveChanges(current);
+  };
+
+  /** The crew's copy of the open file, from the toggle's fourth button (crew marks, rule 15). */
+  const enterCrew = async (current: Doc) => {
+    const gen = generation.current;
+    const crewed = await crewChangesOf(current.path);
+    const latest = docRef.current;
+    if (!crewed || gen !== generation.current || !latest || latest.path !== current.path) return;
+    pending.current = { mode: "new", fragment: null, scrollTop: 0 };
+    const next: Doc = { ...latest, rendered: crewed.rendered, crewText: crewed.text };
+    setChangesOn(null);
+    setCrewOn(true);
+    docRef.current = next;
+    setDoc(next);
+    say("Read-only: this is the crew's copy");
   };
 
   /** The open file's Changes view, from the toggle. */
@@ -1063,7 +1160,8 @@ export function Reader({
     const latest = docRef.current;
     if (!diffed || gen !== generation.current || !latest || latest.path !== current.path) return;
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };
-    const next: Doc = { ...latest, rendered: diffed.rendered };
+    const next: Doc = { ...latest, rendered: diffed.rendered, crewText: undefined };
+    setCrewOn(false);
     setChangesOn(diffed.since ?? "");
     docRef.current = next;
     setDoc(next);
@@ -1072,8 +1170,9 @@ export function Reader({
   /** The open file's usual view again: rendered or source, as its kind last chose. */
   const leaveChanges = (current: Doc) => {
     setChangesOn(null);
+    setCrewOn(false);
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };
-    const next: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path) };
+    const next: Doc = { ...current, rendered: renderDoc(current.text, current.render, current.ext, current.path), crewText: undefined };
     docRef.current = next;
     setDoc(next);
   };
@@ -1096,6 +1195,24 @@ export function Reader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openMark]);
 
+  // The open file lost its crew mark — the crew pushed, or its task ended — while showing the crew's copy: the usual
+  // view, or for a crew row, whose file is not in the captain's folder, one line saying so (crew marks, rule 7).
+  const openCrew = useCrewOf(doc?.path ?? null);
+  useEffect(() => {
+    const current = docRef.current;
+    if (openCrew || !crewRef.current || !current) return;
+    if (current.crew) {
+      const next: Doc = { ...current, rendered: renderRefusal("No changes by the crew any more"), text: "", crewText: "" };
+      docRef.current = next;
+      setDoc(next);
+      return;
+    }
+    leaveChanges(current);
+    say("No changes by the crew any more");
+    // Keyed on the crew mark alone, as above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCrew]);
+
   // A copy of the file, wherever Miguel says in the macOS save sheet. The page names the file and nothing else; the
   // sheet, the read and the write are all Rust's (reader/export.rs). Cancelling the sheet is not an event: it says
   // nothing. A refusal is shown in Rust's own words.
@@ -1103,8 +1220,9 @@ export function Reader({
     const current = docRef.current;
     if (!current) return;
     try {
-      // A deleted file's copy is what it said then, from the record (tree changes rule 22).
-      const result = await (current.deleted ? treeChangesExport(current.path) : readerExport(current.path));
+      // A deleted file's copy is what it said then, from the record (tree changes rule 22); the crew's copy is the
+      // crew's text (crew marks, rule 14).
+      const result = await (current.crew || crewRef.current ? treeChangesCrewExport(current.path) : current.deleted ? treeChangesExport(current.path) : readerExport(current.path));
       if (result.status === "saved") say(`Saved ${result.name}`);
     } catch (e) {
       say(readerErrorOf(e).message);
@@ -1125,9 +1243,11 @@ export function Reader({
   const copy = async () => {
     const current = docRef.current;
     if (!current) return;
-    if (current.text === "") return say("Nothing to copy");
-    if (new TextEncoder().encode(current.text).length > CLIPBOARD_MAX_BYTES) return say("Too large to copy (over 1 MiB)");
-    say((await writeClipboard(current.text)) ? "Copied" : "Could not copy");
+    // On the crew's copy, Copy takes the crew's text (crew marks, rule 14).
+    const text = crewRef.current ? (current.crewText ?? "") : current.text;
+    if (text === "") return say("Nothing to copy");
+    if (new TextEncoder().encode(text).length > CLIPBOARD_MAX_BYTES) return say("Too large to copy (over 1 MiB)");
+    say((await writeClipboard(text)) ? "Copied" : "Could not copy");
   };
 
   // Debug builds only: e2e proves a reload keeps the diagram's node (R30), and can see where focus went (R34).
@@ -1199,17 +1319,26 @@ export function Reader({
   // mark — a source file with a mark gets a toggle it never had, Source and Changes (tree changes rule 19). An image
   // has no Changes view.
   const hasChanges = doc !== null && doc.render !== "image" && (openMark !== null || changes !== null);
-  // A deleted file has nothing but what it said then: Changes alone (rule 19).
-  const offered: View[] = doc?.deleted
-    ? ["changes"]
-    : [...(viewKind ? (["rendered", "source"] as const) : hasChanges ? (["source"] as const) : []), ...(hasChanges ? (["changes"] as const) : [])];
+  // The crew's copy is offered while the open file has a crew mark (crew marks, rule 15).
+  const hasCrew = doc !== null && doc.render !== "image" && (openCrew !== null || crewOn);
+  // A deleted file has nothing but what it said then: Changes alone (rule 19). A crew row has nothing but the crew's.
+  const offered: View[] = doc?.crew
+    ? ["crew"]
+    : doc?.deleted
+      ? ["changes"]
+      : [
+          ...(viewKind ? (["rendered", "source"] as const) : hasChanges || hasCrew ? (["source"] as const) : []),
+          ...(hasChanges ? (["changes"] as const) : []),
+          ...(hasCrew ? (["crew"] as const) : []),
+        ];
   const noFile = doc ? null : "Open a file first";
   // What the print sheet gets is this document laid out for paper (styles/print.css). An image is not text to lay
   // out, and a rendered HTML page is a sandboxed frame, which prints as the clipped box it is — its source prints.
   const cannotPrint = noFile ?? (doc?.render === "image" ? "Images can't be printed from here" : doc?.render === "html" && views.html === "rendered" ? "Switch to Source to print" : null);
   // An item is listed once it exists: nothing here is a placeholder for a later phase.
   // A deleted file can be copied and downloaded — what it said then is how it is rescued — and nothing else (rule 22).
-  const gone = doc?.deleted ? "This file was deleted" : null;
+  // The crew's copy is read-only, and not the captain's to print, edit or pin (crew marks, rule 14).
+  const gone = doc?.deleted ? "This file was deleted" : doc && (doc.crew || crewOn) ? "This is the crew's copy" : null;
   const nothingKept = doc?.deleted && doc.text === "" ? "Kinas kept no copy of this file" : null;
   const menu: MenuItem[] = [
     { id: "download", label: downloadLabel(doc ? baseName(doc.path) : ""), disabledReason: noFile ?? nothingKept, onSelect: () => void download() },
@@ -1234,7 +1363,7 @@ export function Reader({
         title={doc?.path ?? folder ?? ""}
         showBadge={Boolean(doc)}
         views={offered.length > 0 ? offered : null}
-        view={changes !== null ? "changes" : viewKind ? views[viewKind] : offered.length > 0 ? "source" : null}
+        view={crewOn ? "crew" : changes !== null ? "changes" : viewKind ? views[viewKind] : offered.length > 0 ? "source" : null}
         onView={changeView}
         changesSince={openMark?.since ?? changes}
         files={filesButton && { ...filesButton, onToggle: toggle("files") }}
@@ -1363,7 +1492,7 @@ export function Reader({
           {!doc && !problem && !opening && folder && <p className="reader-note">Choose a file</p>}
           {/* data-render carries the mode to the stylesheet (source and images are not capped at a prose measure)
               and to the e2e, which asserts how a file opened. */}
-          <article className="reader-doc" data-render={doc?.render} data-view={changes !== null ? "changes" : undefined} ref={article} hidden={!doc}>
+          <article className="reader-doc" data-render={doc?.render} data-view={crewOn ? "crew" : changes !== null ? "changes" : undefined} ref={article} hidden={!doc}>
             {doc?.rendered.frontmatter && <FrontmatterCard view={doc.rendered.frontmatter} />}
             <div className="reader-body" ref={body} />
           </article>

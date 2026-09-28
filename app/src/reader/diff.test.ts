@@ -20,10 +20,22 @@ const view = (over: Partial<DiffView> = {}): DiffView => ({
   ],
   folds: [],
   baseline_text: null,
+  crew: null,
   ...over,
 });
 
 describe("the Changes view's markup (rules 21–25)", () => {
+  test("renderDiff_says_whose_on_the_crew_s_copy", () => {
+    // Crew marks, rule 14: whose instead of since when, how many tasks, and a crew row's lead.
+    const text = (html: string) => html.replace(/<[^>]+>/g, "");
+    expect(text(renderDiff(view({ crew: { tasks: 1, here: true } })).html)).toContain("+1 −1 The crew's copy, not pushed");
+    expect(text(renderDiff(view({ crew: { tasks: 1, here: true } })).html)).not.toContain("since");
+    expect(text(renderDiff(view({ crew: { tasks: 2, here: true } })).html)).toContain("The crew's copy, not pushed · 1 of 2 tasks");
+    expect(text(renderDiff(view({ mark: "A", crew: { tasks: 1, here: false } })).html)).toContain("Added by the crew — not in your folder");
+    expect(text(renderDiff(view({ mark: "M", crew: { tasks: 1, here: false } })).html)).toContain("Modified by the crew — not in your folder");
+    expect(text(renderDiff(view({ mark: "D", crew: { tasks: 1, here: true } })).html)).toContain("Deleted by the crew — what it said");
+  });
+
   test("renderDiff_escapes_text", () => {
     const html = renderDiff(view({ rows: [{ kind: "add", old: null, new: 1, text: `<img src=x onerror=alert(1)> & "q"`, fold: null }] })).html;
     expect(html).not.toContain("<img");

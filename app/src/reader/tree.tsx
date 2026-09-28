@@ -22,7 +22,7 @@ export type FolderActions = (path: string, name: string) => ReactNode;
 interface TreeProps {
   selected: string | null;
   /** `view`: a marked file's row opens it on its Changes view (tree changes rule 24); an unmarked one opens as always. */
-  onOpen: (path: string, view?: "changes") => void;
+  onOpen: (path: string, view?: "changes" | "crew") => void;
   folderActions?: FolderActions;
   marks: FolderMarks;
 }
@@ -87,7 +87,8 @@ function FileRow({ entry, selected, onOpen, marks }: TreeProps & { entry: Row })
           aria-current={entry.path === selected ? "true" : undefined}
           aria-label={label ?? undefined}
           title={entry.path}
-          onClick={() => !isCrewRow(entry) && onOpen(entry.path, mark ? "changes" : undefined)}
+          // The captain's own Changes first when both; a row with only a crew mark, or a crew row, opens the crew's copy.
+          onClick={() => onOpen(entry.path, mark ? "changes" : crew || isCrewRow(entry) ? "crew" : undefined)}
         >
           {entry.name}
         </button>

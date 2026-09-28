@@ -54,8 +54,11 @@ pub struct DiffView {
     pub removed: u32,
     pub rows: Vec<DiffRow>,
     pub folds: Vec<Fold>,
-    /// Some only for a deleted file: the text it had, which is what Copy copies (rule 22).
+    /// Some only for a deleted file: the text it had, which is what Copy copies (rule 22). On the crew's copy, the crew's
+    /// text: what Copy and Download take (crew marks, rule 14).
     pub baseline_text: Option<String>,
+    /// Some on the crew's copy (crew marks, rule 14): whose, and how many checkouts mark it.
+    pub crew: Option<super::crew::CrewOf>,
 }
 
 /// The diff ran out of time: rule 25 names both sizes instead.

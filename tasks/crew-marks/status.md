@@ -21,7 +21,10 @@
 - [x] Slice 2 · what counts, where it shows, and when it goes: rule 4 whole, crew rows, roll-ups, pushes and worktrees —
   2026-09-28, `bun run check` green (727 bun, 379 Rust); `crew-marks` 4 of 4, `tree-changes` 20 of 20, `-no-git` and
   `-watch-fail` green, run alone
-- [ ] Slice 3 · the crew's Changes view: the read-only door, the fourth view button, the guard, the stories
+- [x] Slice 3 · the crew's Changes view: the read-only door, the fourth view button, the guard, the stories —
+  2026-09-28, `bun run check` green (728 bun, 381 Rust); the guard's negative control failed as it must; `crew-marks`
+  5 of 5, `stories` 2 of 2 (its contract re-recorded byte-identical), `tree-changes` 20 of 20, `-no-git` and
+  `-watch-fail` green, run alone
 - [ ] Slice 4 · the edges and the record → ship point
 
 ## Notes for a fresh session

@@ -182,6 +182,9 @@ export const STORIES: Story[] = [
       { name: "deleted", node: withMark("old-plan.md", <ChangeMark mark="D" words="old-plan.md, deleted since 14:02" />) },
       { name: "rollup", node: withMark("docs", <ChangeMark mark="D" count={3} words="docs, 3 changes inside since 14:02" />) },
       { name: "rollup-many", node: withMark("app", <ChangeMark mark="M" count={150} words="app, 150 changes inside since 14:02" />) },
+      // Crew marks (1.9): the crew's form — the same letter with a hollow dot — and its roll-up.
+      { name: "crew", node: withMark("menu.tsx", <ChangeMark mark="M" words="menu.tsx, modified by the crew, not pushed" hollow />) },
+      { name: "crew-rollup", node: withMark("docs", <ChangeMark mark="D" count={2} words="docs, 2 changes by the crew inside, not pushed" hollow />) },
     ],
   },
   {
@@ -464,6 +467,8 @@ export const STORIES: Story[] = [
       { name: "deleted", node: <Diff view={GONE} language="markdown" /> },
       { name: "no-copy", node: <DiffRefusal text="Kinas kept no copy of this file from 14:02, so there is nothing to compare — the folder holds more text than Kinas keeps" /> },
       { name: "too-many", node: <DiffRefusal text="Too many changes to show — 1,204 lines then, 980 now" /> },
+      // Crew marks (1.9): the crew's copy says whose, and how many tasks mark it.
+      { name: "crew", node: <Diff view={{ ...EDITED, crew: { tasks: 2, here: true } }} language="markdown" /> },
     ],
   },
   {

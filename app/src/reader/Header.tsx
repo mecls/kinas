@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { ChangesIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../ui/icons.tsx";
+import { ChangesIcon, ChevronDownIcon, CloseIcon, CodeIcon, CollapseIcon, CrewCopyIcon, ExpandIcon, EyeIcon, FolderIcon, ListIcon } from "../ui/icons.tsx";
 import { extBadge, splitDisplayPath } from "./labels.ts";
 import { Menu, type MenuItem } from "../ui/Menu.tsx";
 
-/** Changes (tree changes rule 19) exists only while the open file has a mark: the reader says which views it offers. */
-export type View = "rendered" | "source" | "changes";
+/**
+ * Changes (tree changes rule 19) exists only while the open file has a mark, and the crew's copy (crew marks, rule 15)
+ * only while it has a crew mark: the reader says which views it offers.
+ */
+export type View = "rendered" | "source" | "changes" | "crew";
 
 /**
  * Files or Contents: wide, it hides and shows its section beside the text; narrow, it opens it over the text
@@ -93,6 +96,11 @@ export function Header({
               onClick={() => onView("changes")}
             >
               <ChangesIcon />
+            </button>
+          )}
+          {views.includes("crew") && (
+            <button type="button" className="reader-view-button" aria-label="The crew's" aria-pressed={view === "crew"} title="Show what the crew changed and hasn't pushed" onClick={() => onView("crew")}>
+              <CrewCopyIcon />
             </button>
           )}
         </div>

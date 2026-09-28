@@ -407,7 +407,7 @@ export function App() {
   // A click on a file in the sidebar. It goes to the reader as a `follow` — the path a click on the reader's own
   // tree takes — and never as a made-up `kinas open`, which would clear the open folder, skip the human-click door
   // and add a line to the log the 200 ms gate counts (three-column shell §6.14). It opens the panel if it is closed.
-  const openFromSidebar = useCallback((path: string, view?: "changes") => {
+  const openFromSidebar = useCallback((path: string, view?: "changes" | "crew") => {
     const seq = ++readerSeq.current;
     pending.current = { seq, target: null, leaving: null };
     setReader((r) => ({ ...r, open: true, expanded: r.open && r.expanded, request: { type: "follow", path, seq, view }, occupant: "reader" }));

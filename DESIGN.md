@@ -248,7 +248,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | Dot | solid, ring, cross |
 | Chip | cat-1, cat-2, cat-3, cat-4, cat-5, cat-6 |
 | Tag | internal, order |
-| ChangeMark | added, modified, deleted, rollup, rollup-many |
+| ChangeMark | added, modified, deleted, rollup, rollup-many, crew, crew-rollup |
 | Gauge | fine, warn, danger, stale, dead |
 | Bar | fine, warn, danger, stale, inline, segmented |
 | MetricRow | rows, attention |
@@ -260,7 +260,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | ProgressRow | list, quiet |
 | InboxItem | plan, decision, answering, copied, compact |
 | Timeline | task |
-| Diff | modified, deleted, no-copy, too-many |
+| Diff | modified, deleted, no-copy, too-many, crew |
 | Toast | success, error |
 | EmptyState | with-action, plain |
 | TerminalChrome | working, shell, first-mate |

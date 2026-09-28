@@ -636,8 +636,10 @@ export interface DiffView {
   removed: number;
   rows: DiffRow[];
   folds: { id: number; lines: number }[];
-  /** A deleted file's old text, which Copy copies; null otherwise. */
+  /** A deleted file's old text, which Copy copies; on the crew's copy, the crew's text; null otherwise. */
   baseline_text: string | null;
+  /** On the crew's copy (crew marks, rule 14): how many checkouts mark it, and whether the captain's folder has it. */
+  crew: { tasks: number; here: boolean } | null;
 }
 
 /**
@@ -650,6 +652,13 @@ export const treeChangesDiff = (path: string) => invoke<DiffView>("tree_changes_
  * else: Rust finds the text in its record, opens the save sheet and writes the bytes (reader/export.rs).
  */
 export const treeChangesExport = (path: string) => invoke<ReaderExported>("tree_changes_export", { path });
+/**
+ * The crew's copy of a file, read-only, on a Changes view (crew marks, rule 14): the crew's text against what its
+ * branch last pushed. Refused as `not_watched` for a path with no crew mark, `crew_gone` when its task has ended.
+ */
+export const treeChangesCrewDiff = (path: string) => invoke<DiffView>("tree_changes_crew_diff", { path });
+/** Download the crew's copy of a file, through the same door (crew marks, rule 14). */
+export const treeChangesCrewExport = (path: string) => invoke<ReaderExported>("tree_changes_crew_export", { path });
 export const onTreeChanged = (handler: (c: TreeChanges) => void): Promise<UnlistenFn> => listen<TreeChanges>("tree_changed", (e) => handler(e.payload));
 
 export const onOpenPalette = (handler: () => void): Promise<UnlistenFn> => listen("open_palette", handler);

@@ -370,6 +370,7 @@ fn diff_view(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> boo
         rows,
         folds,
         baseline_text: (mark == Mark::Deleted).then_some(before),
+        crew: None,
     })
 }
 

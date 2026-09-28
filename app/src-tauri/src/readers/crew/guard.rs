@@ -49,13 +49,15 @@ fn violations(files: &[(String, String)]) -> Vec<String> {
     for (path, text) in files {
         let crew = path.starts_with("crew/") || path.starts_with("readers/crew/");
         let typing_scope = crew || path == "herdr.rs";
+        // Crew marks read the crew's checkouts, and never write one (ADR 0019).
+        let writes_scope = crew || path == "reader/changes/crew.rs";
         for (n, line) in code_of(text) {
             if typing_scope {
                 for bad in TYPING.iter().filter(|b| line.contains(*b)) {
                     out.push(format!("{path}:{n}: types into a pane ({bad})"));
                 }
             }
-            if crew {
+            if writes_scope {
                 for bad in WRITES.iter().filter(|b| line.contains(*b)) {
                     out.push(format!("{path}:{n}: writes a file ({bad})"));
                 }
@@ -96,7 +98,7 @@ fn crate_sources() -> Vec<(String, String)> {
 #[test]
 fn no_typing_no_writes_three_scripts() {
     let files = crate_sources();
-    for scope in ["crew/launch.rs", "crew/firstmate.rs", "readers/crew/mirror.rs", "herdr.rs"] {
+    for scope in ["crew/launch.rs", "crew/firstmate.rs", "readers/crew/mirror.rs", "herdr.rs", "reader/changes/crew.rs"] {
         assert!(files.iter().any(|(p, t)| p == scope && t.len() > 500), "the guard is not reading {scope}");
     }
     assert_eq!(violations(&files), Vec::<String>::new());
@@ -113,6 +115,7 @@ fn the_guards_find_what_is_planted() {
         ("crew/home.rs", r#"std::fs::write(home.join("state/x"), "");"#),
         ("readers/crew/mirror.rs", "let f = OpenOptions::new().append(true).open(p);"),
         ("crew/config.rs", "std::fs::create_dir_all(home.join(\"data\"));"),
+        ("reader/changes/crew.rs", r#"std::fs::write(worktree.join("notes.md"), "");"#),
         ("crew/answer.rs", r#"script(home, "fm-send.sh", &[task, text]);"#),
         ("lib.rs", r#"let hold = "fm-captain-hold.sh";"#),
         ("crew/launch.rs", r#"let s = home.join("bin/fm-fleet-snapshot.sh");"#),

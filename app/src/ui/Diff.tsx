@@ -23,6 +23,11 @@ export interface DiffShape {
   removed: number;
   rows: DiffLine[];
   folds: { id: number; lines: number }[];
+  /**
+   * The crew's copy (1.9, crew marks): its summary says whose instead of since when, and a file the captain's folder
+   * lacks opens under a line that says so. Absent or null on the captain's own Changes.
+   */
+  crew?: { tasks: number; here: boolean } | null;
 }
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -52,11 +57,20 @@ export function diffHtml(view: DiffShape, language: string | null, since: string
       `<span class="ui-diff-no">${row.old ?? ""}</span><span class="ui-diff-no">${row.new ?? ""}</span>` +
       `<span class="ui-diff-sign">${SIGN[row.kind]}</span><pre><code${klass}>${esc(row.text)}</code></pre></div>`;
   }
-  const lead = view.mark === "D" ? `<p class="ui-diff-lead">Deleted since ${esc(since)} — what it said then</p>` : "";
+  const crew = view.crew ?? null;
+  const lead = crew ? crewLead(view.mark, crew.here) : view.mark === "D" ? `<p class="ui-diff-lead">Deleted since ${esc(since)} — what it said then</p>` : "";
+  const whose = crew ? `The crew's copy, not pushed${crew.tasks > 1 ? ` · 1 of ${crew.tasks} tasks` : ""}` : `since ${esc(since)}`;
   return (
-    `<div class="ui-diff"><p class="ui-diff-summary"><span class="ui-diff-count">+${view.added} −${view.removed}</span> ` +
-    `<span class="ui-diff-since">since ${esc(since)}</span></p>${lead}<div class="ui-diff-rows">${rows}</div></div>`
+    `<div class="ui-diff"${crew ? ' data-crew=""' : ""}><p class="ui-diff-summary"><span class="ui-diff-count">+${view.added} −${view.removed}</span> ` +
+    `<span class="ui-diff-since">${whose}</span></p>${lead}<div class="ui-diff-rows">${rows}</div></div>`
   );
+}
+
+/** The crew's lead line: a file the captain's folder lacks says so; a file the crew deleted shows what it said. */
+function crewLead(mark: "A" | "M" | "D", here: boolean): string {
+  if (mark === "D") return `<p class="ui-diff-lead">Deleted by the crew — what it said</p>`;
+  if (here) return "";
+  return `<p class="ui-diff-lead">${mark === "A" ? "Added" : "Modified"} by the crew — not in your folder</p>`;
 }
 
 /** One line in the diff's place when there is nothing to compare (rules 23, 25), in Rust's words. */

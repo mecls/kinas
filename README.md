@@ -134,6 +134,10 @@ and starts again; so does reloading the window. Kinas only watches: nothing is c
 Amended 2026-09-25 (tree changes clear on push): a mark goes by itself once its change is pushed to the branch's
 remote — Kinas reads this Mac's refs and never fetches — and a pull marks nothing. **↻** now clears only what is pushed
 or can never be pushed (ignored files, folders outside git), and a mark waiting for a push says "not pushed".
+Amended 2026-09-28 (crew marks): the tree also shows what the first mate's crew is changing in its own copies and
+hasn't pushed — the same letters with a **hollow** dot, a file the crew added as a dimmed row "not in your folder" —
+and a click shows the crew's copy, read-only. They follow the workers' saves and go when the crew pushes; Kinas never
+pulls their work into your folder.
 **Home** (⌘1) is the first page: the night's progress per
 client folder, what is waiting on you, the three usage gauges that decide the day and anything past its threshold.
 **Work** (⌘2) is the terminal under a slim chrome. **Usage** (⌘4) is one section per provider. **Crew** (⌘3) and

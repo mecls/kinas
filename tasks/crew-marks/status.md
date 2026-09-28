@@ -12,7 +12,9 @@
   `feat/crew-marks`
 
 ## Slices
-- [ ] Slice 0 · the probe, and docs first: ADR 0019, firstmate-home.md, DESIGN.md 1.9, keymap, README, smoke-test
+- [x] Slice 0 · the probe, and docs first: ADR 0019, firstmate-home.md, DESIGN.md 1.9, keymap, README, smoke-test —
+  2026-09-28; the probe passed (the crew clone's worktree list names its live `~/.treehouse` checkout); baseline
+  `bun run check` green (721 bun, 365 Rust); docs only after it, `bun test` green
 - [ ] Slice 1 · tracer bullet: a crew worktree's save marks the captain's row
 - [ ] Slice 2 · what counts, where it shows, and when it goes: rule 4 whole, crew rows, roll-ups, pushes and worktrees
 - [ ] Slice 3 · the crew's Changes view: the read-only door, the fourth view button, the guard, the stories

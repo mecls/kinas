@@ -1,7 +1,7 @@
 # 0018 · The first mate is Firstmate, adopted; Kinas runs only its read-only scripts and reads under its home only what is listed here
 
 Date: 2026-09-25
-Status: accepted
+Status: superseded by 0019
 
 ## Context
 

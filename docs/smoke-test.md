@@ -386,6 +386,22 @@ folder with no remote, as the fixture's `repo` is; the push's own lines follow i
       marks seen live on the installed build on 2026-09-25 (an amber dot and M on a file an agent was editing); the
       Changes view on code and both themes are still to look at — `in part, needs Miguel`
 
+## Crew marks
+
+What the first mate's crew has changed in its own checkouts and not pushed, marked on the captain's tree with a hollow
+dot (2026-09-28, `tasks/crew-marks/prd.md`; ADR 0019). The steps named are `crew-marks.e2e.ts`'s, as they are built.
+
+- [ ] A crew worktree's save marks the captain's row with a hollow M within 2 s, its words ending "by the crew, not
+      pushed", and the head says "The crew: 1 change not pushed" — `outstanding — crew 2`
+- [ ] A file the crew added is a dimmed crew row with a hollow A, "not in your folder" — `outstanding — crew 3`
+- [ ] A row with both marks opens the captain's Changes; "The crew's" shows the crew's copy, read-only — `outstanding —
+      crew 4`
+- [ ] The crew's push clears its marks within 2 s and leaves the captain's own — `outstanding — crew 5`
+- [ ] ↻ leaves crew marks alone, and a reload shows them again — `outstanding — crew 6`
+- [ ] Nothing about the crew's work reaches the log but counts — `outstanding — crew 7`
+- [ ] Median from a crew worktree's save to its hollow mark, over 10 saves: under 1 s — `outstanding — the crew timing`
+- [ ] A real crew task's save and push, seen on the installed build — `outstanding — needs the captain`
+
 ## The reader's layout
 
 The side column and the text, the reader's tabs, and the window's title bar (2026-09-24,

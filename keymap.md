@@ -123,6 +123,8 @@ and every ⌘ shortcut above, for a two-state control that lives in one header b
 **Expand** and **Close** are click-only for the same reason. If one starts being missed, that is the moment to
 add it — this file stays the gate. Amended 2026-09-23 (tree changes): the toggle's third button, **Changes**, shown
 while the open file has a change mark, is click-only too, and a fold's "N unchanged lines" row unfolds by click.
+Amended 2026-09-28 (crew marks, `tasks/crew-marks/prd.md`): the toggle's fourth button, **The crew's**, shown while
+the open file has a crew mark, is click-only as well.
 
 Amended 2026-09-23 (the reader's layout, `tasks/reader-layout/prd.md`): **Files** and **Contents**, now in the
 header at every width, and the side column's **edge** (drag to resize, double-click for 220 px) are click-only too,

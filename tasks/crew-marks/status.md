@@ -6,8 +6,9 @@
 - Gate 2 · Architecture: APPROVED 2026-09-28 — `architecture.md`, private, in the main checkout
   (`tasks/crew-marks/architecture.md`), with its four PRD clarifications written into `prd.md` as dated notes (rules
   1, 4, 11 and 14), and **ADR 0019**'s text (superseding 0018), to be written and locked in slice 0
-- Gate 3 · Program design: in progress — `build-spec.md` §11, private, in the main checkout
-- Gate 4 · Slice plan: pending
+- Gate 3 · Program design: APPROVED 2026-09-28 — `build-spec.md` §11, private, in the main checkout, approved as
+  written
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12
 
 ## Slices
 (Planned at Gate 4.)

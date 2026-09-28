@@ -222,6 +222,38 @@ impl Git {
         Ok(changed)
     }
 
+    /// The best common commit of `a` and `b` (`merge-base`), or None when they share none (exit 1): where a branch never
+    /// pushed left the remote's default branch.
+    pub fn merge_base(&self, repo: &Path, a: &str, b: &str) -> Result<Option<String>, GitError> {
+        match self.run(repo, "merge-base", &[a, b], None) {
+            Ok(out) => Ok(Some(String::from_utf8_lossy(&out).trim().to_string())),
+            Err(GitError { exit: Some(1) }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The blobs of these files at `commit` (`ls-tree -z --full-tree <commit> -- <paths>`), by absolute path. A path
+    /// `commit` does not hold is absent from the answer.
+    pub fn blobs_at(&self, repo: &Path, commit: &str, files: &[PathBuf]) -> Result<HashMap<PathBuf, String>, GitError> {
+        if files.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rels: Vec<String> = files.iter().map(|f| f.strip_prefix(repo).unwrap_or(f).to_string_lossy().into_owned()).collect();
+        let mut rest: Vec<&str> = vec!["-z", "--full-tree", commit, "--"];
+        rest.extend(rels.iter().map(String::as_str));
+        let out = self.run(repo, "ls-tree", &rest, None)?;
+        let mut blobs = HashMap::new();
+        for record in out.split(|&b| b == 0).filter(|r| !r.is_empty()) {
+            let Some(tab) = record.iter().position(|&b| b == b'\t') else { continue };
+            let meta = String::from_utf8_lossy(&record[..tab]);
+            let mut fields = meta.split(' ');
+            if let (Some(_mode), Some("blob"), Some(sha)) = (fields.next(), fields.next(), fields.next()) {
+                blobs.insert(repo.join(OsStr::from_bytes(&record[tab + 1..])), sha.to_string());
+            }
+        }
+        Ok(blobs)
+    }
+
     /// Files git does not track and does not ignore (`ls-files -z --others --exclude-standard`): a checkout's additions
     /// not yet committed.
     pub fn untracked(&self, repo: &Path) -> Result<Vec<PathBuf>, GitError> {
@@ -460,6 +492,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn merge_base_and_blobs_at_answer_for_a_branch_and_its_files() {
+        let (_dir, root) = temp();
+        repo_with(&root, &[("README.md", b"# Read me\n"), ("docs/a.md", b"# A\n")]);
+        let base = git(&root, &["rev-parse", "HEAD"]);
+        git(&root, &["checkout", "-q", "-b", "side"]);
+        std::fs::write(root.join("README.md"), "# Read me, on side\n").unwrap();
+        git(&root, &["commit", "-qam", "side"]);
+        let g = Git::find().expect("git is installed");
+        assert_eq!(g.merge_base(&root, "HEAD", "main"), Ok(Some(base.clone())));
+        // Unrelated history shares no commit.
+        git(&root, &["checkout", "-q", "--orphan", "alone"]);
+        git(&root, &["commit", "-q", "-m", "alone"]);
+        assert_eq!(g.merge_base(&root, "HEAD", "main"), Ok(None));
+        let blobs = g.blobs_at(&root, &base, &[root.join("README.md"), root.join("docs/a.md"), root.join("gone.md")]).unwrap();
+        assert_eq!(blobs.len(), 2, "a path the commit does not hold is absent");
+        assert_eq!(blobs[&root.join("docs/a.md")], git(&root, &["rev-parse", &format!("{base}:docs/a.md")]));
+    }
+
+    #[test]
     fn the_new_calls_never_write() {
         let (_dir, root) = temp();
         let repo = root.join("repo");
@@ -483,6 +534,8 @@ pub(crate) mod tests {
         let head = git(&repo, &["rev-parse", "HEAD"]);
         g.changed_since(&repo, &head).unwrap();
         g.untracked(&repo).unwrap();
+        g.merge_base(&repo, "HEAD", "refs/remotes/origin/main").unwrap();
+        g.blobs_at(&repo, &head, &[repo.join("README.md")]).unwrap();
         assert_eq!(state(), before, "no object, index, config or ref was written");
     }
 

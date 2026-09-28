@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChangeEntry, DirEntry, TreeChanges } from "../api.ts";
-import { captionFor, createChangesStore, crewWordsFor, folderMarksOf, mergeDeleted, rowWords, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
+import { captionFor, createChangesStore, crewCaption, crewWordsFor, folderMarksOf, mergeCrewRows, mergeDeleted, rowWords, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
 
 const at1402 = new Date(2026, 8, 23, 14, 2).getTime();
 
@@ -67,11 +67,19 @@ describe("the words a tree says (tree changes rules 8, 10 and 11)", () => {
     expect(rowWords("plan.md", "plan.md, modified since 11:44", null, null)).toBe("plan.md, modified since 11:44");
   });
 
+  test("crewCaption_counts_and_pluralises", () => {
+    // Crew marks, rule 13: a second line, only while the tree has crew marks.
+    const head = (crewTotal: number) => ({ total: 2, since: "11:44", watching: true, crewTotal });
+    expect(crewCaption(head(1))).toBe("The crew: 1 change not pushed");
+    expect(crewCaption(head(4))).toBe("The crew: 4 changes not pushed");
+    expect(crewCaption(head(0))).toBeNull();
+  });
+
   test("captionFor_counts_and_pluralises", () => {
-    expect(captionFor({ total: 1, since: "14:02", watching: true }, "kinas")).toBe("1 change since 14:02");
-    expect(captionFor({ total: 5, since: "14:02", watching: true }, "kinas")).toBe("5 changes since 14:02");
-    expect(captionFor({ total: 0, since: "14:02", watching: true }, "kinas")).toBeNull();
-    expect(captionFor({ total: 0, since: "14:02", watching: false }, "kinas")).toBe("Not following changes in kinas");
+    expect(captionFor({ total: 1, since: "14:02", watching: true, crewTotal: 0 }, "kinas")).toBe("1 change since 14:02");
+    expect(captionFor({ total: 5, since: "14:02", watching: true, crewTotal: 0 }, "kinas")).toBe("5 changes since 14:02");
+    expect(captionFor({ total: 0, since: "14:02", watching: true, crewTotal: 0 }, "kinas")).toBeNull();
+    expect(captionFor({ total: 0, since: "14:02", watching: false, crewTotal: 0 }, "kinas")).toBe("Not following changes in kinas");
   });
 });
 
@@ -136,6 +144,36 @@ describe("the marks a folder's rows read", () => {
     expect(pushed.sinceOf("/p/kinas/research/deep/idea.md")).toBe("15:31");
     expect(pushed.sinceOf("/p/kinas/docs")).toBe("14:02");
     expect(pushed.sinceOf("/p/kinas/README.md")).toBe("");
+  });
+
+  test("folderMarksOf_gives_crew_marks_rows_and_rollups", () => {
+    const crew = (path: string, mark: "A" | "M" | "D", here = true, kind: "file" | "dir" = "file", tasks = 1) => ({ path, kind, mark, tasks, here });
+    const marks = folderMarksOf(
+      summary({
+        crew: [crew("/p/kinas/README.md", "M"), crew("/p/kinas/docs/old.md", "D"), crew("/p/kinas/notes.md", "A", false), crew("/p/kinas/research", "A", false, "dir"), crew("/p/kinas/docs/zz.md", "M", false)],
+        crew_folders: [{ path: "/p/kinas/docs", count: 2, strongest: "D", since_ms: 0 }],
+        crew_total: 5,
+      }),
+      () => 0,
+    );
+    expect(marks.crewOf("/p/kinas/README.md")?.mark).toBe("M");
+    expect(marks.crewOf("/p/kinas/other.md")).toBeNull();
+    expect(marks.crewRollupOf("/p/kinas/docs")).toEqual({ path: "/p/kinas/docs", count: 2, strongest: "D", since_ms: 0 });
+    expect(marks.crewRowsIn("/p/kinas").map((e) => e.path)).toEqual(["/p/kinas/notes.md", "/p/kinas/research"]);
+    expect(marks.crewRowsIn("/p/kinas/docs").map((e) => e.path)).toEqual(["/p/kinas/docs/zz.md"]);
+    // The own marks are untouched by the crew's.
+    expect(marks.markOf("/p/kinas/README.md")).toBeNull();
+  });
+
+  test("mergeCrewRows_puts_crew_rows_in_list_dir_order", () => {
+    const entries = [listed("/p/kinas/docs", "dir"), listed("/p/kinas/b.md"), listed("/p/kinas/d.md")];
+    const rows = [
+      { path: "/p/kinas/research", kind: "dir" as const, mark: "A" as const, tasks: 1, here: false },
+      { path: "/p/kinas/c.md", kind: "file" as const, mark: "A" as const, tasks: 1, here: false },
+      { path: "/p/kinas/b.md", kind: "file" as const, mark: "M" as const, tasks: 1, here: false },
+    ];
+    expect(mergeCrewRows(entries, rows).map((r) => `${"crewRow" in r ? "crew " : ""}${r.name}`)).toEqual(["docs", "crew research", "b.md", "crew c.md", "d.md"]);
+    expect(mergeCrewRows(entries, [])).toBe(entries);
   });
 
   test("a row waits for a push as its entry, or its added folder, says", () => {

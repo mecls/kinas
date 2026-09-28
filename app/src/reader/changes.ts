@@ -11,6 +11,8 @@ export interface TreeSummary {
   /** The baseline, local, "14:02". */
   since: string;
   watching: boolean;
+  /** The crew's marks on this tree (crew marks): never "since", counted apart. */
+  crewTotal: number;
 }
 
 /** What a tree's rows need, for one root. */
@@ -34,6 +36,8 @@ export interface FolderMarks {
   crewOf(path: string): CrewEntry | null;
   /** A folder's crew roll-up, or null. */
   crewRollupOf(path: string): FolderRollup | null;
+  /** The crew rows in `dir`: what the crew added or rewrote that the captain's folder lacks (crew marks, rule 11). */
+  crewRowsIn(dir: string): CrewEntry[];
 }
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
@@ -82,11 +86,37 @@ export function rowWords(name: string, own: string | null, entry: CrewEntry | nu
   return own ?? (crew ? `${name}, ${crew}` : null);
 }
 
+/** The crew's line under a tree's head (crew marks, rule 13): "The crew: 4 changes not pushed", or null. */
+export function crewCaption(summary: TreeSummary): string | null {
+  if (summary.crewTotal === 0) return null;
+  return `The crew: ${summary.crewTotal} ${summary.crewTotal === 1 ? "change" : "changes"} not pushed`;
+}
+
 /** The line under a tree's head: "1 change since 14:02", or why there are no marks; null when there is nothing to say. */
 export function captionFor(summary: TreeSummary, name: string): string | null {
   if (!summary.watching) return `Not following changes in ${name}`;
   if (summary.total === 0) return null;
   return `${summary.total} ${summary.total === 1 ? "change" : "changes"} since ${summary.since}`;
+}
+
+/** A crew row: a path the crew added or rewrote that the captain's folder does not have, drawn in its sorted place. */
+export type CrewRow = CrewEntry & { name: string; crewRow: true };
+
+/** A folder's listing with its crew rows put in, in `list_dir`'s order, as `mergeDeleted` puts the deleted ones back. */
+export function mergeCrewRows<T extends { name: string; path: string; kind: ReaderKind }>(entries: T[], rows: CrewEntry[]): (T | CrewRow)[] {
+  const present = new Set(entries.map((e) => e.path));
+  const crew: CrewRow[] = rows
+    .filter((r) => !present.has(r.path))
+    .map((r) => ({ ...r, name: baseName(r.path), crewRow: true as const }))
+    .sort(listOrder);
+  if (crew.length === 0) return entries;
+  const merged: (T | CrewRow)[] = [];
+  let c = 0;
+  for (const entry of entries) {
+    while (c < crew.length && listOrder(crew[c]!, entry) < 0) merged.push(crew[c++]!);
+    merged.push(entry);
+  }
+  return [...merged, ...crew.slice(c)];
 }
 
 /** A deleted entry drawn where it was. */
@@ -127,6 +157,12 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
   const byPath = new Map(summary.entries.map((entry) => [entry.path, entry]));
   const rollups = new Map(summary.folders.map((rollup) => [rollup.path, rollup]));
   const crew = new Map(summary.crew.map((entry) => [entry.path, entry]));
+  const crewRows = new Map<string, CrewEntry[]>();
+  for (const entry of summary.crew) {
+    if (entry.here) continue;
+    const dir = parentOf(entry.path);
+    crewRows.set(dir, [...(crewRows.get(dir) ?? []), entry]);
+  }
   const crewFolders = new Map(summary.crew_folders.map((rollup) => [rollup.path, rollup]));
   const added = summary.entries.filter((e) => e.kind === "dir" && e.mark === "A");
   const addedAbove = (path: string) => added.find((dir) => path.startsWith(`${dir.path}/`));
@@ -148,10 +184,11 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
     waitsOf: (path) => (byPath.get(path) ?? addedAbove(path))?.waits ?? false,
     crewOf: (path) => crew.get(path) ?? null,
     crewRollupOf: (path) => crewFolders.get(path) ?? null,
+    crewRowsIn: (dir) => crewRows.get(dir) ?? [],
   };
 }
 
-const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false, crewOf: () => null, crewRollupOf: () => null };
+const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false, crewOf: () => null, crewRollupOf: () => null, crewRowsIn: () => [] };
 
 /** How many of a root's marks wait for a push, an added folder counting once (the palette's "2 changes not pushed yet"). */
 export const waitingCount = (summary: TreeChanges): number => summary.entries.filter((e) => e.waits).length;
@@ -263,7 +300,7 @@ function useSummary(root: string | null): TreeChanges | null {
 
 export function useTreeChanges(root: string | null): TreeSummary | null {
   const summary = useSummary(root);
-  return useMemo(() => (summary ? { total: summary.total, since: sinceLabel(summary.since_ms), watching: summary.watching } : null), [summary]);
+  return useMemo(() => (summary ? { total: summary.total, since: sinceLabel(summary.since_ms), watching: summary.watching, crewTotal: summary.crew_total } : null), [summary]);
 }
 
 /** A file's mark now, outside React: the reader asks it before choosing the door a click goes through. */

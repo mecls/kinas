@@ -162,20 +162,45 @@ pub(super) fn unpushed(git: &Git, wt: &Worktree) -> (Base, CrewMarks) {
             'D' => Mark::Deleted,
             _ => Mark::Modified,
         };
-        // A binary, or a path that is not a file now, is not something the tree lists.
-        if mark != Mark::Deleted && !listable_file(&path) {
+        // A binary, or a path that is not a file now, is not something the tree lists; a deleted one is judged by what it
+        // was at the base.
+        let listed = if mark == Mark::Deleted { was_listed(git, top, &commit, &path) } else { listable_file(&path) };
+        if !listed {
             continue;
         }
         if let Ok(rel) = path.strip_prefix(top) {
             marks.insert(rel.to_path_buf(), (Kind::File, mark));
         }
     }
+    // `diff-index` reads the index's stat data, unrefreshed: a file only touched reads as M. Git's hash of it against
+    // the base's blob says whether it really differs — and git failing here is no guess either.
+    let ms: Vec<PathBuf> = marks.iter().filter(|(_, (_, m))| *m == Mark::Modified).map(|(rel, _)| top.join(rel)).collect();
+    if !ms.is_empty() {
+        let (Ok(blobs), Ok(hashes)) = (git.blobs_at(top, &commit, &ms), git.hash_objects(top, &ms)) else {
+            return (Base::Unknown, CrewMarks::new());
+        };
+        for (path, hash) in ms.iter().zip(hashes) {
+            if blobs.get(path) == Some(&hash) {
+                if let Ok(rel) = path.strip_prefix(top) {
+                    marks.remove(rel);
+                }
+            }
+        }
+    }
     (base, marks)
 }
 
+/// Whether a file deleted since the base was one the tree listed: an image, or text by its blob's head (rule 5). With
+/// no answer from git, it counts as listed — the checkout's other reads decide whether it is readable at all.
+fn was_listed(git: &Git, top: &Path, commit: &str, path: &Path) -> bool {
+    crate::reader::access::is_image(path)
+        || git.blob_text(top, commit, path).map_or(true, |bytes| crate::reader::access::sniff(&bytes[..bytes.len().min(crate::reader::access::SNIFF_BYTES)]) == crate::reader::access::Content::Text)
+}
+
 /// The commit a checkout's branch last pushed: its upstream, else `origin/<branch>` (the tree changes clear on push
-/// order). A detached checkout, or a clone with no remote, is measured against its own HEAD: only what is not
-/// committed counts. A branch never pushed is `Unknown` for now; git failing is `Unknown` always.
+/// order); a branch never pushed, where it left the remote's default branch (its merge-base with `origin/HEAD`). A
+/// detached checkout, or a clone with no remote, is measured against its own HEAD: only what is not committed counts.
+/// Git failing is `Unknown`.
 fn base_of(git: &Git, wt: &Worktree) -> Base {
     let head = || git.commit_of(&wt.top, "HEAD").ok().flatten().map_or(Base::Unknown, Base::Head);
     let Some(branch) = &wt.branch else { return head() };
@@ -185,7 +210,20 @@ fn base_of(git: &Git, wt: &Worktree) -> Base {
     });
     match found {
         Ok(Some(commit)) => Base::Commit(commit),
-        Ok(None) if git.has_remote(&wt.top) == Ok(false) => head(),
+        Ok(None) => match git.has_remote(&wt.top) {
+            Ok(false) => head(),
+            Ok(true) => never_pushed(git, &wt.top),
+            Err(_) => Base::Unknown,
+        },
+        Err(_) => Base::Unknown,
+    }
+}
+
+/// A branch never pushed: measured from where it left the remote's default branch.
+fn never_pushed(git: &Git, top: &Path) -> Base {
+    let Ok(Some(default)) = git.commit_of(top, "refs/remotes/origin/HEAD") else { return Base::Unknown };
+    match git.merge_base(top, "HEAD", &default) {
+        Ok(Some(fork)) => Base::Commit(fork),
         _ => Base::Unknown,
     }
 }
@@ -241,9 +279,11 @@ pub(super) fn install_scan(state: &ChangesState, repo: &str, common: Option<Path
     (new, dropped, unknown)
 }
 
-/// Rules 3, 6 and 9: one root's crew view. Each paired repository top's crew marks map to the same path under it;
-/// several checkouts on one path give one mark, the strongest, with their count, and the text is read from the one
-/// that changed it last. Only paths under the root, and — for now — only paths the captain's folder has.
+/// Rules 3, 6, 9, 11 and 12: one root's crew view. Each paired repository top's crew marks map to the same path under
+/// it; several checkouts on one path give one mark, the strongest, with their count, and the text is read from the one
+/// that changed it last. Only paths under the root. On the captain's side: a path their folder has is marked where it
+/// is; one it lacks, added or rewritten by the crew, is a crew row — or, when a folder above it is missing too, the
+/// highest such folder is one crew row standing for everything in it; one it lacks that the crew deleted is nothing.
 pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashMap<String, Vec<Snap>>) -> CrewView {
     struct Acc {
         kind: Kind,
@@ -278,12 +318,35 @@ pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashM
             }
         }
     }
-    // The captain's side: a path their folder does not have gets no row yet.
-    acc.retain(|path, _| Stat::of(path).is_some());
-    let marks: BTreeMap<PathBuf, (Kind, Mark)> = acc.iter().map(|(p, a)| (p.clone(), (a.kind, a.mark))).collect();
+    // The captain's side.
+    let mut shown: BTreeMap<PathBuf, (Kind, Mark, u32, bool)> = BTreeMap::new();
+    for (path, a) in &acc {
+        if Stat::of(path).is_some() {
+            shown.insert(path.clone(), (a.kind, a.mark, a.tasks, true));
+            continue;
+        }
+        if a.mark == Mark::Deleted {
+            continue;
+        }
+        let missing = path.ancestors().skip(1).take_while(|p| *p != root && p.starts_with(root)).filter(|p| Stat::of(p).is_none()).last();
+        match missing {
+            Some(dir) => {
+                let row = shown.entry(dir.to_path_buf()).or_insert((Kind::Dir, a.mark, a.tasks, false));
+                row.1 = compare::strongest(row.1, a.mark);
+                row.2 = row.2.max(a.tasks);
+            }
+            None => {
+                shown.insert(path.clone(), (a.kind, a.mark, a.tasks, false));
+            }
+        }
+    }
+    // A crew row of kind folder stands for everything in it: nothing beneath it is its own row (rule 11).
+    let rows: BTreeSet<PathBuf> = shown.iter().filter(|(_, (kind, _, _, here))| *kind == Kind::Dir && !here).map(|(p, _)| p.clone()).collect();
+    shown.retain(|path, _| !path.ancestors().skip(1).any(|a| rows.contains(a)));
+    let marks: BTreeMap<PathBuf, (Kind, Mark)> = shown.iter().map(|(p, &(kind, mark, _, _))| (p.clone(), (kind, mark))).collect();
     let (folders, total) = compare::rollups(root, &marks, &|_| 0);
     CrewView {
-        entries: acc.iter().map(|(p, a)| CrewEntry { path: p.display().to_string(), kind: a.kind, mark: a.mark, tasks: a.tasks, here: true }).collect(),
+        entries: shown.iter().map(|(p, &(kind, mark, tasks, here))| CrewEntry { path: p.display().to_string(), kind, mark, tasks, here }).collect(),
         folders,
         total,
         sources: acc.into_iter().map(|(p, a)| (p, a.source)).collect(),
@@ -294,9 +357,14 @@ pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashM
 /// derive from, under the guard; the derivation and its stats, without; the install, under it again. Answers the
 /// summaries to emit.
 pub(super) fn refresh_views(state: &ChangesState, repo: &str) -> Vec<TreeChanges> {
+    refresh_roots(state, &|r| r.crew_repos.iter().any(|(_, x)| x == repo))
+}
+
+/// The crew views of the roots `which` picks, derived again and installed where they changed.
+fn refresh_roots(state: &ChangesState, which: &dyn Fn(&super::Record) -> bool) -> Vec<TreeChanges> {
     let (roots, snaps) = {
         let changes = state.lock();
-        let roots: Vec<(PathBuf, Vec<(PathBuf, String)>)> = changes.roots.values().filter(|r| r.crew_repos.iter().any(|(_, x)| x == repo)).map(|r| (r.root.clone(), r.crew_repos.clone())).collect();
+        let roots: Vec<(PathBuf, Vec<(PathBuf, String)>)> = changes.roots.values().filter(|r| which(r)).map(|r| (r.root.clone(), r.crew_repos.clone())).collect();
         let wanted: BTreeSet<&String> = roots.iter().flat_map(|(_, tops)| tops.iter().map(|(_, x)| x)).collect();
         let snaps: HashMap<String, Vec<Snap>> = wanted
             .into_iter()
@@ -357,11 +425,68 @@ pub(super) fn attach(app: &AppHandle, root: &Path) {
     for (repo, clone) in pair_root(&state, root, &home) {
         start_project(app, repo, clone, git.clone());
     }
-    let repos: BTreeSet<String> = state.lock().roots.get(root).map(|r| r.crew_repos.iter().map(|(_, x)| x.clone()).collect()).unwrap_or_default();
-    for repo in repos {
-        for summary in refresh_views(&state, &repo) {
-            let _ = app.emit(TREE_CHANGED, summary);
+    let only = root.to_path_buf();
+    for summary in refresh_roots(&state, &|r| r.root == only) {
+        let _ = app.emit(TREE_CHANGED, summary);
+    }
+    watch_projects(app, &home, git);
+}
+
+/// A clone added under `projects/` (the crew took a project on) or removed: every watched root is paired again, a
+/// project new to them started, and every view derived again — a root that no longer pairs loses its crew marks.
+pub(super) fn repair(state: &ChangesState, home: &Path) -> (Vec<(String, PathBuf)>, Vec<TreeChanges>) {
+    let roots: Vec<PathBuf> = state.lock().roots.keys().cloned().collect();
+    let starts = roots.iter().flat_map(|root| pair_root(state, root, home)).collect();
+    (starts, refresh_roots(state, &|_| true))
+}
+
+/// The one non-recursive watch on `<home>/projects/`: names only (ADR 0019), started once, debounced 500 ms.
+fn watch_projects(app: &AppHandle, home: &Path, git: Git) {
+    let state = app.state::<ChangesState>();
+    if state.lock().crew_home.is_some() {
+        return;
+    }
+    let (tx, rx) = mpsc::channel::<CrewHeard>();
+    let watched = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        if event.is_ok() {
+            let _ = tx.send(CrewHeard::Git);
         }
+    })
+    .and_then(|mut w| w.watch(&home.join("projects"), RecursiveMode::NonRecursive).map(|()| w));
+    let watcher = match watched {
+        Ok(watcher) => watcher,
+        Err(e) => {
+            log::warn!("tree changes: could not watch a crew checkout ({})", super::error_kind(&e));
+            return;
+        }
+    };
+    let spare = {
+        let mut changes = state.lock();
+        if changes.crew_home.is_some() {
+            Some(watcher)
+        } else {
+            changes.crew_home = Some(watcher);
+            None
+        }
+    };
+    if spare.is_some() {
+        return;
+    }
+    let (app, home) = (app.clone(), home.to_path_buf());
+    let spawned = std::thread::Builder::new().name("tree-changes-crew-home".into()).spawn(move || {
+        while debounce_crew(&rx, Duration::from_millis(500), Duration::from_secs(2)).is_some() {
+            let state = app.state::<ChangesState>();
+            let (starts, summaries) = repair(&state, &home);
+            for (repo, clone) in starts {
+                start_project(&app, repo, clone, git.clone());
+            }
+            for summary in summaries {
+                let _ = app.emit(TREE_CHANGED, summary);
+            }
+        }
+    });
+    if let Err(e) = spawned {
+        log::error!("tree changes: could not start the crew's home thread: {e}");
     }
 }
 
@@ -630,5 +755,171 @@ pub(super) mod tests {
         assert_eq!(crew_marked(&state, &captain), Vec::<String>::new());
         // The captain's own marks were never touched.
         assert!(state.lock().roots[&captain].marks.is_empty());
+    }
+
+    fn marks_of(g: &Git, top: &Path) -> (Base, Vec<String>) {
+        let wt = Worktree { top: top.to_path_buf(), head: None, branch: g.branch(top).ok().flatten() };
+        let (base, marks) = unpushed(g, &wt);
+        (base, marks.iter().map(|(rel, (_, m))| format!("{} {}", serde_json::to_value(m).unwrap().as_str().unwrap(), rel.display())).collect())
+    }
+
+    #[test]
+    fn unpushed_follows_rule_four() {
+        let (dir, _captain, _home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n")]);
+        let g = Git::find().expect("git is installed");
+        let base = dir.path().canonicalize().unwrap();
+        // Against the upstream: committed-unpushed and uncommitted alike; put back is no mark.
+        std::fs::write(worktree.join("README.md"), "# Shop, committed\n").unwrap();
+        git(&worktree, &["commit", "-qam", "one"]);
+        std::fs::write(worktree.join("docs/plan.md"), "# Plan, edited\n").unwrap();
+        std::fs::write(worktree.join("docs/plan.md"), "# Plan\n").unwrap();
+        std::fs::write(worktree.join("new.md"), "# New\n").unwrap();
+        let (b, marks) = marks_of(&g, &worktree);
+        assert!(matches!(b, Base::Commit(_)));
+        assert_eq!(marks, ["M README.md", "A new.md"]);
+
+        // A branch never pushed: from where it left the remote's default branch.
+        let fresh = base.join("treehouse/shop-1/2/shop");
+        git(&clone, &["worktree", "add", "-q", &fresh.to_string_lossy(), "-b", "fm/fresh"]);
+        std::fs::write(fresh.join("docs/plan.md"), "# Plan, fresh\n").unwrap();
+        git(&fresh, &["commit", "-qam", "fresh"]);
+        let fork = git(&clone, &["rev-parse", "origin/HEAD"]);
+        let (b, marks) = marks_of(&g, &fresh);
+        assert_eq!((b, marks), (Base::Commit(fork), vec!["M docs/plan.md".to_string()]));
+
+        // Detached: only what is not committed.
+        let loose = base.join("treehouse/shop-1/3/shop");
+        git(&clone, &["worktree", "add", "-q", "--detach", &loose.to_string_lossy()]);
+        std::fs::write(loose.join("README.md"), "# Shop, detached commit\n").unwrap();
+        git(&loose, &["commit", "-qam", "detached"]);
+        std::fs::write(loose.join("docs/plan.md"), "# Plan, not committed\n").unwrap();
+        let (b, marks) = marks_of(&g, &loose);
+        assert!(matches!(b, Base::Head(_)));
+        assert_eq!(marks, ["M docs/plan.md"]);
+    }
+
+    #[test]
+    fn a_stale_stat_is_not_a_crew_m() {
+        let (_dir, _captain, _home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        std::thread::sleep(Duration::from_millis(1100));
+        // Rewritten with the same bytes: a new modification time, the same text.
+        std::fs::write(worktree.join("README.md"), "# Shop\n").unwrap();
+        assert_eq!(marks_of(&g, &worktree).1, Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_crew_filter_is_the_tree_s() {
+        let (_dir, _captain, _home, _clone, worktree) = crew_fixture(&[(".gitignore", b"notes/\n"), ("README.md", b"# Shop\n"), ("logo.bin", b"\x00\x01\x02")]);
+        let g = Git::find().expect("git is installed");
+        std::fs::create_dir_all(worktree.join("notes")).unwrap();
+        std::fs::write(worktree.join("notes/n.md"), "# Ignored\n").unwrap();
+        std::fs::create_dir_all(worktree.join("node_modules")).unwrap();
+        std::fs::write(worktree.join("node_modules/x.md"), "# Hidden\n").unwrap();
+        std::fs::write(worktree.join(".hidden.md"), "# Hidden\n").unwrap();
+        std::fs::write(worktree.join("new.bin"), b"\x00\x09").unwrap();
+        std::fs::write(worktree.join("logo.bin"), b"\x00\x01\x03").unwrap();
+        std::fs::remove_file(worktree.join("README.md")).unwrap();
+        assert_eq!(marks_of(&g, &worktree).1, ["D README.md"], "only what the tree would list");
+    }
+
+    #[test]
+    fn a_checkout_git_cannot_read_marks_nothing() {
+        let g = Git::find().expect("git is installed");
+        let wt = Worktree { top: PathBuf::from("/nonexistent/kinas-test"), head: None, branch: Some("main".into()) };
+        assert_eq!(unpushed(&g, &wt), (Base::Unknown, CrewMarks::new()));
+        // Counted, and nothing installed for it.
+        let state = ChangesState::default();
+        state.lock().crew.insert("kinas-test/shop".into(), CrewProject::new());
+        let (_, _, unknown) = install_scan(&state, "kinas-test/shop", None, vec![(wt.top.clone(), Base::Unknown, CrewMarks::new())], true, 1_000);
+        assert_eq!(unknown, 1);
+    }
+
+    #[test]
+    fn two_checkouts_on_one_path_are_one_mark_the_strongest() {
+        let (dir, captain, home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        let second = dir.path().canonicalize().unwrap().join("treehouse/shop-1/2/shop");
+        git(&clone, &["worktree", "add", "-q", &second.to_string_lossy(), "-b", "fm/second"]);
+        git(&second, &["push", "-q", "-u", "origin", "fm/second"]);
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        std::fs::write(worktree.join("README.md"), "# Shop, rewritten\n").unwrap();
+        std::fs::remove_file(second.join("README.md")).unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        assert_eq!(crew_marked(&state, &captain), ["D README.md 2"], "deleted over modified, two tasks");
+    }
+
+    #[test]
+    fn crew_rows_for_what_the_captain_lacks() {
+        let (_dir, captain, home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n"), ("docs/x.md", b"# X\n")]);
+        let g = Git::find().expect("git is installed");
+        // The captain's folder lacks two files the crew's base has.
+        std::fs::remove_file(captain.join("docs/plan.md")).unwrap();
+        std::fs::remove_file(captain.join("docs/x.md")).unwrap();
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        std::fs::write(worktree.join("notes.md"), "# Notes\n").unwrap();
+        std::fs::create_dir_all(worktree.join("research/deep")).unwrap();
+        std::fs::write(worktree.join("research/a.md"), "# A\n").unwrap();
+        std::fs::write(worktree.join("research/deep/b.md"), "# B\n").unwrap();
+        std::fs::write(worktree.join("docs/plan.md"), "# Plan, rewritten by the crew\n").unwrap();
+        std::fs::remove_file(worktree.join("docs/x.md")).unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        let view = state.lock().roots[&captain].crew.clone();
+        let shown: Vec<String> = view.entries.iter().map(|e| format!("{} {:?} {} here={}", serde_json::to_value(e.mark).unwrap().as_str().unwrap(), e.kind, Path::new(&e.path).strip_prefix(&captain).unwrap().display(), e.here)).collect();
+        assert_eq!(shown, ["M File docs/plan.md here=false", "A File notes.md here=false", "A Dir research here=false"], "an added folder counts once; a deletion the captain lacks is nothing");
+        assert_eq!(view.total, 3);
+        assert_eq!(view.folders.len(), 1, "docs rolls up its crew row");
+    }
+
+    #[test]
+    fn derive_view_maps_paths_under_the_root_only() {
+        let (_dir, captain, home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n")]);
+        let g = Git::find().expect("git is installed");
+        let docs = captain.join("docs");
+        let (state, repo, clone) = crew_watched(&docs, &home, &g);
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew\n").unwrap();
+        std::fs::write(worktree.join("docs/plan.md"), "# Plan, by the crew\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        assert_eq!(crew_marked(&state, &docs), ["M plan.md 1"], "README.md is above the root");
+    }
+
+    #[test]
+    fn a_removed_worktree_takes_its_marks() {
+        let (_dir, captain, home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        assert_eq!(crew_marked(&state, &captain), ["M README.md 1"]);
+        git(&clone, &["worktree", "remove", "--force", &worktree.to_string_lossy()]);
+        crew_rescan(&state, &repo, &clone, &g, 7_000);
+        assert_eq!(crew_marked(&state, &captain), Vec::<String>::new());
+        assert_eq!(state.lock().crew[&repo].checkouts.len(), 1, "only the clone is left");
+    }
+
+    #[test]
+    fn a_clone_added_under_projects_pairs_at_the_next_repair() {
+        let (dir, captain, home, _clone, _worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        // A second repository of the captain's, with no crew clone yet.
+        let base = dir.path().canonicalize().unwrap();
+        let remote = base.join("other.git");
+        std::fs::create_dir(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare"]);
+        let url = "https://github.com/kinas-test/other.git";
+        let instead = format!("url.{}.insteadOf", remote.display());
+        let other = base.join("root/other");
+        std::fs::create_dir_all(&other).unwrap();
+        repo_with(&other, &[("a.md", b"# A\n")]);
+        git(&other, &["remote", "add", "origin", url]);
+        git(&other, &["config", &instead, url]);
+        git(&other, &["push", "-q", "-u", "origin", "main"]);
+        let (state, _, _) = crew_watched(&captain, &home, &g);
+        state.lock().roots.insert(other.clone(), super::super::Record::new(other.clone(), 1_000, 0));
+        install_with_git(&state, &other, &g);
+        assert_eq!(pair_root(&state, &other, &home), vec![], "no crew clone of it yet");
+        git(&home.join("projects"), &["-c", &format!("{instead}={url}"), "clone", "-q", url, "other"]);
+        let (starts, _) = repair(&state, &home);
+        assert_eq!(starts, vec![("kinas-test/other".to_string(), home.join("projects/other"))]);
     }
 }

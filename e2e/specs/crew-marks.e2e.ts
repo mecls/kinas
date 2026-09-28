@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { waitForShell } from "../helpers.ts";
-import { TOKEN, worktreeOf } from "./crew-marks.setup.ts";
+import { git, TOKEN, worktreeOf } from "./crew-marks.setup.ts";
 
 // Crew marks (tasks/crew-marks/prd.md §5): what the first mate's crew has changed in its own worktree and not pushed,
 // marked on the captain's own tree with a hollow dot. Everything is read inside the page: a lookup costs seconds under
@@ -30,6 +30,8 @@ interface Row {
   /** The crew's mark as drawn: its colour and letter, and whether its dot is the ring. */
   crewDrawn: string | null;
   crewTooltip: string | null;
+  /** A crew row: a path the captain's folder lacks. */
+  crewRow: boolean;
 }
 
 /** The sidebar's Files rows as the page draws them. */
@@ -46,12 +48,14 @@ const rows = () =>
         crew: row.dataset.crew ?? null,
         crewDrawn: crew ? `${crew.dataset.mark} ${crew.textContent} ${crew.querySelector(".ui-dot")?.getAttribute("data-kind") ?? crew.querySelector("[data-kind]")?.getAttribute("data-kind") ?? ""}`.trim() : null,
         crewTooltip: crew?.title ?? null,
+        crewRow: row.dataset.crewRow !== undefined,
       };
     }),
   ) as Promise<Row[]>;
 
 const row = async (name: string) => (await rows()).find((r) => r.name === name);
-const crewMarked = async () => (await rows()).filter((r) => r.crew !== null).map((r) => `${r.name} ${r.crew}`);
+const crewMarked = async () => (await rows()).filter((r) => r.crew !== null).map((r) => `${r.name} ${r.crew}${r.crewRow ? " row" : ""}`);
+const crewCaption = () => browser.execute(() => document.querySelector(".sidebar .reader-files .tree-crew")?.textContent ?? null);
 
 async function until(check: () => Promise<boolean>, what: string, timeout = CEILING) {
   await browser.waitUntil(check, { timeout, interval: 100, timeoutMsg: `${what} within ${timeout} ms: ${JSON.stringify(await rows())}` });
@@ -83,5 +87,26 @@ describe("Crew marks", () => {
     expect(r.label).toBe(`${README}, modified by the crew, not pushed`);
     expect(r.crewTooltip).toBe(`${README}, modified by the crew, not pushed`);
     expect(r.crewDrawn).toBe("M M ring");
+    expect(await crewCaption()).toBe("The crew: 1 change not pushed");
+  });
+
+  it("crew 3: a file the crew added, which the captain's folder lacks, is a dimmed crew row with a hollow A", async () => {
+    const NOTES = `notes-${TOKEN}.md`;
+    writeFileSync(join(worktree, NOTES), `# Notes ${TOKEN}\n`);
+    await until(async () => (await row(NOTES))?.crewRow === true, `${NOTES} as a crew row`);
+    const r = (await row(NOTES))!;
+    expect([r.crew, r.label]).toEqual(["A", `${NOTES}, added by the crew, not pushed — not in your folder`]);
+    expect(await crewMarked()).toEqual([`${NOTES} A row`, `${README} M`]);
+    expect(await crewCaption()).toBe("The crew: 2 changes not pushed");
+  });
+
+  it("crew 5: the crew commits and pushes, and within 2 s its marks and its row go", async () => {
+    git(worktree, "add", "-A");
+    git(worktree, "commit", "-q", "-m", "the crew's work");
+    await browser.pause(CEILING);
+    // A commit is not a push: both marks stay.
+    expect((await crewMarked()).length).toBe(2);
+    git(worktree, "push", "-q");
+    await until(async () => (await crewMarked()).length === 0 && (await crewCaption()) === null, "the crew's marks gone after its push");
   });
 });

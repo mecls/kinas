@@ -201,6 +201,8 @@ pub struct Changes {
     refs: HashMap<PathBuf, RefWatch>,
     /// The crew projects some root pairs with, by `owner/name` (crew marks).
     crew: HashMap<String, crew::CrewProject>,
+    /// The watch on `<home>/projects/`, started with the first pairing.
+    crew_home: Option<RecommendedWatcher>,
 }
 
 impl Changes {
@@ -460,7 +462,7 @@ fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges,
 }
 
 /// What a reload drops: every record, refs watch and crew project, dropped by the caller with no guard held.
-type Dropped = (HashMap<PathBuf, Record>, HashMap<PathBuf, RefWatch>, HashMap<String, crew::CrewProject>);
+type Dropped = (HashMap<PathBuf, Record>, HashMap<PathBuf, RefWatch>, HashMap<String, crew::CrewProject>, Option<RecommendedWatcher>);
 
 /// Every record, refs watch and crew project out of the state, the repositories forgotten, the budget back to nothing.
 /// The caller drops them, with no guard held.
@@ -468,7 +470,7 @@ fn drop_all(state: &ChangesState) -> Dropped {
     let mut changes = state.lock();
     changes.budget_used = 0;
     changes.repos.clear();
-    (std::mem::take(&mut changes.roots), std::mem::take(&mut changes.refs), std::mem::take(&mut changes.crew))
+    (std::mem::take(&mut changes.roots), std::mem::take(&mut changes.refs), std::mem::take(&mut changes.crew), changes.crew_home.take())
 }
 
 /// The watch, the burst thread and the baseline thread, for a record that has none: its first showing, or a refresh
@@ -1663,7 +1665,7 @@ mod tests {
         assert!(before > 0);
         state.lock().repos.insert(PathBuf::from("/p/repo"), Repo { common: PathBuf::from("/p/repo/.git"), upstream: Upstream::Waiting });
         state.lock().crew.insert("kinas-test/shop".into(), crew::CrewProject::new());
-        let (dropped, refs, crews) = drop_all(&state);
+        let (dropped, refs, crews, _home) = drop_all(&state);
         assert_eq!(dropped.len(), 2);
         assert!(dropped.contains_key(&root));
         assert!(refs.is_empty());

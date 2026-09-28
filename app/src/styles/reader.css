@@ -361,6 +361,12 @@
   text-decoration: line-through;
 }
 
+/* A crew row (crew marks, rule 11): a path the crew added or rewrote that the captain's folder lacks — the name dimmed,
+   its hollow mark saying the rest. */
+.tree-row[data-crew-row] > .tree-item {
+  color: var(--ink-3);
+}
+
 .tree-caret {
   display: inline-block;
   width: 12px;
@@ -368,7 +374,8 @@
 }
 
 /* Under a tree's head while it has marks (tree changes rule 11): "5 changes since 14:02", aligned with the head's label. */
-.tree-since {
+.tree-since,
+.tree-crew {
   margin: 0 0 var(--space-1) var(--space-2);
   color: var(--ink-2);
   font-size: var(--fs-xs);

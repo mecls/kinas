@@ -1,5 +1,5 @@
 import { RefreshIcon } from "../ui/index.ts";
-import { captionFor, refreshRoot, useTreeChanges } from "./changes.ts";
+import { captionFor, crewCaption, refreshRoot, useTreeChanges } from "./changes.ts";
 
 // What sits on and under a file tree's head (tree changes rules 11 and 15): the ↻ that starts its count again, and one
 // line saying how many changes since when — only while there are some — or that the root is not followed at all.
@@ -28,5 +28,12 @@ export function RefreshButton({ root, name }: { root: string; name: string }) {
 export function ChangesCaption({ root, name }: { root: string; name: string }) {
   const summary = useTreeChanges(root);
   const caption = summary && captionFor(summary, name);
-  return caption ? <p className="tree-since">{caption}</p> : null;
+  // Crew marks: a second line while the tree has any, under the captain's own (rule 13).
+  const crew = summary && crewCaption(summary);
+  return (
+    <>
+      {caption && <p className="tree-since">{caption}</p>}
+      {crew && <p className="tree-crew">{crew}</p>}
+    </>
+  );
 }

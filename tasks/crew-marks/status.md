@@ -3,9 +3,10 @@
 - Gate 1 · Product: APPROVED 2026-09-28 — `prd.md`, from the captain's answers 1A, 2A, 3A, 4A+C (§7); approved as
   written, so §7.1 (any tree with the same remote), §7.2 (no task names) and §7.3 (the crew's added rows) stand
   - Mockups: APPROVED 2026-09-28 — `mockups/sidebar-crew.html`, `mockups/reader-crew.html`
-- Gate 2 · Architecture: in progress — `architecture.md`, private, in the main checkout, with an ADR superseding 0018
-  for the new reads under Firstmate's home
-- Gate 3 · Program design: pending
+- Gate 2 · Architecture: APPROVED 2026-09-28 — `architecture.md`, private, in the main checkout
+  (`tasks/crew-marks/architecture.md`), with its four PRD clarifications written into `prd.md` as dated notes (rules
+  1, 4, 11 and 14), and **ADR 0019**'s text (superseding 0018), to be written and locked in slice 0
+- Gate 3 · Program design: in progress — `build-spec.md` §11, private, in the main checkout
 - Gate 4 · Slice plan: pending
 
 ## Slices
@@ -27,3 +28,6 @@
 - The main checkout stays at `73c70fd`, with another session's untracked `docs/overview.md` and `tasks/design-system/`:
   never pull, switch, stash or commit there while worktrees exist.
 - Fixtures and documents use a made-up client folder (`shop`); no client's name goes into a tracked file.
+- Pending with the captain (asked twice, 2026-09-27 and 28, not yet answered): their report that done work stays on the
+  Fleet board and in Home's Overnight after the crew stops — the first mate's feature (its PRD rules 12 and 21); whether
+  to pass it to the first mate's session or keep it for after crew marks.

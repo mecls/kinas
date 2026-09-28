@@ -32,6 +32,9 @@ before, with a solid dot. Nothing is pulled into your folder: Kinas only watches
    saves.
    - A worktree that comes and goes (a task starts, a task is merged) starts or stops counting within 5 seconds.
    - The captain's own clone of Firstmate, elsewhere on this Mac, is never read (`docs/external/firstmate-home.md`).
+   - *(Clarified at Gate 2, 2026-09-28.)* A worker's checkout is a git worktree of the crew clone, and it lives outside
+     Firstmate's home, under `~/.treehouse`. The crew's checkouts are found from the clone's own worktree list, so this
+     rule holds wherever they are.
 2. **A crew project marks a tree when they are the same GitHub repository.** A file tree's repository is paired with a
    crew project when both have the same GitHub `origin`, as `owner/name`, the match the crew's lanes already use
    (`crew/repo.rs`).
@@ -58,6 +61,10 @@ before, with a solid dot. Nothing is pulled into your folder: Kinas only watches
    | present | present, the same text | none |
 
    Committed-but-unpushed and uncommitted edits count alike. An edit put back is no mark.
+
+   *(Clarified at Gate 2, 2026-09-28.)* A checkout on a detached HEAD, or in a clone with no remote, counts only what
+   is not committed. A checkout git cannot read gives no crew marks, never a guessed one: a false crew mark would say
+   someone else changed a file.
 5. **Only what the tree would list is marked.** The same filter as the captain's own marks (tree changes rule 5): no
    dot-names, no `node_modules`, `target`, `dist` or `build`, no binaries. Git-ignored files in a crew checkout are
    never marked: the crew cannot push them.
@@ -94,6 +101,8 @@ before, with a solid dot. Nothing is pulled into your folder: Kinas only watches
       not pushed — not in your folder".
     - A folder the crew added becomes one such row, with no caret. Its hollow **A** stands for everything in it, as
       an added folder's A already does.
+    - *(Clarified at Gate 2, 2026-09-28.)* A crew **M** on a file the captain's folder lacks shows as such a row too,
+      "not in your folder". A crew **D** on a file the captain lacks shows nothing: there is no row to mark.
 12. **Folders roll up the crew too.** A folder with crew marks beneath it carries a crew roll-up: a hollow dot in the
     strongest colour and the count, beside the captain's own roll-up if it has one.
     - Its words: "docs, 3 changes by the crew inside, not pushed".
@@ -113,6 +122,8 @@ before, with a solid dot. Nothing is pulled into your folder: Kinas only watches
     - A deleted file shows its text at that commit, every line removed. An added one shows every line added.
     - With several checkouts, the one that changed the file last is shown, and the summary names how many
       ("1 of 2 tasks").
+    - *(Clarified at Gate 2, 2026-09-28.)* "The one that changed the file last" is the checkout whose mark on that path
+      Kinas saw change last.
     - The crew's file is never opened for writing, never offered to "Open in editor", and never pinned. Copy and
       Download act on the crew's text.
 15. **A row with both marks opens the captain's own Changes first,** as today (tree changes rule 24). The crew's view is

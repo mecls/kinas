@@ -29,8 +29,10 @@
   (its negative control failed as it must); `crew-marks` 9 of 9 with `crew 6–8` and the timing; a recomputation
   32–79 ms on the fixture, 199 ms median on a Kinas-sized crew clone. **Ship point:** `origin/main` unmoved (`fa52b8e`),
   `bun run check` green (728 bun, 382 Rust), the full e2e alone 39 of 39 specs (215 cases), save-to-mark median
-  150.5 ms, private names clean. **Waiting on the captain:** push and the PR, the merge to `main`, and the install —
-  each on their word
+  150.5 ms, private names clean. **On the captain's word (2026-09-28):** pushed as
+  PR #43 and fast-forwarded onto `main`. A release build of `993d698` was made (no test seams in the binary);
+  **not installed** — the install, which quits the running Kinas and replaces `/Applications/Kinas.app`, is left for
+  the captain to run
 
 ## Notes for a fresh session
 

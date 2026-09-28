@@ -1,8 +1,10 @@
 # Status: Crew marks — what the crew is changing and hasn't pushed, marked on the captain's own tree
 
-- Gate 1 · Product: in progress — `prd.md`, from the captain's answers 1A, 2A, 3A, 4A+C (§7), awaiting approval
-  - Mockups: in progress — `mockups/sidebar-crew.html`, `mockups/reader-crew.html`
-- Gate 2 · Architecture: pending (with an ADR superseding 0018, for the new reads under Firstmate's home)
+- Gate 1 · Product: APPROVED 2026-09-28 — `prd.md`, from the captain's answers 1A, 2A, 3A, 4A+C (§7); approved as
+  written, so §7.1 (any tree with the same remote), §7.2 (no task names) and §7.3 (the crew's added rows) stand
+  - Mockups: APPROVED 2026-09-28 — `mockups/sidebar-crew.html`, `mockups/reader-crew.html`
+- Gate 2 · Architecture: in progress — `architecture.md`, private, in the main checkout, with an ADR superseding 0018
+  for the new reads under Firstmate's home
 - Gate 3 · Program design: pending
 - Gate 4 · Slice plan: pending
 

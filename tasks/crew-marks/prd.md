@@ -224,13 +224,12 @@ every added line and commit message returns 0.
 
 ## 7. Open questions
 
-1. **Answer 4B was left unticked.** This document reads it as "not only client folders": crew marks go on any file tree
-   whose repository has the same GitHub remote as a crew project (rule 2), a pinned subfolder included. The captain's
-   call at this gate. The alternative is to limit them to the sidebar's client folders.
-2. **Should the words name the task?** For example "modified by the crew (shop-menu)". Written as no: "the
-   crew", and a count. The captain's call at this gate.
-3. **The crew's added row** (rule 11) puts a file the captain's folder does not have into their tree. This is the least
-   sure line in the document: it could instead show only as a count on its folder. The captain's call at this gate.
+1. ~~**Answer 4B was left unticked.**~~ Decided 2026-09-28: as written — crew marks go on any file tree whose repository
+   has the same GitHub remote as a crew project (rule 2), a pinned subfolder included; Gate 1 was approved without a
+   change. (The alternative was to limit them to the sidebar's client folders.)
+2. ~~**Should the words name the task?**~~ Decided 2026-09-28: no, as written — "the crew", and a count.
+3. ~~**The crew's added row**~~ (rule 11) — decided 2026-09-28: kept as written. (It could instead have shown only as a
+   count on its folder.)
 4. The first mate's session builds the crew's own code. The new ADR supersedes 0018, which that build wrote. The build
    will rebase over it and keep it informed.
 

@@ -21,7 +21,9 @@
 - [x] Slice 2 · a done task with an open PR stays until it merges — 2026-09-29: the collector reads a done task's PR
   while it reads open; `bun run check` green (732 bun, 390 Rust); `crew-done-clears` 4 of 4, `crew-board` 5 of 5, run
   alone
-- [ ] Slice 3 · Overnight, and a task that comes back
+- [x] Slice 3 · Overnight, and a task that comes back — 2026-09-29: Home clears what Overnight counted, a returning
+  task forgets its stamps; `bun run check` green (733 bun, 391 Rust); the negative control failed as it must;
+  `crew-done-clears` 6 of 6, `crew-home` 1 of 1, `crew-board` 5 of 5, run alone
 - [ ] Slice 4 · the record → ship point
 
 ## Notes for a fresh session

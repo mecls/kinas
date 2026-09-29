@@ -1,7 +1,7 @@
 import { $, browser, expect } from "@wdio/globals";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { fakeHome, hook } from "../helpers.ts";
+import { fakeHome, hook, kinasCli, logLines } from "../helpers.ts";
 import { writeSnapshot } from "../fake-firstmate/make.ts";
 import { setGhAnswer } from "../stub-tools/make.ts";
 
@@ -102,6 +102,17 @@ const A1 = { id: "a1-9c2e", title: "Alpha one 9c2e", project: "alpha-9c2e" };
 const A2 = { id: "a2-9c2e", title: "Alpha two 9c2e", project: "alpha-9c2e" };
 const A3 = { id: "a3-9c2e", title: "Alpha three 9c2e", project: "alpha-9c2e" };
 const PR = "https://github.com/o/alpha-9c2e/pull/123";
+const N1 = { id: "n1-9c2e", title: "Night one 9c2e", project: "alpha-9c2e" };
+const N2 = { id: "n2-9c2e", title: "Night two 9c2e", project: "alpha-9c2e" };
+const H = 3_600_000;
+
+/** Overnight's row for alpha, its badges as drawn — "1 working", "4 done". */
+const nightBadges = async () =>
+  JSON.parse(
+    (await browser.execute(() =>
+      JSON.stringify([...document.querySelectorAll('[data-section="overnight"] [data-folder="alpha-9c2e"] .ui-badge')].map((b) => b.textContent)),
+    )) as string,
+  ) as string[];
 
 describe("Done work clears", () => {
   before(async () => {
@@ -182,5 +193,43 @@ describe("Done work clears", () => {
     await go("Home");
     await go("Crew");
     await browser.waitUntil(async () => !(await cards()).some((c) => c.startsWith(A3.id)), { timeout: 15000, interval: 250, timeoutMsg: "the merged task's card stayed after a new load" });
+  });
+
+  it("clears 5: Overnight counts a finished task once; the Crew page still shows its card once", async () => {
+    await go("Home");
+    // The night began ten hours ago.
+    sql(`INSERT OR REPLACE INTO settings (org_id, key, value) VALUES ((SELECT id FROM orgs LIMIT 1), 'window_session_end_at', '${Date.now() - 10 * H}')`);
+    await file([
+      { ...A1, backlog: "done" },
+      { ...A2, backlog: "done" },
+      { ...A3, backlog: "done", pr: PR },
+      { ...N1, backlog: "done" },
+      { ...N2, backlog: "in_flight", state: "working" },
+    ]);
+    // a1–a3 were told on the earlier visits to Home (the night was the last 24 hours then), and this load leaves them
+    // out; n1, filed done while Home shows, is counted — once.
+    await browser.waitUntil(async () => JSON.stringify(await nightBadges()) === JSON.stringify(["1 working", "1 done"]), {
+      timeout: 30000,
+      interval: 250,
+      timeoutMsg: "Overnight never counted n1 done and n2 working",
+    });
+    await browser.waitUntil(() => sql("SELECT count(*) FROM crew_tasks WHERE overnight_seen_at IS NOT NULL") === "4", { timeout: 15000, interval: 250, timeoutMsg: "Overnight never stamped the four done" });
+
+    // The board has never shown n1: its card is there, once.
+    await go("Crew");
+    await cardWord(N1.id, "done");
+    expect(await cards()).toEqual([`${N2.id} working`, `${N1.id} done`]);
+
+    // Home's next load: the done ones have been told, and go.
+    await go("Home");
+    await browser.waitUntil(async () => JSON.stringify(await nightBadges()) === JSON.stringify(["1 working"]), { timeout: 15000, interval: 250, timeoutMsg: "Overnight still counted what it had told" });
+  });
+
+  it("clears 6: nothing is deleted, `kinas crew status` lists every task, and no task reaches the log", async () => {
+    expect(sql("SELECT count(*) FROM crew_tasks")).toBe("5");
+    const { code, stdout } = kinasCli("crew", "status", "--json");
+    expect(code).toBe(0);
+    expect((JSON.parse(stdout) as { tasks: unknown[] }).tasks.length).toBe(5);
+    expect(logLines("9c2e")).toEqual([]);
   });
 });

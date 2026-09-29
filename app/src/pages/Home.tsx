@@ -1,6 +1,7 @@
-import type { KeyboardEvent } from "react";
+import { useEffect, useMemo, type KeyboardEvent } from "react";
 import type { CrewDecision, CrewSnapshot, ProjectRow, UsageSnapshot } from "../api.ts";
 import { ageText, copiedText, titleOf } from "../crew/inbox.ts";
+import { useCleared } from "../crew/useCleared.ts";
 import { seatFolders, shownFolders } from "../shell/folders.ts";
 import { Button, EmptyState, Gauge, Gauges, InboxItem, MetricRow, ProgressList, ProgressRow, Rows, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
@@ -15,7 +16,7 @@ import { overnightRows, sinceCaption } from "./overnight.ts";
 // since the end of the captain's last session and opens the one that matters in the panel; Waiting on you holds the
 // newest three decisions as compact items (Approve here, Answer and Deny on the Inbox); the title row holds the one
 // waiting count. Without a crew every section is as before. Always mounted, like every page (App.tsx); `hidden` is the
-// shell's.
+// shell's. Amended 2026-09-29 (done work clears): a finished task a row has counted is left out from Home's next load.
 
 /** Home shows this many waiting items; the rest are one click away on the Inbox. */
 const WAITING_SHOWN = 3;
@@ -29,6 +30,8 @@ export function HomePage({
   onGo,
   onLaunch,
   crew = null,
+  active = true,
+  onReloadCrew = () => {},
   onSelectTask = () => {},
   onApprove = () => {},
   onOpenBox = () => {},
@@ -44,6 +47,10 @@ export function HomePage({
   onLaunch: () => void;
   /** App's one crew reading (crew/useCrew.ts); null, or not installed, and Home is as before the crew. */
   crew?: CrewSnapshot | null;
+  /** Home is the page on screen: its coming on screen is a new load, which clears what Overnight has shown. */
+  active?: boolean;
+  /** A fresh crew reading, asked at each load. */
+  onReloadCrew?: () => void;
   /** A row's most important task, opened in the right panel. */
   onSelectTask?: (id: string) => void;
   onApprove?: (task: string, key: string) => void;
@@ -53,7 +60,15 @@ export function HomePage({
   const seated = seatFolders(projects);
   const folders = shownFolders(seated);
   const withCrew = crew !== null && crew.page !== "uninstalled";
-  const night = withCrew ? overnightRows(folders, crew.tasks, crew.overnight_since, crew.decisions) : [];
+  // What this load counts: every task but the finished ones Overnight counted in an earlier load (done work clears).
+  const cleared = useCleared("overnight", active, onReloadCrew);
+  const tasks = useMemo(() => (crew ? cleared.onScreen(crew.tasks) : []), [crew, cleared, active]);
+  const night = withCrew ? overnightRows(folders, tasks, crew.overnight_since, crew.decisions) : [];
+  const counted = night.flatMap((r) => r.counted).join(" ");
+  useEffect(() => {
+    const ids = new Set(counted.split(" "));
+    cleared.shown(tasks.filter((t) => ids.has(t.id)));
+  }, [cleared, tasks, counted]);
   const waiting = withCrew ? crew.decisions : [];
   return (
     <div className="page-in home">

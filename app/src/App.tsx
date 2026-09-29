@@ -656,6 +656,8 @@ export function App() {
               onGo={goTo}
               onLaunch={launchTask}
               crew={crew}
+              active={page === "home"}
+              onReloadCrew={reloadCrew}
               onSelectTask={openTask}
               onApprove={(task, key) => void answer(task, key, "approve", "")}
               onOpenBox={openBox}

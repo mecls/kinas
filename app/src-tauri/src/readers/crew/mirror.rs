@@ -190,6 +190,10 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
                 }
             }
         }
+        // Done work clears, rule 7: a task back in the snapshot, or no longer done or gone, is new again to every page.
+        if prior.is_some_and(|p| p.gone_at.is_some()) || !matches!(word, "done" | "gone") {
+            forget_seen(tx, org, &facts.id)?;
+        }
         if let Some((raw, line, age)) = &facts.last_event {
             applied.events += last_event(tx, org, &facts.id, raw, line, *age, now)?;
         }
@@ -412,6 +416,15 @@ fn places(conn: &Connection, org: &str) -> rusqlite::Result<HashMap<String, Plac
 pub(crate) fn priors_one(conn: &Connection, org: &str, id: &str) -> rusqlite::Result<Option<Stored>> {
     conn.query_row(&format!("SELECT {STORED_COLUMNS} FROM crew_tasks WHERE org_id = ?1 AND id = ?2"), params![org, id], |r| stored_of(r, 0))
         .optional()
+}
+
+/// Both of a task's seen stamps back to NULL (done work clears, rule 7). Writes only a row that has one.
+fn forget_seen(tx: &Transaction, org: &str, id: &str) -> rusqlite::Result<usize> {
+    tx.execute(
+        "UPDATE crew_tasks SET board_seen_at = NULL, overnight_seen_at = NULL
+         WHERE org_id = ?1 AND id = ?2 AND (board_seen_at IS NOT NULL OR overnight_seen_at IS NOT NULL)",
+        params![org, id],
+    )
 }
 
 /// The PR URLs whose last reading is open, of tasks not gone (done work clears, rule 2): the collector keeps reading a
@@ -795,5 +808,28 @@ mod tests {
         add("4", Some("OPEN"), Some(3));
         let open = open_pr_urls(&store.conn(), store.org_id()).unwrap();
         assert_eq!(open, HashSet::from(["https://github.com/o/shop-9c2e/pull/1".to_string()]));
+    }
+
+    #[test]
+    fn a_returning_task_forgets_it_was_seen() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let stamps = || -> (Option<i64>, Option<i64>) {
+            store.conn().query_row("SELECT board_seen_at, overnight_seen_at FROM crew_tasks WHERE id = ?1", params![ID], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
+        };
+        let stamp = || {
+            store.conn().execute("UPDATE crew_tasks SET board_seen_at = 7, overnight_seen_at = 8 WHERE id = ?1", params![ID]).unwrap();
+        };
+        cycle(&store, "working", T0);
+        cycle(&store, "done", T0 + MIN);
+        stamp();
+        // Still done, then gone: finished all along, so both pages keep what they saw.
+        cycle(&store, "done", T0 + 2 * MIN);
+        assert_eq!(stamps(), (Some(7), Some(8)));
+        cycle(&store, "empty", T0 + 3 * MIN);
+        assert_eq!(stamps(), (Some(7), Some(8)), "gone is finished too");
+        // Back in the snapshot: new again to every page.
+        cycle(&store, "done", T0 + 4 * MIN);
+        assert_eq!(stamps(), (None, None));
     }
 }

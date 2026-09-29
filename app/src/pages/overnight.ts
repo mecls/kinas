@@ -16,6 +16,8 @@ export interface OvernightRow {
   badges: { state: BadgeState; count: number }[];
   /** The task a click opens in the panel: the one waiting on a person, then a failed one, then the latest. */
   target: string | null;
+  /** Every task this row counted: what Home has shown, for its stamps (done work clears). */
+  counted: string[];
 }
 
 type Bucket = keyof Segments;
@@ -52,7 +54,7 @@ export function overnightRows(folders: readonly SeatedFolder[], tasks: readonly 
   return folders.map((folder) => {
     const lane = lanes.find((l) => l.key === folder.path);
     const night = (lane?.tasks ?? []).filter((t) => activityAt(t) >= since);
-    if (night.length === 0) return { folder, event: null, seg: null, badges: [], target: null };
+    if (night.length === 0) return { folder, event: null, seg: null, badges: [], target: null, counted: [] };
     const seg: Segments = { done: 0, working: 0, wait: 0, fail: 0 };
     const words = new Map<CrewWord, number>();
     for (const t of night) {
@@ -63,7 +65,7 @@ export function overnightRows(folders: readonly SeatedFolder[], tasks: readonly 
     const newest = (list: CrewTask[]) => [...list].sort((a, b) => activityAt(b) - activityAt(a))[0];
     const target =
       newest(night.filter((t) => bucketOf(t.overnight_word) === "wait")) ?? newest(night.filter((t) => bucketOf(t.overnight_word) === "fail")) ?? newest(night)!;
-    return { folder, event: eventLine(target, decisions), seg, badges, target: target.id };
+    return { folder, event: eventLine(target, decisions), seg, badges, target: target.id, counted: night.map((t) => t.id) };
   });
 }
 

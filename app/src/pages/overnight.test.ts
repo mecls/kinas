@@ -30,6 +30,9 @@ const task = (id: string, word: CrewWord, at: number, extra: Partial<CrewTask> =
   last_event_text: word,
   pr: null,
   has_pane: false,
+  finished: false,
+  board_seen_at: null,
+  overnight_seen_at: null,
   ...extra,
 });
 
@@ -59,7 +62,7 @@ test("only in-window tasks count; the waiting one is the target; a quiet folder 
   ]);
   expect(harbor!.target).toBe("a");
   expect(harbor!.event).toMatch(/^Needs decision: REST or GraphQL\? \d\d:\d\d$/);
-  expect(north).toEqual({ folder: folders[1]!, event: null, seg: null, badges: [], target: null });
+  expect(north).toEqual({ folder: folders[1]!, event: null, seg: null, badges: [], target: null, counted: [] });
 });
 
 test("with nothing waiting, a failed one leads; then the latest", () => {
@@ -70,6 +73,14 @@ test("with nothing waiting, a failed one leads; then the latest", () => {
   expect(latest!.event).toMatch(/^Done: w2 title \d\d:\d\d$/);
   const [ready] = overnightRows(folders, [task("r", "ready", NOW - H)], SINCE);
   expect(ready!.event).toMatch(/^Ready to merge: r title, \d\d:\d\d$/);
+});
+
+test("overnightRows says which tasks it counted (done work clears)", () => {
+  // Home stamps what its rows counted: the in-window tasks of each folder, never one outside the night.
+  const tasks = [task("w", "working", NOW - H), task("d", "done", NOW - 2 * H, { done_at: NOW - 2 * H, finished: true }), task("old", "done", SINCE - H, { done_at: SINCE - H, first_seen_at: SINCE - 5 * H })];
+  const [harbor, north] = overnightRows(folders, tasks, SINCE);
+  expect([...harbor!.counted].sort()).toEqual(["d", "w"]);
+  expect(north!.counted).toEqual([]);
 });
 
 test("the caption says where the night began and how long ago", () => {

@@ -18,7 +18,9 @@
 - [x] Slice 1 · tracer bullet: a done card leaves the board at the next load — 2026-09-29: migration 0006,
   `finished()`, `crew_seen`, `useCleared` on the Crew page; `bun run check` green (732 bun, 388 Rust); the negative
   control failed as it must; `crew-done-clears` 2 of 2, `crew-board` 5 of 5, `crew-home` 1 of 1, run alone
-- [ ] Slice 2 · a done task with an open PR stays until it merges
+- [x] Slice 2 · a done task with an open PR stays until it merges — 2026-09-29: the collector reads a done task's PR
+  while it reads open; `bun run check` green (732 bun, 390 Rust); `crew-done-clears` 4 of 4, `crew-board` 5 of 5, run
+  alone
 - [ ] Slice 3 · Overnight, and a task that comes back
 - [ ] Slice 4 · the record → ship point
 

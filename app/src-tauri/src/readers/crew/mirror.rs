@@ -414,6 +414,14 @@ pub(crate) fn priors_one(conn: &Connection, org: &str, id: &str) -> rusqlite::Re
         .optional()
 }
 
+/// The PR URLs whose last reading is open, of tasks not gone (done work clears, rule 2): the collector keeps reading a
+/// done task's PR while it is open, so the board keeps the card and its PR line stays current.
+pub(crate) fn open_pr_urls(conn: &Connection, org: &str) -> rusqlite::Result<HashSet<String>> {
+    let mut stmt = conn.prepare("SELECT pr_url FROM crew_tasks WHERE org_id = ?1 AND pr_state = 'OPEN' AND gone_at IS NULL AND pr_url IS NOT NULL")?;
+    let rows = stmt.query_map(params![org], |r| r.get::<_, String>(0))?;
+    rows.collect()
+}
+
 pub(crate) const STORED_COLUMNS: &str = "state, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_state, pr_draft,
     pr_mergeable, pr_checks_total, pr_checks_failed, first_seen_at, first_working_at, done_at, gone_at, board_seen_at, overnight_seen_at";
 /// How many columns `STORED_COLUMNS` names: a query's next column after them is at `at + STORED_LEN`.
@@ -765,5 +773,27 @@ mod tests {
             .unwrap();
         assert_eq!((state.as_str(), attempt), ("error", T0 + MIN));
         assert_eq!(error, "unsupported snapshot contract fm-fleet-snapshot.v2, expected fm-fleet-snapshot.v1");
+    }
+
+    #[test]
+    fn open_pr_urls_names_open_prs_of_tasks_not_gone() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let add = |id: &str, state: Option<&str>, gone: Option<i64>| {
+            store
+                .conn()
+                .execute(
+                    "INSERT INTO crew_tasks (org_id, id, kind, backlog_state, snapshot_generated, first_seen_at, last_seen_at, done_at, gone_at, pr_url, pr_state)
+                     VALUES (?1, ?2, 'ship', 'done', 'g', 1, 1, 2, ?3, ?4, ?5)",
+                    params![store.org_id(), id, gone, format!("https://github.com/o/shop-9c2e/pull/{id}"), state],
+                )
+                .unwrap();
+        };
+        add("1", Some("OPEN"), None);
+        add("2", Some("MERGED"), None);
+        add("3", None, None);
+        add("4", Some("OPEN"), Some(3));
+        let open = open_pr_urls(&store.conn(), store.org_id()).unwrap();
+        assert_eq!(open, HashSet::from(["https://github.com/o/shop-9c2e/pull/1".to_string()]));
     }
 }

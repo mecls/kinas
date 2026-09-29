@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { fakeHome, hook } from "../helpers.ts";
 import { writeSnapshot } from "../fake-firstmate/make.ts";
+import { setGhAnswer } from "../stub-tools/make.ts";
 
 // Done work clears (tasks/crew-done-clears/prd.md §5): a finished task — done or gone — stays while a page shows it,
 // and leaves at that page's next load; a done task whose PR is still open stays until it is merged or closed. Each
@@ -11,6 +12,7 @@ import { writeSnapshot } from "../fake-firstmate/make.ts";
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const db = join(dataDir, "kinas.sqlite");
+const tools = join(dataDir, "tools");
 const sql = (query: string) => execFileSync("/usr/bin/sqlite3", [db, query], { encoding: "utf8" }).trim();
 
 interface Spec {
@@ -92,8 +94,14 @@ const cardWord = (id: string, word: string) =>
 const stamped = (id: string, column: "board_seen_at" | "overnight_seen_at") =>
   browser.waitUntil(() => sql(`SELECT ${column} IS NOT NULL FROM crew_tasks WHERE id = '${id}'`) === "1", { timeout: 15000, interval: 250, timeoutMsg: `${id}'s ${column} never set` });
 
+/** A card's PR line as drawn, or null with no card or no line. */
+const prLine = (id: string) =>
+  browser.execute((t: string) => document.querySelector(`section[data-page="crew"] article.crew-card[data-task="${t}"] .crew-pr`)?.textContent ?? null, id) as Promise<string | null>;
+
 const A1 = { id: "a1-9c2e", title: "Alpha one 9c2e", project: "alpha-9c2e" };
 const A2 = { id: "a2-9c2e", title: "Alpha two 9c2e", project: "alpha-9c2e" };
+const A3 = { id: "a3-9c2e", title: "Alpha three 9c2e", project: "alpha-9c2e" };
+const PR = "https://github.com/o/alpha-9c2e/pull/123";
 
 describe("Done work clears", () => {
   before(async () => {
@@ -141,5 +149,38 @@ describe("Done work clears", () => {
     await waitInPage(() => document.querySelectorAll('section[data-page="crew"] .crew-lane').length === 0, "the lane stayed with nothing left in it");
     // Nothing deleted: the mirror keeps both rows (rule 11).
     expect(sql("SELECT count(*) FROM crew_tasks WHERE id IN ('a1-9c2e', 'a2-9c2e')")).toBe("2");
+  });
+
+  it("clears 3: a done task whose PR is open stays after being seen and a reload, and its PR is still read", async () => {
+    // Its PR read while it works, as a worker's PR is: open, mergeable.
+    setGhAnswer(tools, 1);
+    await file([{ ...A1, backlog: "done" }, { ...A2, backlog: "done" }, { ...A3, backlog: "in_flight", state: "working", pr: PR }]);
+    await browser.waitUntil(async () => (await prLine(A3.id))?.includes("PR #123") === true, { timeout: 30000, interval: 250, timeoutMsg: "the working task's PR line never showed" });
+    expect(sql(`SELECT pr_state FROM crew_tasks WHERE id = '${A3.id}'`)).toBe("OPEN");
+
+    await file([{ ...A1, backlog: "done" }, { ...A2, backlog: "done" }, { ...A3, backlog: "done", pr: PR }]);
+    await cardWord(A3.id, "done");
+    // Done, its PR open: not finished, so never stamped, and a new load keeps it (rule 2).
+    await go("Home");
+    await go("Crew");
+    await cardWord(A3.id, "done");
+    expect(sql(`SELECT board_seen_at IS NULL FROM crew_tasks WHERE id = '${A3.id}'`)).toBe("1");
+    // And Kinas still reads that PR: Refresh readings asks `gh` again, and the reading's time moves.
+    const before = Number(sql(`SELECT pr_checked_at FROM crew_tasks WHERE id = '${A3.id}'`));
+    await browser.pause(50);
+    await refresh();
+    await browser.waitUntil(() => Number(sql(`SELECT pr_checked_at FROM crew_tasks WHERE id = '${A3.id}'`)) > before, { timeout: 15000, interval: 250, timeoutMsg: "a done task's open PR was never read again" });
+    expect(await prLine(A3.id)).toContain("PR #123");
+  });
+
+  it("clears 4: once that PR reads merged, the card says so and stays, and goes at the next load", async () => {
+    setGhAnswer(tools, 3);
+    await refresh();
+    await browser.waitUntil(async () => (await prLine(A3.id))?.includes("merged") === true, { timeout: 30000, interval: 250, timeoutMsg: "the card never said merged" });
+    await stamped(A3.id, "board_seen_at");
+    expect(await cards()).toEqual([`${A3.id} done`]);
+    await go("Home");
+    await go("Crew");
+    await browser.waitUntil(async () => !(await cards()).some((c) => c.startsWith(A3.id)), { timeout: 15000, interval: 250, timeoutMsg: "the merged task's card stayed after a new load" });
   });
 });

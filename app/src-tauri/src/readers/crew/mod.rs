@@ -20,7 +20,7 @@ use crate::store::{now_ms, Store};
 use schedule::{CrewWake, Schedule};
 use mirror::Found;
 use snapshot::{parse_fleet, pr_url_ok, Fleet};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Mutex, RwLock};
@@ -260,10 +260,16 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     let found = match &outcome {
         Ok(fleet) => {
             let visible = app.state::<ReaderControl>().crew_visible();
+            // The open PRs of done tasks, under a short guard; `gh` runs with none held.
+            let open = {
+                let store = app.state::<Store>();
+                let conn = store.conn();
+                mirror::open_pr_urls(&conn, store.org_id()).unwrap_or_default()
+            };
             Found {
                 workers: mirror::workers_of(fleet, view.as_ref(), attached_session().as_deref()),
                 repos: repos_of(fleet, home, memo),
-                prs: prs_of(app, fleet, memo, visible),
+                prs: prs_of(app, fleet, memo, visible, &open),
             }
         }
         Err(_) => Found::default(),
@@ -326,18 +332,10 @@ fn repos_of(fleet: &Fleet, home: &Path, memo: &mut Memo) -> HashMap<String, Opti
 
 /// The PRs of tasks not yet done whose last check is older than the page's gap, each through `gh pr view` (10 s). A PR
 /// `gh` could not read keeps its last values; it is asked again after the same gap, never in a tight loop.
-fn prs_of(app: &AppHandle, fleet: &Fleet, memo: &mut Memo, visible: bool) -> Vec<gh::PrFacts> {
+fn prs_of(app: &AppHandle, fleet: &Fleet, memo: &mut Memo, visible: bool, open: &HashSet<String>) -> Vec<gh::PrFacts> {
     let gap = if visible { PR_FRESH_VISIBLE_MS } else { PR_FRESH_HIDDEN_MS };
     let now = now_ms();
-    let mut urls: Vec<&str> = fleet
-        .tasks
-        .iter()
-        .filter(|t| !mirror::done_now(t))
-        .filter_map(|t| t.pr_url.as_deref())
-        .filter(|url| pr_url_ok(url) && memo.pr_checked.get(*url).is_none_or(|at| now - at >= gap))
-        .collect();
-    urls.sort_unstable();
-    urls.dedup();
+    let urls = due_prs(fleet, open, &memo.pr_checked, now, gap);
     if urls.is_empty() {
         return Vec::new();
     }
@@ -356,6 +354,20 @@ fn prs_of(app: &AppHandle, fleet: &Fleet, memo: &mut Memo, visible: bool) -> Vec
         checks.insert(pr.url.clone(), pr.checks.clone());
     }
     prs
+}
+
+/// The PRs due a reading: the PR of every task not done, and of a done task whose last reading was open (done work
+/// clears, rule 2) — valid, and not read within `gap`. Sorted, deduplicated.
+fn due_prs<'a>(fleet: &'a Fleet, open: &HashSet<String>, checked: &HashMap<String, i64>, now: i64, gap: i64) -> Vec<&'a str> {
+    let mut urls: Vec<&str> = fleet
+        .tasks
+        .iter()
+        .filter_map(|t| t.pr_url.as_deref().filter(|url| !mirror::done_now(t) || open.contains(*url)))
+        .filter(|url| pr_url_ok(url) && checked.get(*url).is_none_or(|at| now - at >= gap))
+        .collect();
+    urls.sort_unstable();
+    urls.dedup();
+    urls
 }
 
 /// The script's answer as a fleet, or the reason it is not one — for `reader_status` and the Crew page's error line,
@@ -408,5 +420,28 @@ mod tests {
         assert_eq!(read(&ran(Exit::TimedOut, "", Some("x"))).unwrap_err(), "the fleet snapshot did not answer within 20 s");
         assert_eq!(read(&ran(Exit::Signal, "", None)).unwrap_err(), "the fleet snapshot was stopped by a signal");
         assert!(read(&ran(Exit::Code(0), r#"{"schema":"fm-fleet-snapshot.v1","generated":"g"}"#, None)).is_ok());
+    }
+
+    #[test]
+    fn a_done_task_s_pr_is_due_while_open() {
+        const IN_FLIGHT: &str = "https://github.com/o/shop-9c2e/pull/1";
+        const DONE: &str = "https://github.com/o/shop-9c2e/pull/2";
+        let task = |id: &str, backlog: &str, url: &str| super::snapshot::TaskFacts {
+            id: id.into(),
+            backlog_state: Some(backlog.into()),
+            pr_url: Some(url.into()),
+            ..Default::default()
+        };
+        let fleet = Fleet {
+            generated: "g".into(),
+            tasks: vec![task("working-9c2e", "in_flight", IN_FLIGHT), task("done-9c2e", "done", DONE), task("bad-9c2e", "in_flight", "https://example.com/pull/3")],
+            orphans: Vec::new(),
+        };
+        let never = HashMap::new();
+        assert_eq!(due_prs(&fleet, &HashSet::new(), &never, 1_000, 60_000), vec![IN_FLIGHT], "a done task's PR not known open is not read");
+        let open = HashSet::from([DONE.to_string()]);
+        assert_eq!(due_prs(&fleet, &open, &never, 1_000, 60_000), vec![IN_FLIGHT, DONE], "its last reading open: read again");
+        let just_read = HashMap::from([(DONE.to_string(), 990)]);
+        assert_eq!(due_prs(&fleet, &open, &just_read, 1_000, 60_000), vec![IN_FLIGHT], "the gap still holds");
     }
 }

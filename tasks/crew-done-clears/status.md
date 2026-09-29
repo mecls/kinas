@@ -24,7 +24,9 @@
 - [x] Slice 3 · Overnight, and a task that comes back — 2026-09-29: Home clears what Overnight counted, a returning
   task forgets its stamps; `bun run check` green (733 bun, 391 Rust); the negative control failed as it must;
   `crew-done-clears` 6 of 6, `crew-home` 1 of 1, `crew-board` 5 of 5, run alone
-- [ ] Slice 4 · the record → ship point
+- [x] Slice 4 · the record → ship point — 2026-09-29: `origin/main` unmoved (`49d185f`), `bun run check` green (733
+  bun, 391 Rust), the full e2e alone 40 of 40 specs (221 cases), private names clean. **Waiting on the captain:** push
+  and the PR, the merge to `main`, the release build; the install is theirs to run
 
 ## Notes for a fresh session
 

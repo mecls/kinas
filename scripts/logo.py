@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""The Kinas logo, from one source image to the two places it appears.
+"""The Kinas logo, from its two source images to the two places it appears.
 
     python3 scripts/logo.py [new-logo.png]
 
 With an argument, the image replaces app/src-tauri/icons/source/kinas-logo.png first. Then:
 
-1. app/src-tauri/icons/source/app-icon.png: the logo on a navy rounded square, 824 px of artwork on a 1024 px canvas
-   (macOS's icon grid; a rounded square, so macOS 26 does not set the icon on a grey tile). Regenerate the app's icon
-   set from it, then delete the android/ and ios/ folders the generator adds (the app is macOS only):
+1. app/src-tauri/icons/source/app-icon.png: the Dock's tile, cut from app/src-tauri/icons/source/dock-logo.png — the
+   captain's finished rounded square, drawn on black — and set 824 px wide on a 1024 px canvas (macOS's icon grid;
+   a rounded square, so macOS 26 does not set the icon on a grey tile). Regenerate the app's icon set from it, then
+   delete the android/ and ios/ folders the generator adds (the app is macOS only):
 
        app/node_modules/.bin/tauri icon app/src-tauri/icons/source/app-icon.png -o app/src-tauri/icons
 
-2. packages/commands/src/logo-grid.ts: the logo as a 44x44 grid, which the CLI draws in braille.
+2. packages/commands/src/logo-grid.ts: kinas-logo.png as a 44x44 grid, which the CLI draws in braille.
 
-The source is square pixel art on a 16 px grid with transparent corners. Needs Pillow.
+kinas-logo.png is square pixel art on a 16 px grid with transparent corners. Needs Pillow.
 """
 
 import json
@@ -21,22 +22,36 @@ import shutil
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "app/src-tauri/icons/source/kinas-logo.png"
+DOCK = ROOT / "app/src-tauri/icons/source/dock-logo.png"
 APP_ICON = ROOT / "app/src-tauri/icons/source/app-icon.png"
 GRID_TS = ROOT / "packages/commands/src/logo-grid.ts"
-NAVY = (10, 20, 32, 255)
 CELL = 16
+# The black the Dock's tile is drawn on: brighter than this is the tile's rim or what it holds.
+GROUND = 8
 
 
-def app_icon(logo: Image.Image) -> Image.Image:
-    tile = Image.new("RGBA", (824, 824), (0, 0, 0, 0))
-    ImageDraw.Draw(tile).rounded_rectangle([0, 0, 823, 823], radius=185, fill=NAVY)
-    tile.alpha_composite(logo.resize((760, 760), Image.LANCZOS), (32, 32))
+def app_icon(dock: Image.Image) -> Image.Image:
+    """The tile, cut from its ground along its own rim, whatever the shape of its corners."""
+    rgb = dock.convert("RGB")
+    lit = rgb.convert("L").point(lambda v: 255 if v > GROUND else 0)
+    box = lit.getbbox()
+    # The ground is the black reachable from a corner without crossing the rim; the tile is the rest, one pixel in,
+    # since the rim's outermost pixels were blended with the black and would ring it in a dark hairline. Eroding by two
+    # and growing back by one also drops the specks of noise the ground holds outside the rim.
+    ImageDraw.floodfill(lit, (0, 0), 128)
+    tile_only = lit.point(lambda v: 0 if v == 128 else 255)
+    mask = tile_only.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    tile = rgb.convert("RGBA")
+    tile.putalpha(mask)
+    tile = tile.crop(box)
+    scale = 824 / max(tile.size)
+    tile = tile.resize((round(tile.size[0] * scale), round(tile.size[1] * scale)), Image.LANCZOS)
     canvas = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-    canvas.alpha_composite(tile, (100, 100))
+    canvas.alpha_composite(tile, ((1024 - tile.size[0]) // 2, (1024 - tile.size[1]) // 2))
     return canvas
 
 
@@ -68,7 +83,7 @@ def main() -> None:
     if width != height or width % (CELL * 2):
         sys.exit(f"{SOURCE}: expected a square image on a {CELL} px grid, got {width}x{height}")
 
-    app_icon(logo).save(APP_ICON)
+    app_icon(Image.open(DOCK)).save(APP_ICON)
     rows = grid(logo)
     body = "\n".join(f"  {json.dumps(r)}," for r in rows)
     GRID_TS.write_text(

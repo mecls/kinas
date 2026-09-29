@@ -25,8 +25,10 @@
   task forgets its stamps; `bun run check` green (733 bun, 391 Rust); the negative control failed as it must;
   `crew-done-clears` 6 of 6, `crew-home` 1 of 1, `crew-board` 5 of 5, run alone
 - [x] Slice 4 · the record → ship point — 2026-09-29: `origin/main` unmoved (`49d185f`), `bun run check` green (733
-  bun, 391 Rust), the full e2e alone 40 of 40 specs (221 cases), private names clean. **Waiting on the captain:** push
-  and the PR, the merge to `main`, the release build; the install is theirs to run
+  bun, 391 Rust), the full e2e alone 40 of 40 specs (221 cases), private names clean. **On the captain's word (2026-09-29):**
+  pushed as PR #45 and fast-forwarded onto `main`; the Dock icon followed as PR #46 (#44 replayed onto it, not
+  force-pushed). A release build of `34419e5`, both on board, carries no test seam and the new icon. **Not installed**
+  — the install quits the running Kinas and is the captain's to run
 
 ## Notes for a fresh session
 

@@ -1,6 +1,7 @@
 {
   "name": "kinas",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": ["app", "cli", "packages/*"],
   "scripts": {

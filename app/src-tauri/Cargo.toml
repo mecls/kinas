@@ -2,6 +2,7 @@
 name = "kinas-app"
 version = "0.1.0"
 description = "Kinas"
+license = "MIT"
 edition = "2021"
 publish = false
 

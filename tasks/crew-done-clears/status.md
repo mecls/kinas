@@ -3,9 +3,10 @@
 - Gate 1 · Product: APPROVED 2026-09-29 — `prd.md`, from the captain's answers (§7); approved as written, so §7.1
   (one seen stamp per surface) and §7.2 (gone clears like done) stand as proposed
   - Mockups: APPROVED 2026-09-29 — `mockups/fleet-board.html`, `mockups/home-overnight.html`
-- Gate 2 · Architecture: in progress — `architecture.md`, private, in the main checkout
-  (`tasks/crew-done-clears/architecture.md`)
-- Gate 3 · Program design: pending
+- Gate 2 · Architecture: APPROVED 2026-09-29 — `architecture.md`, private, in the main checkout
+  (`tasks/crew-done-clears/architecture.md`): two stamp columns on `crew_tasks` (migration 0006), `finished()` in
+  Rust, a `crew_seen` command, the PRs of done tasks read while open, each page filtering by its own load; no ADR
+- Gate 3 · Program design: in progress — `build-spec.md` §11, private, in the main checkout
 - Gate 4 · Slice plan: pending
 
 ## Slices

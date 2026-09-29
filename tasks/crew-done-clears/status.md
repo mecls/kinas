@@ -6,8 +6,9 @@
 - Gate 2 · Architecture: APPROVED 2026-09-29 — `architecture.md`, private, in the main checkout
   (`tasks/crew-done-clears/architecture.md`): two stamp columns on `crew_tasks` (migration 0006), `finished()` in
   Rust, a `crew_seen` command, the PRs of done tasks read while open, each page filtering by its own load; no ADR
-- Gate 3 · Program design: in progress — `build-spec.md` §11, private, in the main checkout
-- Gate 4 · Slice plan: pending
+- Gate 3 · Program design: APPROVED 2026-09-29 — `build-spec.md` §11, private, in the main checkout, approved as
+  written
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12
 
 ## Slices
 - [ ] (planned at Gate 4)

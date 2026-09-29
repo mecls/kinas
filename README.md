@@ -240,6 +240,7 @@ DESIGN.md            the design system: tokens, components, pages — the law fo
 design/preview.html  DESIGN.md rendered, both themes, for a browser; held equal to tokens.css by a test
 docs/design/screens/ Home, Usage, Settings and the stories in both themes, as the e2e captured them
 AGENTS.md            how agents work here: the four gates, the resume rule, where the documents live
+LICENSE              MIT, for everything but the fonts and the vendored skill (see Licence below)
 docs/smoke-test.md   the terminal's acceptance checklist
 docs/adr/            the decisions that outlive a feature, numbered, never rewritten (adr.test.ts holds them)
 docs/external/       the world outside the repository — names and scopes, never values
@@ -255,3 +256,9 @@ session reads first. `AGENTS.md` is the rule book: the resume rule, the approval
 boundary, what skips the gates, and the map from the vendored skill's file layout to `tasks/<feature>/`. The
 templates are in `tasks/_templates/`; the tracked part of a feature's folder is its status file, its PRD and
 its mockups, which are reviewed inside Kinas with `kinas open`; the build spec stays on the captain's Mac.
+
+## Licence
+
+Kinas is released under the MIT licence; the text is in `LICENSE`. Two things in the repository are not Kinas's to
+license and keep their own terms: the fonts in `app/src/assets/fonts/`, each under the SIL Open Font License beside
+it, and the vendored `.claude/skills/software-factory/SKILL.md`, whose header names where it came from.

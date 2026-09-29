@@ -1,8 +1,8 @@
 //! The crew's read side (build spec §11.2), under one guard the caller takes: the Crew page's snapshot. Words are
 //! derived here, at read time, from the mirror's columns (§7) — never stored.
 
-use crate::readers::crew::mirror::{stored_of, STORED_COLUMNS};
-use crate::readers::crew::word::{word_of, word_without_gone};
+use crate::readers::crew::mirror::{stored_of, STORED_COLUMNS, STORED_LEN};
+use crate::readers::crew::word::{finished, word_of, word_without_gone};
 use crate::readings::ReaderView;
 use crate::redact::{Reader, DEAD_AFTER_MS};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -50,6 +50,11 @@ pub struct TaskRow {
     pub last_event_text: Option<String>,
     pub pr: Option<PrView>,
     pub has_pane: bool,
+    /// Done work clears (rules 1–2): gone, or done with no open PR. The page never derives it.
+    pub finished: bool,
+    /// When the Crew page's board, and Home's Overnight, first showed it finished.
+    pub board_seen_at: Option<i64>,
+    pub overnight_seen_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -168,7 +173,10 @@ fn task_row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
             checks_total: stored.pr_checks_total,
             checks_failed: stored.pr_checks_failed,
         }),
-        has_pane: r.get(24)?,
+        has_pane: r.get(9 + STORED_LEN)?,
+        finished: finished(&input),
+        board_seen_at: stored.board_seen_at,
+        overnight_seen_at: stored.overnight_seen_at,
     })
 }
 
@@ -462,6 +470,32 @@ mod tests {
         cycle(&store, "empty", T0 + 20);
         let gone = snapshot_view(&store.conn(), store.org_id(), T0 + 21, true, true, None).unwrap();
         assert_eq!((gone.tasks[0].word, gone.tasks[0].overnight_word), ("gone", "done"));
+    }
+
+    #[test]
+    fn task_rows_carry_finished_and_the_stamps() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let org = store.org_id();
+        let first = |now: i64| snapshot_view(&store.conn(), org, now, true, false, None).unwrap().tasks.remove(0);
+        cycle(&store, "working", T0);
+        let working = first(T0 + 1);
+        assert_eq!((working.finished, working.board_seen_at, working.overnight_seen_at), (false, None, None));
+
+        cycle(&store, "done", T0 + 10);
+        store.conn().execute("UPDATE crew_tasks SET board_seen_at = ?2 WHERE org_id = ?1", params![org, T0 + 11]).unwrap();
+        // A worker's pane seen just now: `has_pane` is read from its own column, after the stamps.
+        store
+            .conn()
+            .execute("INSERT INTO crew_workers (org_id, task_id, session, pane_id, alive, observed_at) VALUES (?1, ?2, 's', 'p', 1, ?3)", params![org, working.id, T0 + 12])
+            .unwrap();
+        let done = first(T0 + 12);
+        assert_eq!((done.word, done.finished, done.board_seen_at, done.overnight_seen_at, done.has_pane), ("done", true, Some(T0 + 11), None, true));
+
+        // Its PR read open: done, and not finished (done work clears, rule 2).
+        store.conn().execute("UPDATE crew_tasks SET pr_state = 'OPEN' WHERE org_id = ?1", params![org]).unwrap();
+        let open = first(T0 + 13);
+        assert_eq!((open.word, open.finished), ("done", false));
     }
 
     #[test]

@@ -120,6 +120,7 @@ pub fn run() {
             crew::crew_task,
             crew::crew_focus_pane,
             crew::crew_answer,
+            crew::crew_seen,
             crew::crew_record_order,
             crew::crew_add,
             tray::tray_title,

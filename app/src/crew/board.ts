@@ -1,4 +1,4 @@
-import type { CrewPr, CrewTask, CrewWord } from "../api.ts";
+import type { CrewPr, CrewSurface, CrewTask, CrewWord } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { BadgeState } from "../ui/StatusBadge.tsx";
 import type { Category } from "../ui/Dot.tsx";
@@ -48,6 +48,32 @@ export function fleetAsOf(generated: string | null, now: number): string | null 
 
 /** In flight: started and not finished, whatever the badge says (§7). */
 export const inFlight = (t: CrewTask) => t.word !== "queued" && t.word !== "done" && t.word !== "gone";
+
+const seenAt = (t: CrewTask, surface: CrewSurface) => (surface === "board" ? t.board_seen_at : t.overnight_seen_at);
+
+/**
+ * What a page shows in the load it opened at `openedAt` (done work clears, rules 3–5): every task but the finished
+ * ones it stamped before that load — except those `keep` says this load has already drawn, so a card never leaves
+ * under the captain's eyes. `stampedHere` holds the stamps this page asked for, for a reading taken before they were
+ * written. Whether a task is finished is Rust's word (`finished`), never decided here.
+ */
+export function onScreen(
+  tasks: readonly CrewTask[],
+  surface: CrewSurface,
+  openedAt: number,
+  keep: ReadonlySet<string>,
+  stampedHere: ReadonlyMap<string, number> = new Map(),
+): CrewTask[] {
+  return tasks.filter((t) => {
+    const at = seenAt(t, surface) ?? stampedHere.get(t.id) ?? null;
+    return !(t.finished && at !== null && at < openedAt && !keep.has(t.id));
+  });
+}
+
+/** The finished tasks among those drawn with no stamp for this surface yet: what the page sends to be stamped. */
+export function toStamp(shown: readonly CrewTask[], surface: CrewSurface): string[] {
+  return shown.filter((t) => t.finished && seenAt(t, surface) === null).map((t) => t.id);
+}
 
 /**
  * One lane per client folder with a task, matched by GitHub repository and never by name (PRD rule 18), in the

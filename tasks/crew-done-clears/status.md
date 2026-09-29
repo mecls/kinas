@@ -15,7 +15,9 @@
 - [x] Slice 0 · the probe (migration 0006 on a copy of the captain's store), and docs first — 2026-09-29: baseline
   `bun run check` green (728 bun, 382 Rust); the probe passed (schema 5, 0006 applies; 13 tasks, 12 done, 2 gone);
   DESIGN.md 1.10, the first mate's PRD, github-cli.md, README and the smoke test amended, `bun test` green
-- [ ] Slice 1 · tracer bullet: a done card leaves the board at the next load
+- [x] Slice 1 · tracer bullet: a done card leaves the board at the next load — 2026-09-29: migration 0006,
+  `finished()`, `crew_seen`, `useCleared` on the Crew page; `bun run check` green (732 bun, 388 Rust); the negative
+  control failed as it must; `crew-done-clears` 2 of 2, `crew-board` 5 of 5, `crew-home` 1 of 1, run alone
 - [ ] Slice 2 · a done task with an open PR stays until it merges
 - [ ] Slice 3 · Overnight, and a task that comes back
 - [ ] Slice 4 · the record → ship point

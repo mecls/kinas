@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { CrewTask, CrewWord } from "../api.ts";
 import { seatFolders } from "../shell/folders.ts";
 import { BADGE } from "../ui/StatusBadge.tsx";
-import { BADGE_OF, cardOrder, duration, elapsedText, laneCounts, lanesOf, metaLine, prLine } from "./board.ts";
+import { BADGE_OF, cardOrder, duration, elapsedText, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
 
 // The board's rules (build spec §4 Crew page, PRD rules 18–19, AC-7): lanes by repository in the sidebar's order, then
 // the unmatched by name without chips; counts; card order; elapsed texts; PR lines.
@@ -27,6 +27,9 @@ const task = (id: string, word: CrewWord, extra: Partial<CrewTask> = {}): CrewTa
   last_event_text: null,
   pr: null,
   has_pane: false,
+  finished: false,
+  board_seen_at: null,
+  overnight_seen_at: null,
   ...extra,
 });
 
@@ -120,4 +123,46 @@ test("the PR line once gh has answered", () => {
 test("every word has a badge DESIGN.md draws", () => {
   for (const state of Object.values(BADGE_OF)) expect(BADGE[state]).toBeDefined();
   expect(Object.keys(BADGE_OF)).toHaveLength(12);
+});
+
+describe("onScreen and toStamp (done work clears, rules 3–5)", () => {
+  const OPENED = NOW;
+  const none = new Set<string>();
+  const done = (id: string, extra: Partial<CrewTask> = {}) => task(id, "done", { finished: true, done_at: NOW - 30 * MIN, ...extra });
+
+  test("onScreen keeps what this load showed and drops what was seen before it", () => {
+    const tasks = [
+      task("working", "working"),
+      done("unseen"),
+      done("seen-before", { board_seen_at: OPENED - 1 }),
+      done("seen-in-this-load", { board_seen_at: OPENED }),
+      done("drawn-then-stamped", { board_seen_at: OPENED - 5 * MIN }),
+      done("seen-on-home-only", { overnight_seen_at: OPENED - MIN }),
+    ];
+    const ids = (list: CrewTask[]) => list.map((t) => t.id);
+    expect(ids(onScreen(tasks, "board", OPENED, new Set(["drawn-then-stamped"])))).toEqual(["working", "unseen", "seen-in-this-load", "drawn-then-stamped", "seen-on-home-only"]);
+    // Each page clears only what it has shown (rule 6): Overnight drops what Home saw, and keeps the board's.
+    expect(ids(onScreen(tasks, "overnight", OPENED, none))).toEqual(["working", "unseen", "seen-before", "seen-in-this-load", "drawn-then-stamped"]);
+  });
+
+  test("onScreen counts the stamps this page asked for before a reading holds them", () => {
+    // Stamped at the last load, and the page came back before re-reading: the reading still says none.
+    const t = done("stamped-here");
+    expect(onScreen([t], "board", OPENED, none, new Map([["stamped-here", OPENED - MIN]]))).toEqual([]);
+    expect(onScreen([t], "board", OPENED, new Set(["stamped-here"]), new Map([["stamped-here", OPENED - MIN]]))).toEqual([t]);
+  });
+
+  test("onScreen never drops an unfinished task", () => {
+    // A done task whose PR is still open is not finished (Rust's word): whatever its stamp says, it stays.
+    const open = task("pr-open", "done", { finished: false, board_seen_at: OPENED - MIN, overnight_seen_at: OPENED - MIN });
+    const failed = task("failed", "failed", { board_seen_at: OPENED - MIN });
+    expect(onScreen([open, failed], "board", OPENED, none)).toEqual([open, failed]);
+    expect(onScreen([open, failed], "overnight", OPENED, none)).toEqual([open, failed]);
+  });
+
+  test("toStamp gives the finished tasks with no stamp for the surface", () => {
+    const shown = [task("working", "working"), done("unseen"), done("stamped", { board_seen_at: OPENED }), done("home-only", { overnight_seen_at: OPENED }), task("gone", "gone", { finished: true })];
+    expect(toStamp(shown, "board")).toEqual(["unseen", "home-only", "gone"]);
+    expect(toStamp(shown, "overnight")).toEqual(["unseen", "stamped", "gone"]);
+  });
 });

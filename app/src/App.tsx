@@ -671,6 +671,7 @@ export function App() {
               onOpenPane={(id) => void openPane(id)}
               onLaunch={() => void firstMate()}
               onInbox={() => goTo("inbox")}
+              onReload={reloadCrew}
             />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>

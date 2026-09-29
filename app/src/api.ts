@@ -151,6 +151,11 @@ export interface CrewTask {
   last_event_text: string | null;
   pr: CrewPr | null;
   has_pane: boolean;
+  /** Done work clears (rules 1–2): gone, or done with no open PR — Rust's word, never derived here. */
+  finished: boolean;
+  /** When the Crew page's board, and Home's Overnight, first showed it finished; null until then. */
+  board_seen_at: number | null;
+  overnight_seen_at: number | null;
 }
 export interface CrewDecision {
   task_id: string;
@@ -234,6 +239,10 @@ export interface CrewTaskDetail {
 export const getCrew = () => invoke<CrewSnapshot>("crew_snapshot");
 /** One task for the panel; null when the mirror never held it. */
 export const getCrewTask = (id: string) => invoke<CrewTaskDetail | null>("crew_task", { id });
+/** The two pages that clear finished work once they have shown it (done work clears). */
+export type CrewSurface = "board" | "overnight";
+/** What a page just showed finished: Rust stamps each one still finished and not yet stamped; answers how many. */
+export const crewSeen = (surface: CrewSurface, ids: readonly string[]) => invoke<number>("crew_seen", { surface, ids });
 /**
  * An Inbox answer (ADR 0017): Rust builds `On <task> (<key>): <answer>` from the open decision, puts it on the clipboard,
  * marks it copied, then runs the launcher. A rejection with a launcher's code (a missing tool, Herdr) came after the

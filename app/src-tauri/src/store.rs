@@ -12,6 +12,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (3, include_str!("../../../migrations/0003_provider_metrics.sql")),
     (4, include_str!("../../../migrations/0004_hostinger.sql")),
     (5, include_str!("../../../migrations/0005_crew.sql")),
+    (6, include_str!("../../../migrations/0006_crew_seen.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -330,7 +331,7 @@ mod tests {
         }
 
         let store = Store::open(dir.path()).unwrap();
-        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), 5);
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), MIGRATIONS.last().unwrap().0);
         assert_eq!(count(&store, "SELECT count(*) FROM orgs"), 1, "the upgrade must not mint a second org");
         assert_eq!(count(&store, "SELECT count(*) FROM settings WHERE key = 'appearance'"), 1);
         let row: (String, i64, i64, String) = store
@@ -347,5 +348,36 @@ mod tests {
         for table in ["crew_tasks", "crew_workers", "crew_events", "crew_decisions"] {
             assert_eq!(count(&store, &format!("SELECT count(*) FROM {table}")), 0, "{table}");
         }
+    }
+
+    /// Done work clears (build spec §11.2): the captain's store is at v5 with a mirror full of tasks; it upgrades in
+    /// place, every row kept, and no task starts out seen.
+    #[test]
+    fn upgrading_from_v5_keeps_the_crew_and_stamps_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_FILE);
+        {
+            let mut conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)")
+                .unwrap();
+            for (version, sql) in MIGRATIONS.iter().filter(|(v, _)| *v <= 5) {
+                let tx = conn.transaction().unwrap();
+                tx.execute_batch(sql).unwrap();
+                tx.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)", params![version]).unwrap();
+                tx.commit().unwrap();
+            }
+            conn.execute("INSERT INTO orgs (id, name, created_at) VALUES ('org-1', 'test', 0)", []).unwrap();
+            conn.execute(
+                "INSERT INTO crew_tasks (org_id, id, kind, backlog_state, snapshot_generated, first_seen_at, last_seen_at, done_at)
+                 VALUES ('org-1', 'done-9c2e', 'ship', 'done', 'g', 1, 1, 5)",
+                [],
+            )
+            .unwrap();
+        }
+
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), MIGRATIONS.last().unwrap().0);
+        assert_eq!(count(&store, "SELECT count(*) FROM crew_tasks WHERE done_at = 5"), 1, "the row kept");
+        assert_eq!(count(&store, "SELECT count(*) FROM crew_tasks WHERE board_seen_at IS NULL AND overnight_seen_at IS NULL"), 1, "seen by no page yet");
     }
 }

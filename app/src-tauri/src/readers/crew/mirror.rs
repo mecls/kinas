@@ -110,6 +110,9 @@ pub(crate) struct Stored {
     pub(crate) first_working_at: Option<i64>,
     pub(crate) done_at: Option<i64>,
     pub(crate) gone_at: Option<i64>,
+    /// When the Crew page's board, and Home's Overnight, first showed the task finished (done work clears).
+    pub(crate) board_seen_at: Option<i64>,
+    pub(crate) overnight_seen_at: Option<i64>,
 }
 
 impl Stored {
@@ -406,13 +409,15 @@ fn places(conn: &Connection, org: &str) -> rusqlite::Result<HashMap<String, Plac
     rows.collect()
 }
 
-fn priors_one(conn: &Connection, org: &str, id: &str) -> rusqlite::Result<Option<Stored>> {
+pub(crate) fn priors_one(conn: &Connection, org: &str, id: &str) -> rusqlite::Result<Option<Stored>> {
     conn.query_row(&format!("SELECT {STORED_COLUMNS} FROM crew_tasks WHERE org_id = ?1 AND id = ?2"), params![org, id], |r| stored_of(r, 0))
         .optional()
 }
 
 pub(crate) const STORED_COLUMNS: &str = "state, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_state, pr_draft,
-    pr_mergeable, pr_checks_total, pr_checks_failed, first_seen_at, first_working_at, done_at, gone_at";
+    pr_mergeable, pr_checks_total, pr_checks_failed, first_seen_at, first_working_at, done_at, gone_at, board_seen_at, overnight_seen_at";
+/// How many columns `STORED_COLUMNS` names: a query's next column after them is at `at + STORED_LEN`.
+pub(crate) const STORED_LEN: usize = 17;
 
 pub(crate) fn stored_of(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Stored> {
     Ok(Stored {
@@ -431,6 +436,8 @@ pub(crate) fn stored_of(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Stored
         first_working_at: r.get(at + 12)?,
         done_at: r.get(at + 13)?,
         gone_at: r.get(at + 14)?,
+        board_seen_at: r.get(at + 15)?,
+        overnight_seen_at: r.get(at + 16)?,
     })
 }
 

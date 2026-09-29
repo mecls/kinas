@@ -58,6 +58,17 @@ pub(crate) fn word_of(w: &WordInput) -> &'static str {
     }
 }
 
+/// Finished (done work clears, rules 1–2): gone, or done with no open PR — a done task whose PR is still open stays on
+/// the Crew page until it is merged or closed. A PR never read (`state` None) is no PR. The one definition: the Crew
+/// page's rows carry it, and `crew::seen` stamps nothing it says is not finished.
+pub(crate) fn finished(w: &WordInput) -> bool {
+    match word_of(w) {
+        "gone" => true,
+        "done" => w.pr.and_then(|pr| pr.state) != Some("OPEN"),
+        _ => false,
+    }
+}
+
 /// The word without the gone rule: a task that finished overnight and was then torn down still counts as done.
 pub(crate) fn word_without_gone(w: &WordInput) -> &'static str {
     word_of(&WordInput { gone: false, ..*w })
@@ -140,6 +151,22 @@ mod tests {
         }
         for word in ["queued", "done", "gone"] {
             assert!(!in_flight(word), "{word}");
+        }
+    }
+
+    #[test]
+    fn finished_is_gone_or_done_without_an_open_pr() {
+        let pr = |state: Option<&'static str>| Some(PrWordInput { state, ..PrWordInput::default() });
+        let done = WordInput { done: true, backlog_state: Some("done"), ..WordInput::default() };
+        assert!(finished(&WordInput { gone: true, ..WordInput::default() }), "gone");
+        assert!(finished(&WordInput { gone: true, pr: pr(Some("OPEN")), ..done }), "gone, whatever its PR");
+        assert!(finished(&done), "done, no PR");
+        assert!(finished(&WordInput { pr: pr(None), ..done }), "done, a PR never read counts as none");
+        assert!(!finished(&WordInput { pr: pr(Some("OPEN")), ..done }), "done, its PR open: it stays");
+        assert!(finished(&WordInput { pr: pr(Some("MERGED")), ..done }), "done, merged");
+        assert!(finished(&WordInput { pr: pr(Some("CLOSED")), ..done }), "done, closed");
+        for state in ["working", "failed", "parked"] {
+            assert!(!finished(&WordInput { state: Some(state), ..WordInput::default() }), "{state}");
         }
     }
 }

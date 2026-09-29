@@ -12,6 +12,7 @@ pub(crate) mod orders;
 pub(crate) mod pin;
 pub(crate) mod read;
 pub(crate) mod repo;
+pub(crate) mod seen;
 pub(crate) mod tools;
 
 use crate::readers::crew::{CrewLive, HERDR_FRESH_MS};
@@ -176,6 +177,21 @@ pub async fn crew_focus_pane(app: AppHandle, task: String) -> Result<(), CrewErr
     })
     .await
     .map_err(|e| CrewError::internal(format!("the focus did not finish: {e}")))?
+}
+
+/// What a page just showed finished (done work clears, rules 4–6): each task still finished and not yet stamped for
+/// that page gets its stamp. The ids are only a request — `seen::seen` checks every row. A failed stamp is the page's to
+/// drop: the task then shows again at its next load, never cleared unseen. Nothing is logged.
+#[tauri::command]
+pub async fn crew_seen(app: AppHandle, surface: seen::Surface, ids: Vec<String>) -> Result<usize, CrewError> {
+    seen::within_limit(&ids)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<Store>();
+        let conn = store.conn();
+        seen::seen(&conn, store.org_id(), surface, &ids, now_ms()).map_err(|e| CrewError::internal(format!("could not mark what the page showed: {e}")))
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the stamp did not finish: {e}")))?
 }
 
 /// An Inbox answer (§11.3 Answering; ADR 0017): the line from the open decision row onto the clipboard, `copied_at`

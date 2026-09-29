@@ -8,10 +8,15 @@
   Rust, a `crew_seen` command, the PRs of done tasks read while open, each page filtering by its own load; no ADR
 - Gate 3 · Program design: APPROVED 2026-09-29 — `build-spec.md` §11, private, in the main checkout, approved as
   written
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12
+- Gate 4 · Slice plan: APPROVED 2026-09-29 — `build-spec.md` §12, five slices, one ship point at slice 4; building on
+  `feat/crew-done-clears`
 
 ## Slices
-- [ ] (planned at Gate 4)
+- [ ] Slice 0 · the probe (migration 0006 on a copy of the captain's store), and docs first
+- [ ] Slice 1 · tracer bullet: a done card leaves the board at the next load
+- [ ] Slice 2 · a done task with an open PR stays until it merges
+- [ ] Slice 3 · Overnight, and a task that comes back
+- [ ] Slice 4 · the record → ship point
 
 ## Notes for a fresh session
 

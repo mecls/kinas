@@ -1,8 +1,10 @@
 # Status: Done work clears — the Fleet board and Overnight forget what you have seen
 
-- Gate 1 · Product: in progress — `prd.md`, from the captain's answers (§7), written 2026-09-29
-  - Mockups: in progress — `mockups/fleet-board.html`, `mockups/home-overnight.html`
-- Gate 2 · Architecture: pending
+- Gate 1 · Product: APPROVED 2026-09-29 — `prd.md`, from the captain's answers (§7); approved as written, so §7.1
+  (one seen stamp per surface) and §7.2 (gone clears like done) stand as proposed
+  - Mockups: APPROVED 2026-09-29 — `mockups/fleet-board.html`, `mockups/home-overnight.html`
+- Gate 2 · Architecture: in progress — `architecture.md`, private, in the main checkout
+  (`tasks/crew-done-clears/architecture.md`)
 - Gate 3 · Program design: pending
 - Gate 4 · Slice plan: pending
 

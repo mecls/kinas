@@ -386,6 +386,23 @@ folder with no remote, as the fixture's `repo` is; the push's own lines follow i
       marks seen live on the installed build on 2026-09-25 (an amber dot and M on a file an agent was editing); the
       Changes view on code and both themes are still to look at — `in part, needs Miguel`
 
+## Done work clears
+
+Finished crew work — done or gone — leaves the Crew page's board and Home's Overnight at that page's next load, once
+the page has shown it; a done task whose PR is still open stays until it is merged or closed (2026-09-29,
+`tasks/crew-done-clears/prd.md`). The steps named are `crew-done-clears.e2e.ts`'s, as they are built.
+
+- [ ] A task that turns done while the Crew page shows it keeps its card through the page's re-reads — `outstanding —
+      clears 1`
+- [ ] Home and back to Crew: the done card is gone, and its lane with it if it was the last — `outstanding — clears 2`
+- [ ] A done task whose PR is open stays after a reload, its PR line current — `outstanding — clears 3`
+- [ ] Once that PR reads merged, the card goes at the next load — `outstanding — clears 4`
+- [ ] Overnight counts a finished task once; the Crew page still shows its card once — `outstanding — clears 5`
+- [ ] Nothing is deleted from the mirror, `kinas crew status` lists every task, and no task reaches the log —
+      `outstanding — clears 6`
+- [ ] After a real crew run, on the installed build: the done cards clear at the next visit to Crew, and Overnight
+      reports them once — `outstanding — needs the captain`
+
 ## Crew marks
 
 What the first mate's crew has changed in its own checkouts and not pushed, marked on the captain's tree with a hollow

@@ -110,7 +110,10 @@ now says what the crew did while you were away, and a right-click on a client fo
     app is still the store's one writer (ADR 0001) and the CLI still opens it read-only.
 12. **The mirror never deletes.** A task the snapshot stops listing is marked gone, never removed; the timeline only
     grows; a decision is closed, never erased. What is shown is a view: a done task for 7 days after it finished, a
-    gone task for 24 hours.
+    gone task for 24 hours. *(Amended 2026-09-29, done work clears, `tasks/crew-done-clears/prd.md`: the Crew page and
+    Home's Overnight also leave out a finished task — done or gone — at their next load once they have shown it; a
+    done task whose PR is still open stays until the PR is merged or closed. These windows stay as ceilings, and the
+    mirror still never deletes.)*
 13. **A task filed in the pane is a card within 5 seconds.** The snapshot runs when `data/backlog.md` or the summary
     changes (after 500 ms of quiet), when the Crew or Inbox page opens, and every 60 s while the window is visible
     (300 s hidden) — never twice within 5 s. Filing a task does not republish Firstmate's summary (it can lag 5
@@ -153,6 +156,8 @@ now says what the crew did while you were away, and a right-click on a client fo
     hours, and says so: `since 23:40 yesterday, 9 h 20 m`. A folder's row counts the tasks of its lane with any
     event in that window as done, working (queued, working, PR open, paused, unknown), waiting on you (needs
     decision, ready) or failed (failed, blocked, CI red).
+    *(Amended 2026-09-29, done work clears: a finished task Overnight has counted is left out from Home's next load, so
+    each finish is told once; the window and the four counts stand.)*
 22. **The Work pane opens on the first mate, once.** When Kinas starts and the attached Herdr session has a
     `firstmate` workspace, Kinas focuses it, so the pane shows the first mate when the session attaches. After that
     Kinas moves the pane only on a click (First mate, Open its pane, Launch task, Open in the terminal); the pane is

@@ -155,7 +155,10 @@ waits shows on the sidebar, the Crew page, Home and the menu bar. Below the item
 where Firstmate's records and what Kinas sees disagree — a dead endpoint, a missing worktree, a worker pane Herdr does
 not have, a task in flight with no record — and neither counts nor repairs any of it. **Home** reads the night since
 the last session ended from the same mirror, and a client folder's menu has **Add to crew**, which hands its GitHub
-repository to the first mate in one sentence.
+repository to the first mate in one sentence. Amended 2026-09-29 (done work clears): a finished task — done or gone —
+stays on the Crew page and in Home's night while they show it, and is gone the next time that page opens or reloads;
+one whose PR is still open stays until the PR is merged or closed. The mirror keeps every row, and `kinas crew status`
+lists them all.
 
 ## The crew
 

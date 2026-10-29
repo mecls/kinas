@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CrewDecision, CrewSnapshot } from "../api.ts";
 import { fleetAsOf } from "../crew/board.ts";
-import { ageText, copiedText, inboxGroups, titleOf } from "../crew/inbox.ts";
+import { ageText, copiedText, inboxGroups, reconcileRows, titleOf } from "../crew/inbox.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import { Dot, EmptyState, InboxItem, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
@@ -174,10 +174,10 @@ export function InboxPage({
             <Section data-section="reconcile">
               <SectionHeader title="Reconcile" caption="information — nothing here is repaired" />
               <ul className="inbox-reconcile">
-                {groups.reconcile.map((line) => (
-                  <li key={line}>
+                {reconcileRows(groups.reconcile).map((r) => (
+                  <li key={r.key}>
                     <Dot color="--stale" />
-                    {line}
+                    {r.line}
                   </li>
                 ))}
               </ul>

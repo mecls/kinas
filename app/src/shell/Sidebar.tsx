@@ -1,6 +1,6 @@
 import { type CrewForMenu, folderMenu, hiddenFolders, menuAt, seatFolders, type SeatedFolder, shownFolders } from "./folders.ts";
 import { useLayoutEffect, useEffect, useRef, useState } from "react";
-import { getUsageSnapshot, onReadingsChanged, type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
+import { type PinView, type ProjectRow, readerAllowClick } from "../api.ts";
 import type { Page } from "../App.tsx";
 import { FileTree, type FolderActions as TreeFolderActions } from "../reader/tree.tsx";
 import { ChangesCaption, RefreshButton } from "../reader/treeHead.tsx";
@@ -25,13 +25,10 @@ import {
   Toast,
   Wordmark,
 } from "../ui/index.ts";
-import { type Connection, connectionOf } from "./connection.ts";
+import type { Connection } from "./connection.ts";
 import { type Notice, NOTICE_MS } from "./notice.ts";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
-
-/** The sidebar asks for the VPS reading this often when nothing else changes; a new reading arrives as an event. */
-const CONNECTION_MS = 60_000;
 
 /**
  * The left sidebar (DESIGN.md §3.1; three-column shell §4): the wordmark, the five pages, then what Miguel can open —
@@ -71,6 +68,7 @@ export function Sidebar({
   onAdd,
   notice,
   panelOpen,
+  connection = null,
   waiting = 0,
   crew = { installed: false, repos: [] },
   onAddToCrew = () => {},
@@ -100,6 +98,8 @@ export function Sidebar({
   /** What the shell last said. Shown here only while the panel is closed — open, the reader's status line has it. */
   notice: Notice | null;
   panelOpen: boolean;
+  /** The VPS row at the foot, from App's one usage snapshot (shell/connection.ts); null draws no row. */
+  connection?: Connection | null;
   /** The crew's one waiting count (crew::read::waiting), on the Inbox row; hidden at zero. */
   waiting?: number;
   /** What Add to crew needs: whether Firstmate is installed, and the repositories already in the crew. */
@@ -177,7 +177,8 @@ export function Sidebar({
       </div>
 
       <SidebarNotice notice={notice} panelOpen={panelOpen} />
-      <Machine />
+      {/* The VPS row, from the same reading the Usage page shows (shell/connection.ts); nothing when no machine is watched. */}
+      {connection && <ConnectionRow name={connection.name} state={connection.state} detail={connection.detail} />}
       {/* The last row, below the machine (folder views, 2026-09-23): out of the scrolling sections, always in view. */}
       <div className="sidebar-foot">
         <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} />
@@ -267,25 +268,6 @@ function ClientFolders({
       )}
     </section>
   );
-}
-
-/** The VPS row at the foot, from the same reading the Usage page shows (shell/connection.ts); nothing when no machine is watched. */
-function Machine() {
-  const [connection, setConnection] = useState<Connection | null>(null);
-  useEffect(() => {
-    const load = () => void getUsageSnapshot().then((s) => setConnection(connectionOf(s)), () => {});
-    load();
-    const timer = window.setInterval(load, CONNECTION_MS);
-    const stop = onReadingsChanged(load);
-    window.addEventListener("focus", load);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", load);
-      void stop.then((u) => u());
-    };
-  }, []);
-  if (!connection) return null;
-  return <ConnectionRow name={connection.name} state={connection.state} detail={connection.detail} />;
 }
 
 /**

@@ -21,6 +21,7 @@ import {
   type SettingsView,
 } from "../api.ts";
 import { chordFromEvent } from "../settings/chord.ts";
+import { writeClipboard } from "../terminal/clipboard.ts";
 import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { CrewSection } from "../settings/CrewSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
@@ -182,8 +183,11 @@ export function SettingsPage({
                   <code>{line}</code>
                   <Button
                     className="button"
+                    // The app's one clipboard door (terminal/clipboard.ts), as the Crew page's Copy uses it: "Copied"
+                    // only once the line is on the clipboard.
                     onClick={() =>
-                      void navigator.clipboard.writeText(line).then(() => {
+                      void writeClipboard(line).then((ok) => {
+                        if (!ok) return;
                         setCopied(i);
                         window.setTimeout(() => setCopied(null), 1500);
                       })

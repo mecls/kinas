@@ -24,6 +24,7 @@ const ignored = [
   "tasks/first-mate/build-spec.md",
   "tasks/first-mate/architecture.md",
   "tasks/first-mate/handoff.md",
+  "tasks/first-mate/notes/handoff.md",
   "tasks/prd-crew.md",
   "tasks/three-column-shell-build-spec.md",
   "tasks/tasks-process.md",

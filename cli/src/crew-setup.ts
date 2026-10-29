@@ -189,7 +189,12 @@ async function ask(ctx: Ctx, question: string): Promise<boolean> {
   return confirm(`  ${question}`, ctx.io);
 }
 
-/** An existing home is looked at, never changed: a clone with local changes, a stranger folder or a moved pin stays. */
+/**
+ * An existing home is looked at, never changed: a clone with local changes, a stranger folder, a moved pin or a clone
+ * on another branch stays. Where the clone stands is judged as the app judges it (`crew/home.rs`, `classify`): on a
+ * branch that is not `main` it is a tangle for the first mate, whatever its commit; detached or on `main`, it is at the
+ * pin or moved on from it.
+ */
 async function checkHome(ctx: Ctx): Promise<string | null> {
   if (!existsSync(join(ctx.home, ".git"))) {
     const problem = `${ctx.home} exists and is not a git clone — move it away, then run kinas crew setup again`;
@@ -203,18 +208,35 @@ async function checkHome(ctx: Ctx): Promise<string | null> {
     return problem;
   }
   const at = await head(ctx);
+  if (at === null) {
+    say(ctx, "no commit checked out");
+    return "Firstmate's home has no commit checked out";
+  }
+  const branch = await currentBranch(ctx);
+  if (branch !== null && branch !== "main") {
+    const problem = `Firstmate's home is on branch ${branch}, not main — setup leaves it; ask the first mate`;
+    say(ctx, problem);
+    return problem;
+  }
   if (at === FIRSTMATE_PIN) {
     say(ctx, `already at ${SHORT_PIN}`);
     return null;
   }
   // Firstmate updates itself (/updatefirstmate): a clean clone that moved is Firstmate's doing, and Settings says so.
-  say(ctx, at ? `at ${at.slice(0, 7)}, moved from the pin ${SHORT_PIN} — setup leaves it; Settings → Crew shows it` : "no commit checked out");
-  return at ? null : "Firstmate's home has no commit checked out";
+  say(ctx, `at ${at.slice(0, 7)}, moved from the pin ${SHORT_PIN} — setup leaves it; Settings → Crew shows it`);
+  return null;
 }
 
 async function head(ctx: Ctx): Promise<string | null> {
   const r = await group(["git", "-C", ctx.home, "rev-parse", "HEAD"], ctx, PROBE_MS);
   return r.code === 0 ? r.stdout.trim() : null;
+}
+
+/** The branch HEAD is on; null when detached (`symbolic-ref` is quiet and exits 1 then). */
+async function currentBranch(ctx: Ctx): Promise<string | null> {
+  const r = await group(["git", "-C", ctx.home, "symbolic-ref", "--short", "-q", "HEAD"], ctx, PROBE_MS);
+  const line = r.stdout.trim();
+  return r.code === 0 && line !== "" ? line : null;
 }
 
 /** A tool's version and whether it meets its floor. A release tool is asked `--version`; an npm tool is never run. */
@@ -321,7 +343,9 @@ interface Ran {
 
 /**
  * A command in its own process group, killed whole at the limit (`npm install -g` starts children of its own), with
- * the setup environment and no stdin. `packages/context/src/exec.ts::run` kills only the direct child.
+ * the setup environment and no stdin. `packages/context/src/exec.ts::run` kills only the direct child. Git runs with
+ * optional locks off, so looking at an existing home (`git status`) never refreshes its index: Kinas writes nothing
+ * under the home but `config/backend` (ADR 0018).
  */
 function group(cmd: string[], ctx: Ctx, limitMs: number): Promise<Ran> {
   return new Promise((resolve) => {
@@ -329,7 +353,7 @@ function group(cmd: string[], ctx: Ctx, limitMs: number): Promise<Ran> {
     // Found on the setup PATH, not the CLI's own: the login shell's is what the captain's tools are on.
     const program = cmd[0]!.includes("/") ? cmd[0]! : (Bun.which(cmd[0]!, { PATH: ctx.env.PATH ?? "" }) ?? cmd[0]!);
     try {
-      child = spawn(program, cmd.slice(1), { env: ctx.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      child = spawn(program, cmd.slice(1), { env: { ...ctx.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["ignore", "pipe", "pipe"], detached: true });
     } catch (e) {
       resolve({ code: null, stdout: "", stderr: (e as Error).message });
       return;

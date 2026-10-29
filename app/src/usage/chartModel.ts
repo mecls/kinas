@@ -80,7 +80,9 @@ export function niceTicks(max: number): number[] {
   if (!(max > 0)) return [0];
   const raw = max / 4;
   const magnitude = 10 ** Math.floor(Math.log10(raw));
-  const step = ([1, 2, 5, 10].find((m) => m * magnitude >= raw) ?? 10) * magnitude;
+  // Tokens are whole numbers: a step under 1 would round two ticks onto one value (a day with 2 tokens gave
+  // 0, 1, 1, 2, 2), which the chart would draw and key twice.
+  const step = Math.max(1, ([1, 2, 5, 10].find((m) => m * magnitude >= raw) ?? 10) * magnitude);
   const top = Math.ceil(max / step) * step;
   const ticks: number[] = [];
   for (let v = 0; v <= top + step / 2; v += step) ticks.push(Math.round(v));

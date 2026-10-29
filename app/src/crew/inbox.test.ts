@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { CrewDecision, CrewSnapshot } from "../api.ts";
-import { ageText, copiedText, inboxGroups, titleOf } from "./inbox.ts";
+import { ageText, copiedText, inboxGroups, reconcileRows, titleOf } from "./inbox.ts";
 
 // The Inbox's words (build spec §4 Inbox page): groups in Rust's order, held tasks apart, the Copied line, the age.
 
@@ -45,4 +45,13 @@ test("ages in minutes, hours and days", () => {
 test("a task's title, else its id", () => {
   expect(titleOf(decision("k", "needs-decision"))).toBe("Export listing as CSV");
   expect(titleOf(decision("k", "needs-decision", { task_title: null }))).toBe("t-9c2e");
+});
+
+test("reconcile lines are drawn in order with keys that stay distinct when two tasks say the same thing", () => {
+  // Rust prefixes a line with the task's title, so two tasks of one title with the same trouble read the same.
+  const lines = ["Fix login 9c2e: Firstmate's endpoint (none) is absent", "Fix login 9c2e: Firstmate's endpoint (none) is absent", "Add CSV 9c2e: worktree ~/w is gone"];
+  const rows = reconcileRows(lines);
+  expect(rows.map((r) => r.line)).toEqual(lines);
+  expect(new Set(rows.map((r) => r.key)).size).toBe(3);
+  expect(reconcileRows([])).toEqual([]);
 });

@@ -26,6 +26,13 @@ export function asOf(updatedAt: number | null, now: number): string {
   return updatedAt === null ? "never read" : `as of ${lisbonClock(updatedAt, now)}`;
 }
 
+/** A metric row's unit with "stale" said after it (DESIGN.md §1: a stale reading says so where it is) — alone when
+ * the row had no unit, so nothing ever reads " · stale" with nothing before the separator. */
+export function withStale(unit: string, stale: boolean): string {
+  if (!stale) return unit;
+  return unit === "" ? "stale" : `${unit} · stale`;
+}
+
 /**
  * A bar's tone by % used (DESIGN.md §2.2, replacing R38's % left): `ui/Bar.ts toneOf` is the law, and a reading's
  * state comes first — stale is stale whatever its number, and a dead or reset one shows no number to warn about.
@@ -48,9 +55,10 @@ export function usedPct(used: number): string {
 /** 950 · 34k · 1.2M · 6.1B */
 export function compactTokens(n: number): string {
   const abs = Math.abs(n);
-  if (abs >= 1e9) return `${trim(n / 1e9)}B`;
-  if (abs >= 1e6) return `${trim(n / 1e6)}M`;
-  if (abs >= 1e3) return `${trim(n / 1e3)}k`;
+  // The unit is chosen on the value as it will be shown, not as it is: 999,600 rounds to 1,000k, which is 1M.
+  if (abs >= 1e9 || Number(trim(abs / 1e6)) >= 1000) return `${trim(n / 1e9)}B`;
+  if (abs >= 1e6 || Number(trim(abs / 1e3)) >= 1000) return `${trim(n / 1e6)}M`;
+  if (abs >= 1e3 || Math.round(abs) >= 1000) return `${trim(n / 1e3)}k`;
   return String(Math.round(n));
 }
 

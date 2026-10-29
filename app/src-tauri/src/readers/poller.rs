@@ -63,8 +63,9 @@ impl Poller {
                 let retry_after = retry_after_s.map_or(0, |s| i64::try_from(s).unwrap_or(i64::MAX / 2).saturating_mul(1000));
                 let wait = backoff.max(retry_after);
                 self.backoff_step += 1;
-                self.blocked_until = now + wait;
-                self.next_due = now + wait;
+                // Saturating: a `Retry-After` of garbage size must block, not overflow the clock.
+                self.blocked_until = now.saturating_add(wait);
+                self.next_due = self.blocked_until;
             }
         }
     }
@@ -77,7 +78,7 @@ impl Poller {
 
     /// How long the reader thread may sleep before the next tick is due.
     pub fn sleep_ms(&self, now: i64) -> i64 {
-        (self.next_due.max(self.blocked_until) - now).clamp(1_000, CADENCE_MS)
+        self.next_due.max(self.blocked_until).saturating_sub(now).clamp(1_000, CADENCE_MS)
     }
 }
 
@@ -136,6 +137,19 @@ mod tests {
         p.record(Result::RateLimited { retry_after_s: Some(900) }, 0);
         assert!(!p.should_request(Trigger::Tick, 15 * MIN - 1));
         assert!(p.should_request(Trigger::Tick, 15 * MIN));
+    }
+
+    /// A `Retry-After` too large to be meant — a proxy's garbage, or a header in milliseconds — must not overflow the
+    /// clock: in a debug build that panic ends the reader's thread, in a release build the wrapped sum unblocks it.
+    #[test]
+    fn an_absurd_retry_after_blocks_without_overflowing() {
+        let mut p = Poller::new(0);
+        let now = 1_790_000_000_000;
+        p.record(Result::RateLimited { retry_after_s: Some(u64::MAX) }, now);
+        assert!(!p.should_request(Trigger::Manual, now + 365 * 24 * 60 * MIN), "blocked, not unblocked by a wrap");
+        assert!(p.sleep_ms(now) >= 1_000 && p.sleep_ms(now) <= CADENCE_MS);
+        p.record(Result::RateLimited { retry_after_s: Some(9_223_372_036_854_775) }, now);
+        assert!(!p.should_request(Trigger::Tick, now + 30 * MIN));
     }
 
     #[test]

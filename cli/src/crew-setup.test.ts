@@ -45,9 +45,10 @@ if [ "$1" = clone ]; then mkdir -p "$4/.git" "$4/bin"; echo stub > "$4/bin/fm-fl
 if [ "$1" = -C ]; then
   dir=$2; shift 2
   case "$1" in
-    checkout) echo "$5" > "$dir/.git/STUB_HEAD" ;;
+    checkout) echo "$5" > "$dir/.git/STUB_HEAD"; echo "$4" > "$dir/.git/STUB_BRANCH" ;;
     rev-parse) cat "$dir/.git/STUB_HEAD" 2>/dev/null || exit 128 ;;
-    status) cat "$dir/.git/STUB_DIRTY" 2>/dev/null ;;
+    symbolic-ref) cat "$dir/.git/STUB_BRANCH" 2>/dev/null || exit 1 ;;
+    status) echo "git-env GIT_OPTIONAL_LOCKS=\${GIT_OPTIONAL_LOCKS:-unset}" >> "$CALLS"; cat "$dir/.git/STUB_DIRTY" 2>/dev/null ;;
   esac
 fi
 exit 0`,
@@ -178,10 +179,41 @@ describe("kinas crew setup", () => {
     expect(w.calls().filter((c) => c.includes("checkout") || c.startsWith("git clone"))).toEqual([]);
   });
 
+  test("looking at an existing home takes no optional lock: git status must not refresh the index (ADR 0018)", async () => {
+    const w = world();
+    mkdirSync(join(w.home, ".git"), { recursive: true });
+    writeFileSync(join(w.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+    writeFileSync(join(w.home, ".git", "STUB_BRANCH"), "main\n");
+    await run(w, { yes: true });
+    expect(w.calls().filter((c) => c.startsWith("git-env "))).toEqual(["git-env GIT_OPTIONAL_LOCKS=0"]);
+  });
+
+  test("a home on another branch is a tangle, as Settings → Crew says: reported, left alone, exit 1", async () => {
+    const w = world();
+    mkdirSync(join(w.home, ".git"), { recursive: true });
+    writeFileSync(join(w.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+    writeFileSync(join(w.home, ".git", "STUB_BRANCH"), "fix-9c2e\n");
+    const { code, out } = await run(w, { yes: true });
+    expect(code).toBe(1);
+    expect(out).toContain("Firstmate's home is on branch fix-9c2e, not main — setup leaves it; ask the first mate");
+    expect(out).not.toContain("already at");
+    expect(w.calls().filter((c) => c.includes("checkout") || c.startsWith("git clone"))).toEqual([]);
+  });
+
+  test("a home detached at the pin is at the pin", async () => {
+    const w = world();
+    mkdirSync(join(w.home, ".git"), { recursive: true });
+    writeFileSync(join(w.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+    const { code, out } = await run(w, { yes: true });
+    expect(code).toBe(0);
+    expect(out).toContain(`already at ${FIRSTMATE_PIN.slice(0, 7)}`);
+  });
+
   test("a clean clone that moved on by itself is reported, not reset", async () => {
     const w = world();
     mkdirSync(join(w.home, ".git"), { recursive: true });
     writeFileSync(join(w.home, ".git", "STUB_HEAD"), "9296f9b0000000000000000000000000000000ff\n");
+    writeFileSync(join(w.home, ".git", "STUB_BRANCH"), "main\n");
     const { code, out } = await run(w, { yes: true });
     expect(code).toBe(0);
     expect(out).toContain("at 9296f9b, moved from the pin f9f74a1 — setup leaves it");

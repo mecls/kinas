@@ -6,7 +6,7 @@
 //
 // Environment variables win over the file: KINAS_ROOT, FM_HOME, HERDR_SOCKET_PATH, CODEX_HOME, PI_CODING_AGENT_DIR.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { dataDir, readSetting } from "@kinas/store/sqlite-readonly";
@@ -93,8 +93,23 @@ export function loadConfig(env: Env = process.env): KinasConfig {
   };
 }
 
-/** True when `path` is the root or inside it. */
+/** `path` resolved on disk after symlinks, or merely normalised when it does not exist. */
+function real(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+const under = (p: string, root: string): boolean => p === root || p.startsWith(`${root}/`);
+
+/**
+ * True when `path` is the root or inside it. Both are judged as written and as they are on disk (`resolve` drops a
+ * trailing slash and `..`; `realpath` follows a symlinked root or a symlinked folder), so a hook started in a real
+ * path under a root written through a link still gets its packet — the same two-sided check `kinas open` makes.
+ */
 export function insideRoot(config: KinasConfig, path: string): boolean {
-  const p = resolve(path);
-  return p === config.root || p.startsWith(`${config.root}/`);
+  const root = resolve(config.root);
+  return under(resolve(path), root) || under(real(path), real(root));
 }

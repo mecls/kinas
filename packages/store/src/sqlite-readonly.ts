@@ -21,12 +21,26 @@ export type OpenResult =
   | { ok: false; reason: "newer"; version: number }
   | { ok: false; reason: "unreadable"; message: string };
 
+/**
+ * How long a read waits for the app's lock before it fails. The app holds the store exclusively for moments — WAL
+ * recovery after a crash, a checkpoint that restarts the log — and a reading refused for that is lost for nothing.
+ * The same wait the app and the CLI cache give themselves.
+ */
+const BUSY_TIMEOUT_MS = 2000;
+
+/** The store, read-only (`?mode=ro`, never a writer), waiting out a brief lock. */
+function openRo(path: string): Database {
+  const db = new Database(`file:${path}?mode=ro`, { readonly: true });
+  db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+  return db;
+}
+
 export function openReadOnly(dir: string): OpenResult {
   const path = join(dir, DB_FILE);
   if (!existsSync(path)) return { ok: false, reason: "missing", path };
   let db: Database;
   try {
-    db = new Database(`file:${path}?mode=ro`, { readonly: true });
+    db = openRo(path);
   } catch (e) {
     return { ok: false, reason: "unreadable", message: (e as Error).message };
   }
@@ -54,7 +68,7 @@ export function readSetting(dir: string, key: string): unknown {
   if (!existsSync(path)) return null;
   let db: Database | undefined;
   try {
-    db = new Database(`file:${path}?mode=ro`, { readonly: true });
+    db = openRo(path);
     const row = db.query("SELECT value FROM settings WHERE key = ?1 LIMIT 1").get(key) as { value: string } | null;
     return row ? JSON.parse(row.value) : null;
   } catch {

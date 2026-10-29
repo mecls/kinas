@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getCrew, onCrewChanged, setCrewVisible, type CrewSnapshot } from "../api.ts";
+import { latestOnly } from "../shell/latest.ts";
 
 // The one crew reading (build spec §11.2), modelled on usage/useUsageSnapshot.ts: App holds it and hands it to the pages
 // that show the crew, so they never read at two moments. Read again on `crew_changed` (the collector wrote the mirror),
@@ -11,8 +12,9 @@ const RERENDER_MS = 30_000;
 export function useCrew(showing: boolean): { crew: CrewSnapshot | null; reload: () => void } {
   const [crew, setCrew] = useState<CrewSnapshot | null>(null);
 
-  // A failed read keeps the last reading (ADR 0004); the page's error line comes from the collector's own status.
-  const reload = useCallback(() => void getCrew().then(setCrew, () => {}), []);
+  // A failed read keeps the last reading (ADR 0004); the page's error line comes from the collector's own status. Only
+  // the newest read counts (shell/latest.ts): a slow one must not put an older mirror back over a fresher one.
+  const reload = useMemo(() => latestOnly(getCrew, setCrew), []);
 
   useEffect(() => {
     reload();

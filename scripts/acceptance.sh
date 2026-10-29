@@ -64,19 +64,23 @@ if want ac10; then
   else
     fail "$BIN not installed"
   fi
-  leaks=0
-  for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c 'sk-ant-' "$f" || true); [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }; done
-  [ $leaks -eq 0 ] && pass "no sk-ant- in the store or the logs" || fail "sk-ant- found (above)"
-
-  # No credential header ever reaches the store or the logs, whichever provider it belongs to. `Convex ` keeps
-  # its trailing space on purpose: without it this matches the word in every log line that names the reader.
-  leaks=0
-  for f in "$DB"* "$LOGS"/*; do
-    [ -f "$f" ] || continue
-    c=$(grep -a -c -E 'Bearer |Convex [A-Za-z0-9_|-]{8}' "$f" || true)
-    [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }
-  done
-  [ $leaks -eq 0 ] && pass "no Bearer or Convex credential header in the store or the logs" || fail "a credential header was found (above)"
+  # The store and the logs, as files; a scan over none proves nothing, and says SKIP rather than PASS. Both walk the
+  # globs themselves: the data folder's path has a space in it, so a list of paths split on whitespace would name
+  # files that do not exist (scripts/acceptance.test.ts).
+  store_files() { for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] && echo "$f"; done; }
+  scan() { # scan <grep args…>: the files with a hit, one per line
+    for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c "$@" "$f" || true); [ "$c" = "0" ] || echo "      $f: $c"; done
+  }
+  if [ -z "$(store_files)" ]; then
+    echo "SKIP  no store or log on this Mac yet, so there is nothing to scan for sk-ant-, Bearer or Convex headers"
+  else
+    hits=$(scan 'sk-ant-')
+    [ -z "$hits" ] && pass "no sk-ant- in the store or the logs" || fail "sk-ant- found: $hits"
+    # No credential header ever reaches the store or the logs, whichever provider it belongs to. `Convex ` keeps
+    # its trailing space on purpose: without it this matches the word in every log line that names the reader.
+    hits=$(scan -E 'Bearer |Convex [A-Za-z0-9_|-]{8}')
+    [ -z "$hits" ] && pass "no Bearer or Convex credential header in the store or the logs" || fail "a credential header was found: $hits"
+  fi
 
   # The Convex deploy key itself (prd-convex-usage.md §5). Its first 12 characters cannot be written here — a
   # real key prefix in a committed script would be the very leak this is looking for — so they are read from the
@@ -85,9 +89,11 @@ if want ac10; then
   if [ -z "$prefix" ]; then
     # Deliberately not a PASS: an empty store proves nothing, and a green tick here would be a lie of omission.
     echo "SKIP  no Convex deploy key saved yet, so there is nothing to look for (save one in Settings first)"
+  elif [ -z "$(store_files)" ] && [ ! -x "$KINAS" ]; then
+    echo "SKIP  a Convex deploy key is saved, but there is no store, log or kinas on this Mac to look in"
   else
     leaks=0
-    for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c -F "$prefix" "$f" || true); [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }; done
+    hits=$(scan -F "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
     if [ -x "$KINAS" ]; then
       c=$("$KINAS" status --json 2>/dev/null | grep -c -F "$prefix" || true)
       [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
@@ -102,9 +108,11 @@ if want ac10; then
   if [ -z "$prefix" ]; then
     # Deliberately not a PASS, for the same reason: an empty store proves nothing.
     echo "SKIP  no Hostinger API token saved yet, so there is nothing to look for (save one in Settings first)"
+  elif [ -z "$(store_files)" ] && [ ! -x "$KINAS" ]; then
+    echo "SKIP  a Hostinger API token is saved, but there is no store, log or kinas on this Mac to look in"
   else
     leaks=0
-    for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c -F "$prefix" "$f" || true); [ "$c" = "0" ] || { echo "      $f: $c"; leaks=1; }; done
+    hits=$(scan -F "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
     if [ -x "$KINAS" ]; then
       c=$("$KINAS" status --json 2>/dev/null | grep -c -F "$prefix" || true)
       [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }

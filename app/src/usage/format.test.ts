@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { asOf, compactTokens, gb, gib, leftPct, resetsIn, tone, usedPct } from "./format.ts";
+import { asOf, compactTokens, gb, gib, leftPct, resetsIn, tone, usedPct, withStale } from "./format.ts";
+
+test("a stale row's unit says stale after its words, or alone when it had none — never ' · stale' with nothing before it", () => {
+  expect(withStale("of 8 GiB", true)).toBe("of 8 GiB · stale");
+  expect(withStale("", true)).toBe("stale");
+  expect(withStale("of 8 GiB", false)).toBe("of 8 GiB");
+  expect(withStale("", false)).toBe("");
+});
 
 const NOW = 1_789_390_320_000; // 2026-09-14T12:52:00Z = 13:52 in Lisbon
 const MIN = 60_000;
@@ -62,6 +69,11 @@ test("compact numbers", () => {
   expect(compactTokens(34_000)).toBe("34k");
   expect(compactTokens(1_250_000)).toBe("1.3M");
   expect(compactTokens(6_130_000_000)).toBe("6.1B");
+  // Rounding at a unit's ceiling moves up a unit: never "1000k" or "1000M".
+  expect(compactTokens(999_600)).toBe("1M");
+  expect(compactTokens(999_950_000)).toBe("1B");
+  expect(compactTokens(999)).toBe("999");
+  expect(compactTokens(999.6)).toBe("1k");
   expect(gib(7.44)).toBe("7.4 GiB");
   expect(gib(460.2)).toBe("460 GiB");
 });

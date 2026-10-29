@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getUsageSnapshot, onBackfillProgress, onReadingsChanged, setUsageVisible, type UsageSnapshot } from "../api.ts";
+import { latestOnly } from "../shell/latest.ts";
 
 // The one usage poller (build-spec §11.1): App holds it and hands the snapshot to Home and Usage, so the two pages
 // never read at two moments and never argue about whether usage is on screen. Lifted from the Usage page.
@@ -12,15 +13,21 @@ export function useUsageSnapshot(visible: boolean): { snapshot: UsageSnapshot | 
   const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    getUsageSnapshot().then(
-      (s) => {
-        setSnapshot(s);
-        setError(null);
-      },
-      (e: unknown) => setError(String(e)),
-    );
-  }, []);
+  // Only the newest read counts (shell/latest.ts): the timer's read and a `readings_changed` read can be in flight
+  // together, and the slower one must not put older numbers back over fresher ones. A failure keeps the last snapshot
+  // (ADR 0004) and says so.
+  const load = useMemo(
+    () =>
+      latestOnly(
+        getUsageSnapshot,
+        (s) => {
+          setSnapshot(s);
+          setError(null);
+        },
+        (e: unknown) => setError(String(e)),
+      ),
+    [],
+  );
 
   useEffect(() => {
     load();

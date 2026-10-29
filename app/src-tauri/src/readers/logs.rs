@@ -50,8 +50,10 @@ pub fn lisbon_date(timestamp: &str) -> Option<String> {
     Some(zoned.date().strftime("%Y-%m-%d").to_string())
 }
 
+/// A token count. A whole number as it is; a float cut to its whole part, as the recount script's `num` cuts it — JSON
+/// read by the script cannot tell `12.0` from `12`, and the two must agree line for line (AC-5); anything else is 0.
 fn int(v: &Value) -> i64 {
-    v.as_i64().unwrap_or(0)
+    v.as_i64().or_else(|| v.as_f64().map(|f| f.trunc() as i64)).unwrap_or(0)
 }
 
 /// A Claude Code transcript line (R20, R22). Counted when `type == "assistant"`, `message.usage`
@@ -164,7 +166,9 @@ pub struct FileResult {
 /// all in one transaction (R25). A changed inode or a file shorter than the cursor starts again from 0;
 /// the per-message keys stop that from double counting.
 pub fn ingest_file(conn: &mut Connection, org_id: &str, machine: &str, harness: Harness, path: &Path, now: i64) -> Result<FileResult, String> {
-    let meta = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    // The reason only, never the path (ADR 0007): this string becomes `reader_status.last_error`, and a transcript's
+    // folder under `~/.claude/projects` is a project's own path, flattened.
+    let meta = std::fs::metadata(path).map_err(|e| format!("a transcript could not be read: {e}"))?;
     let inode = meta.ino() as i64;
     let len = meta.len();
     let path_key = path.to_string_lossy().to_string();
@@ -184,7 +188,7 @@ pub fn ingest_file(conn: &mut Connection, org_id: &str, machine: &str, harness: 
         return Ok(FileResult::default());
     }
 
-    let mut file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut file = std::fs::File::open(path).map_err(|e| format!("a transcript could not be read: {e}"))?;
     file.seek(SeekFrom::Start(start)).map_err(|e| e.to_string())?;
     let mut buf = Vec::with_capacity((len - start) as usize);
     file.read_to_end(&mut buf).map_err(|e| e.to_string())?;
@@ -334,6 +338,15 @@ mod tests {
         assert_eq!(lisbon_date("not a time"), None);
     }
 
+    /// AC-5: the recount script reads JSON where `12.0` is `12`, so a float token count is counted here too — cut to
+    /// its whole part, as the script cuts it — rather than read as 0 on one side and 12 on the other.
+    #[test]
+    fn a_float_token_count_is_cut_to_its_whole_part_as_the_recount_cuts_it() {
+        let line = r#"{"type":"assistant","timestamp":"2026-09-10T10:00:00Z","message":{"id":"m1","model":"claude-opus-5","usage":{"input_tokens":12.0,"cache_read_input_tokens":2.9,"output_tokens":3.9}}}"#;
+        let Parsed::Event(ev) = parse_claude_line(line) else { panic!("a counted line") };
+        assert_eq!((ev.tokens_in, ev.tokens_cache_read, ev.tokens_out), (12, 2, 3));
+    }
+
     #[test]
     fn fixture_transcripts_match_the_hand_derived_totals() {
         let dir = tempfile::tempdir().unwrap();
@@ -414,6 +427,31 @@ mod tests {
         let store = Store::open(dir.path()).unwrap();
         let r = sweep(&mut store.conn(), store.org_id(), "mac", Harness::Pi, Path::new("/nonexistent/pi"), 1, |_, _| {});
         assert_eq!(r, SweepResult::default());
+    }
+
+    /// ADR 0007: a transcript's path names a client — Claude Code's folder under `~/.claude/projects` is the project's
+    /// own path, flattened — and a file that cannot be read becomes `reader_status.last_error`, which the Usage page and
+    /// `kinas status --json` show. So the error says what went wrong, never which file.
+    #[test]
+    fn an_unreadable_transcript_s_error_never_names_its_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let project = dir.path().join("-Users-me-Documents-Projects-acme-client-9c2e");
+        std::fs::create_dir_all(&project).unwrap();
+        let missing = project.join("11111111-1111-1111-1111-111111111111.jsonl");
+        let err = ingest_file(&mut store.conn(), store.org_id(), "mac", Harness::ClaudeCode, &missing, 1).unwrap_err();
+        assert!(!err.contains("9c2e") && !err.contains("acme") && !err.contains('/'), "{err}");
+        assert!(err.contains("not found") || err.contains("No such file"), "{err}");
+
+        let unreadable = project.join("22222222-2222-2222-2222-222222222222.jsonl");
+        std::fs::write(&unreadable, "x\n").unwrap();
+        std::fs::set_permissions(&unreadable, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+        let err = ingest_file(&mut store.conn(), store.org_id(), "mac", Harness::ClaudeCode, &unreadable, 1).unwrap_err();
+        std::fs::set_permissions(&unreadable, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
+        assert!(!err.contains("9c2e") && !err.contains("acme") && !err.contains('/'), "{err}");
+        // The sweep's note carries the same words and still no path.
+        let r = sweep(&mut store.conn(), store.org_id(), "mac", Harness::ClaudeCode, dir.path(), 2, |_, _| {});
+        assert_eq!(r.failed.len(), 0, "a readable file again");
     }
 
     #[test]

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { dispatchAppAction } from "../actions.ts";
 import type { CrewSnapshot, HostView, ProviderMetricView, QuotaView, ReaderId, ReaderView, UsageSnapshot } from "../api.ts";
 import * as convex from "../usage/convex.ts";
-import { asOf, gb, gib, tone, usedPct, WINDOW_LABEL } from "../usage/format.ts";
+import { asOf, gb, gib, tone, usedPct, WINDOW_LABEL, withStale } from "../usage/format.ts";
 import * as hostinger from "../usage/hostinger.ts";
 import { asOfOldest, QuotaGauge, quotaDetail, shownUsed, sourcesOf } from "../usage/QuotaGauge.tsx";
 import { CrewSection } from "../usage/CrewSection.tsx";
@@ -159,7 +159,7 @@ function metricRow(
       label={format.label(m.metric)}
       used={dead || !gauged ? null : m.used_pct}
       value={dead ? "—" : format.value(m.used, m.unit)}
-      unit={m.state === "stale" ? `${unit} · stale` : unit}
+      unit={withStale(unit, m.state === "stale")}
       tone={tone(m.used_pct, m.state)}
       data-provider={m.provider}
       data-metric={m.metric}

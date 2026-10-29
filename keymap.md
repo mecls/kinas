@@ -249,7 +249,7 @@ Every other key — Tab, arrows, escape sequences, other letters — is ignored.
 
 Amended 2026-09-24 (the first mate): `kinas crew setup` is the CLI's one other reader of keys. It asks `y/N` before each
 step and reads one line: `y` or `yes` (any case) then Enter is yes; anything else, an empty line or ⌃D is no. It asks
-only on a terminal; without one it needs `--yes`, or it exits 64 without asking.
+only on a terminal; without one it needs `--yes` (or `--dry-run`, which asks nothing), or it exits 64 without asking.
 
 ## Exit message
 

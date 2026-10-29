@@ -173,6 +173,13 @@ describe("what kinas open prints", () => {
     expect(outcome({ kind: "down" }, { path: "/r/a.md", tty: true })).toEqual({ exit: 0, stdout: "/r/a.md", stderr: "Kinas is not running; add --launch to start it" });
     expect(outcome({ kind: "down" }, { path: "/r/a.md", tty: false })).toEqual({ exit: 0, stdout: "/r/a.md", stderr: null });
     expect(outcome({ kind: "down" }, { path: null, tty: true })).toEqual({ exit: 66, stdout: null, stderr: "kinas open: Kinas is not running, so there is no last file" });
+    // Several matches: every one is printed, as the app would list them, and the exit is 0 (R1b, R12).
+    expect(outcome({ kind: "down" }, { path: null, paths: ["/r/two/dup.md", "/r/one/dup.md"], tty: true })).toEqual({
+      exit: 0,
+      stdout: "/r/two/dup.md\n/r/one/dup.md",
+      stderr: "Kinas is not running; add --launch to start it",
+    });
+    expect(outcome({ kind: "down" }, { path: null, paths: ["/r/two/dup.md", "/r/one/dup.md"], tty: false })).toEqual({ exit: 0, stdout: "/r/two/dup.md\n/r/one/dup.md", stderr: null });
     expect(outcome({ kind: "silent" }, { path: "/r/a.md", tty: true })).toEqual({ exit: 1, stdout: null, stderr: "kinas open: Kinas did not answer" });
   });
 });

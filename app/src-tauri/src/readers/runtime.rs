@@ -277,7 +277,8 @@ fn logs_loop(app: AppHandle, machine: String, tx: Sender<()>, rx: Receiver<()>) 
             let now = now_ms();
             if !root.is_dir() {
                 with_conn(&app, |conn, org| {
-                    let _ = write_reader_status(conn, org, reader, Outcome::NotConfigured(&format!("{} not found", root.display())), now);
+                    // The folder's name under the home, never its path (ADR 0007): the note is shown and read by the CLI.
+                    let _ = write_reader_status(conn, org, reader, Outcome::NotConfigured(&format!("no {} transcripts folder", harness.id())), now);
                 });
                 continue;
             }

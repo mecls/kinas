@@ -1,9 +1,12 @@
 import type { ReaderView, UsageSnapshot } from "../api.ts";
 import type { ConnectionState } from "../ui/Nav.tsx";
+import { asOf } from "../usage/format.ts";
 
 // The VPS row at the foot of the sidebar (DESIGN.md §3.1): one machine, one word. The word is the Hostinger
 // reader's state as the usage snapshot reports it — the same reading the Usage page shows, so the two never
 // disagree. Nothing configured, nothing shown: a row that says "not configured" is a settings page, not a status.
+// The hover's "as of" is the Usage page's own caption (usage/format.ts): 24-hour, Europe/Lisbon, not the webview's
+// locale — the same reading must read the same time wherever it is said.
 
 export interface Connection {
   name: string;
@@ -21,11 +24,7 @@ export function connectionOf(snapshot: Pick<UsageSnapshot, "now" | "readers">): 
   if (reader.state === "error") return { name: VPS_NAME, state: "error", detail: reader.last_error ?? "the last reading failed" };
   const since = reader.last_success_at;
   if (since === null || snapshot.now - since > reader.stale_after_ms) {
-    return { name: VPS_NAME, state: "stale", detail: since === null ? "no reading yet" : `as of ${clock(since)}` };
+    return { name: VPS_NAME, state: "stale", detail: since === null ? "no reading yet" : asOf(since, snapshot.now) };
   }
-  return { name: VPS_NAME, state: "connected", detail: `as of ${clock(since)}` };
-}
-
-function clock(ms: number): string {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return { name: VPS_NAME, state: "connected", detail: asOf(since, snapshot.now) };
 }

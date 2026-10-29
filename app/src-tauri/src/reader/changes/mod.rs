@@ -374,9 +374,28 @@ fn diff_view(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> boo
     })
 }
 
+/// Whether a path the webview names can be one of a tree's own (ADR 0009): no `.` or `..` anywhere — "inside a folder
+/// marked added" is judged lexically, and `research/../../elsewhere/x` would pass it and read outside the root — and no
+/// symlink in it, which the tree never lists (rule 6) and which would read wherever it points: not the path itself, and
+/// not a folder above it, so its parent must be its own real path. A path that is gone (a D mark) still has a parent.
+fn tree_path(path: &Path) -> bool {
+    // On the bytes, not `components()`, which drops an interior `.` before it can be seen.
+    use std::os::unix::ffi::OsStrExt;
+    if path.as_os_str().as_bytes().split(|b| *b == b'/').any(|part| part == b"." || part == b"..") {
+        return false;
+    }
+    if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        return false;
+    }
+    path.parent().is_some_and(|parent| std::fs::canonicalize(parent).is_ok_and(|real| real == parent))
+}
+
 /// The deepest watched root that marks `path` — itself, or a folder above it marked added — with the path's own
 /// "since", its mark, and the baseline to read its old text from.
 fn changed_file(state: &ChangesState, path: &Path) -> Option<(PathBuf, Millis, Mark, Arc<Baseline>)> {
+    if !tree_path(path) {
+        return None;
+    }
     let changes = state.lock();
     changes
         .roots
@@ -1794,6 +1813,39 @@ mod tests {
         burst(&state, &root, &["research", "research/idea.md"]);
         let v = view(&state, &root.join("research/idea.md"), None).unwrap();
         assert_eq!((v.mark, v.added, v.removed), (Mark::Added, 3, 0));
+    }
+
+    /// ADR 0009: the record is the diff's only door, and "inside a folder marked added" is judged lexically. A path that
+    /// reaches that door through `..`, or a symlink planted inside the added folder, would read a file outside the
+    /// root — so neither is a door, and no byte of either is read.
+    #[test]
+    fn a_path_that_leaves_the_root_through_an_added_folder_is_no_door() {
+        let (_dir, root, state) = watched(&[("README.md", b"# R\n")], 1024);
+        let outside = tempfile::tempdir().unwrap();
+        let outside = outside.path().canonicalize().unwrap();
+        std::fs::write(outside.join("secret-9c2e.md"), "# Secret\n").unwrap();
+        std::fs::create_dir(root.join("research")).unwrap();
+        std::fs::write(root.join("research/idea.md"), "# Idea\n").unwrap();
+        std::os::unix::fs::symlink(outside.join("secret-9c2e.md"), root.join("research/link.md")).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("research/elsewhere")).unwrap();
+        burst(&state, &root, &["research", "research/idea.md", "research/link.md", "research/elsewhere"]);
+        assert!(view(&state, &root.join("research/idea.md"), None).is_ok(), "the added folder's own file is a door");
+
+        // Both temp folders share a parent, so `research/../../<outside>/secret-9c2e.md` is the secret's real path.
+        let dotted = root.join("research").join("..").join("..").join(outside.file_name().unwrap()).join("secret-9c2e.md");
+        assert_eq!(std::fs::read_to_string(&dotted).unwrap(), "# Secret\n", "the dotted path does reach the secret");
+        let through_link = root.join("research/elsewhere/secret-9c2e.md");
+        assert_eq!(std::fs::read_to_string(&through_link).unwrap(), "# Secret\n", "the linked folder does reach the secret");
+        for path in [dotted, root.join("research/link.md"), through_link, root.join("research/./idea.md")] {
+            let refused = view(&state, &path, None).expect_err(&format!("{} was a door", path.display()));
+            assert_eq!(refused.code, "not_watched", "{}", path.display());
+            assert!(deleted_baseline_of(&state, &path).is_err(), "{}", path.display());
+        }
+    }
+
+    /// `deleted_baseline` without Tauri: the same door as the diff's, for Download.
+    fn deleted_baseline_of(state: &ChangesState, path: &Path) -> Result<(Millis, Mark, Vec<u8>), ReaderError> {
+        old_text(state, path, EVERYWHERE, None)
     }
 
     #[test]

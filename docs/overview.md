@@ -30,7 +30,7 @@ castle first, then one room at a time.
 | Webview | `app/src/` | React 19 + Vite, plain global CSS. The window: sidebar, pages, the reader panel, the palette, the terminal (xterm.js) |
 | CLI | `cli/src/` | `kinas`, compiled with Bun into one binary shipped inside the app bundle and linked at `~/.local/bin/kinas` |
 | Shared packages | `packages/store`, `packages/commands`, `packages/context` | Staleness rules and the read-only SQLite adapter; the command registry the CLI and the palette both use; the context packet |
-| Migrations | `migrations/` | Forward-only SQL, applied by the app (schema version 4) |
+| Migrations | `migrations/` | Forward-only SQL, applied by the app (schema version 6) |
 | Tests | `e2e/`, `*.test.ts`, `#[cfg(test)]` | WebdriverIO end-to-end specs against the debug app; Bun unit tests; Rust unit tests |
 | Docs | `README.md`, `keymap.md`, `docs/smoke-test.md`, `tasks/` | The README is the user manual; `keymap.md` is the law on keys; the smoke test is the checklist of what is proven and how; `tasks/` (git-ignored) holds every PRD, task list and build spec |
 

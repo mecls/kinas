@@ -164,7 +164,9 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
         let working = facts.state.as_deref() == Some("working");
         let first_seen_at = prior.map_or(now, |p| p.first_seen_at);
         let first_working_at = prior.and_then(|p| p.first_working_at).or(working.then_some(now));
-        let done_at = prior.and_then(|p| p.done_at).or(done_now(facts).then_some(now));
+        // Done as the snapshot says it now: the stamp is when Kinas first saw it, kept while it stays done, and gone
+        // when the captain reopens the task — so its word can leave done (done work clears, rule 7).
+        let done_at = done_now(facts).then(|| prior.and_then(|p| p.done_at).unwrap_or(now));
         upsert(tx, org, facts, &fleet.generated, first_seen_at, first_working_at, now, done_at)?;
         repository(tx, org, facts, places.get(&facts.id), found)?;
         applied.events += pull_request(tx, org, facts, prior, found, now)?;
@@ -564,6 +566,32 @@ mod tests {
         assert_eq!((r.2, r.5, r.6), (t1, Some(t3), None));
         assert_eq!(word(&store), "done");
         assert_eq!(events(&store).last(), Some(&ev(t5, "returned", "back in the fleet snapshot")));
+        assert_eq!(store.conn().query_row("SELECT count(*) FROM crew_tasks", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    }
+
+    /// Done work clears, rule 7: "a done task whose word leaves done" is new again — so done must be able to leave. A
+    /// task the captain reopens (its backlog record back to in flight, its worker working) reads **working**, its
+    /// `done_at` gone with its seen stamps; done again later, it is stamped afresh, and nothing is deleted.
+    #[test]
+    fn a_done_task_that_is_reopened_leaves_done_and_forgets_it_was_seen() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        cycle(&store, "working", T0);
+        cycle(&store, "done", T0 + MIN);
+        assert_eq!((row(&store).5, word(&store)), (Some(T0 + MIN), "done"));
+        store.conn().execute("UPDATE crew_tasks SET board_seen_at = 7, overnight_seen_at = 8 WHERE id = ?1", params![ID]).unwrap();
+
+        cycle(&store, "working", T0 + 2 * MIN);
+        let r = row(&store);
+        assert_eq!((r.0.as_deref(), r.1.as_deref(), r.5, r.6), (Some("working"), Some("in_flight"), None, None), "no longer done");
+        assert_eq!(word(&store), "working");
+        let stamps: (Option<i64>, Option<i64>) =
+            store.conn().query_row("SELECT board_seen_at, overnight_seen_at FROM crew_tasks WHERE id = ?1", params![ID], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(stamps, (None, None), "new again to every page");
+        assert_eq!(events(&store).last(), Some(&ev(T0 + 2 * MIN, "word", "working")));
+
+        cycle(&store, "done", T0 + 3 * MIN);
+        assert_eq!((row(&store).5, word(&store)), (Some(T0 + 3 * MIN), "done"), "done again, from now");
         assert_eq!(store.conn().query_row("SELECT count(*) FROM crew_tasks", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
     }
 

@@ -176,8 +176,9 @@ pub(super) fn unpushed(git: &Git, wt: &Worktree) -> (Base, CrewMarks) {
             _ => Mark::Modified,
         };
         // A binary, or a path that is not a file now, is not something the tree lists; a deleted one is judged by what it
-        // was at the base.
-        let listed = if mark == Mark::Deleted { was_listed(git, top, &commit, &path) } else { listable_file(&path) };
+        // was at the base. A symlink is never an entry of the tree's own (tree changes rule 6), so one a worker plants —
+        // untracked, or in place of a tracked file — is no mark, and what it points at is never read as the crew's copy.
+        let listed = if mark == Mark::Deleted { was_listed(git, top, &commit, &path) } else { !is_symlink(&path) && listable_file(&path) };
         if !listed {
             continue;
         }
@@ -201,6 +202,11 @@ pub(super) fn unpushed(git: &Git, wt: &Worktree) -> (Base, CrewMarks) {
         }
     }
     (base, marks)
+}
+
+/// What is at the path is a link, judged without following it.
+fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
 }
 
 /// Whether a file deleted since the base was one the tree listed: an image, or text by its blob's head (rule 5). With
@@ -852,6 +858,28 @@ pub(super) mod tests {
         assert_eq!(crew_marked(&state, &captain), Vec::<String>::new());
         // The captain's own marks were never touched.
         assert!(state.lock().roots[&captain].marks.is_empty());
+    }
+
+    /// Rule 5, as the tree lists paths: a symlink is not an entry of the tree's own (tree changes rule 6), so one a worker
+    /// plants in its checkout — untracked, or in place of a tracked file — is no crew mark, and its target is never read
+    /// as the crew's copy.
+    #[test]
+    fn a_symlink_in_a_crew_checkout_is_no_mark_and_no_door() {
+        let (dir, captain, home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n")]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        let outside = dir.path().canonicalize().unwrap().join("secret-9c2e.md");
+        std::fs::write(&outside, "# Secret\n").unwrap();
+        std::os::unix::fs::symlink(&outside, worktree.join("notes.md")).unwrap();
+        std::fs::remove_file(worktree.join("docs/plan.md")).unwrap();
+        std::os::unix::fs::symlink(&outside, worktree.join("docs/plan.md")).unwrap();
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew\n").unwrap();
+
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        assert_eq!(crew_marked(&state, &captain), ["M README.md 1"], "the links are no marks; the real edit is");
+        let refused = crew_text(&state, &captain.join("docs/plan.md"), &|_| true, Some(&g)).expect_err("a link in place of a tracked file is no door");
+        assert_eq!(refused.code, "not_watched");
+        assert!(crew_text(&state, &captain.join("notes.md"), &|_| true, Some(&g)).is_err());
     }
 
     fn marks_of(g: &Git, top: &Path) -> (Base, Vec<String>) {

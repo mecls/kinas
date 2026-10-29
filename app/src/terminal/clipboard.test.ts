@@ -40,3 +40,25 @@ describe("writeClipboard says whether the text reached the clipboard", () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe("one clipboard door (selection and clipboard, 2026-09-15)", () => {
+  test("nothing under app/src writes the clipboard but writeClipboard: no navigator.clipboard outside this module", () => {
+    const { readdirSync, readFileSync, statSync } = require("node:fs") as typeof import("node:fs");
+    const { join, relative } = require("node:path") as typeof import("node:path");
+    const src = join(import.meta.dir, "..");
+    const walk = (dir: string, out: string[] = []): string[] => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path, out);
+        else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) out.push(path);
+      }
+      return out;
+    };
+    const offenders = walk(src)
+      .filter((p) => readFileSync(p, "utf8").includes("navigator.clipboard"))
+      .map((p) => relative(src, p));
+    expect(offenders).toEqual([]);
+    // The guard is reading real code: it finds its own needle when one is planted.
+    expect("void navigator.clipboard.writeText(line)".includes("navigator.clipboard")).toBe(true);
+  });
+});

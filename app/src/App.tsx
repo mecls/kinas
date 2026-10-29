@@ -38,6 +38,7 @@ import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
 import { SIDE_DEFAULT } from "./reader/side.ts";
 import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
+import { connectionOf } from "./shell/connection.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { back, canBack, canForward, EMPTY_HISTORY, forward, type History, patchScroll, type Place, readerAtOf, record, samePlace } from "./shell/history.ts";
 import { addedLine, seatFolders } from "./shell/folders.ts";
@@ -158,8 +159,10 @@ export function App() {
   /** In full screen the title bar keeps no room for the traffic lights. */
   const fullscreen = useFullscreen();
 
-  // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page.
+  // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page. The
+  // sidebar's VPS row reads the same snapshot, so it never disagrees with the Usage page's Hostinger section.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
+  const connection = useMemo(() => (usage.snapshot ? connectionOf(usage.snapshot) : null), [usage.snapshot]);
   // One crew reading for every page that shows the crew (crew/useCrew.ts): Crew, Inbox, and Home's night.
   const { crew, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
@@ -640,6 +643,7 @@ export function App() {
         projects={projects}
         notice={notice}
         panelOpen={readerShowing}
+        connection={connection}
         waiting={crew?.waiting ?? 0}
         crew={{ installed: !!crew && crew.page !== "uninstalled", repos: crew?.crew_repos ?? [] }}
         onAddToCrew={(f) => void addFolderToCrew(f)}

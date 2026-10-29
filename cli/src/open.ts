@@ -1,6 +1,7 @@
 // `kinas open` (PRD R2–R7, R11–R17): resolve the path the way the app will judge it, then hand it to the running app
-// over <data dir>/kinas.sock. Resolution touches only realpath and stat, so nothing is ever created or written; the
-// app checks every path again on its side, because any local process can write to the socket.
+// over <data dir>/kinas.sock. Resolution touches only realpath, stat and a file's first 4 KB (sniff.ts), so nothing is
+// ever created or written; the app checks every path again on its side, because any local process can write to the
+// socket.
 
 import { spawnSync } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
@@ -188,8 +189,11 @@ export interface Outcome {
   stderr: string | null;
 }
 
-/** What `kinas open` prints and returns for the app's answer (R7, R12, R13). `path` is null for a reopen. */
-export function outcome(answer: Answer, ctx: { path: string | null; tty: boolean }): Outcome {
+/**
+ * What `kinas open` prints and returns for the app's answer (R7, R12, R13). `path` is null for a reopen and for a
+ * picker, which carries its matches in `paths`.
+ */
+export function outcome(answer: Answer, ctx: { path: string | null; paths?: string[]; tty: boolean }): Outcome {
   switch (answer.kind) {
     case "answer": {
       const body = answer.body;
@@ -214,8 +218,11 @@ export function outcome(answer: Answer, ctx: { path: string | null; tty: boolean
       return { exit: OPEN_EXIT.error, stdout: null, stderr: "kinas open: Kinas did not answer" };
     case "failed":
       return { exit: OPEN_EXIT.error, stdout: null, stderr: answer.message };
-    case "down":
-      if (ctx.path === null) return { exit: OPEN_EXIT.noInput, stdout: null, stderr: "kinas open: Kinas is not running, so there is no last file" };
-      return { exit: OPEN_EXIT.ok, stdout: ctx.path, stderr: ctx.tty ? "Kinas is not running; add --launch to start it" : null };
+    case "down": {
+      // Several matches are printed as the app would list them (R1b); a reopen has nothing to print.
+      const printed = ctx.path ?? (ctx.paths && ctx.paths.length > 0 ? ctx.paths.join("\n") : null);
+      if (printed === null) return { exit: OPEN_EXIT.noInput, stdout: null, stderr: "kinas open: Kinas is not running, so there is no last file" };
+      return { exit: OPEN_EXIT.ok, stdout: printed, stderr: ctx.tty ? "Kinas is not running; add --launch to start it" : null };
+    }
   }
 }

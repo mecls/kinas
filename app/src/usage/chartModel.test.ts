@@ -82,6 +82,12 @@ describe("periodRows", () => {
 
 test("niceTicks", () => {
   expect(niceTicks(0)).toEqual([0]);
+  // Tokens are whole numbers, so a step is never under 1: a day with 1 or 2 tokens gets distinct ticks, not the same
+  // value twice (which the chart would draw twice and key twice).
+  expect(niceTicks(1)).toEqual([0, 1]);
+  expect(niceTicks(2)).toEqual([0, 1, 2]);
+  expect(niceTicks(3)).toEqual([0, 1, 2, 3]);
+  for (const max of [1, 2, 3, 4, 6, 7, 11, 13]) expect(new Set(niceTicks(max)).size, `ticks for ${max}`).toBe(niceTicks(max).length);
   expect(niceTicks(9)).toEqual([0, 5, 10]);
   expect(niceTicks(165)).toEqual([0, 50, 100, 150, 200]);
   expect(niceTicks(1_200_000)).toEqual([0, 500_000, 1_000_000, 1_500_000]);

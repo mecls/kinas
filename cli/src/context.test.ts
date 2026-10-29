@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_HEADINGS } from "@kinas/context";
 import { makeWorld, type World, type WorldOptions } from "@kinas/context/testing";
@@ -110,6 +110,21 @@ describe("kinas context", () => {
     expect(await kinas(["context", "--agent", "--cwd", "/tmp"], w.env)).toMatchObject({ code: 0, stdout: "" });
   });
 
+  test("a packet longer than a pipe's buffer reaches a hook whole", async () => {
+    // The session hooks read the CLI through a pipe. Bun's process.exit() drops what has not left the 64 KiB pipe
+    // buffer yet, and five conventions of 60 KB make a packet five times that size.
+    const w = await start();
+    for (let i = 0; i < 5; i++) writeFileSync(join(w.hub, `conventions/con-big-${i}.md`), `# Big ${i}\n\n${"rule ".repeat(12_000)}\n`);
+    // Read the way a hook does: through a pipe whose reader is slower than the CLI, so nothing the CLI dropped at exit
+    // can be hidden by a reader that drained it in time.
+    const slow = Bun.spawn(["sh", "-c", 'exec "$@" | { sleep 1; cat; }', "sh", process.execPath, MAIN, "context", "--agent"], { env: w.env, stdout: "pipe", stderr: "pipe" });
+    const [stdout, code] = await Promise.all([new Response(slow.stdout).text(), slow.exited]);
+    expect(code).toBe(0);
+    expect(stdout.length).toBeGreaterThan(300_000);
+    expect(stdout).toContain("\n## Recent\n");
+    expect(stdout.endsWith("\n")).toBe(true);
+  });
+
   test("with no Kinas app, no Firstmate, no Herdr and no Codex, every section still answers in one line", async () => {
     const w = await start();
     await w.herdr.stop();
@@ -148,6 +163,17 @@ describe("kinas open, help and usage", () => {
     expect((await kinas(["open", join(w.acme, "src/index.ts")], w.env)).code).toBe(0);
     expect(await kinas(["open"], w.env)).toMatchObject({ code: 66, stdout: "" });
     expect((await kinas(["open", "a.md", "b.md"], w.env)).code).toBe(64);
+  });
+
+  test("several matches with Kinas not running print every match and exit 0, newest first", async () => {
+    const w = await start();
+    for (const d of ["one", "two"]) mkdirSync(join(w.acme, d), { recursive: true });
+    writeFileSync(join(w.acme, "one/dup.md"), "# older\n");
+    writeFileSync(join(w.acme, "two/dup.md"), "# newer\n");
+    utimesSync(join(w.acme, "one/dup.md"), new Date(1_000_000), new Date(1_000_000));
+    utimesSync(join(w.acme, "two/dup.md"), new Date(2_000_000), new Date(2_000_000));
+    const real = (p: string) => realpathSync.native(join(w.acme, p));
+    expect(await kinas(["open", "dup"], w.env)).toMatchObject({ code: 0, stdout: `${real("two/dup.md")}\n${real("one/dup.md")}\n` });
   });
 
   test("--help names every command; unknown commands and options are 64", async () => {

@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "./config.ts";
+import { insideRoot, loadConfig } from "./config.ts";
 
 // The projects root, which `kinas open` and the app's reader both enforce (PRD R1). The Rust copy in
 // app/src-tauri/src/paths.rs (`projects_root_from`) is tested against the same cases, so the two cannot drift.
@@ -36,6 +36,26 @@ describe("the projects root", () => {
     expect(loadConfig(withFile("blank.json", '{"root":"   "}')).root).toBe(fallback);
     expect(loadConfig(withFile("bad.json", "{nope")).root).toBe(fallback);
     expect(loadConfig(withFile("absent.json", null)).root).toBe(fallback);
+  });
+});
+
+describe("inside the projects root (`kinas context --cwd`)", () => {
+  test("a root written with a trailing slash still holds its folders", () => {
+    const config = loadConfig(withFile("slash.json", '{"root":"/from/file/"}'));
+    expect(insideRoot(config, "/from/file/proj")).toBe(true);
+    expect(insideRoot(config, "/from/file")).toBe(true);
+    expect(insideRoot(config, "/from/file-old/proj")).toBe(false);
+  });
+  test("a root reached through a symlink holds a folder named by its real path, and the other way round", () => {
+    const real = realpathSync.native(dir);
+    mkdirSync(join(real, "projects/proj"), { recursive: true });
+    symlinkSync(join(real, "projects"), join(real, "link"));
+    const viaLink = loadConfig(withFile("link.json", JSON.stringify({ root: join(real, "link") })));
+    expect(insideRoot(viaLink, join(real, "projects/proj"))).toBe(true);
+    expect(insideRoot(viaLink, join(real, "link/proj"))).toBe(true);
+    const viaReal = loadConfig(withFile("real.json", JSON.stringify({ root: join(real, "projects") })));
+    expect(insideRoot(viaReal, join(real, "link/proj"))).toBe(true);
+    expect(insideRoot(viaReal, join(real, "elsewhere"))).toBe(false);
   });
 });
 

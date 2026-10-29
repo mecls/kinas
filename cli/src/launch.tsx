@@ -1,5 +1,5 @@
-// `kinas` with no arguments: the launch screen. A static Ink render — drawn once, then the shell prompt returns. It
-// reads no keys at all, so it never captures Tab and nothing can hold the terminal; there is nothing to quit.
+// `kinas` with no arguments: the launch screen. A static Ink render — drawn once. It reads no keys itself: on a
+// terminal main.ts then holds through hold.ts until Enter, q or Ctrl+C (keymap.md), and piped it is printed and done.
 
 import { accentLine, bannerLines, BANNER_WIDTH, glyph, LOGO_WIDTH, logoLines, paint, type Polarity, type Tone } from "@kinas/commands/theme";
 import { age, ago, packetCounts, plural, until, type Packet, type QuotaLine, type Section } from "@kinas/context";

@@ -248,6 +248,8 @@ async function open(args: string[]): Promise<number> {
     }
   }
 
+  // What is printed when the app cannot be reached: the one path, or every match of a name (R1b, R11).
+  const resolved = path ? [path] : request.op === "pick" ? request.paths : [];
   let exit: number = EXIT.ok;
   const { lines } = await cliCommand("open")!.run({
     now: Date.now(),
@@ -259,11 +261,11 @@ async function open(args: string[]): Promise<number> {
         if (!launched) {
           exit = EXIT.error;
           printError(`kinas open: Kinas did not start within ${LAUNCH_TIMEOUT_MS / 1000} s`);
-          return path ? [path] : [];
+          return resolved;
         }
         answer = launched;
       }
-      const result = outcome(answer, { path, tty: Boolean(process.stderr.isTTY) });
+      const result = outcome(answer, { path, paths: request.op === "pick" ? request.paths : undefined, tty: Boolean(process.stderr.isTTY) });
       exit = result.exit;
       if (result.stderr !== null) printError(result.stderr);
       return result.stdout === null ? [] : [result.stdout];
@@ -288,9 +290,24 @@ async function main(argv: string[]): Promise<number> {
   return status(rest);
 }
 
+/**
+ * Ends the process once stdout has been delivered. Bun's `process.exit()` drops whatever has not yet left a pipe or a
+ * file — a pipe holds 64 KiB, and the agent packet is longer — so the session hooks would get a packet cut mid-table.
+ * On a terminal every write is already on screen, and the Work pane's exit code 10 must not wait on anything.
+ */
+async function exit(code: number): Promise<never> {
+  if (!process.stdout.isTTY) {
+    await new Promise<void>((resolve) => {
+      process.stdout.once("error", () => resolve());
+      process.stdout.end(resolve);
+    });
+  }
+  process.exit(code);
+}
+
 try {
-  process.exit(await main(process.argv.slice(2)));
+  await exit(await main(process.argv.slice(2)));
 } catch (e) {
   printError(`kinas: ${(e as Error).message}`);
-  process.exit(EXIT.error);
+  await exit(EXIT.error);
 }

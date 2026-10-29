@@ -37,7 +37,8 @@ export function candidateNames(arg: string): string[] {
 }
 
 /**
- * Every markdown file under `root` whose name matches, newest first.
+ * Every file under `root` whose name matches, newest first — at most `limit`, so a tree with more carriers of one name
+ * than that lists the first `limit` the walk met, newest first among those.
  *
  * @param arg a bare file name, with or without its extension
  */

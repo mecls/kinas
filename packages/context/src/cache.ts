@@ -81,11 +81,16 @@ export class ContextCache {
     );
   }
 
-  /** Takes the refresh lease unless another refresh took it less than `leaseMs` ago. */
-  claimRefresh(org: string, now: number, leaseMs: number): boolean {
+  /**
+   * Takes the refresh lease unless another refresh took it less than `leaseMs` ago. `now` may be a clock, read once the
+   * lease is: another process takes it with no guard this shares, and a lease stamped after an earlier look at the clock
+   * would read as from before a clock step back, and be taken again beside it.
+   */
+  claimRefresh(org: string, clock: number | (() => number), leaseMs: number): boolean {
     return this.db
       .transaction(() => {
         const row = this.db.query("SELECT computed_at FROM packet_cache WHERE org_id = ? AND key = 'refresh-lease'").get(org) as { computed_at: number } | null;
+        const now = typeof clock === "function" ? clock() : clock;
         if (row && within(row.computed_at, now, leaseMs)) return false;
         this.db.run(
           `INSERT INTO packet_cache (org_id, key, body, computed_at) VALUES (?, 'refresh-lease', ?, ?)

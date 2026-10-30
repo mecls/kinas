@@ -114,7 +114,8 @@ async function launch(): Promise<number> {
     const packet = cached?.packet ?? (await computePacket(config, cache, { now, skipCrew: true }));
     // Old once older than the limit (+ 1: at exactly the limit it is not yet), or stamped in what is now the future.
     const old = !cached || !within(cached.computedAt, now, LAUNCH_REFRESH_AFTER_MS + 1) || packet.crew.state === "pending";
-    if (old && cache?.claimRefresh(org, now, REFRESH_LEASE_MS)) spawnRefresh();
+    // The lease is judged when it is read: computing an uncached packet takes seconds, and another pane may claim meanwhile.
+    if (old && cache?.claimRefresh(org, () => Date.now(), REFRESH_LEASE_MS)) spawnRefresh();
 
     const { MAX_COLUMNS, renderLaunch } = await import("./launch.tsx");
     process.stdout.write(renderLaunch(packet, { columns: process.stdout.columns ?? MAX_COLUMNS, color, polarity: polarityFromEnv(), now }));
@@ -160,7 +161,7 @@ async function context(args: string[]): Promise<number> {
     if (parsed.flags.has("--refresh")) {
       if (!cache) return EXIT.ok;
       const held = process.env.KINAS_REFRESH_LEASE === "held";
-      if (!held && !cache.claimRefresh(org, Date.now(), REFRESH_LEASE_MS)) return EXIT.ok;
+      if (!held && !cache.claimRefresh(org, () => Date.now(), REFRESH_LEASE_MS)) return EXIT.ok;
       try {
         await computePacket(config, cache);
       } finally {
@@ -206,7 +207,8 @@ async function status(args: string[]): Promise<number> {
 
   try {
     const now = Date.now();
-    const { result } = await cliCommand("status")!.run({ now, getStatus: async () => statusFromStore(opened.store, now) });
+    // Judged once the rows are read (statusFromStore): the app writes from another process with no guard shared.
+    const { result } = await cliCommand("status")!.run({ now, getStatus: async () => statusFromStore(opened.store, () => Date.now()) });
     if (!result) return EXIT.ok;
     if (parsed.flags.has("--json")) {
       console.log(JSON.stringify(statusJson(result), null, 2));

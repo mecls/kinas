@@ -141,14 +141,20 @@ pub fn chart_days(now_ms: i64) -> Vec<String> {
         .collect()
 }
 
-/// The Usage page's and the menu bar's reading, with `now` read from `clock` only once the store's guard is held. Every
-/// reader stamps its row before it lets the guard go, so no row read here is stamped after `now` unless the wall clock
+/// The Usage page's and the menu bar's reading, with `now` read from `clock` only once the store's guard is held and the
+/// hook's hand-off file is read. Every reader stamps its row before it lets the guard go, and the status line stamps
+/// its capture before it moves the file into place, so nothing read here is stamped after `now` unless the wall clock
 /// stepped back — the one thing R12's "a reading stamped after now is stale" may mean. With `now` read before the
 /// guard, a host sample stamped and written in the gap was a reading 0 ms old labelled stale.
 pub fn read_now(store: &Store, data_dir: &Path, backfill: Backfill, clock: impl FnOnce() -> i64) -> rusqlite::Result<UsageSnapshot> {
     let conn = store.conn();
-    let now = clock();
-    snapshot(&conn, store.org_id(), now, backfill, hook_status(data_dir, now))
+    let mut now = 0;
+    // hook_status reads `clock` exactly once, after the file: the rows below are read under the guard already held.
+    let hook = hook_status(data_dir, || {
+        now = clock();
+        now
+    });
+    snapshot(&conn, store.org_id(), now, backfill, hook)
 }
 
 pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, claude_hook: HookStatus) -> rusqlite::Result<UsageSnapshot> {
@@ -359,6 +365,26 @@ mod tests {
         });
         let host = snap.host.unwrap();
         assert_eq!((host.updated_at, host.state), (NOW - 5_000, ReadingState::Fresh), "the sample stamped after now waits for the next read");
+    }
+
+    /// The status line writes the hook's hand-off file from another process, with no guard shared: a capture it stamps
+    /// just after this read's `now` and moves into place before the read reaches the file is not from the future (a
+    /// clock step back), so it must not turn Settings' and the Usage page's **receiving** into last seen 0 minutes ago.
+    #[test]
+    fn now_is_read_after_the_hook_file_so_a_capture_written_meanwhile_is_never_from_the_future() {
+        use crate::readers::claude_plan::handoff_path;
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let handoff = handoff_path(dir.path());
+        std::fs::create_dir_all(handoff.parent().unwrap()).unwrap();
+        std::fs::write(&handoff, format!(r#"{{"captured_at":{}}}"#, NOW - 60_000)).unwrap();
+        let snap = read_now(&store, dir.path(), Backfill::default(), || {
+            std::fs::write(&handoff, format!(r#"{{"captured_at":{}}}"#, NOW + 3)).unwrap();
+            NOW
+        })
+        .unwrap();
+        let hook = snap.claude_hook;
+        assert_eq!((hook.state, hook.captured_at), ("receiving", Some(NOW - 60_000)), "the capture written after now waits for the next read");
     }
 
     #[test]

@@ -219,3 +219,29 @@ describe("quotas in the packet", () => {
     }
   });
 });
+
+describe("the crew in the packet", () => {
+  test("a mirror the app writes while the packet is being computed stands for the fleet, not a stamp from before a clock step", async () => {
+    // `now` is when the computation began; the projects' git is read first and can take seconds, while the app's
+    // collector keeps writing. A mirror written since then is newer than `now` with no clock step behind it: it is
+    // judged when it is read, so the launch screen does not read "pending" over a mirror written a second ago.
+    const w = await makeWorld();
+    try {
+      const began = Date.now() - 5_000;
+      const landed = Date.now() - 1_000;
+      const db = new Database(join(w.dataDir, "kinas.sqlite"));
+      db.run("INSERT INTO reader_status VALUES ('org-1', 'crew', 'ok', ?, ?, NULL, 180000, 43200000)", [landed, landed]);
+      db.run(
+        `INSERT INTO crew_tasks (org_id, id, title, kind, backlog_state, state, snapshot_generated, first_seen_at, last_seen_at)
+         VALUES ('org-1', 'mirror-9c2e', 'Mirror task', 'ship', 'in_flight', 'working', '2026-09-25T09:00:00Z', ?, ?)`,
+        [landed, landed],
+      );
+      db.close();
+      const p = await computePacket(loadConfig(w.env), null, { now: began, skipCrew: true });
+      expect(p.crew.state).toBe("ok");
+      expect(p.crew.data?.in_flight.map((t) => t.id)).toEqual(["mirror-9c2e"]);
+    } finally {
+      await w.cleanup();
+    }
+  });
+});

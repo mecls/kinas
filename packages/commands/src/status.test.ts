@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StatusResult, StatusQuota } from "./status.ts";
-import { statusLines } from "./status.ts";
+import type { StorageAdapter } from "@kinas/store/types";
+import { statusFromStore, statusLines } from "./status.ts";
 
 const NOW = 1_790_000_000_000;
 
@@ -29,5 +30,29 @@ describe("kinas status's compact token counts", () => {
   test("a count that rounds to a unit's ceiling moves up a unit, as the Usage page's compactTokens does: never 1000k or 1000M", () => {
     expect(todayLine(result([usage(999_950, 999_999, 999_950_000)]))).toContain("in 1M · cache 1M · out 1B");
     expect(todayLine(result([usage(1_000_000, 1_000, 1_000_000_000)]))).toContain("in 1M · cache 1k · out 1B");
+  });
+});
+
+describe("statusFromStore judges a reading at the moment it is read", () => {
+  test("a reading the app writes while the store is read is fresh, not a stamp from before a clock step", () => {
+    // The app is another process with no guard the CLI shares: a sample it stamps just after the caller looked at the
+    // clock, and commits before the rows are read, is newer than that look with no clock step behind it. The clock is
+    // read once the rows are, so no row it judges is stamped after it unless the wall clock stepped back.
+    let clock = NOW;
+    const landed = NOW + 3;
+    const store: StorageAdapter = {
+      schemaVersion: () => 6,
+      getReaderStatus: () => [],
+      getQuotas: () => {
+        clock = landed;
+        return [{ subscription: "claude-plan", window: "session", used_pct: 40, resets_at: NOW + 3_600_000, plan: null, source: "s", updated_at: landed, models: [] }];
+      },
+      getHost: () => ({ machine: "mac-9c2e", cpu_pct: 1, mem_used_gb: 1, mem_total_gb: 2, disk_used_gb: 1, disk_total_gb: 2, disk_available_gb: null, updated_at: landed }),
+      getUsageDaily: () => [],
+    } as unknown as StorageAdapter;
+    const r = statusFromStore(store, () => clock);
+    expect([r.now, r.quotas[0]!.state, r.host!.state]).toEqual([landed, "fresh", "fresh"]);
+    // A number is still a moment, as the palette passes the app's snapshot's.
+    expect(statusFromStore(store, NOW).quotas[0]!.state).toBe("stale");
   });
 });

@@ -34,7 +34,8 @@ export function openStore(dataDir: string): StoreOpen {
   return { ok: false, note: `the app's store could not be read (${opened.message})` };
 }
 
-export function storeQuotas(opened: StoreOpen, now: number): QuotaLine[] {
+/** `now` may be a clock, read once the store's rows are read (statusFromStore): a quota written meanwhile is not judged against an earlier moment. */
+export function storeQuotas(opened: StoreOpen, now: number | (() => number)): QuotaLine[] {
   if (!opened.ok) {
     return (["Claude", "Ollama"] as const).map((provider) => ({ provider, window: null, left_pct: null, resets_at: null, updated_at: null, state: "not_connected", note: opened.note }));
   }
@@ -47,7 +48,7 @@ export function storeQuotas(opened: StoreOpen, now: number): QuotaLine[] {
         left_pct: Math.floor(q.left_pct),
         resets_at: q.resets_at,
         updated_at: q.updated_at,
-        state: freshness(q.state, q.updated_at, now),
+        state: freshness(q.state, q.updated_at, status.now),
         note: q.state === "dead" ? q.reason : null,
       }),
     ),

@@ -213,19 +213,23 @@ pub struct HookStatus {
     pub minutes_ago: Option<i64>,
 }
 
-pub fn hook_status(data_dir: &Path, now: i64) -> HookStatus {
+/// R17's hook line, with `now` read from `clock` once the hand-off file is read. The status line writes that file from
+/// another process, with no guard shared: with `now` read first, a capture stamped and moved into place in between read
+/// as one from the future — a clock step back, the one thing a capture after now may mean — and **receiving** turned
+/// into last seen 0 minutes ago.
+pub fn hook_status(data_dir: &Path, clock: impl FnOnce() -> i64) -> HookStatus {
     let path = handoff_path(data_dir);
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return HookStatus { state: "never_seen", captured_at: None, minutes_ago: None };
-    };
-    let captured = serde_json::from_str::<Value>(&text).ok().and_then(|j| j["captured_at"].as_i64()).or_else(|| {
-        std::fs::metadata(&path)
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as i64)
+    let captured = std::fs::read_to_string(&path).ok().map(|text| {
+        serde_json::from_str::<Value>(&text).ok().and_then(|j| j["captured_at"].as_i64()).or_else(|| {
+            std::fs::metadata(&path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64)
+        })
     });
-    match captured {
+    let now = clock();
+    match captured.flatten() {
         Some(at) => HookStatus {
             // A gap, not a moment to reach: a capture stamped in what is now the future (a clock step back) is not recent.
             state: if (0..=RECEIVING_MS).contains(&(now - at)) { "receiving" } else { "last_seen" },
@@ -362,12 +366,12 @@ mod tests {
     #[test]
     fn hook_status_follows_captured_at() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(hook_status(dir.path(), 0).state, "never_seen");
+        assert_eq!(hook_status(dir.path(), || 0).state, "never_seen");
         std::fs::create_dir_all(dir.path().join("inbox")).unwrap();
         std::fs::write(handoff_path(dir.path()), fixture("basic.json")).unwrap();
         let captured = 1_789_390_320_000;
-        assert_eq!(hook_status(dir.path(), captured + 29 * 60_000).state, "receiving");
-        let later = hook_status(dir.path(), captured + 31 * 60_000);
+        assert_eq!(hook_status(dir.path(), || captured + 29 * 60_000).state, "receiving");
+        let later = hook_status(dir.path(), || captured + 31 * 60_000);
         assert_eq!((later.state, later.minutes_ago), ("last_seen", Some(31)));
     }
 
@@ -380,9 +384,9 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("inbox")).unwrap();
         std::fs::write(handoff_path(dir.path()), fixture("basic.json")).unwrap();
         let captured = 1_789_390_320_000;
-        let before = hook_status(dir.path(), captured - 2 * 60 * 60_000);
+        let before = hook_status(dir.path(), || captured - 2 * 60 * 60_000);
         assert_eq!((before.state, before.minutes_ago), ("last_seen", Some(0)));
-        assert_eq!(hook_status(dir.path(), captured).state, "receiving", "written just now");
+        assert_eq!(hook_status(dir.path(), || captured).state, "receiving", "written just now");
     }
 
     #[test]

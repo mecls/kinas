@@ -134,7 +134,7 @@ pub fn get_settings(
         hostinger_key_saved: keys.0.get(HOSTINGER_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
         hostinger_vm_id,
         hostinger_vm_label,
-        claude_hook: claude_plan::hook_status(control.data_dir(), now_ms()),
+        claude_hook: claude_plan::hook_status(control.data_dir(), now_ms),
         reader_editor,
         projects_root: projects_root.display().to_string(),
         projects_root_from_env: std::env::var("KINAS_ROOT").is_ok_and(|v| !v.trim().is_empty()),

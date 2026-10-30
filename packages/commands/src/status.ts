@@ -42,15 +42,23 @@ const GB_PER_GIB = 1.073741824;
 
 const lisbonDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" });
 
-export function statusFromStore(store: StorageAdapter, now: number): StatusResult {
+/**
+ * `now` is a moment (the palette passes its snapshot's), or a clock read once the rows are: the app is another process
+ * with no guard this shares, so a reading it writes after an earlier look at the clock would be stamped after it with
+ * no clock step behind it, and a stamp after now reads stale (staleness.ts).
+ */
+export function statusFromStore(store: StorageAdapter, clock: number | (() => number)): StatusResult {
   const readers = store.getReaderStatus();
+  const quotaRows = store.getQuotas();
+  const hostRow = store.getHost();
+  const now = typeof clock === "function" ? clock() : clock;
   const readerFor = (id: string): ReaderRow | undefined => readers.find((r) => r.reader === id);
   const limits = (id: string): [number, number] => {
     const r = readerFor(id);
     return r ? [r.stale_after_ms, r.dead_after_ms] : (DEFAULT_LIMITS[id] ?? [120_000, 43_200_000]);
   };
 
-  const quotas = store.getQuotas().map((q) => {
+  const quotas = quotaRows.map((q) => {
     const [stale, dead] = limits(q.subscription);
     return {
       ...q,
@@ -75,7 +83,6 @@ export function statusFromStore(store: StorageAdapter, now: number): StatusResul
     }
   }
 
-  const hostRow = store.getHost();
   const [hostStale, hostDead] = limits("host");
   return {
     now,

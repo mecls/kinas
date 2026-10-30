@@ -22,11 +22,15 @@ export interface MirrorStore {
   getCrewDecisions(): CrewDecisionRow[];
 }
 
-/** The crew from the mirror, or null when the mirror is not fresh enough to stand for the fleet. */
-export async function crewFromStore(store: MirrorStore, now: number, home: string): Promise<Crew | null> {
+/**
+ * The crew from the mirror, or null when the mirror is not fresh enough to stand for the fleet. `now` may be a clock,
+ * read once the collector's status is read: a mirror written since an earlier moment is not judged against it.
+ */
+export async function crewFromStore(store: MirrorStore, now: number | (() => number), home: string): Promise<Crew | null> {
   const status = store.getReaderStatus().find((r) => r.reader === "crew");
-  if (!status?.last_success_at || !within(status.last_success_at, now, MIRROR_FRESH_MS)) return null;
-  const rows = store.getCrewMirror(now).filter((r) => r.gone_at === null);
+  const at = typeof now === "function" ? now() : now;
+  if (!status?.last_success_at || !within(status.last_success_at, at, MIRROR_FRESH_MS)) return null;
+  const rows = store.getCrewMirror(at).filter((r) => r.gone_at === null);
 
   const inFlight: CrewTask[] = rows
     .filter((r) => r.backlog_state === "in_flight" || (r.backlog_state === null && r.done_at === null))

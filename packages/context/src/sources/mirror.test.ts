@@ -93,3 +93,12 @@ test("a mirror stamped in what is now the future (the wall clock stepped back) i
   expect(await crewFromStore(store(NOW - MIRROR_FRESH_MS + 1, [row("a-9c2e")]), NOW, "/h")).not.toBeNull();
   expect(await crewFromStore(store(NOW - MIRROR_FRESH_MS, [row("a-9c2e")]), NOW, "/h")).toBeNull();
 });
+
+test("given a clock, the mirror is judged once the collector's status is read, not at an earlier look", async () => {
+  // The app writes its status from another process: one committed just after the caller's first look at the clock is
+  // newer than that look with no clock step behind it. Read after the status, the clock is never behind it.
+  let clock = NOW;
+  const base = store(NOW + 3, [row("a-9c2e")]);
+  const landing = { ...base, getReaderStatus: () => ((clock = NOW + 3), base.getReaderStatus()) };
+  expect((await crewFromStore(landing, () => clock, "/h"))?.in_flight.map((t) => t.id)).toEqual(["a-9c2e"]);
+});

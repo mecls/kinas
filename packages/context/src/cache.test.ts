@@ -75,6 +75,18 @@ describe("the CLI cache", () => {
     cache.close();
   });
 
+  test("a lease taken while this caller computed its packet holds it back: the claim reads the clock itself", () => {
+    // Two panes start `kinas` with no packet cached. The later one computes faster and takes the lease; the earlier one
+    // claims seconds after its own start. Judged at that start, the lease is stamped after now — read as a clock step
+    // back — and a second refresh starts beside the first. Judged when the lease is read, it holds.
+    const cache = ContextCache.open(dir());
+    expect(cache.claimRefresh("o", 2_000, 60_000)).toBe(true);
+    expect(cache.claimRefresh("o", () => 3_500, 60_000)).toBe(false);
+    expect(cache.claimRefresh("o", () => 62_000, 60_000)).toBe(true);
+    expect(cache.claimRefresh("o", 62_001, 60_000)).toBe(false);
+    cache.close();
+  });
+
   test("an event is recorded once, and recent is newest first", () => {
     const cache = ContextCache.open(dir());
     const event = (ref: string, at: number) => ({ ref, at, kind: "commit" as const, project: "p", text: ref });

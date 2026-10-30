@@ -19,6 +19,9 @@ export function readingState(input: StalenessInput): ReadingState {
   // Reset outranks dead and stale: the stored number belongs to a window that has ended.
   if (input.resetsAt != null && input.now >= input.resetsAt) return "reset";
   const age = input.now - input.updatedAt;
+  // A reading stamped after now is from before a backwards clock step: its true age is unknown, so it is not fresh
+  // (as the poller and the caches judge a stamp in the future); the next reading puts it right.
+  if (age < 0) return "stale";
   if (age > input.deadAfterMs) return "dead";
   if (age > input.staleAfterMs) return "stale";
   return "fresh";

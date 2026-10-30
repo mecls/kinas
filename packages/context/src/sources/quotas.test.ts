@@ -60,3 +60,9 @@ describe("quotas", () => {
     ]);
   });
 });
+
+test("a quota stamped after now is stale, as the store's staleness rule has it: the clock stepped back since", () => {
+  const now = 1_790_000_000_000;
+  expect(freshness("fresh", now + 2 * 3_600_000, now)).toBe("stale");
+  expect(freshness("fresh", now - 60_000, now)).toBe("fresh");
+});

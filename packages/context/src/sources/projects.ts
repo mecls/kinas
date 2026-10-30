@@ -74,7 +74,9 @@ async function changedAgainstHead(git: Git): Promise<string[]> {
     if (!meta.startsWith(":")) break;
     const [srcMode, dstMode, srcSha, dstSha, status] = meta.slice(1).split(" ");
     const unknownContent = /^0+$/.test(dstSha ?? "");
-    if (status === "M" && unknownContent && srcMode === dstMode && srcMode !== "160000") {
+    // Regular files only, as the app hashes: `hash-object` opens a path and follows a symlink, and one whose target is
+    // gone or a folder failed the whole batch. A symlink the stat data cannot vouch for counts.
+    if (status === "M" && unknownContent && srcMode === dstMode && (srcMode === "100644" || srcMode === "100755")) {
       verify.push({ path, blob: srcSha ?? "" });
     } else {
       changed.push(path);

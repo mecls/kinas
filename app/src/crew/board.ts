@@ -39,11 +39,16 @@ export const BADGE_OF: Record<CrewWord, BadgeState> = {
 /** The caption's clock: the snapshot's own time, as a 24-hour local time. */
 const secondsClock = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour12: false });
 
-/** "as of 09:31:12", or "stale · as of 09:31:12" once the snapshot is more than 60 s old (§4) — on Crew and Usage. */
+/**
+ * "as of 09:31:12", or "stale · as of 09:31:12" once the snapshot is more than 60 s old (§4) — on Crew and Usage. A
+ * snapshot made in what is now the future is from before a backwards clock step: its age is unknown, so it is stale,
+ * as every reading is (`packages/store/src/staleness.ts`).
+ */
 export function fleetAsOf(generated: string | null, now: number): string | null {
   const at = generated ? Date.parse(generated) : NaN;
   if (Number.isNaN(at)) return null;
-  return `${now - at > 60_000 ? "stale · " : ""}as of ${secondsClock(at)}`;
+  const stale = at > now || now - at > 60_000;
+  return `${stale ? "stale · " : ""}as of ${secondsClock(at)}`;
 }
 
 /** In flight: started and not finished, whatever the badge says (§7). */
@@ -56,6 +61,10 @@ const seenAt = (t: CrewTask, surface: CrewSurface) => (surface === "board" ? t.b
  * ones it stamped before that load — except those `keep` says this load has already drawn, so a card never leaves
  * under the captain's eyes. `stampedHere` holds the stamps this page asked for, for a reading taken before they were
  * written. Whether a task is finished is Rust's word (`finished`), never decided here.
+ *
+ * A stamp this page asked for and this load has not drawn was asked at an earlier load (this load asks only for what it
+ * draws), so it is from before this load whatever the clock read: after the wall clock steps back, it reads later
+ * than `openedAt`.
  */
 export function onScreen(
   tasks: readonly CrewTask[],
@@ -66,7 +75,8 @@ export function onScreen(
 ): CrewTask[] {
   return tasks.filter((t) => {
     const at = seenAt(t, surface) ?? stampedHere.get(t.id) ?? null;
-    return !(t.finished && at !== null && at < openedAt && !keep.has(t.id));
+    const earlier = at !== null && (at < openedAt || stampedHere.has(t.id));
+    return !(t.finished && earlier && !keep.has(t.id));
   });
 }
 
@@ -79,6 +89,25 @@ export function onScreen(
 export function fleetShown(page: CrewPage | undefined, taskCount: number, readerError: boolean): boolean {
   if (page === undefined || page === "uninstalled") return false;
   return page === "running" || taskCount > 0 || readerError;
+}
+
+/** A finished task's finish: when it was done, else when it went. A new one means it came back and finished again. */
+export const finishOf = (t: CrewTask): number | null => t.done_at ?? t.gone_at;
+
+/**
+ * Forgets the stamps this page asked for whose task has come back since (done work clears, rule 7): read unfinished, or
+ * finished at another moment than the one it stamped. Runs on every reading, the page on screen or not — a hidden page
+ * draws nothing, so its memory of a finish must not outlive that finish, or the next one is cleared unseen. A task this
+ * reading does not list keeps its entry.
+ */
+export function forgetComeBack(tasks: readonly CrewTask[], stamped: Map<string, number>, finishes: Map<string, number | null>): void {
+  for (const t of tasks) {
+    if (!stamped.has(t.id)) continue;
+    if (!t.finished || finishOf(t) !== finishes.get(t.id)) {
+      stamped.delete(t.id);
+      finishes.delete(t.id);
+    }
+  }
 }
 
 /** The finished tasks among those drawn with no stamp for this surface yet: what the page sends to be stamped. */

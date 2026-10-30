@@ -13,13 +13,14 @@ import { join } from "node:path";
 import { statusFromStore } from "@kinas/commands";
 import { openReadOnly, type SqliteReadOnlyStore } from "@kinas/store/sqlite-readonly";
 import type { QuotaLine, QuotaState } from "../packet.ts";
-import { STALE_AFTER_MS } from "../time.ts";
+import { STALE_AFTER_MS, within } from "../time.ts";
 
 const PROVIDER = { "claude-plan": "Claude", "ollama-cloud": "Ollama" } as const;
 const WINDOW = { session: "session", week: "week", month_credits: "credits" } as const;
 
+/** Older than 15 minutes is stale — and so is a quota stamped after now (the clock stepped back), as the store's rule has it. */
 export function freshness(state: QuotaState, updatedAt: number | null, now: number): QuotaState {
-  if (state === "fresh" && updatedAt !== null && now - updatedAt > STALE_AFTER_MS) return "stale";
+  if (state === "fresh" && updatedAt !== null && !within(updatedAt, now, STALE_AFTER_MS + 1)) return "stale";
   return state;
 }
 

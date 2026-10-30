@@ -227,7 +227,8 @@ pub fn hook_status(data_dir: &Path, now: i64) -> HookStatus {
     });
     match captured {
         Some(at) => HookStatus {
-            state: if now - at <= RECEIVING_MS { "receiving" } else { "last_seen" },
+            // A gap, not a moment to reach: a capture stamped in what is now the future (a clock step back) is not recent.
+            state: if (0..=RECEIVING_MS).contains(&(now - at)) { "receiving" } else { "last_seen" },
             captured_at: Some(at),
             minutes_ago: Some((now - at).max(0) / 60_000),
         },
@@ -368,6 +369,20 @@ mod tests {
         assert_eq!(hook_status(dir.path(), captured + 29 * 60_000).state, "receiving");
         let later = hook_status(dir.path(), captured + 31 * 60_000);
         assert_eq!((later.state, later.minutes_ago), ("last_seen", Some(31)));
+    }
+
+    /// The hook stamps `captured_at` from the wall clock, which can step back. A capture stamped in what is now the
+    /// future is not a recent one: read as one, Settings said **receiving** for the length of the step plus 30 minutes
+    /// after the hook had stopped writing.
+    #[test]
+    fn a_capture_stamped_in_the_future_is_not_receiving() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("inbox")).unwrap();
+        std::fs::write(handoff_path(dir.path()), fixture("basic.json")).unwrap();
+        let captured = 1_789_390_320_000;
+        let before = hook_status(dir.path(), captured - 2 * 60 * 60_000);
+        assert_eq!((before.state, before.minutes_ago), ("last_seen", Some(0)));
+        assert_eq!(hook_status(dir.path(), captured).state, "receiving", "written just now");
     }
 
     #[test]

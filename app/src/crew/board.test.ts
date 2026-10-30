@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { CrewTask, CrewWord } from "../api.ts";
 import { seatFolders } from "../shell/folders.ts";
 import { BADGE } from "../ui/StatusBadge.tsx";
-import { BADGE_OF, cardOrder, duration, elapsedText, fleetShown, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
+import { BADGE_OF, cardOrder, duration, elapsedText, fleetAsOf, fleetShown, forgetComeBack, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
 
 // The board's rules (build spec §4 Crew page, PRD rules 18–19, AC-7): lanes by repository in the sidebar's order, then
 // the unmatched by name without chips; counts; card order; elapsed texts; PR lines.
@@ -125,6 +125,15 @@ test("every word has a badge DESIGN.md draws", () => {
   expect(Object.keys(BADGE_OF)).toHaveLength(12);
 });
 
+test("the fleet caption: as of the snapshot's time, stale past 60 s or stamped in what is now the future", () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+  expect(fleetAsOf(null, NOW)).toBeNull();
+  expect(fleetAsOf(at(NOW - 60_000), NOW)).not.toContain("stale");
+  expect(fleetAsOf(at(NOW - 60_001), NOW)).toStartWith("stale · as of ");
+  // Made before the clock stepped back two hours: its age is unknown, so it is not fresh (the shared staleness rule).
+  expect(fleetAsOf(at(NOW + 120 * MIN), NOW)).toStartWith("stale · as of ");
+});
+
 describe("onScreen and toStamp (done work clears, rules 3–5)", () => {
   const OPENED = NOW;
   const none = new Set<string>();
@@ -150,6 +159,46 @@ describe("onScreen and toStamp (done work clears, rules 3–5)", () => {
     const t = done("stamped-here");
     expect(onScreen([t], "board", OPENED, none, new Map([["stamped-here", OPENED - MIN]]))).toEqual([]);
     expect(onScreen([t], "board", OPENED, new Set(["stamped-here"]), new Map([["stamped-here", OPENED - MIN]]))).toEqual([t]);
+  });
+
+  test("onScreen clears what this page stamped at an earlier load, whatever the clock read then", () => {
+    // The board stamped it, then the Mac's clock stepped back two hours (an NTP correction, a wake): its stamp now
+    // reads later than this load's moment. It was seen before this load, so this load leaves it out (rule 5).
+    const t = done("before-the-step", { board_seen_at: OPENED + 120 * MIN });
+    const asked = new Map([["before-the-step", OPENED + 120 * MIN]]);
+    expect(onScreen([t], "board", OPENED, none, asked)).toEqual([]);
+    // Drawn in this load, it stays until the next (rule 3).
+    expect(onScreen([t], "board", OPENED, new Set(["before-the-step"]), asked)).toEqual([t]);
+    // Overnight's own stamp clears on Overnight alone (rule 6).
+    const night = done("before-the-step", { overnight_seen_at: OPENED + 120 * MIN });
+    expect(onScreen([night], "overnight", OPENED, none, asked)).toEqual([]);
+  });
+
+  test("a stamp this page asked for is forgotten once its task comes back, even while the page is hidden (rule 7)", () => {
+    // The board showed it done and stamped it; the captain went to Home; Firstmate reopened it (Rust cleared its stamps)
+    // and it finished again with a new done_at. Back on Crew, the reading says no stamp — and the page's own memory of
+    // the first finish must not clear the second unseen.
+    const first = NOW - 30 * MIN;
+    const stamped = new Map([["again", OPENED - MIN]]);
+    const finishes = new Map<string, number | null>([["again", first]]);
+    const refinished = done("again", { done_at: NOW - 5 * MIN });
+    forgetComeBack([refinished], stamped, finishes);
+    expect(onScreen([refinished], "board", OPENED, none, stamped)).toEqual([refinished]);
+    expect([stamped.size, finishes.size]).toEqual([0, 0]);
+
+    // Read unfinished in between: forgotten as well.
+    const s2 = new Map([["back", OPENED - MIN]]);
+    const f2 = new Map<string, number | null>([["back", first]]);
+    forgetComeBack([task("back", "working")], s2, f2);
+    expect([s2.size, f2.size]).toEqual([0, 0]);
+
+    // The same finish, or a task this reading does not list: the memory stands, and the card stays cleared.
+    const s3 = new Map([["same", OPENED - MIN], ["absent", OPENED - MIN]]);
+    const f3 = new Map<string, number | null>([["same", first], ["absent", first]]);
+    const same = done("same", { done_at: first });
+    forgetComeBack([same], s3, f3);
+    expect([...s3.keys()]).toEqual(["same", "absent"]);
+    expect(onScreen([same], "board", OPENED, none, s3)).toEqual([]);
   });
 
   test("onScreen never drops an unfinished task", () => {

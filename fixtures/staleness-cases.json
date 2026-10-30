@@ -36,6 +36,15 @@
     "expected": "dead"
   },
   {
+    "name": "a reading stamped after now is stale: the clock stepped back since, so its age is unknown",
+    "updated_at": 2000000,
+    "now": 1600000,
+    "stale_after_ms": 600000,
+    "dead_after_ms": 43200000,
+    "resets_at": null,
+    "expected": "stale"
+  },
+  {
     "name": "never succeeded is dead",
     "updated_at": null,
     "now": 1000000,

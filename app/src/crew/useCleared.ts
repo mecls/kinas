@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { crewSeen, type CrewSurface, type CrewTask } from "../api.ts";
-import { onScreen, toStamp } from "./board.ts";
+import { finishOf, forgetComeBack, onScreen, toStamp } from "./board.ts";
 
 // A page's load (done work clears, `tasks/crew-done-clears/prd.md` rules 3–6). The pages never unmount — App hides
 // them — so a load is the page coming on screen: `active` false → true, which a window reload or Kinas starting on the
@@ -42,8 +42,11 @@ export function useCleared(
   const wasActive = useRef(false);
   const isActive = useRef(active);
   // The stamps this page asked for, kept across its loads: a reading taken before Rust wrote them still says none, and
-  // a quick return would show the card again. A task drawn unfinished again forgets its own (rule 7).
+  // a quick return would show the card again; and one a later load has not drawn is from before that load, whatever
+  // the clock says of it (board.ts onScreen). A task that comes back forgets its own (rule 7, board.ts forgetComeBack).
   const stampedHere = useRef(new Map<string, number>());
+  /** The finish each of those stamps was for (board.ts finishOf): a task that finishes again is new again (rule 7). */
+  const stampedFinish = useRef(new Map<string, number | null>());
   // Opened in the render that shows the page, not in an effect: an effect would let that first render draw with the
   // last load's moment, and keep what this one must clear.
   if (active && !wasActive.current) load.current = { openedAt: Date.now(), keep: new Set(), asked: new Set() };
@@ -57,6 +60,8 @@ export function useCleared(
 
   const filter = useCallback(
     (tasks: readonly CrewTask[]) => {
+      // Every reading, on screen or not: a task that came back while the page was hidden is new again (rule 7).
+      forgetComeBack(tasks, stampedHere.current, stampedFinish.current);
       const now = load.current;
       return now ? onScreen(tasks, surface, now.openedAt, now.keep, stampedHere.current) : [...tasks];
     },
@@ -67,10 +72,7 @@ export function useCleared(
     (drawn: readonly CrewTask[]) => {
       const now = load.current;
       if (!now || !isActive.current) return;
-      for (const t of drawn) {
-        now.keep.add(t.id);
-        if (!t.finished) stampedHere.current.delete(t.id);
-      }
+      for (const t of drawn) now.keep.add(t.id);
       if (!windowShown()) return;
       const ids = toStamp(drawn, surface).filter((id) => !now.asked.has(id) && !stampedHere.current.has(id));
       if (ids.length === 0) return;
@@ -78,6 +80,8 @@ export function useCleared(
       for (const id of ids) {
         now.asked.add(id);
         stampedHere.current.set(id, at);
+        const task = drawn.find((t) => t.id === id);
+        stampedFinish.current.set(id, task ? finishOf(task) : null);
       }
       // A stamp that cannot be written is dropped: the task keeps no stamp, so it is shown again at the next load
       // and never cleared unseen (Journey D). A later re-read of this load may ask again.
@@ -85,6 +89,7 @@ export function useCleared(
         for (const id of ids) {
           now.asked.delete(id);
           stampedHere.current.delete(id);
+          stampedFinish.current.delete(id);
         }
       });
     },

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ReaderView } from "../api.ts";
+import { readingState } from "@kinas/store/staleness";
 import { asOf } from "../usage/format.ts";
 import { connectionOf } from "./connection.ts";
 
@@ -26,6 +27,15 @@ describe("the VPS row's word (DESIGN.md §3.1)", () => {
     expect(connectionOf({ now, readers: [reader({ last_success_at: now - 300_001 })] })?.state).toBe("stale");
     expect(connectionOf({ now, readers: [reader({ last_success_at: null })] })).toMatchObject({ state: "stale", detail: "no reading yet" });
     expect(connectionOf({ now, readers: [reader({ state: "error", last_error: "api token rejected" })] })).toEqual({ name: "Hostinger VPS", state: "error", detail: "api token rejected" });
+  });
+
+  test("a reading stamped in what is now the future is stale, as the Usage page's Hostinger section says it", () => {
+    // Taken just before the clock stepped back two hours: its age is unknown (packages/store/src/staleness.ts).
+    const ahead = now + 2 * 60 * 60_000;
+    expect(connectionOf({ now, readers: [reader({ last_success_at: ahead })] })).toEqual({ name: "Hostinger VPS", state: "stale", detail: asOf(ahead, now) });
+    expect(readingState({ updatedAt: ahead, staleAfterMs: 300_000, deadAfterMs: 900_000, now })).toBe("stale");
+    // At exactly now it is fresh: connected.
+    expect(connectionOf({ now, readers: [reader({ last_success_at: now })] })?.state).toBe("connected");
   });
 
   test("the hover's 'as of' is the Usage page's own caption for the same reading: 24-hour, Europe/Lisbon, never the locale's", () => {

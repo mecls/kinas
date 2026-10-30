@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, utimesSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fixture, git, write } from "../testing/world.ts";
@@ -71,6 +71,29 @@ describe("projects through git plumbing", () => {
     write(join(repo, '"draft-9c2e".md'), "# Changed\n");
     utimesSync(join(repo, '"draft-9c2e".md'), new Date(), new Date(Date.now() + 10_000));
     expect((await readRepo(repo, "repo")).row.dirty).toBe(1);
+  });
+
+  test("a touched symlink that git cannot hash as a file never makes the touched clean files read dirty", async () => {
+    // `hash-object --stdin-paths` opens each path and follows a symlink: one whose target is gone or is a folder failed
+    // the whole batch, so every touched-but-unchanged file in the repository read dirty. A symlink is not hashed; when
+    // its stat data no longer vouches for it, it counts, as the app counts a path it is unsure of.
+    const repo = join(tempDir(), "repo");
+    write(join(repo, "same-9c2e.md"), "# Same\n");
+    mkdirSync(join(repo, "dir-9c2e"));
+    write(join(repo, "dir-9c2e/inside.md"), "# Inside\n");
+    symlinkSync("gone-9c2e", join(repo, "dangling-9c2e"));
+    symlinkSync("dir-9c2e", join(repo, "to-dir-9c2e"));
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "First");
+    utimesSync(join(repo, "same-9c2e.md"), new Date(), new Date(Date.now() + 5_000));
+    // Recreated as it was: the same link, new stat data.
+    for (const [target, link] of [["gone-9c2e", "dangling-9c2e"], ["dir-9c2e", "to-dir-9c2e"]] as const) {
+      unlinkSync(join(repo, link));
+      symlinkSync(target, join(repo, link));
+    }
+
+    expect((await readRepo(repo, "repo")).row.dirty).toBe(2);
   });
 
   test("ahead and behind its upstream", async () => {

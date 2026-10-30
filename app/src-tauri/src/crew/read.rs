@@ -134,14 +134,14 @@ fn reader(conn: &Connection, org: &str) -> rusqlite::Result<ReaderView> {
 }
 
 /// A task row's columns, with the newest event that is not an order and whether a fresh worker row exists (`?4` is
-/// the freshness cut-off).
+/// the freshness cut-off, `?5` now: a row stamped in what is now the future — the wall clock stepped back — is not fresh).
 fn task_select() -> String {
     format!(
         "SELECT id, title, repo, project_name, kind, harness, pr_number, (SELECT e.at FROM crew_events e WHERE e.org_id = t.org_id
            AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1), (SELECT e.text FROM crew_events e
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
            {STORED_COLUMNS},
-           EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4)
+           EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4 AND w.observed_at <= ?5)
          FROM crew_tasks t"
     )
 }
@@ -187,7 +187,7 @@ fn tasks(conn: &Connection, org: &str, now: i64) -> rusqlite::Result<Vec<TaskRow
         task_select()
     );
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params![org, now - GONE_SHOWN_MS, now - DONE_SHOWN_MS, now - WORKER_FRESH_MS], task_row)?;
+    let rows = stmt.query_map(params![org, now - GONE_SHOWN_MS, now - DONE_SHOWN_MS, now - WORKER_FRESH_MS, now], task_row)?;
     rows.collect()
 }
 
@@ -250,7 +250,7 @@ pub struct DetailPaths {
 pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rusqlite::Result<Option<CrewTaskDetail>> {
     // `?3` is the retention bound the board uses; one task is shown whatever its age.
     let sql = format!("{} WHERE org_id = ?1 AND id = ?2", task_select());
-    let Some(task) = conn.query_row(&sql, params![org, id, 0, now - WORKER_FRESH_MS], task_row).optional()? else { return Ok(None) };
+    let Some(task) = conn.query_row(&sql, params![org, id, 0, now - WORKER_FRESH_MS, now], task_row).optional()? else { return Ok(None) };
     let text = |r: &rusqlite::Row, i: usize| r.get::<_, Option<String>>(i);
     let (state, source, detail, observed_at, mode, backend, excerpt, report, worktree, pr_review, pr_url) = conn.query_row(
         "SELECT state, state_source, state_detail, state_observed_at, mode, backend, excerpt, report_path, worktree_path,
@@ -402,11 +402,11 @@ pub(crate) fn task_repos(conn: &Connection, org: &str) -> rusqlite::Result<Vec<S
     rows.collect()
 }
 
-/// A task's worker row while it is fresh: (session, workspace).
+/// A task's worker row while it is fresh — never one stamped in what is now the future: (session, workspace).
 pub(crate) fn fresh_worker(conn: &Connection, org: &str, task: &str, now: i64) -> rusqlite::Result<Option<(String, Option<String>)>> {
     conn.query_row(
-        "SELECT session, workspace_id FROM crew_workers WHERE org_id = ?1 AND task_id = ?2 AND observed_at > ?3",
-        params![org, task, now - WORKER_FRESH_MS],
+        "SELECT session, workspace_id FROM crew_workers WHERE org_id = ?1 AND task_id = ?2 AND observed_at > ?3 AND observed_at <= ?4",
+        params![org, task, now - WORKER_FRESH_MS, now],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )
     .optional()
@@ -496,6 +496,32 @@ mod tests {
         store.conn().execute("UPDATE crew_tasks SET pr_state = 'OPEN' WHERE org_id = ?1", params![org]).unwrap();
         let open = first(T0 + 13);
         assert_eq!((open.word, open.finished), ("done", false));
+    }
+
+    /// A worker row is fresh for 15 s — on the wall clock, which can step back — and a snapshot that fails keeps the
+    /// last good rows (ADR 0004). A row stamped in what is now the future is not a recent one, as the Work chrome's
+    /// Herdr view is not: kept as fresh, the card and the panel offered Open its pane, and the click focused the
+    /// workspace it named, for the length of the step after the crew stopped seeing that worker.
+    #[test]
+    fn a_worker_row_stamped_in_the_future_is_not_fresh() {
+        use crate::readers::crew::mirror::{Found, Worker};
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let org = store.org_id();
+        let ahead = T0 + 2 * 60 * 60_000;
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/crew-snapshot.working.synthetic.json");
+        let fleet = parse_fleet(&std::fs::read_to_string(path).unwrap());
+        let id = fleet.as_ref().unwrap().tasks[0].id.clone();
+        let worker = Worker { task_id: id.clone(), session: "default".into(), pane_id: "w2:p2".into(), workspace_id: Some("w2-9c2e".into()), tab_label: None };
+        record(&mut store.conn(), org, &fleet, &Found { workers: vec![worker], ..Found::default() }, ahead).unwrap();
+        record(&mut store.conn(), org, &Err("the snapshot failed".into()), &Found::default(), T0).unwrap();
+        let has_pane = |now: i64| snapshot_view(&store.conn(), org, now, true, true, None).unwrap().tasks[0].has_pane;
+        let panel = |now: i64| task_view(&store.conn(), org, &id, now).unwrap().unwrap().task.has_pane;
+        assert_eq!((has_pane(T0), panel(T0)), (false, false), "a worker seen two hours from now has no pane to open");
+        assert_eq!(fresh_worker(&store.conn(), org, &id, T0).unwrap(), None);
+        assert_eq!((has_pane(ahead), panel(ahead)), (true, true), "seen just now");
+        assert_eq!(fresh_worker(&store.conn(), org, &id, ahead + WORKER_FRESH_MS - 1).unwrap(), Some(("default".into(), Some("w2-9c2e".into()))));
+        assert_eq!(fresh_worker(&store.conn(), org, &id, ahead + WORKER_FRESH_MS).unwrap(), None, "15 s old is stale");
     }
 
     #[test]

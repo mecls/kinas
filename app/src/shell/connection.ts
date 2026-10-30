@@ -17,13 +17,16 @@ export interface Connection {
 
 export const VPS_NAME = "Hostinger VPS";
 
-/** `null` while no machine is watched. Stale past the reader's own `stale_after_ms`, like every gauge. */
+/**
+ * `null` while no machine is watched. Stale past the reader's own `stale_after_ms`, like every gauge — and stamped in
+ * what is now the future, from before a backwards clock step, whose age is unknown (`packages/store/src/staleness.ts`).
+ */
 export function connectionOf(snapshot: Pick<UsageSnapshot, "now" | "readers">): Connection | null {
   const reader = snapshot.readers.find((r): r is ReaderView => r.reader === "hostinger");
   if (!reader || reader.state === "not_configured") return null;
   if (reader.state === "error") return { name: VPS_NAME, state: "error", detail: reader.last_error ?? "the last reading failed" };
   const since = reader.last_success_at;
-  if (since === null || snapshot.now - since > reader.stale_after_ms) {
+  if (since === null || since > snapshot.now || snapshot.now - since > reader.stale_after_ms) {
     return { name: VPS_NAME, state: "stale", detail: since === null ? "no reading yet" : asOf(since, snapshot.now) };
   }
   return { name: VPS_NAME, state: "connected", detail: asOf(since, snapshot.now) };

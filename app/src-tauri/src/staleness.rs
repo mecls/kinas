@@ -23,7 +23,11 @@ pub fn reading_state(updated_at: Option<i64>, stale_after_ms: i64, dead_after_ms
         return ReadingState::Reset;
     }
     let age = now - updated_at;
-    if age > dead_after_ms {
+    // A reading stamped after now is from before a backwards clock step: its true age is unknown, so it is not fresh
+    // (as the poller and the caches judge a stamp in the future); the next reading puts it right.
+    if age < 0 {
+        ReadingState::Stale
+    } else if age > dead_after_ms {
         ReadingState::Dead
     } else if age > stale_after_ms {
         ReadingState::Stale

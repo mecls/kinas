@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
@@ -188,5 +189,33 @@ describe("recent activity", () => {
     const events = activityEvents(packet, { projects: [], commits: new Map(), artifacts: later.artifacts, crew: packet.crew, sessions: packet.sessions }, 99);
     expect(events.map((e) => [e.kind, e.project, e.text])).toEqual([["file", "acme", "docs/plan.md written by claude"]]);
     rmSync(plan);
+  });
+});
+
+describe("quotas in the packet", () => {
+  test("a reading that lands while the packet is being computed is fresh, not a stamp from before a clock step", async () => {
+    // `now` is when the computation began; git across the projects can take seconds, and Codex and the app keep writing.
+    // A reading stamped since then is newer than `now` without the clock having stepped back: it is judged when it is read.
+    const w = await makeWorld();
+    try {
+      const began = Date.now() - 5_000;
+      const landed = Date.now() - 1_000;
+      const db = new Database(join(w.dataDir, "kinas.sqlite"));
+      db.run("UPDATE quotas SET updated_at = ?", [landed]);
+      db.close();
+      const limits = { primary: { used_percent: 30, window_minutes: 300, resets_at: Math.floor((landed + 3_600_000) / 1000) } };
+      write(
+        join(w.codexHome, "sessions/2026/09/14/rollout-2026-09-14T20-00-00-abc.jsonl"),
+        `${JSON.stringify({ timestamp: new Date(landed).toISOString(), type: "event_msg", payload: { type: "token_count", rate_limits: limits } })}\n`,
+      );
+      const p = await computePacket(loadConfig(w.env), null, { now: began, skipCrew: true });
+      expect(p.quotas.data.map((q) => [q.provider, q.state])).toEqual([
+        ["Claude", "fresh"],
+        ["Codex", "fresh"],
+        ["Ollama", "fresh"],
+      ]);
+    } finally {
+      await w.cleanup();
+    }
   });
 });

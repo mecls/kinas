@@ -96,17 +96,28 @@ export const finishOf = (t: CrewTask): number | null => t.done_at ?? t.gone_at;
 
 /**
  * Forgets the stamps this page asked for whose task has come back since (done work clears, rule 7): read unfinished, or
- * finished at another moment than the one it stamped. Runs on every reading, the page on screen or not — a hidden page
- * draws nothing, so its memory of a finish must not outlive that finish, or the next one is cleared unseen. A task this
- * reading does not list keeps its entry.
+ * finished at another moment than the one it stamped, or — given the page's `surface` and its `confirmed` set — its
+ * stamp for that surface read by an earlier reading and missing from this one. Rust removes a stamp only when the task
+ * comes back (`forget_seen`), and a done task that was torn down and returns keeps its `done_at`, so only the stamp's
+ * going says it is new again. Runs on every reading, the page on screen or not — a hidden page draws nothing, so its
+ * memory of a finish must not outlive that finish, or the next one is cleared unseen. A task this reading does not
+ * list keeps its entry.
  */
-export function forgetComeBack(tasks: readonly CrewTask[], stamped: Map<string, number>, finishes: Map<string, number | null>): void {
+export function forgetComeBack(
+  tasks: readonly CrewTask[],
+  stamped: Map<string, number>,
+  finishes: Map<string, number | null>,
+  surface?: CrewSurface,
+  confirmed: Set<string> = new Set(),
+): void {
   for (const t of tasks) {
     if (!stamped.has(t.id)) continue;
-    if (!t.finished || finishOf(t) !== finishes.get(t.id)) {
+    const rust = surface ? seenAt(t, surface) : null;
+    if (!t.finished || finishOf(t) !== finishes.get(t.id) || (rust === null && confirmed.has(t.id))) {
       stamped.delete(t.id);
       finishes.delete(t.id);
-    }
+      confirmed.delete(t.id);
+    } else if (rust !== null) confirmed.add(t.id);
   }
 }
 

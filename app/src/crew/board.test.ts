@@ -201,6 +201,36 @@ describe("onScreen and toStamp (done work clears, rules 3–5)", () => {
     expect(onScreen([same], "board", OPENED, none, s3)).toEqual([]);
   });
 
+  test("a stamp this page asked for is forgotten once Rust drops it: a done task torn down that comes back (rule 7)", () => {
+    // The board stamped it; a reading carried Rust's stamp; it was torn down (gone), then returned to the snapshot still
+    // done. Rust keeps its done_at and removes its stamps in that write (forget_seen): it is new again, and the page's
+    // memory of the first sighting must not clear it unseen.
+    const first = NOW - 30 * MIN;
+    const stamped = new Map([["back-done", OPENED - MIN]]);
+    const finishes = new Map<string, number | null>([["back-done", first]]);
+    const confirmed = new Set<string>();
+    forgetComeBack([done("back-done", { done_at: first, board_seen_at: OPENED - MIN })], stamped, finishes, "board", confirmed);
+    forgetComeBack([done("back-done", { done_at: first, gone_at: NOW - 10 * MIN, board_seen_at: OPENED - MIN })], stamped, finishes, "board", confirmed);
+    expect(stamped.has("back-done")).toBe(true);
+    const returned = done("back-done", { done_at: first });
+    forgetComeBack([returned], stamped, finishes, "board", confirmed);
+    expect(onScreen([returned], "board", OPENED, none, stamped)).toEqual([returned]);
+    expect([stamped.size, finishes.size, confirmed.size]).toEqual([0, 0, 0]);
+
+    // A reading taken before Rust wrote the stamp still says none: the memory stands until a reading has carried it.
+    const s2 = new Map([["not-yet", OPENED - MIN]]);
+    const f2 = new Map<string, number | null>([["not-yet", first]]);
+    forgetComeBack([done("not-yet", { done_at: first })], s2, f2, "board", new Set());
+    expect(onScreen([done("not-yet", { done_at: first })], "board", OPENED, none, s2)).toEqual([]);
+    // Overnight's stamp says nothing of the board's memory (rule 6).
+    const s3 = new Map([["other", OPENED - MIN]]);
+    const f3 = new Map<string, number | null>([["other", first]]);
+    const c3 = new Set<string>();
+    forgetComeBack([done("other", { done_at: first, overnight_seen_at: OPENED - MIN })], s3, f3, "board", c3);
+    forgetComeBack([done("other", { done_at: first })], s3, f3, "board", c3);
+    expect(s3.has("other")).toBe(true);
+  });
+
   test("onScreen never drops an unfinished task", () => {
     // A done task whose PR is still open is not finished (Rust's word): whatever its stamp says, it stays.
     const open = task("pr-open", "done", { finished: false, board_seen_at: OPENED - MIN, overnight_seen_at: OPENED - MIN });

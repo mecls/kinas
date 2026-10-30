@@ -47,6 +47,8 @@ export function useCleared(
   const stampedHere = useRef(new Map<string, number>());
   /** The finish each of those stamps was for (board.ts finishOf): a task that finishes again is new again (rule 7). */
   const stampedFinish = useRef(new Map<string, number | null>());
+  /** Those whose stamp a reading has carried: one that drops it again was brought back by Rust (rule 7). */
+  const stampConfirmed = useRef(new Set<string>());
   // Opened in the render that shows the page, not in an effect: an effect would let that first render draw with the
   // last load's moment, and keep what this one must clear.
   if (active && !wasActive.current) load.current = { openedAt: Date.now(), keep: new Set(), asked: new Set() };
@@ -61,7 +63,7 @@ export function useCleared(
   const filter = useCallback(
     (tasks: readonly CrewTask[]) => {
       // Every reading, on screen or not: a task that came back while the page was hidden is new again (rule 7).
-      forgetComeBack(tasks, stampedHere.current, stampedFinish.current);
+      forgetComeBack(tasks, stampedHere.current, stampedFinish.current, surface, stampConfirmed.current);
       const now = load.current;
       return now ? onScreen(tasks, surface, now.openedAt, now.keep, stampedHere.current) : [...tasks];
     },
@@ -90,6 +92,7 @@ export function useCleared(
           now.asked.delete(id);
           stampedHere.current.delete(id);
           stampedFinish.current.delete(id);
+          stampConfirmed.current.delete(id);
         }
       });
     },

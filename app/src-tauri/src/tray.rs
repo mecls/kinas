@@ -4,7 +4,6 @@
 //! item `N waiting on you` opens the Inbox; at zero both are as before.
 
 use crate::quota_line::{format_quota_line, menu_title, provider_label, QuotaLineInput};
-use crate::readers::claude_plan;
 use crate::readers::runtime::ReaderControl;
 use crate::readings::{self, UsageSnapshot};
 use crate::store::{now_ms, Store};
@@ -92,9 +91,7 @@ fn chosen_quota(app: &AppHandle) -> (String, String) {
 fn read(app: &AppHandle) -> Option<UsageSnapshot> {
     let store = app.state::<Store>();
     let control = app.try_state::<ReaderControl>()?;
-    let now = now_ms();
-    let hook = claude_plan::hook_status(control.data_dir(), now);
-    let snapshot = readings::snapshot(&store.conn(), store.org_id(), now, control.backfill(), hook);
+    let snapshot = readings::read_now(&store, control.data_dir(), control.backfill(), now_ms);
     snapshot.map_err(|e| log::error!("tray: {e}")).ok()
 }
 

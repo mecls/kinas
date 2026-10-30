@@ -99,6 +99,9 @@ export interface ComputeOptions {
 
 export async function computePacket(config: KinasConfig, cache: ContextCache | null, opts: ComputeOptions = {}): Promise<Packet> {
   const now = opts.now ?? Date.now();
+  // A quota is judged when it is read, not when the packet began: one written while the projects are read is stamped
+  // after `now` with no clock step behind it, and a stamp after now reads stale (the store's staleness rule).
+  const readNow = () => Math.max(now, Date.now());
   const store = openStore(config.dataDir);
   try {
     const org = store.ok ? store.store.orgId() : LOCAL_ORG;
@@ -132,7 +135,7 @@ export async function computePacket(config: KinasConfig, cache: ContextCache | n
       settle(() => withTimeout(readConventions(config.hub), 5_000, "conventions"), [], now, prev?.conventions),
       settle(() => readSessions(config.herdrSocket, projects.data), null, now, prev?.sessions),
       crewSection(store, config.firstmateHome, now, prev?.crew, opts.skipCrew === true),
-      codexQuotas(config.codexHome, now).catch(
+      codexQuotas(config.codexHome, readNow).catch(
         (e): QuotaLine[] => [{ provider: "Codex", window: null, left_pct: null, resets_at: null, updated_at: null, state: "dead", note: `Codex logs could not be read (${(e as Error).message})` }],
       ),
     ]);
@@ -142,7 +145,7 @@ export async function computePacket(config: KinasConfig, cache: ContextCache | n
     }
     projects.data = projects.data.map((p) => ({ ...p, artifacts: artifacts.data.filter((a) => a.project === p.name).length }));
 
-    const quotaLines = [...storeQuotas(store, now), ...codex].sort((a, b) => PROVIDER_ORDER[a.provider] - PROVIDER_ORDER[b.provider]);
+    const quotaLines = [...storeQuotas(store, readNow()), ...codex].sort((a, b) => PROVIDER_ORDER[a.provider] - PROVIDER_ORDER[b.provider]);
     const events = activityEvents(prev, { projects: projects.data, commits, artifacts, crew, sessions }, now);
     cache?.record(org, events, now);
     const recent = cache ? cache.recent(org, RECENT_IN_PACKET) : events.sort((a, b) => b.at - a.at).slice(0, RECENT_IN_PACKET).map(({ ref: _ref, ...row }) => row);

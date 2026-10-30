@@ -130,15 +130,17 @@ async function newestRollouts(sessions: string, limit: number): Promise<string[]
   return out;
 }
 
-export async function codexQuotas(codexHome: string, now: number): Promise<QuotaLine[]> {
+/** `now` may be a clock, read after each log is read, so a line written meanwhile is not judged against an earlier moment. */
+export async function codexQuotas(codexHome: string, now: number | (() => number)): Promise<QuotaLine[]> {
   const none = (note: string): QuotaLine[] => [{ provider: "Codex", window: null, left_pct: null, resets_at: null, updated_at: null, state: "not_connected", note }];
   if (!existsSync(codexHome)) return none("no Codex folder on this Mac");
   for (const file of await newestRollouts(join(codexHome, "sessions"), 5)) {
     const blob = Bun.file(file);
     const tail = await blob.slice(Math.max(0, blob.size - 512 * 1024)).text();
     const lines = tail.split("\n");
+    const at = typeof now === "function" ? now() : now;
     for (let i = lines.length - 1; i >= 0; i--) {
-      const windows = codexWindows(lines[i]!, now);
+      const windows = codexWindows(lines[i]!, at);
       if (windows) return windows;
     }
   }

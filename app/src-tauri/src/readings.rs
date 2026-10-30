@@ -2,14 +2,16 @@
 //! mixes readings from different moments. States are computed here, at read time, from each reader's
 //! stored limits (PRD R12).
 
-use crate::readers::claude_plan::HookStatus;
+use crate::readers::claude_plan::{hook_status, HookStatus};
 use crate::readers::ollama_cloud::ModelRequests;
 use crate::readers::runtime::Backfill;
 use crate::redact::{Reader, DEAD_AFTER_MS};
 use crate::staleness::{reading_state, ReadingState};
+use crate::store::Store;
 use rusqlite::{params, Connection};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::Path;
 
 pub const CHART_DAYS: i64 = 30;
 
@@ -137,6 +139,16 @@ pub fn chart_days(now_ms: i64) -> Vec<String> {
         .filter_map(|back| today.checked_sub(jiff::Span::new().days(back)).ok())
         .map(|d| d.strftime("%Y-%m-%d").to_string())
         .collect()
+}
+
+/// The Usage page's and the menu bar's reading, with `now` read from `clock` only once the store's guard is held. Every
+/// reader stamps its row before it lets the guard go, so no row read here is stamped after `now` unless the wall clock
+/// stepped back — the one thing R12's "a reading stamped after now is stale" may mean. With `now` read before the
+/// guard, a host sample stamped and written in the gap was a reading 0 ms old labelled stale.
+pub fn read_now(store: &Store, data_dir: &Path, backfill: Backfill, clock: impl FnOnce() -> i64) -> rusqlite::Result<UsageSnapshot> {
+    let conn = store.conn();
+    let now = clock();
+    snapshot(&conn, store.org_id(), now, backfill, hook_status(data_dir, now))
 }
 
 pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, claude_hook: HookStatus) -> rusqlite::Result<UsageSnapshot> {
@@ -317,6 +329,36 @@ mod tests {
         assert!(find("claude-plan", "week").models.is_empty(), "unreadable JSON shows as no models");
         assert_eq!(find("claude-plan", "week").state, ReadingState::Reset);
         assert_eq!(snap.quotas[0].window, "session", "session sorts before week");
+    }
+
+    /// R12 calls a reading stamped after now stale (a backwards clock step). The host thread stamps its sample and then
+    /// takes the store's guard, so a read that took `now` before the guard could find a sample written in between,
+    /// stamped a few ms after its `now`, and label a reading 0 ms old stale (and the menu bar a quota `%?`).
+    #[test]
+    fn now_is_read_under_the_guard_so_a_reading_written_meanwhile_is_never_from_the_future() {
+        use crate::readers::host::{write_host, HostReading};
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let org = store.org_id().to_string();
+        let sample = HostReading { cpu_pct: 10.0, mem_used_gb: 1.0, mem_total_gb: 2.0, disk_used_gb: 1.0, disk_total_gb: 2.0, disk_available_gb: None };
+        write_host(&store.conn(), &org, "mac-9c2e", &sample, NOW - 5_000).unwrap();
+        let (store, org, sample) = (&store, org.as_str(), &sample);
+        let snap = std::thread::scope(|s| {
+            read_now(store, dir.path(), Backfill::default(), || {
+                // The host thread samples just after this read's `now` and writes as soon as the guard lets it.
+                let (done, wrote) = std::sync::mpsc::channel();
+                s.spawn(move || {
+                    write_host(&store.conn(), org, "mac-9c2e", sample, NOW + 3).unwrap();
+                    let _ = done.send(());
+                });
+                // Its chance to land between `now` and the read: with no guard held, it takes it.
+                let _ = wrote.recv_timeout(std::time::Duration::from_millis(300));
+                NOW
+            })
+            .unwrap()
+        });
+        let host = snap.host.unwrap();
+        assert_eq!((host.updated_at, host.state), (NOW - 5_000, ReadingState::Fresh), "the sample stamped after now waits for the next read");
     }
 
     #[test]

@@ -15,9 +15,7 @@ use tauri::AppHandle;
 /// Everything the Usage page shows, with states computed now (R12).
 #[tauri::command]
 pub fn get_usage_snapshot(store: State<'_, Store>, control: State<'_, ReaderControl>) -> Result<UsageSnapshot, String> {
-    let now = now_ms();
-    let hook = claude_plan::hook_status(control.data_dir(), now);
-    readings::snapshot(&store.conn(), store.org_id(), now, control.backfill(), hook).map_err(|e| e.to_string())
+    readings::read_now(&store, control.data_dir(), control.backfill(), now_ms).map_err(|e| e.to_string())
 }
 
 /// The Usage page became visible or hidden (R13).

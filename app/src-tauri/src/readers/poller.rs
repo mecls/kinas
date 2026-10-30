@@ -46,8 +46,11 @@ impl Poller {
             return false;
         }
         match trigger {
-            Trigger::Tick => now >= self.next_due,
-            Trigger::Visible { reading_age_ms } => reading_age_ms.is_none_or(|age| age > VISIBLE_REFRESH_AGE_MS),
+            // Due, or due further off than a cadence can put it: the clock stepped back since it was set. Not blocked —
+            // that was checked above — so a rate limit's longer wait never reads as a step.
+            Trigger::Tick => now >= self.next_due || self.next_due.saturating_sub(now) > CADENCE_MS,
+            // A reading's age is `now - updated_at`, negative after a step back: not one made within the last minute.
+            Trigger::Visible { reading_age_ms } => reading_age_ms.is_none_or(|age| !(0..=VISIBLE_REFRESH_AGE_MS).contains(&age)),
             Trigger::Manual => true,
         }
     }
@@ -166,6 +169,25 @@ mod tests {
         assert!(p.should_request(Trigger::Manual, earlier), "Refresh after a step back");
         assert!(p.should_request(Trigger::Visible { reading_age_ms: Some(2 * MIN) }, earlier), "a visible page after a step back");
         assert!(!p.should_request(Trigger::Manual, now + MIN - 1), "the gap still holds forward");
+    }
+
+    /// The same step back, for the two triggers the fix above left out. The cadence's next due moment is on the wall
+    /// clock too, so after a step back the Tick would wait the length of the step plus a cadence; and the Usage page
+    /// reports a reading's age as `now - updated_at`, which a step back makes negative — a reading from the future is
+    /// not one made within the last minute. A rate-limit block is kept: waiting longer is the safe direction.
+    #[test]
+    fn a_clock_that_went_back_does_not_silence_the_cadence_or_a_page_whose_reading_is_from_the_future() {
+        let mut p = Poller::new(0);
+        let now = 1_790_000_000_000;
+        p.record(Result::Done, now);
+        let earlier = now - 2 * 60 * MIN;
+        assert!(p.should_request(Trigger::Tick, earlier), "the cadence after a step back");
+        assert!(p.should_request(Trigger::Visible { reading_age_ms: Some(-2 * 60 * MIN) }, earlier), "a reading stamped in the future is not a fresh one");
+        assert!(!p.should_request(Trigger::Tick, now + CADENCE_MS - 1), "the cadence still holds forward");
+        assert!(p.should_request(Trigger::Tick, now + CADENCE_MS));
+        assert!(!p.should_request(Trigger::Visible { reading_age_ms: Some(MIN) }, now + 2 * MIN), "a reading a minute old still does not refresh");
+        p.record(Result::RateLimited { retry_after_s: None }, now);
+        assert!(!p.should_request(Trigger::Tick, earlier), "a block outlives a step back: never more requests than allowed");
     }
 
     #[test]

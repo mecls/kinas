@@ -44,7 +44,7 @@ pub(crate) fn health(home: &Path, now: i64) -> (Health, bool) {
     {
         let cache = CACHE.lock().unwrap_or_else(|p| p.into_inner());
         if let Some((cached_home, h)) = cache.as_ref() {
-            if cached_home == home && now - h.checked_at < CACHE_MS {
+            if cached_home == home && fresh(h.checked_at, now) {
                 return (h.clone(), false);
             }
         }
@@ -52,6 +52,12 @@ pub(crate) fn health(home: &Path, now: i64) -> (Health, bool) {
     let fresh = probe(home, now);
     *CACHE.lock().unwrap_or_else(|p| p.into_inner()) = Some((home.to_path_buf(), fresh.clone()));
     (fresh, true)
+}
+
+/// Whether a probe stamped `checked_at` still counts at `now`: a gap, not a moment to reach again — a stamp in what
+/// is now the future (the wall clock stepped back) is not one made within the last minute.
+fn fresh(checked_at: i64, now: i64) -> bool {
+    (0..CACHE_MS).contains(&(now - checked_at))
 }
 
 /// The cached health when there is one, without probing: for readers that must stay cheap.
@@ -170,6 +176,18 @@ mod tests {
         assert_eq!(version_in("1.2").as_deref(), None);
         assert_eq!(version_in("unknown"), None);
         assert_eq!(version_in("gh-axi — 0.1.35").as_deref(), Some("0.1.35"));
+    }
+
+    /// The cache is "at most 60 s old" on the wall clock, which can step back: a probe stamped in what is now the future
+    /// is not one made within the last minute, or a tool installed after the step would read missing — and block the
+    /// launch — for the length of the step.
+    #[test]
+    fn a_probe_stamped_in_the_future_is_not_fresh() {
+        let now = 1_790_000_000_000;
+        assert!(fresh(now, now));
+        assert!(fresh(now - CACHE_MS + 1, now));
+        assert!(!fresh(now - CACHE_MS, now));
+        assert!(!fresh(now + 2 * 60 * 60_000, now), "after a step back");
     }
 
     #[test]

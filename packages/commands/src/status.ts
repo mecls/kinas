@@ -1,6 +1,6 @@
 // `status`: the Usage page as text or JSON (PRD R37), from the same rows through the StorageAdapter.
 
-import { formatQuotaLine, leftPct, lisbonClock, quotaLabel, type Subscription } from "@kinas/store/quota-line";
+import { compactTokens, formatQuotaLine, leftPct, lisbonClock, quotaLabel, type Subscription } from "@kinas/store/quota-line";
 import { readingState, type ReadingState } from "@kinas/store/staleness";
 import type { HostRow, QuotaRow, ReaderRow, StorageAdapter, UsageRow } from "@kinas/store/types";
 
@@ -150,17 +150,6 @@ const GOLD = "\x1b[33m";
 const RESET = "\x1b[0m";
 const LABEL_WIDTH = 19;
 
-/** 950 · 34k · 1.3M · 6.1B: one decimal while it is not .0. */
-function compact(n: number): string {
-  const shown = (v: number) => v.toFixed(1).replace(/\.0$/, "");
-  // The unit is chosen on the value as it will be shown, not as it is: 999,950 rounds to 1000.0k, which is 1M — the
-  // Usage page's compactTokens (app/src/usage/format.ts) moves up the same way, and the two say the same number.
-  if (n >= 1e9 || Number(shown(n / 1e6)) >= 1000) return `${shown(n / 1e9)}B`;
-  if (n >= 1e6 || Number(shown(n / 1e3)) >= 1000) return `${shown(n / 1e6)}M`;
-  if (n >= 1e3 || Math.round(n) >= 1000) return `${shown(n / 1e3)}k`;
-  return String(n);
-}
-
 /** Finder's "available" when the app has it (free + purgeable), else free space; whole GB, floored. */
 function diskText(h: HostRow): string {
   return h.disk_available_gb === null
@@ -188,7 +177,7 @@ export function statusLines(result: StatusResult, color: boolean): string[] {
     lines.push("Today");
     for (const u of result.usageToday) {
       const label = `  ${u.harness} · ${u.model}`;
-      lines.push(`${label.padEnd(Math.max(34, label.length + 1))}in ${compact(u.tokens_in)} · cache ${compact(u.tokens_cache_read)} · out ${compact(u.tokens_out)} · ${u.messages} msg${u.messages === 1 ? "" : "s"}`);
+      lines.push(`${label.padEnd(Math.max(34, label.length + 1))}in ${compactTokens(u.tokens_in)} · cache ${compactTokens(u.tokens_cache_read)} · out ${compactTokens(u.tokens_out)} · ${u.messages} msg${u.messages === 1 ? "" : "s"}`);
     }
   }
 

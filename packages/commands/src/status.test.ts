@@ -20,9 +20,10 @@ const result = (usageToday: StatusResult["usageToday"]): StatusResult => ({ now:
 const todayLine = (r: StatusResult) => statusLines(r, false).find((l) => l.startsWith("  claude-code"))!;
 
 describe("kinas status's compact token counts", () => {
-  test("950 · 34k · 1.3M · 6.1B, one decimal while it is not .0", () => {
+  test("950 · 34k · 1.3M · 6.1B — the Usage page's own numbers (README: the Usage page as text), from the one shared rule", () => {
     expect(todayLine(result([usage(950, 34_000, 1_250_000)]))).toBe("  claude-code · claude-opus-5     in 950 · cache 34k · out 1.3M · 1 msg");
-    expect(todayLine(result([usage(6_130_000_000, 0, 999_600)]))).toContain("in 6.1B · cache 0 · out 999.6k");
+    // Three significant figures as the page shows them: 150,400 is 150k and 999,600 is 1M here too, not 150.4k and 999.6k.
+    expect(todayLine(result([usage(6_130_000_000, 150_400, 999_600)]))).toContain("in 6.1B · cache 150k · out 1M");
   });
 
   test("a count that rounds to a unit's ceiling moves up a unit, as the Usage page's compactTokens does: never 1000k or 1000M", () => {

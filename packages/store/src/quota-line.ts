@@ -42,6 +42,23 @@ export function lisbonClock(ms: number, now: number): string {
   return at.date === lisbon(now).date ? at.time : `${at.date} ${at.time}`;
 }
 
+/**
+ * A token count as the Usage page and `kinas status` both say it: 950 · 34k · 1.2M · 6.1B — one decimal below 100,
+ * none from 100 up, and the unit chosen on the value as it will be shown (999,600 rounds to 1,000k, which is 1M). One
+ * function, so the page and "the Usage page as text" (README) never read the same number two ways.
+ */
+export function compactTokens(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e9 || Number(trim(abs / 1e6)) >= 1000) return `${trim(n / 1e9)}B`;
+  if (abs >= 1e6 || Number(trim(abs / 1e3)) >= 1000) return `${trim(n / 1e6)}M`;
+  if (abs >= 1e3 || Math.round(abs) >= 1000) return `${trim(n / 1e3)}k`;
+  return String(Math.round(n));
+}
+
+function trim(v: number): string {
+  return v >= 100 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, "");
+}
+
 export function leftPct(usedPct: number): number {
   return Math.floor(100 - usedPct);
 }

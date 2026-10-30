@@ -1,10 +1,10 @@
 // Text for the Usage page. Times are Europe/Lisbon (R11); "left" is always floored (build spec invariant 6).
 
-import { leftPct, lisbonClock } from "@kinas/store/quota-line";
+import { compactTokens, leftPct, lisbonClock } from "@kinas/store/quota-line";
 import type { ReadingState } from "../api.ts";
 import { toneOf, type Tone } from "../ui/Bar.tsx";
 
-export { leftPct, lisbonClock };
+export { compactTokens, leftPct, lisbonClock };
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -50,20 +50,6 @@ export function usedPct(used: number): string {
   // Stored values come from fractions × 100 (0.003 × 100 = 0.30000000000000004); drop that noise first.
   const clean = Math.round(used * 1e6) / 1e6;
   return clean < 10 ? String(Math.ceil(clean * 10) / 10) : String(Math.ceil(clean));
-}
-
-/** 950 · 34k · 1.2M · 6.1B */
-export function compactTokens(n: number): string {
-  const abs = Math.abs(n);
-  // The unit is chosen on the value as it will be shown, not as it is: 999,600 rounds to 1,000k, which is 1M.
-  if (abs >= 1e9 || Number(trim(abs / 1e6)) >= 1000) return `${trim(n / 1e9)}B`;
-  if (abs >= 1e6 || Number(trim(abs / 1e3)) >= 1000) return `${trim(n / 1e6)}M`;
-  if (abs >= 1e3 || Math.round(abs) >= 1000) return `${trim(n / 1e3)}k`;
-  return String(Math.round(n));
-}
-
-function trim(v: number): string {
-  return v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1).replace(/\.0$/, "") : v.toFixed(1).replace(/\.0$/, "");
 }
 
 export function gib(n: number): string {

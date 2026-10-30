@@ -465,7 +465,8 @@ fn register(state: &ChangesState, real: &Path, now: Millis) -> (TreeChanges, Opt
 }
 
 /// Refresh's half under the guard: the record back to empty, with a new generation and "since". Answers the empty
-/// summary, the generation, and whether the watch has to be started again; None for a root not watched.
+/// summary, the generation, and whether the watch has to be started again — it failed, or `follow` has not installed
+/// it yet, and the new generation will refuse the one it is starting; None for a root not watched.
 fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges, u64, bool)> {
     let mut changes = state.lock();
     let generation = changes.next_generation();
@@ -478,7 +479,7 @@ fn reset(state: &ChangesState, real: &Path, now: Millis) -> Option<(TreeChanges,
     record.queued.clear();
     record.marks.clear();
     record.copy_bytes = 0;
-    Some((summary(record, repos, Vec::new()), generation, !record.watching))
+    Some((summary(record, repos, Vec::new()), generation, record.feed.is_none()))
 }
 
 /// What a reload drops: every record, refs watch and crew project, dropped by the caller with no guard held.
@@ -1630,6 +1631,9 @@ mod tests {
         assert_eq!(burst(&state, &root, &["a.md", "new.md"]).total, 2);
         assert_eq!(state.lock().budget_used, 100);
 
+        // The watch is up: the refresh resets the record without starting it again.
+        let (feed, _rx) = mpsc::channel();
+        state.lock().roots.get_mut(&root).unwrap().feed = Some(feed);
         let (answer, generation, retry) = reset(&state, &root, 9_000).expect("a watched root");
         assert_eq!((answer.since_ms, answer.ready, answer.total, answer.entries.len(), retry), (9_000, false, 0, 0, false));
         assert_eq!(state.lock().budget_used, 0);
@@ -1663,6 +1667,30 @@ mod tests {
         let fresh = baseline::take(&root, None, 1024, &|_| false);
         assert!(install_baseline(&state, &root, second, fresh, HashMap::new()).unwrap().0.ready);
         assert_eq!(state.lock().budget_used, 100);
+    }
+
+    /// ↻ pressed between a tree's first showing and its watch coming up: the record is in (`register`) and `follow` is
+    /// still starting the watcher, so the root has no channel to hand the refresh to. The refresh resets the record,
+    /// and the watcher `follow` then installs is refused by the generation check — so unless the refresh starts the
+    /// watch again, the root reads "watching" and hears nothing until a reload.
+    #[test]
+    fn a_refresh_before_the_watch_is_up_starts_it() {
+        let state = ChangesState::default();
+        let root = Path::new("/p/kinas");
+        assert!(register(&state, root, 1_000).1.is_some());
+        let (_, _, retry) = reset(&state, root, 2_000).expect("a watched root");
+        assert!(retry, "no watch is up yet: the refresh starts it");
+        // The watch up: a refresh goes through its thread, and a reset for an emptied tree starts nothing.
+        let (tx, _rx) = mpsc::channel();
+        state.lock().roots.get_mut(root).unwrap().feed = Some(tx);
+        assert!(!reset(&state, root, 3_000).unwrap().2);
+        // The watch failed: it is tried again, as before.
+        let mut changes = state.lock();
+        let record = changes.roots.get_mut(root).unwrap();
+        record.feed = None;
+        record.watching = false;
+        drop(changes);
+        assert!(reset(&state, root, 4_000).unwrap().2);
     }
 
     #[test]

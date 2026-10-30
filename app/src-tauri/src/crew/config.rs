@@ -39,7 +39,7 @@ static MODES: Mutex<Option<(PathBuf, i64, Vec<ProjectMode>)>> = Mutex::new(None)
 /// Every project folder under `<home>/projects/` with the mode `fm-project-mode.sh` gives it, by name; kept 300 s.
 pub(crate) fn project_modes(home: &Path, now: i64) -> Vec<ProjectMode> {
     if let Some((h, at, modes)) = MODES.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
-        if h == home && now - at < MODES_MS {
+        if h == home && fresh(*at, now) {
             return modes.clone();
         }
     }
@@ -53,6 +53,12 @@ pub(crate) fn project_modes(home: &Path, now: i64) -> Vec<ProjectMode> {
         .collect();
     *MODES.lock().unwrap_or_else(|p| p.into_inner()) = Some((home.to_path_buf(), now, modes.clone()));
     modes
+}
+
+/// Whether modes read at `at` still count at `now`: a gap, not a moment to reach again — a stamp in what is now the
+/// future (the wall clock stepped back) is not a fresh one.
+fn fresh(at: i64, now: i64) -> bool {
+    (0..MODES_MS).contains(&(now - at))
 }
 
 /// "Refresh readings": the next `project_modes` asks again.
@@ -92,6 +98,16 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    /// As the tools' cache: a reading stamped in what is now the future (the clock stepped back) is not a fresh one.
+    #[test]
+    fn modes_stamped_in_the_future_are_not_fresh() {
+        let now = 1_790_000_000_000;
+        assert!(fresh(now, now));
+        assert!(fresh(now - MODES_MS + 1, now));
+        assert!(!fresh(now - MODES_MS, now));
+        assert!(!fresh(now + 2 * 60 * 60_000, now), "after a step back");
     }
 
     #[test]

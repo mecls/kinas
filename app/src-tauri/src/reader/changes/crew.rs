@@ -90,7 +90,7 @@ pub struct CrewEntry {
 }
 
 /// Where the crew's text of a captain-side path is read from: the checkout that changed it last, and what the crew
-/// did to it there.
+/// did to it there — its own mark, which the row's (the strongest across checkouts, rule 6) can outrank.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
     pub checkout: PathBuf,
@@ -372,7 +372,7 @@ pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashM
             .into_iter()
             .map(|(p, a)| {
                 let here = Stat::of(&p).is_some();
-                (p, Source { mark: a.mark, tasks: a.tasks, here, ..a.source })
+                (p, Source { tasks: a.tasks, here, ..a.source })
             })
             .collect(),
     }
@@ -972,6 +972,31 @@ pub(super) mod tests {
         std::fs::remove_file(second.join("README.md")).unwrap();
         crew_rescan(&state, &repo, &clone, &g, 6_000);
         assert_eq!(crew_marked(&state, &captain), ["D README.md 2"], "deleted over modified, two tasks");
+    }
+
+    /// Rule 14 (Gate 2) beside rule 6: the row carries the strongest mark of every checkout at the path, and a click
+    /// shows the checkout that changed it last — its own change. One worker deletes a file, another rewrites it later:
+    /// the row is a hollow D for two tasks, and the view is the rewrite, not the other's deletion told with this one's
+    /// base text.
+    #[test]
+    fn the_view_is_the_last_checkout_s_own_change_not_the_row_s_strongest_mark() {
+        let (dir, captain, home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        let second = dir.path().canonicalize().unwrap().join("treehouse/shop-1/2/shop");
+        git(&clone, &["worktree", "add", "-q", &second.to_string_lossy(), "-b", "fm/second"]);
+        git(&second, &["push", "-q", "-u", "origin", "fm/second"]);
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        std::fs::remove_file(worktree.join("README.md")).unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        std::fs::write(second.join("README.md"), "# Shop\n\nRewritten later.\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 7_000);
+        assert_eq!(crew_marked(&state, &captain), ["D README.md 2"], "the row: deleted over modified, two tasks");
+
+        let (source, _, after) = crew_text(&state, &captain.join("README.md"), EVERYWHERE, Some(&g)).unwrap();
+        assert_eq!((source.checkout.as_path(), source.mark, source.tasks), (second.as_path(), Mark::Modified, 2), "the one that changed it last, and what it did");
+        assert_eq!(after, b"# Shop\n\nRewritten later.\n");
+        let v = crew_diff(&state, &captain.join("README.md"), &g).unwrap();
+        assert_eq!((v.mark, v.added, v.removed, v.crew), (Mark::Modified, 2, 0, Some(CrewOf { tasks: 2, here: true })));
     }
 
     #[test]

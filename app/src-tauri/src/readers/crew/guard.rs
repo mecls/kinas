@@ -13,8 +13,8 @@
 
 use std::path::{Path, PathBuf};
 
-const TYPING: &[&str] = &["send-text", "send-keys", "\"sh\", \"-c\"", "sh -c", "pty_write", "Session::write", ".write_all("];
-const WRITES: &[&str] = &["File::create", "OpenOptions", "fs::write", "fs::rename", "fs::copy", "remove_file", "remove_dir", "create_dir", "set_permissions"];
+const TYPING: &[&str] = &["send-text", "send-keys", "\"sh\", \"-c\"", "sh -c", "\"zsh\", \"-c\"", "\"bash\", \"-c\"", "\"-lc\"", ".arg(\"-c\")", "pty_write", "Session::write", ".write_all("];
+const WRITES: &[&str] = &["File::create", "File::options", "OpenOptions", "fs::write", "fs::rename", "fs::copy", "remove_file", "remove_dir", "create_dir", "set_permissions", "::symlink(", "hard_link(", "write!("];
 const READ_ONLY_SCRIPTS: &[&str] = &["fm-fleet-snapshot.sh", "fm-afk-contract.sh", "fm-project-mode.sh"];
 const SCRIPT_FILE: &str = "crew/firstmate.rs";
 

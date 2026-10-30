@@ -36,8 +36,16 @@ impl PrFacts {
         self.checks.iter().filter(|(_, c)| FAILING.contains(&c.as_str())).count() as u32
     }
 
+    /// First mate rule 20's **ready** is "at least one check, all green", and a check still running is not green: until
+    /// the last one concludes there is no verdict, and nothing is counted — the word stays **PR open**, and no
+    /// `checks 4/4` says passed for a run still going. A failure among them counts at once: that is **CI red** already.
     pub(crate) fn checks_total(&self) -> u32 {
-        self.checks.len() as u32
+        let running = self.checks.iter().any(|(_, c)| c == "PENDING");
+        if running && self.checks_failed() == 0 {
+            0
+        } else {
+            self.checks.len() as u32
+        }
     }
 }
 
@@ -134,6 +142,26 @@ mod tests {
         assert_eq!((green.checks_total(), green.checks_failed()), (4, 0));
         assert_eq!(checks_text(4, 0).as_deref(), Some("checks 4/4"));
         assert_eq!(green.review.as_deref(), Some("APPROVED"));
+    }
+
+    /// First mate rule 20: **ready** is "at least one check, all green", and a check still running is not green. Until
+    /// the last one concludes the PR has no verdict to count — the word stays **PR open** and the card carries no
+    /// `checks 4/4` that would read as passed — unless one has failed already, which is **CI red** at once.
+    #[test]
+    fn a_running_check_is_not_green_so_the_pr_is_not_ready_yet() {
+        let rollup = |runs: &[(&str, &str)]| {
+            let checks: Vec<String> = runs.iter().map(|(status, conclusion)| format!(r#"{{"__typename":"CheckRun","name":"c{status}{conclusion}","status":"{status}","conclusion":"{conclusion}"}}"#)).collect();
+            format!(r#"{{"number":7,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","statusCheckRollup":[{}]}}"#, checks.join(","))
+        };
+        let green = ("COMPLETED", "SUCCESS");
+        let running = parse(URL, &rollup(&[green, green, green, ("IN_PROGRESS", "")])).unwrap();
+        assert_eq!((running.checks_total(), running.checks_failed()), (0, 0), "no verdict while one runs");
+        assert_eq!(checks_text(running.checks_total(), running.checks_failed()), None);
+        let concluded = parse(URL, &rollup(&[green, green, green, green])).unwrap();
+        assert_eq!((concluded.checks_total(), concluded.checks_failed()), (4, 0), "all green, and ready");
+        let red_already = parse(URL, &rollup(&[green, ("COMPLETED", "FAILURE"), ("QUEUED", "")])).unwrap();
+        assert_eq!(red_already.checks_failed(), 1, "a failure is CI red before the rest conclude");
+        assert!(red_already.checks_total() > 0);
     }
 
     #[test]

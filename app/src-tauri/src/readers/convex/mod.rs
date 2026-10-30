@@ -187,9 +187,11 @@ pub fn parse_usage(body: &str) -> Result<Usage, String> {
         return Err(format!("unrecognized response shape: {seen}"));
     }
 
-    // R7's sum, appended as its own metric. The parts stay in the list so a spike can be attributed.
+    // R7's sum, appended as its own metric. The parts stay in the list so a spike can be attributed. Only when every
+    // part came: a sum of two gauged against the whole allowance would understate it (R12), so a response missing one
+    // leaves the previous sum to age into stale instead.
     let parts: Vec<&Metric> = metrics.iter().filter(|m| ACTION_COMPUTE_KEYS.contains(&m.metric.as_str())).collect();
-    if !parts.is_empty() {
+    if parts.len() == ACTION_COMPUTE_KEYS.len() {
         let unit = parts.iter().find_map(|m| m.unit.clone());
         let (day, month) = parts.iter().fold((0.0, 0.0), |(d, m), part| (d + part.day, m + part.month));
         metrics.push(Metric { metric: ACTION_COMPUTE.to_string(), unit, day, month });
@@ -387,6 +389,21 @@ mod tests {
         assert_eq!(sum.unit.as_deref(), Some("GB-hours"));
     }
 
+    /// R7's sum is gauged against the whole action-compute allowance, so a sum of two parts — a response that dropped
+    /// one key, or one whose `usage` is missing — would understate it, the one wrong answer this page must not give
+    /// (R12). With a part missing there is no sum; the parts that came stay, and the previous sum ages into stale.
+    #[test]
+    fn the_action_compute_sum_needs_all_three_parts() {
+        let mut j: serde_json::Value = serde_json::from_str(&fixture()).unwrap();
+        j["metrics"].as_object_mut().unwrap().remove("actionComputeNodeJsGbHours");
+        let usage = parse_usage(&j.to_string()).unwrap();
+        assert!(usage.metrics.iter().all(|m| m.metric != ACTION_COMPUTE), "two parts are not the sum");
+        assert!(usage.metrics.iter().any(|m| m.metric == "actionComputeConvexGbHours"), "the parts that came are kept");
+        j["metrics"]["actionComputeNodeJsGbHours"] = serde_json::json!({ "unit": "GB-hours" });
+        let usage = parse_usage(&j.to_string()).unwrap();
+        assert!(usage.metrics.iter().all(|m| m.metric != ACTION_COMPUTE), "a part without numbers is a part missing");
+    }
+
     #[test]
     fn a_200_stores_every_metric_for_both_windows() {
         let dir = tempfile::tempdir().unwrap();
@@ -548,6 +565,10 @@ mod tests {
         for verb in ["post", "put", "patch", "delete", "head"] {
             let needle = format!(".{verb}(");
             assert!(!source.contains(&needle), "{needle} has no business in a watch-only reader");
+        }
+        // A verb chosen at run time is a verb too: a request built with an explicit method is refused.
+        for door in [format!(".{}(", "request"), format!("{}::", "Method")] {
+            assert!(!source.contains(&door), "{door} has no business in a watch-only reader");
         }
         assert!(source.contains(&format!(".{}(", "get")), "the guard is worthless if it cannot see the one call there is");
     }

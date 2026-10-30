@@ -12,7 +12,13 @@ import { ago, lisbonStamp } from "./time.ts";
 
 export const AGENT_HEADINGS = ["# Kinas context", "## Projects", "## Features in progress", "## Artifacts", "## Conventions", "## Crew", "## Sessions", "## Decisions", "## Quotas", "## Recent"] as const;
 
-const cell = (v: string | number | null | undefined): string => (v === null || v === undefined || v === "" ? "—" : String(v).replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " "));
+/**
+ * One line of the packet, whatever a source put in it: a newline inside a title, a hold reason or an event text would
+ * start a new line of markdown — one that could read as `## Crew`, a heading hooks look for — so it becomes a space.
+ */
+const flat = (line: string): string => line.replace(/\s*\n\s*/g, " ");
+
+const cell = (v: string | number | null | undefined): string => (v === null || v === undefined || v === "" ? "—" : flat(String(v).replace(/\|/g, "\\|")));
 
 function table(head: string[], rows: (string | number | null)[][]): string {
   return [`| ${head.join(" | ")} |`, `| ${head.map(() => "---").join(" | ")} |`, ...rows.map((r) => `| ${r.map(cell).join(" | ")} |`)].join("\n");
@@ -128,11 +134,11 @@ export function renderCrew(p: Packet): string {
   const gone = missing(s);
   if (gone || !s.data) return `## Crew\n\n${gone ?? "_Not read yet._"}`;
   const c = s.data;
-  const list = <T>(items: T[], line: (item: T) => string) => (items.length === 0 ? ["- none"] : items.map(line));
+  const list = <T>(items: T[], line: (item: T) => string) => (items.length === 0 ? ["- none"] : items.map((item) => flat(line(item))));
   return [
     "## Crew",
     "",
-    `${asOf(s, p.generated_at)} Firstmate home ${c.home} · contract ${c.schema}.`,
+    flat(`${asOf(s, p.generated_at)} Firstmate home ${c.home} · contract ${c.schema}.`),
     "",
     `**In flight** (${c.in_flight.length})`,
     ...list(c.in_flight, (t) => `- \`${t.id}\` ${t.title} — ${[t.project, t.kind, t.state].filter(Boolean).join(" · ")}${t.worktree ? ` · worktree ${t.worktree}` : ""}`),
@@ -163,7 +169,7 @@ export function renderSessions(p: Packet): string {
 export function renderDecisions(p: Packet): string {
   const rows = p.decisions.data;
   if (rows.length === 0) return "## Decisions\n\nNothing is waiting on the human.";
-  return `## Decisions\n\n${rows.map((d) => `- ${d.source === "crew" ? `Crew task \`${d.id}\`` : `Session ${d.id}`}: ${d.title}${d.reason ? ` — ${d.reason}` : ""}`).join("\n")}`;
+  return `## Decisions\n\n${rows.map((d) => flat(`- ${d.source === "crew" ? `Crew task \`${d.id}\`` : `Session ${d.id}`}: ${d.title}${d.reason ? ` — ${d.reason}` : ""}`)).join("\n")}`;
 }
 
 /** "not connected: no Codex folder", without repeating the state when the note already starts with it. */
@@ -190,14 +196,14 @@ export function renderQuotas(p: Packet): string {
 export function renderRecent(p: Packet): string {
   const rows = p.recent.data;
   if (rows.length === 0) return "## Recent\n\nNothing recorded yet.";
-  return `## Recent\n\n${rows.map((r) => `- ${lisbonStamp(r.at)} (${ago(r.at, p.generated_at)}) · ${r.project ?? "—"} · ${r.kind} · ${r.text}`).join("\n")}`;
+  return `## Recent\n\n${rows.map((r) => flat(`- ${lisbonStamp(r.at)} (${ago(r.at, p.generated_at)}) · ${r.project ?? "—"} · ${r.kind} · ${r.text}`)).join("\n")}`;
 }
 
 /** Each project's features in progress, one line each, from `tasks/<feature>/status.md`. */
 export function renderFeatures(p: Packet): string {
   const rows = p.features.data;
   if (rows.length === 0) return "## Features in progress\n\nNone.";
-  return `## Features in progress\n\n${rows.map((f) => `- ${f.project} · ${f.slug}: ${f.line}`).join("\n")}`;
+  return `## Features in progress\n\n${rows.map((f) => flat(`- ${f.project} · ${f.slug}: ${f.line}`)).join("\n")}`;
 }
 
 export function renderAgentPacket(p: Packet): string {

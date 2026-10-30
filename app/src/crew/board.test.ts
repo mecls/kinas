@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { CrewTask, CrewWord } from "../api.ts";
 import { seatFolders } from "../shell/folders.ts";
 import { BADGE } from "../ui/StatusBadge.tsx";
-import { BADGE_OF, cardOrder, duration, elapsedText, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
+import { BADGE_OF, cardOrder, duration, elapsedText, fleetShown, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
 
 // The board's rules (build spec §4 Crew page, PRD rules 18–19, AC-7): lanes by repository in the sidebar's order, then
 // the unmatched by name without chips; counts; card order; elapsed texts; PR lines.
@@ -164,5 +164,22 @@ describe("onScreen and toStamp (done work clears, rules 3–5)", () => {
     const shown = [task("working", "working"), done("unseen"), done("stamped", { board_seen_at: OPENED }), done("home-only", { overnight_seen_at: OPENED }), task("gone", "gone", { finished: true })];
     expect(toStamp(shown, "board")).toEqual(["unseen", "home-only", "gone"]);
     expect(toStamp(shown, "overnight")).toEqual(["unseen", "stamped", "gone"]);
+  });
+});
+
+describe("fleetShown (done work clears, rule 4: seen means drawn)", () => {
+  test("the Fleet section exists while the first mate runs, or while there is a card or a reader error to draw", () => {
+    expect(fleetShown("running", 0, false)).toBe(true);
+    expect(fleetShown("installed", 1, false)).toBe(true);
+    expect(fleetShown("installed", 0, true)).toBe(true);
+    expect(fleetShown("installed", 0, false)).toBe(false);
+  });
+
+  test("before setup the page is the setup line and the tools: no card is drawn, so no finished task is seen there", () => {
+    // The mirror keeps every task (rule 11), so a finished one can be in the reading while the clone is gone; the page
+    // must not stamp it as seen on the board it is not drawing.
+    expect(fleetShown("uninstalled", 3, false)).toBe(false);
+    expect(fleetShown("uninstalled", 0, true)).toBe(false);
+    expect(fleetShown(undefined, 3, false)).toBe(false);
   });
 });

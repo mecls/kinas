@@ -602,6 +602,10 @@ mod tests {
             let needle = format!(".{verb}(");
             assert!(!code.contains(&needle), "{needle} has no business in a watch-only reader");
         }
+        // A verb chosen at run time is a verb too: `.request(Method::…)` and `Method::` itself are refused.
+        for door in [format!(".{}(", "request"), format!("{}::", "Method")] {
+            assert!(!code.contains(&door), "{door} has no business in a watch-only reader");
+        }
     }
 
     #[test]

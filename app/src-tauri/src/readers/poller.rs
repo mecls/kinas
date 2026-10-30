@@ -40,7 +40,9 @@ impl Poller {
     }
 
     pub fn should_request(&self, trigger: Trigger, now: i64) -> bool {
-        if self.last_request.is_some_and(|last| now - last < MIN_GAP_MS) || now < self.blocked_until {
+        // A gap, not a moment to reach again: a wall clock that stepped back (an NTP correction) is past the gap too,
+        // or Refresh and a visible page would be silent for the length of the step.
+        if self.last_request.is_some_and(|last| (0..MIN_GAP_MS).contains(&(now - last))) || now < self.blocked_until {
             return false;
         }
         match trigger {
@@ -150,6 +152,20 @@ mod tests {
         assert!(p.sleep_ms(now) >= 1_000 && p.sleep_ms(now) <= CADENCE_MS);
         p.record(Result::RateLimited { retry_after_s: Some(9_223_372_036_854_775) }, now);
         assert!(!p.should_request(Trigger::Tick, now + 30 * MIN));
+    }
+
+    /// The scheduler runs on the wall clock, which can step back (an NTP correction). The 60 s gap is a gap, not a
+    /// moment the clock must reach again: after a step back, Refresh and a visible page still poll, and the readings do
+    /// not age into stale for the length of the step.
+    #[test]
+    fn a_clock_that_went_back_does_not_silence_the_readers() {
+        let mut p = Poller::new(0);
+        let now = 1_790_000_000_000;
+        p.record(Result::Done, now);
+        let earlier = now - 2 * 60 * MIN;
+        assert!(p.should_request(Trigger::Manual, earlier), "Refresh after a step back");
+        assert!(p.should_request(Trigger::Visible { reading_age_ms: Some(2 * MIN) }, earlier), "a visible page after a step back");
+        assert!(!p.should_request(Trigger::Manual, now + MIN - 1), "the gap still holds forward");
     }
 
     #[test]

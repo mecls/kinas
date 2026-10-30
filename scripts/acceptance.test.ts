@@ -28,7 +28,8 @@ function ac10(name: string, storeText: string): { out: string; store: string } {
     env: {
       ...process.env,
       HOME: home,
-      KINAS_PRIVATE_NAMES: "no-such-name-9c2e",
+      // Assembled here so that this file does not carry the very name the grep must not find.
+      KINAS_PRIVATE_NAMES: ["no-such", "name", "9c2e"].join("-"),
       KINAS_CONVEX_KEY_PREFIX: "convex-9c2e-",
       KINAS_HOSTINGER_TOKEN_PREFIX: "hosting-9c2e",
     },
@@ -38,6 +39,7 @@ function ac10(name: string, storeText: string): { out: string; store: string } {
 
 test("a clean store under a path with a space passes the leak scan", () => {
   const { out } = ac10("clean", "nothing secret here\n");
+  expect(out).toContain("PASS  no private names in the repository");
   expect(out).toContain("PASS  no sk-ant- in the store or the logs");
   expect(out).toContain("PASS  no Bearer or Convex credential header in the store or the logs");
   expect(out).toContain("PASS  the Convex deploy key is not in the store, the logs or kinas status --json");

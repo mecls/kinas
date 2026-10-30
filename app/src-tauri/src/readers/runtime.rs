@@ -591,7 +591,7 @@ pub(crate) fn watch_with(paths: &[&Path], mode: notify::RecursiveMode, on_event:
     .ok()?;
     for path in paths.iter().filter(|p| p.is_dir()) {
         if let Err(e) = watcher.watch(path, mode) {
-            log::warn!("could not watch {}: {e}", path.display());
+            log::warn!("file watcher: {}", crate::reader::watch::watch_note(&e));
         }
     }
     Some(watcher)

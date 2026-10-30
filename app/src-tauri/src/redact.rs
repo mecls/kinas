@@ -7,17 +7,21 @@ const REDACTED: &str = "[redacted]";
 /// GitHub's token prefixes (classic personal, OAuth, user-to-server, server-to-server, refresh, fine-grained).
 const GITHUB_PREFIXES: [&str; 6] = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"];
 
-/// Replaces `Bearer <token>`, `sk-ant-…` and GitHub's token shapes with `[redacted]`. Runs on every error string
-/// before it is stored or logged, and on every order the crew records (amended 2026-09-25, the first mate), so a
-/// credential that slips into either never lands on disk.
+/// Replaces `Bearer <token>` (in any case), `Convex <deploy key>` (the Convex reader's own scheme, ADR 0006; a deploy
+/// key carries a `|`, which is how it is told from the word), `sk-ant-…` and GitHub's token shapes with `[redacted]`.
+/// Runs on every error string before it is stored or logged, and on every order the crew records (amended 2026-09-25,
+/// the first mate), so a credential that slips into either never lands on disk.
 pub fn redact(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
     while !rest.is_empty() {
-        if let Some(after) = rest.strip_prefix("Bearer") {
+        let scheme = ["Bearer", "Convex"].iter().find(|s| rest.get(..s.len()).is_some_and(|head| head.eq_ignore_ascii_case(s)));
+        if let Some(scheme) = scheme {
+            let after = &rest[scheme.len()..];
             let spaces = after.len() - after.trim_start().len();
             let token_len = after[spaces..].find(char::is_whitespace).unwrap_or(after.len() - spaces);
-            if spaces > 0 && token_len > 0 {
+            let token = &after[spaces..spaces + token_len];
+            if spaces > 0 && token_len > 0 && (*scheme == "Bearer" || token.contains('|')) {
                 out.push_str(REDACTED);
                 rest = &after[spaces + token_len..];
                 continue;
@@ -153,6 +157,19 @@ mod tests {
         assert_eq!(redact("401 for Authorization: Bearer abc.DEF-123 at x"), "401 for Authorization: [redacted] at x");
         assert_eq!(redact("key sk-ant-oat01-XYZ_9 leaked"), "key [redacted] leaked");
         assert_eq!(redact("Bearer\tsecret"), "[redacted]");
+    }
+
+    /// ADR 0006: the Convex reader sends `Authorization: Convex <deploy key>` and the Hostinger and Ollama readers a
+    /// lowercase `bearer` is as good as the capitalised one to a server — so an error that echoed either is redacted
+    /// too. "Convex" as a word stays: only a token with a deploy key's `|` after it is one.
+    #[test]
+    fn redacts_the_convex_scheme_and_any_case_of_bearer() {
+        assert_eq!(redact("401 for Authorization: Convex prod:happy-otter-123|eyJhbGciOiJIUzI1NiJ9.x at y"), "401 for Authorization: [redacted] at y");
+        assert_eq!(redact("authorization: bearer abc.DEF at x"), "authorization: [redacted] at x");
+        assert_eq!(redact("BEARER\tsecret"), "[redacted]");
+        for s in ["Convex usage could not be read", "convex: still seeding (seeding)", "Convex", "Convex "] {
+            assert_eq!(redact(s), s);
+        }
     }
 
     #[test]

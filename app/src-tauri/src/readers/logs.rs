@@ -338,6 +338,19 @@ mod tests {
         assert_eq!(lisbon_date("not a time"), None);
     }
 
+    /// AC-5: the recount script admits only the shapes jiff parses — a date, `T` or a space, a time, and always an
+    /// offset (scripts/usage-recount.ts `RFC3339`) — so both skip the same lines. Pinned so a jiff upgrade that
+    /// changes its grammar is seen here, not in a DIFF line of `check-usage.ts`.
+    #[test]
+    fn a_timestamp_s_shape_is_read_as_the_recount_reads_it() {
+        for ok in ["2026-09-10 10:00:00Z", "2026-09-10t10:00:00z", "2026-09-10T10:00:00+0100", "2026-09-10T10:00+01:00", "2026-09-10T10:00:00.123456789Z"] {
+            assert_eq!(lisbon_date(ok).as_deref(), Some("2026-09-10"), "{ok}");
+        }
+        for bad in ["2026-09-10T10:00:00", "2026-09-10", "Sep 10 2026", " 2026-09-10T10:00:00Z", "2026-09-10T10:00:00.1234567890Z"] {
+            assert_eq!(lisbon_date(bad), None, "{bad}");
+        }
+    }
+
     /// AC-5: the recount script reads JSON where `12.0` is `12`, so a float token count is counted here too — cut to
     /// its whole part, as the script cuts it — rather than read as 0 on one side and 12 on the other.
     #[test]

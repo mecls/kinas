@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -82,6 +82,25 @@ describe("resolving a path", () => {
       exit: OPEN_EXIT.outside,
       message: `kinas open: ${join(base, "root-old/x.md")} is outside ${root}; add --anywhere to ask Kinas to open it`,
     });
+  });
+
+  test("a file this user may not read is 1 with one kinas open: line, not a crash", () => {
+    // root owns everything, so only an ordinary user can be refused a read.
+    if (process.getuid?.() === 0) return;
+    const sealed = join(root, "sealed.md");
+    writeFileSync(sealed, "# sealed\n");
+    chmodSync(sealed, 0o000);
+    try {
+      const target = at("sealed.md");
+      expect(target.ok).toBe(false);
+      if (!target.ok) {
+        expect(target.exit).toBe(OPEN_EXIT.error);
+        expect(target.message.startsWith(`kinas open: could not read ${sealed}: `)).toBe(true);
+      }
+    } finally {
+      chmodSync(sealed, 0o644);
+      rmSync(sealed);
+    }
   });
 
   test("a missing file is 66 and is never created", () => {

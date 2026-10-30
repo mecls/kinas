@@ -19,6 +19,12 @@ struct Changed {
     path: String,
 }
 
+/// The log's note for a folder that could not be watched: the kind of failure and nothing else. notify's own words
+/// end "about [<the folder>]", and the folder of an open file, or a transcripts root, is a path (ADR 0007).
+pub(crate) fn watch_note(e: &notify::Error) -> String {
+    format!("could not watch a folder ({})", super::changes::error_kind(e))
+}
+
 /// A watch that lasts as long as the returned watcher; dropping it (another file, or closing the reader) ends the
 /// thread too. `None` when the folder cannot be watched: the page still shows, it just does not follow the file.
 pub fn watch_file(app: AppHandle, file: PathBuf) -> Option<RecommendedWatcher> {
@@ -34,7 +40,7 @@ pub fn watch_file(app: AppHandle, file: PathBuf) -> Option<RecommendedWatcher> {
     })
     .map_err(|e| log::error!("reader watch: {e}"))
     .ok()?;
-    watcher.watch(&dir, RecursiveMode::NonRecursive).map_err(|e| log::warn!("reader watch: could not watch a folder: {e}")).ok()?;
+    watcher.watch(&dir, RecursiveMode::NonRecursive).map_err(|e| log::warn!("reader watch: {}", watch_note(&e))).ok()?;
 
     let path = file.display().to_string();
     std::thread::Builder::new()
@@ -62,6 +68,22 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::thread::sleep;
+
+    /// ADR 0007: notify's own words for a failed watch end "about [<the folder>]", and the folder of an open file is a
+    /// client's. The note the log gets says what kind of failure it was and nothing else — here and in the readers'
+    /// `watch_with`, which logs through the same words.
+    #[test]
+    fn a_failed_watch_s_note_never_names_the_folder() {
+        let folder = PathBuf::from("/Users/me/Documents/Projects/acme-client-9c2e/docs");
+        let gone = notify::Error::path_not_found().add_path(folder.clone());
+        assert!(gone.to_string().contains("9c2e"), "notify does name it: {gone}");
+        let io = notify::Error::io(std::io::Error::other("Operation not permitted")).add_path(folder);
+        for (e, kind) in [(gone, "path not found"), (io, "io")] {
+            let note = watch_note(&e);
+            assert!(!note.contains("9c2e") && !note.contains('/'), "{note}");
+            assert_eq!(note, format!("could not watch a folder ({kind})"));
+        }
+    }
 
     #[test]
     fn a_burst_of_saves_fires_once_and_a_later_save_fires_again() {

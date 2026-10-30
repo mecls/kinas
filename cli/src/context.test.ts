@@ -125,6 +125,23 @@ describe("kinas context", () => {
     expect(stdout.endsWith("\n")).toBe(true);
   });
 
+  test("a config file that cannot be read is said on stderr by every command that reads it, which then runs on defaults", async () => {
+    const w = await start();
+    writeFileSync(w.configPath, '{"org": "Acme Ops",}');
+    // The defaults would point at this Mac's own folders; the variables keep every read inside the world.
+    const env = { ...w.env, KINAS_ROOT: w.root, FM_HOME: w.fmHome, HERDR_SOCKET_PATH: w.herdr.socket, CODEX_HOME: w.codexHome, PI_CODING_AGENT_DIR: join(w.base, "pi"), CLAUDE_CONFIG_DIR: join(w.base, "claude") };
+    const warning = `kinas: ${w.configPath} could not be read (`;
+    const context = await kinas(["context"], env);
+    expect(context.code).toBe(0);
+    expect(context.stderr.startsWith(warning), context.stderr).toBe(true);
+    expect(context.stderr).toContain("using defaults");
+    expect(context.stdout).toContain("SintraLabs · operations");
+    const open = await kinas(["open", "clients/acme/README.md"], env);
+    expect(open.code).toBe(0);
+    expect(open.stderr.startsWith(warning), open.stderr).toBe(true);
+    expect(open.stdout).toBe(`${realpathSync.native(join(w.acme, "README.md"))}\n`);
+  });
+
   test("with no Kinas app, no Firstmate, no Herdr and no Codex, every section still answers in one line", async () => {
     const w = await start();
     await w.herdr.stop();

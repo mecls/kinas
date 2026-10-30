@@ -1,4 +1,4 @@
-import type { CrewPr, CrewSurface, CrewTask, CrewWord } from "../api.ts";
+import type { CrewPage, CrewPr, CrewSurface, CrewTask, CrewWord } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { BadgeState } from "../ui/StatusBadge.tsx";
 import type { Category } from "../ui/Dot.tsx";
@@ -68,6 +68,17 @@ export function onScreen(
     const at = seenAt(t, surface) ?? stampedHere.get(t.id) ?? null;
     return !(t.finished && at !== null && at < openedAt && !keep.has(t.id));
   });
+}
+
+/**
+ * Whether the Crew page draws its Fleet section — the board, or the empty line and the reader's error — for this page
+ * state: while the first mate runs, or while there is a card or an error to draw. Before setup the page is the setup
+ * line and the tools, and no card is drawn, so nothing is "seen" there (done work clears, rule 4): a finished task the
+ * mirror still holds (rule 11) must not be stamped by a board that is not showing it.
+ */
+export function fleetShown(page: CrewPage | undefined, taskCount: number, readerError: boolean): boolean {
+  if (page === undefined || page === "uninstalled") return false;
+  return page === "running" || taskCount > 0 || readerError;
 }
 
 /** The finished tasks among those drawn with no stamp for this surface yet: what the page sends to be stamped. */

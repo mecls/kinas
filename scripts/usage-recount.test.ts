@@ -62,3 +62,21 @@ test("a float token count is cut to its whole part, as the Rust reader cuts it",
   const [c, p] = roots("float-tokens", [claudeLine("m1", "2026-09-10T10:00:00Z", 3.9, "claude-opus-5")], []);
   expect(recount(c, p).map((r) => [r.tokens_in, r.tokens_out])).toEqual([[10, 3]]);
 });
+
+test("a usage that is not an object carries no count, as the Rust reader skips it (usage.is_object())", () => {
+  const claude = (usage: unknown) => JSON.stringify({ type: "assistant", timestamp: "2026-09-10T10:00:00Z", message: { id: `m-${JSON.stringify(usage)}`, model: "claude-opus-5", usage } });
+  const pi = (usage: unknown) => JSON.stringify({ type: "message", id: `e-${JSON.stringify(usage)}`, timestamp: "2026-09-13T10:00:00Z", message: { provider: "ollama", model: "glm", usage } });
+  const [c, p] = roots("usage-shape", [claude([]), claude("x"), claude(5), claude(true), claude(null)], [pi([]), pi("x"), pi(1), pi(null)]);
+  expect(recount(c, p)).toEqual([]);
+});
+
+test("a timestamp is counted only in the RFC 3339 shape the Rust reader parses: an offset is required", () => {
+  // JavaScript's Date would take a date alone, a zoneless time or `Sep 10 2026`; jiff's Timestamp does not, and the
+  // store would then hold fewer messages than the recount — a DIFF the store did not cause (AC-5).
+  for (const bad of ["2026-09-10T10:00:00", "2026-09-10", "Sep 10 2026", "2026-9-10T10:00:00Z", "1726000000"]) expect(lisbonDate(bad), bad).toBeNull();
+  for (const good of ["2026-09-10T10:00:00Z", "2026-09-10t10:00:00z", "2026-09-10 10:00:00Z", "2026-09-10T10:00:00.123456789Z", "2026-09-10T10:00:00+01:00", "2026-09-10T10:00:00-0100", "2026-09-10T10:00Z"]) {
+    expect(lisbonDate(good), good).toBe("2026-09-10");
+  }
+  const [c, p] = roots("zoneless", [claudeLine("m1", "2026-09-10T10:00:00", 5, "claude-opus-5"), claudeLine("m2", "2026-09-10T10:00:00+01:00", 7, "claude-opus-5")], []);
+  expect(recount(c, p)).toEqual([{ date: "2026-09-10", harness: "claude-code", provider: "anthropic", model: "claude-opus-5", tokens_in: 10, tokens_cache_read: 0, tokens_out: 7, messages: 1 }]);
+});

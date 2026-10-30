@@ -45,7 +45,7 @@ if [ "$1" = clone ]; then mkdir -p "$4/.git" "$4/bin"; echo stub > "$4/bin/fm-fl
 if [ "$1" = -C ]; then
   dir=$2; shift 2
   case "$1" in
-    checkout) echo "$5" > "$dir/.git/STUB_HEAD"; echo "$4" > "$dir/.git/STUB_BRANCH" ;;
+    checkout) if [ -f "$CALLS.no-checkout" ]; then echo "fatal: reference is not a tree: $5" >&2; exit 128; fi; echo "$5" > "$dir/.git/STUB_HEAD"; echo "$4" > "$dir/.git/STUB_BRANCH" ;;
     rev-parse) cat "$dir/.git/STUB_HEAD" 2>/dev/null || exit 128 ;;
     symbolic-ref) cat "$dir/.git/STUB_BRANCH" 2>/dev/null || exit 1 ;;
     status) echo "git-env GIT_OPTIONAL_LOCKS=\${GIT_OPTIONAL_LOCKS:-unset}" >> "$CALLS"; cat "$dir/.git/STUB_DIRTY" 2>/dev/null ;;
@@ -207,6 +207,15 @@ describe("kinas crew setup", () => {
     const { code, out } = await run(w, { yes: true });
     expect(code).toBe(0);
     expect(out).toContain(`already at ${FIRSTMATE_PIN.slice(0, 7)}`);
+  });
+
+  test("a clone whose checkout to the pin fails says which step failed, with git's own last line", async () => {
+    const w = world();
+    writeFileSync(`${w.env.CALLS}.no-checkout`, "");
+    const { code, out } = await run(w, { yes: true });
+    expect(code).toBe(1);
+    expect(out).toContain(`the checkout of ${FIRSTMATE_PIN.slice(0, 7)} failed: fatal: reference is not a tree: ${FIRSTMATE_PIN}`);
+    expect(out).not.toContain("the clone failed");
   });
 
   test("a clean clone that moved on by itself is reported, not reset", async () => {

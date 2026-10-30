@@ -107,7 +107,9 @@ const under = (p: string, root: string): boolean => p === root || p.startsWith(`
 /**
  * True when `path` is the root or inside it. Both are judged as written and as they are on disk (`resolve` drops a
  * trailing slash and `..`; `realpath` follows a symlinked root or a symlinked folder), so a hook started in a real
- * path under a root written through a link still gets its packet — the same two-sided check `kinas open` makes.
+ * path under a root written through a link still gets its packet. Either side is enough here: a session's folder is
+ * judged as the shell handed it over. `kinas open` is stricter with a file — its real path alone, against the real
+ * root (open.ts `at`) — because that path is handed to the app.
  */
 export function insideRoot(config: KinasConfig, path: string): boolean {
   const root = resolve(config.root);

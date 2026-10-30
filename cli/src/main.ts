@@ -148,6 +148,8 @@ async function context(args: string[]): Promise<number> {
   if (parsed.positional.length > 0) return usageError(`kinas context: unexpected argument ${parsed.positional[0]}`);
 
   const config = loadConfig();
+  // A config file that could not be used is said once, on stderr, whatever the command: defaults name another root.
+  if (config.problem) printError(`kinas: ${config.problem}`);
   const cwd = parsed.values.get("--cwd");
   if (cwd !== undefined && !insideRoot(config, cwd)) return EXIT.ok;
 
@@ -234,7 +236,9 @@ async function open(args: string[]): Promise<number> {
   let path: string | null = null;
   let request: OpenRequest = { v: 1, op: "reopen" };
   if (parsed.positional.length === 1) {
-    const target = resolveTarget(parsed.positional[0]!, { cwd: process.cwd(), root: loadConfig().root, anywhere });
+    const config = loadConfig();
+    if (config.problem) printError(`kinas: ${config.problem}`);
+    const target = resolveTarget(parsed.positional[0]!, { cwd: process.cwd(), root: config.root, anywhere });
     if (!target.ok) {
       printError(target.message);
       return target.exit;

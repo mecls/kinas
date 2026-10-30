@@ -79,7 +79,8 @@ pub fn run() {
                     app.manage(keychain::Keys(keys));
                     // R35: ~/.local/bin/kinas → the CLI in this bundle, never clobbering anything else.
                     let link = cli_link::ensure_for_running_app();
-                    log::info!("cli link: {link:?}");
+                    // The state only (ADR 0007): the link's paths are the captain's, not the log's.
+                    log::info!("cli link: {}", link.word());
                     app.manage(cli_link::CliLink(link));
                     // R39: the menu bar item.
                     if let Err(e) = tray::install(app.handle()) {

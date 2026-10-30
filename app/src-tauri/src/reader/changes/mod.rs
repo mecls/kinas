@@ -604,7 +604,8 @@ fn heard(root: &Path, event: notify::Event) -> Vec<PathBuf> {
     paths
 }
 
-fn error_kind(e: &notify::Error) -> &'static str {
+/// A notify error by its kind alone: its Display names the paths it is about (ADR 0007).
+pub(crate) fn error_kind(e: &notify::Error) -> &'static str {
     match e.kind {
         notify::ErrorKind::Generic(_) => "generic",
         notify::ErrorKind::Io(_) => "io",

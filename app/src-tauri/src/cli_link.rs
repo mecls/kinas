@@ -27,6 +27,20 @@ pub enum LinkStatus {
 }
 
 /// The CLI next to the app's own executable, when the app runs from a Kinas.app bundle.
+impl LinkStatus {
+    /// The state alone, for the log (ADR 0007): `Repointed`'s `from` is wherever the captain's own link pointed, and
+    /// `Conflict`'s reason can name what is in its place — neither is the log's to keep.
+    pub fn word(&self) -> &'static str {
+        match self {
+            LinkStatus::Linked { .. } => "linked",
+            LinkStatus::Created { .. } => "created",
+            LinkStatus::Repointed { .. } => "repointed",
+            LinkStatus::Conflict { .. } => "conflict",
+            LinkStatus::NoBundle => "no bundle",
+        }
+    }
+}
+
 pub fn bundled_cli(exe: &Path) -> Option<PathBuf> {
     if !exe.to_string_lossy().contains(BUNDLE_MARKER) {
         return None;
@@ -86,6 +100,22 @@ pub fn ensure_for_running_app() -> LinkStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ADR 0007: the start-up log line says the link's state and nothing else — `Repointed`'s `from` is wherever the
+    /// captain's own `~/.local/bin/kinas` pointed, and a `Conflict`'s reason names what is in its place.
+    #[test]
+    fn the_log_s_word_for_the_link_carries_no_path() {
+        let statuses = [
+            LinkStatus::Repointed { from: "/Users/me/Projects/acme-9c2e/bin/kinas".into(), target: "/Applications/Kinas.app/Contents/MacOS/kinas".into() },
+            LinkStatus::Conflict { reason: "a regular file is at /Users/me/.local/bin/kinas-9c2e".into() },
+            LinkStatus::Linked { target: "/Applications/Kinas.app/Contents/MacOS/kinas".into() },
+        ];
+        for status in statuses {
+            let word = status.word();
+            assert!(!word.contains('/') && !word.contains("9c2e"), "{word}");
+        }
+        assert_eq!(LinkStatus::NoBundle.word(), "no bundle");
+    }
 
     fn fake_bundle(root: &Path, name: &str) -> PathBuf {
         let dir = root.join(name).join("Kinas.app/Contents/MacOS");

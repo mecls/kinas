@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCrewSettings, type CrewSettings, type CrewSnapshot } from "../api.ts";
-import { fleetAsOf } from "../crew/board.ts";
+import { fleetAsOf, fleetShown } from "../crew/board.ts";
 import { Board } from "../crew/Board.tsx";
 import { ToolTable } from "../crew/ToolTable.tsx";
 import { useCleared } from "../crew/useCleared.ts";
@@ -66,7 +66,10 @@ export function CrewPage({
   // What this load shows: every task but the finished ones the board showed in an earlier load.
   const cleared = useCleared("board", active, onReload);
   const tasks = useMemo(() => (crew ? cleared.onScreen(crew.tasks) : []), [crew, cleared, active]);
-  useEffect(() => cleared.shown(tasks), [cleared, tasks]);
+  // The Fleet section — the board, or its empty line and the reader's error — is drawn only in these states; what it
+  // draws is what the board has seen (done work clears, rule 4), so before setup nothing is stamped.
+  const fleet = crew !== null && fleetShown(page, tasks.length, crew.reader.state === "error");
+  useEffect(() => cleared.shown(fleet ? tasks : []), [cleared, tasks, fleet]);
   return (
     <div className="page-in crew" data-crew={page}>
       <TitleRow title="Crew">
@@ -112,7 +115,7 @@ export function CrewPage({
         </>
       )}
       {page === "installed" && settings && <StartFirstMate settings={settings} blocked={blocked} />}
-      {crew && page !== "uninstalled" && (page === "running" || tasks.length > 0 || crew.reader.state === "error") && (
+      {crew && fleet && (
         <Section>
           <SectionHeader title="Fleet" caption={fleetAsOf(crew.generated, crew.now) ?? undefined} source="Firstmate's fleet snapshot" />
           {crew.reader.state === "error" && crew.reader.last_error && (

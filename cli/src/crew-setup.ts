@@ -89,8 +89,13 @@ export function steps(): Step[] {
         }
         mkdirSync(dirname(ctx.home), { recursive: true });
         const cloned = await group(["git", "clone", "--quiet", FIRSTMATE_REPO, ctx.home], ctx, GIT_MS);
-        const pinned = cloned.code === 0 && (await group(["git", "-C", ctx.home, "checkout", "--quiet", "-B", "main", FIRSTMATE_PIN], ctx, GIT_MS)).code === 0;
-        ctx.homeProblem = pinned && (await head(ctx)) === FIRSTMATE_PIN ? null : `the clone failed${lastLine(cloned)}`;
+        if (cloned.code !== 0) {
+          ctx.homeProblem = `the clone failed${lastLine(cloned)}`;
+        } else {
+          // Each step names itself when it fails: git's last line belongs to the step that printed it.
+          const checked = await group(["git", "-C", ctx.home, "checkout", "--quiet", "-B", "main", FIRSTMATE_PIN], ctx, GIT_MS);
+          ctx.homeProblem = checked.code === 0 && (await head(ctx)) === FIRSTMATE_PIN ? null : `the checkout of ${SHORT_PIN} failed${lastLine(checked)}`;
+        }
         say(ctx, ctx.homeProblem ?? `cloned, at ${SHORT_PIN} on main`);
       },
     },

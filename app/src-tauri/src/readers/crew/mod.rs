@@ -29,6 +29,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 /// A trigger file must be quiet this long before the snapshot runs: Firstmate rewrites the backlog in bursts.
 const FILE_DEBOUNCE: Duration = Duration::from_millis(500);
+/// A trigger rewritten without pause — the summary during a fleet burst — cannot hold the cycle longer than this.
+const FILE_CEILING: Duration = Duration::from_secs(5);
 
 /// The two files whose change means the fleet changed. Their contents are never read (§6.5).
 const TRIGGERS: [&str; 2] = ["backlog.md", "home-summary.json"];
@@ -150,7 +152,9 @@ fn start_focus(started_at: i64, answered_at: i64, view: &View) -> Option<String>
 /// run) and when each PR was last asked of `gh`.
 #[derive(Default)]
 struct Memo {
-    repos: HashMap<String, Option<String>>,
+    /// Each clone's repository, read once per run. A clone with none — not cloned yet, or no GitHub origin — is not
+    /// remembered: it is asked again next cycle, so a clone that appears is read without a restart.
+    repos: HashMap<String, String>,
     pr_checked: HashMap<String, i64>,
 }
 
@@ -182,13 +186,7 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
             Ok(wake) => {
                 let mut wakes = vec![wake];
                 if wake == CrewWake::File {
-                    // Quiet for 500 ms first; whatever else arrives meanwhile joins this run.
-                    while let Ok(more) = rx.recv_timeout(FILE_DEBOUNCE) {
-                        match more {
-                            CrewWake::Herdr => herdr_pending = true,
-                            other => wakes.push(other),
-                        }
-                    }
+                    herdr_pending |= gather_wakes(&rx, &mut wakes, FILE_DEBOUNCE, FILE_CEILING);
                 }
                 let now = now_ms();
                 for wake in wakes {
@@ -224,6 +222,22 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
 }
 
 /// The start focus, decided on Herdr's first answer only.
+/// After a `File` wake: quiet for `quiet` first, and whatever else arrives meanwhile joins this run — for at most
+/// `ceiling`, so a trigger rewritten without pause cannot starve the cycle (the wakes still coming are the next run's).
+/// Answers whether a Herdr wake arrived among them.
+fn gather_wakes(rx: &Receiver<CrewWake>, wakes: &mut Vec<CrewWake>, quiet: Duration, ceiling: Duration) -> bool {
+    let mut herdr = false;
+    let opened = std::time::Instant::now();
+    while let Some(left) = ceiling.checked_sub(opened.elapsed()) {
+        match rx.recv_timeout(quiet.min(left)) {
+            Ok(CrewWake::Herdr) => herdr = true,
+            Ok(other) => wakes.push(other),
+            Err(_) => break,
+        }
+    }
+    herdr
+}
+
 fn first_answer(app: &AppHandle, started_at: i64, seen: &mut bool, view: Option<&View>) {
     let Some(view) = view else { return };
     if std::mem::replace(seen, true) {
@@ -300,16 +314,23 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
     ok
 }
 
+/// A clone's repository, from the memo when it has one; read and remembered otherwise, unless there is none yet.
+fn clone_repo_memo(memo: &mut Memo, home: &Path, path: &str) -> Option<String> {
+    if let Some(repo) = memo.repos.get(path) {
+        return Some(repo.clone());
+    }
+    let repo = repo::clone_repo(home, path)?;
+    memo.repos.insert(path.to_string(), repo.clone());
+    Some(repo)
+}
+
 /// The repositories of Firstmate's clones, one per folder under `<home>/projects/`, each read once per run.
 fn project_repos(home: &Path, memo: &mut Memo) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(home.join("projects")) else { return Vec::new() };
     let mut repos: Vec<String> = entries
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
-        .filter_map(|e| {
-            let path = e.path().display().to_string();
-            memo.repos.entry(path.clone()).or_insert_with(|| repo::clone_repo(home, &path)).clone()
-        })
+        .filter_map(|e| clone_repo_memo(memo, home, &e.path().display().to_string()))
         .collect();
     repos.sort_unstable();
     repos.dedup();
@@ -324,8 +345,7 @@ fn repos_of(fleet: &Fleet, home: &Path, memo: &mut Memo) -> HashMap<String, Opti
         .iter()
         .filter_map(|t| {
             let path = mirror::clone_path(t, home)?;
-            let repo = memo.repos.entry(path.clone()).or_insert_with(|| repo::clone_repo(home, &path)).clone();
-            Some((t.id.clone(), repo))
+            Some((t.id.clone(), clone_repo_memo(memo, home, &path)))
         })
         .collect()
 }
@@ -411,6 +431,48 @@ mod tests {
 
     fn ran(exit: Exit, stdout: &str, last_err: Option<&str>) -> Ran {
         Ran { exit, stdout: stdout.into(), first_err: None, last_err: last_err.map(str::to_string), elapsed: Duration::ZERO }
+    }
+
+    /// A clone that is not there yet — a task queued before the first mate clones its project — has no repository, and
+    /// that answer is not remembered for the run: the cycle after the clone appears reads it, so the task's lane and the
+    /// crew marks' pairing do not wait for a restart.
+    #[test]
+    fn a_clone_that_appears_later_is_read_not_remembered_as_missing() {
+        let home = tempfile::tempdir().unwrap();
+        let clone = home.path().join("projects").join("shop-9c2e");
+        let fleet = Fleet { tasks: vec![snapshot::TaskFacts { id: "t1".into(), project: Some(clone.display().to_string()), ..snapshot::TaskFacts::default() }], ..Fleet::default() };
+        let mut memo = Memo::default();
+        assert_eq!(repos_of(&fleet, home.path(), &mut memo).get("t1"), Some(&None));
+        assert!(project_repos(home.path(), &mut memo).is_empty());
+        std::fs::create_dir_all(clone.join(".git")).unwrap();
+        std::fs::write(clone.join(".git/config"), "[remote \"origin\"]\n\turl = git@github.com:owner-9c2e/shop.git\n").unwrap();
+        assert_eq!(repos_of(&fleet, home.path(), &mut memo).get("t1"), Some(&Some("owner-9c2e/shop".into())));
+        assert_eq!(project_repos(home.path(), &mut memo), ["owner-9c2e/shop"]);
+    }
+
+    /// First mate rule 13: a cycle runs after 500 ms of quiet on `data/backlog.md` or the summary. A file rewritten
+    /// more often than that — the summary during a fleet burst — is never quiet, so the gathering stops at its ceiling
+    /// and the cycle runs; the wakes that keep coming are the next run's.
+    #[test]
+    fn a_trigger_rewritten_without_pause_cannot_starve_the_cycle() {
+        let (tx, rx) = std::sync::mpsc::channel::<CrewWake>();
+        let flood = std::thread::spawn(move || {
+            for _ in 0..40 {
+                if tx.send(CrewWake::File).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let started = std::time::Instant::now();
+        let mut wakes = vec![CrewWake::File];
+        let herdr = gather_wakes(&rx, &mut wakes, Duration::from_millis(200), Duration::from_millis(600));
+        let took = started.elapsed();
+        assert!(took < Duration::from_millis(1_200), "gathered for {took:?}: the ceiling did not stop it");
+        assert!(took >= Duration::from_millis(600), "the ceiling, not the quiet, ended it after {took:?}");
+        assert!(!herdr && wakes.len() > 1);
+        drop(rx);
+        flood.join().unwrap();
     }
 
     #[test]

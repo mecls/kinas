@@ -17,8 +17,16 @@ export interface UsageRow {
 
 const lisbon = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" });
 
+/**
+ * The shapes the Rust reader's `jiff::Timestamp` parses (logs.rs `lisbon_date`): a date, `T` or a space, a time, and
+ * always an offset. JavaScript's `Date` would also take a date alone, a zoneless time or `Sep 10 2026`, and the two
+ * must agree line for line (AC-5).
+ */
+const RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:[Zz]|[+-]\d{2}:?\d{2})$/;
+
 /** The Lisbon date of an RFC 3339 timestamp; null when it does not parse — such a line is malformed and skipped (R25). */
 export function lisbonDate(timestamp: string): string | null {
+  if (!RFC3339.test(timestamp)) return null;
   const at = new Date(timestamp);
   return Number.isNaN(at.getTime()) ? null : lisbon.format(at);
 }
@@ -65,6 +73,8 @@ interface Counted {
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : 0);
 /** A model or provider that is not a string reads "unknown", as the Rust reader has it (logs.rs). */
 const name = (v: unknown) => (typeof v === "string" ? v : "unknown");
+/** A JSON object, or null for anything else: a `usage` that is an array, a string or a number counts nothing in Rust (`is_object`). */
+const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
 export function recount(claudeRoot: string, piRoot: string): UsageRow[] {
   const messages = new Map<string, Counted>();
@@ -72,8 +82,8 @@ export function recount(claudeRoot: string, piRoot: string): UsageRow[] {
   // Claude Code: one message per message.id across every file; its largest-output line wins (R21).
   for (const file of jsonlFiles(claudeRoot).sort()) {
     for (const j of lines(file)) {
-      const m = j.message as Record<string, unknown> | undefined;
-      const usage = m?.usage as Record<string, unknown> | undefined;
+      const m = obj(j.message);
+      const usage = obj(m?.usage);
       if (j.type !== "assistant" || !m || !usage || typeof m.id !== "string" || typeof j.timestamp !== "string") continue;
       if (m.model === "<synthetic>") continue;
       const date = lisbonDate(j.timestamp);
@@ -101,8 +111,8 @@ export function recount(claudeRoot: string, piRoot: string): UsageRow[] {
   for (const file of jsonlFiles(piRoot).sort()) {
     const fileName = file.split("/").pop()!;
     for (const j of lines(file)) {
-      const m = j.message as Record<string, unknown> | undefined;
-      const usage = m?.usage as Record<string, unknown> | undefined;
+      const m = obj(j.message);
+      const usage = obj(m?.usage);
       if (j.type !== "message" || !m || !usage || typeof j.id !== "string" || typeof j.timestamp !== "string") continue;
       const date = lisbonDate(j.timestamp);
       if (date === null) continue;

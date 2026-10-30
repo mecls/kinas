@@ -26,9 +26,14 @@ pub fn check_editor(value: &str) -> Result<String, String> {
 }
 
 /// `<editor> '<path>'`: the editor as Miguel typed it, the path always quoted, so a file named
-/// `it's $(rm -rf ~).md` arrives as a name and never as a command.
-pub fn editor_command(editor: &str, path: &Path) -> String {
-    format!("{} {}", editor.trim(), crate::pty::sh_quote(&path.to_string_lossy()))
+/// `it's $(rm -rf ~).md` arrives as a name and never as a command. Herdr types it at the new pane's prompt, where the
+/// line editor reads a control character as a key before the shell sees a quote: a path holding one is refused.
+pub fn editor_command(editor: &str, path: &Path) -> Result<String, String> {
+    let path = path.to_string_lossy();
+    if path.chars().any(char::is_control) {
+        return Err("This file's name has a control character, which a terminal would take as a key — open it another way".into());
+    }
+    Ok(format!("{} {}", editor.trim(), crate::pty::sh_quote(&path)))
 }
 
 /// `herdr pane list` → the one pane with `"focused": true` (measured: one per client, even across workspaces).
@@ -45,6 +50,8 @@ pub fn new_pane_id(split_json: &str) -> Option<String> {
 
 /// R37 steps 2–6. `file` has already been checked by the caller (R9).
 pub fn open_in_editor(editor: &str, file: &Path) -> Result<(), String> {
+    // Checked before Herdr is asked anything, so a refused name opens no pane.
+    let command = editor_command(editor, file)?;
     let herdr = find_herdr().ok_or_else(|| NOT_INSTALLED.to_string())?;
     let session = session();
     let session = session.as_deref();
@@ -53,7 +60,7 @@ pub fn open_in_editor(editor: &str, file: &Path) -> Result<(), String> {
     let dir = file.parent().unwrap_or(Path::new("/")).to_string_lossy().into_owned();
     let split = run(&herdr, &herdr_args(session, &["pane", "split", &pane, "--direction", "right", "--cwd", &dir, "--focus"]))?;
     let new_pane = new_pane_id(&split).ok_or_else(|| "Herdr did not say which pane it opened".to_string())?;
-    run(&herdr, &herdr_args(session, &["pane", "run", &new_pane, &editor_command(editor, file)]))?;
+    run(&herdr, &herdr_args(session, &["pane", "run", &new_pane, &command]))?;
     Ok(())
 }
 
@@ -67,8 +74,20 @@ mod tests {
 
     #[test]
     fn a_file_name_is_quoted_so_it_can_never_run() {
-        assert_eq!(editor_command("vim", Path::new("it's $(x).md")), r"vim 'it'\''s $(x).md'");
-        assert_eq!(editor_command(" nvim -R ", Path::new("/a b/plan.md")), "nvim -R '/a b/plan.md'");
+        assert_eq!(editor_command("vim", Path::new("it's $(x).md")), Ok(r"vim 'it'\''s $(x).md'".into()));
+        assert_eq!(editor_command(" nvim -R ", Path::new("/a b/plan.md")), Ok("nvim -R '/a b/plan.md'".into()));
+    }
+
+    /// `pane run` arrives as typed input, read by the shell's line editor before any quote is: a ^U in a name kills the
+    /// line typed so far, a ^C drops it, a tab completes, a carriage return submits it half-typed — and what follows in
+    /// the name runs as a command of its own (zsh, measured 2026-10-30: `'a<^U>touch PWNED '` ran `touch`). A path with
+    /// any control character is never typed.
+    #[test]
+    fn a_name_with_a_control_character_is_never_typed() {
+        for name in ["/p/shop-9c2e/a\u{15}touch x.md", "/p/a\u{3}b.md", "/p/a\tb.md", "/p/a\rb.md", "/p/a\nb.md", "/p/a\u{1b}b.md", "/p/a\u{7f}b.md", "/p/\u{15}/plan.md"] {
+            assert!(editor_command("vim", Path::new(name)).is_err(), "{name:?}");
+        }
+        assert_eq!(editor_command("vim", Path::new("/p/café — plan.md")), Ok("vim '/p/café — plan.md'".into()));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -159,6 +159,22 @@ describe("asking the app", () => {
     close();
     expect(await launchAndAsk(join(base, "never.sock"), request, { start: () => true, timeoutMs: 300 })).toBeNull();
     expect(await launchAndAsk(join(base, "never.sock"), request, { start: () => false })).toBeNull();
+  });
+});
+
+describe("--launch and the wall clock", () => {
+  afterEach(() => setSystemTime());
+
+  test("a wall clock stepped back while waiting for Kinas does not stretch the wait by the step", async () => {
+    // The deadline was a moment on the wall clock: a two-hour step back mid-wait kept `kinas open --launch` polling a
+    // socket that never came up for two hours more. A wait is a span, so it is measured on a clock that never steps.
+    const started = performance.now();
+    const start = () => {
+      setTimeout(() => setSystemTime(new Date(Date.now() - 2 * 3_600_000)), 50);
+      return true;
+    };
+    expect(await launchAndAsk(join(base, "never-9c2e.sock"), { v: 1, op: "reopen" }, { start, timeoutMs: 400 })).toBeNull();
+    expect(performance.now() - started).toBeLessThan(3_000);
   });
 });
 

@@ -56,6 +56,23 @@ describe("projects through git plumbing", () => {
     expect(row.error).toBeNull();
   });
 
+  test("a touched file named with a leading quote or a newline is hashed as itself, and no clean file reads dirty", async () => {
+    // `hash-object --stdin-paths` unquotes a line that starts with `"` and ends one at a newline: unescaped, `"draft".md`
+    // was read as `draft` and the whole batch failed, so every touched-but-unchanged file in the repository read dirty.
+    const repo = join(tempDir(), "repo");
+    const names = ['"draft-9c2e".md', "a\nb-9c2e.md", "back\\slash-9c2e.md", "tab\tcr\r-9c2e.md", "café-9c2e.md", "plain-9c2e.md"];
+    for (const n of names) write(join(repo, n), "# Same\n");
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "First");
+    for (const n of names) utimesSync(join(repo, n), new Date(), new Date(Date.now() + 5_000));
+
+    expect((await readRepo(repo, "repo")).row.dirty).toBe(0);
+    write(join(repo, '"draft-9c2e".md'), "# Changed\n");
+    utimesSync(join(repo, '"draft-9c2e".md'), new Date(), new Date(Date.now() + 10_000));
+    expect((await readRepo(repo, "repo")).row.dirty).toBe(1);
+  });
+
   test("ahead and behind its upstream", async () => {
     const origin = repoWithHistory();
     const clone = join(tempDir(), "clone");

@@ -174,8 +174,9 @@ export async function launchAndAsk(
 ): Promise<Answer | null> {
   const start = opts.start ?? (() => spawnSync("/usr/bin/open", ["-b", "ai.sintralabs.kinas"]).status === 0);
   if (!start()) return null;
-  const deadline = Date.now() + (opts.timeoutMs ?? LAUNCH_TIMEOUT_MS);
-  while (Date.now() < deadline) {
+  // A span, so measured on the monotonic clock: on the wall clock a step back mid-wait stretched it by the step.
+  const deadline = performance.now() + (opts.timeoutMs ?? LAUNCH_TIMEOUT_MS);
+  while (performance.now() < deadline) {
     const answer = await ask(socketPath, request);
     if (answer.kind !== "down") return answer;
     await sleep(LAUNCH_POLL_MS);

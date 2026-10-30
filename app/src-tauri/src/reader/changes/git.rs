@@ -58,6 +58,9 @@ fn quote_line(out: &mut Vec<u8>, path: &[u8]) {
     out.extend_from_slice(b"\"\n");
 }
 
+/// A path asked of `check-ignore`, and whether it is a folder (asked with a trailing slash).
+type Asked<'a> = (&'a PathBuf, bool);
+
 /// NUL-separated output as paths under `repo`.
 fn paths_under<'a>(repo: &'a Path, out: &'a [u8]) -> impl Iterator<Item = PathBuf> + 'a {
     out.split(|&b| b == 0).filter(|p| !p.is_empty()).map(move |p| repo.join(OsStr::from_bytes(p)))
@@ -82,8 +85,8 @@ impl Git {
     /// The repository holding `dir` — its top, which may be above `dir` — or None outside any.
     pub fn toplevel(&self, dir: &Path) -> Option<PathBuf> {
         let out = self.run(dir, "rev-parse", &["--show-toplevel"], None).ok()?;
-        let top = String::from_utf8(out).ok()?;
-        std::fs::canonicalize(top.trim_end_matches('\n')).ok()
+        // Exactly the one newline git adds: a name may end in one of its own.
+        std::fs::canonicalize(OsStr::from_bytes(out.strip_suffix(b"\n").unwrap_or(&out))).ok()
     }
 
     /// HEAD's commit, or None when the repository has no commit yet.
@@ -169,17 +172,42 @@ impl Git {
     /// gone from a file without it (checked 2026-09-25). A tracked file inside an ignored folder is not ignored: git
     /// would push it. Exit 1 is "none of them".
     pub fn ignored(&self, repo: &Path, files: &[PathBuf], folders: &[PathBuf]) -> Result<HashSet<PathBuf>, GitError> {
+        let rel = |p: &PathBuf| p.strip_prefix(repo).unwrap_or(p).as_os_str().as_bytes().to_vec();
+        // `check-ignore` asks the index whether each line is tracked with the line as a pattern, so a name holding a
+        // glob character matched other, tracked files and read as tracked. Those are judged by the rules alone
+        // (`--no-index`), and the tracked among them taken out by a literal `ls-files`.
+        let (globbed, plain): (Vec<Asked>, Vec<Asked>) =
+            files.iter().map(|f| (f, false)).chain(folders.iter().map(|d| (d, true))).partition(|(p, _)| rel(p).iter().any(|b| matches!(b, b'*' | b'?' | b'[' | b'\\')));
+        let mut ignored = self.check_ignore(repo, &plain, false)?;
+        let by_rules = self.check_ignore(repo, &globbed, true)?;
+        if !by_rules.is_empty() {
+            let specs: Vec<String> = by_rules.iter().map(|p| format!(":(literal){}", p.strip_prefix(repo).unwrap_or(p).to_string_lossy())).collect();
+            let mut rest: Vec<&str> = vec!["-z", "--cached", "--"];
+            rest.extend(specs.iter().map(String::as_str));
+            let tracked: Vec<PathBuf> = paths_under(repo, &self.run(repo, "ls-files", &rest, None)?).collect();
+            ignored.extend(by_rules.into_iter().filter(|p| !tracked.iter().any(|t| t.starts_with(p))));
+        }
+        Ok(ignored)
+    }
+
+    /// One `check-ignore -z --stdin` over these paths, a folder with its trailing slash; with `no_index`, by the ignore
+    /// rules alone, tracked or not.
+    fn check_ignore(&self, repo: &Path, asked: &[Asked], no_index: bool) -> Result<HashSet<PathBuf>, GitError> {
+        if asked.is_empty() {
+            return Ok(HashSet::new());
+        }
         let mut stdin = Vec::new();
-        for (path, slash) in files.iter().map(|f| (f, false)).chain(folders.iter().map(|d| (d, true))) {
+        for (path, slash) in asked {
             // `./` first: a leading `:` would be read as pathspec magic, and `check-ignore` takes no `:(literal)`.
             stdin.extend_from_slice(b"./");
             stdin.extend_from_slice(path.strip_prefix(repo).unwrap_or(path).as_os_str().as_bytes());
-            if slash {
+            if *slash {
                 stdin.push(b'/');
             }
             stdin.push(0);
         }
-        match self.run(repo, "check-ignore", &["-z", "--stdin"], Some(stdin)) {
+        let args: &[&str] = if no_index { &["--no-index", "-z", "--stdin"] } else { &["-z", "--stdin"] };
+        match self.run(repo, "check-ignore", args, Some(stdin)) {
             Ok(out) => Ok(out
                 .split(|&b| b == 0)
                 .filter(|p| !p.is_empty())
@@ -634,6 +662,44 @@ pub(crate) mod tests {
         assert_eq!(g.ignored(&root, &[root.join(":local.md")], &[]), Ok(HashSet::new()), "`:local.md` is not `local.md`");
         std::fs::write(root.join(".gitignore"), ":local.md\n").unwrap();
         assert_eq!(g.ignored(&root, &[root.join(":local.md")], &[]), Ok(HashSet::from([root.join(":local.md")])));
+    }
+
+    /// `check-ignore` reads each line as a pathspec, so a name holding `*`, `?`, `[` or `\\` is a glob when it asks the
+    /// index whether the path is tracked: `draft*.md`, ignored and untracked, matched the tracked `draft-old.md` (and
+    /// `notes[1]/x.md` the tracked `notes1/x.md`) and read as tracked — not ignored, so waiting for a push — though
+    /// `git status` calls it ignored. A tracked file of such a name, and a folder holding one, still are not ignored: git
+    /// would push them.
+    #[test]
+    fn a_name_with_glob_characters_is_asked_as_itself() {
+        let (_dir, root) = temp();
+        repo_with(&root, &[(".gitignore", b"draft*.md\nnotes?.md\nnotes\\[1\\]/\n"), ("notes1/x.md", b"# X\n")]);
+        std::fs::write(root.join("draft-old.md"), "# Old\n").unwrap();
+        std::fs::write(root.join("notes?.md"), "# Tracked\n").unwrap();
+        git(&root, &["add", "-f", "draft-old.md", "notes?.md"]);
+        git(&root, &["commit", "-q", "-m", "tracked, though their patterns say ignore"]);
+        std::fs::write(root.join("draft*.md"), "# Mine\n").unwrap();
+        std::fs::create_dir_all(root.join("notes[1]")).unwrap();
+        std::fs::write(root.join("notes[1]/x.md"), "# X\n").unwrap();
+        let g = Git::find().expect("git is installed");
+        let files = [root.join("draft*.md"), root.join("notes?.md"), root.join("notes[1]/x.md"), root.join("gone[1].md")];
+        let ignored = g.ignored(&root, &files, &[root.join("notes[1]")]).unwrap();
+        assert_eq!(ignored, HashSet::from([root.join("draft*.md"), root.join("notes[1]/x.md"), root.join("notes[1]")]), "as `git status` says");
+        git(&root, &["add", "-f", "notes[1]/x.md"]);
+        assert_eq!(g.ignored(&root, &[], &[root.join("notes[1]")]), Ok(HashSet::new()), "a folder holding a tracked file is not ignored");
+    }
+
+    /// `rev-parse --show-toplevel` prints the top and one newline, unquoted: a folder whose own name ends in a newline
+    /// kept its name only when exactly that one newline is taken off. Trimmed of every newline, its top was a folder
+    /// that is not there — or the sibling of that name, another repository.
+    #[test]
+    fn a_top_whose_name_ends_in_a_newline_is_that_top() {
+        let (_dir, root) = temp();
+        let top = root.join("shop-9c2e\n");
+        std::fs::create_dir(&top).unwrap();
+        repo_with(&top, &[("README.md", b"# Shop\n")]);
+        std::fs::create_dir(root.join("shop-9c2e")).unwrap();
+        let g = Git::find().expect("git is installed");
+        assert_eq!(g.toplevel(&top), Some(top.clone()));
     }
 
     #[test]

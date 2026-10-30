@@ -81,13 +81,22 @@ async function changedAgainstHead(git: Git): Promise<string[]> {
     }
   }
   if (verify.length > 0) {
-    const hashed = await git(["hash-object", "--stdin-paths"], `${verify.map((v) => v.path).join("\n")}\n`);
+    const hashed = await git(["hash-object", "--stdin-paths"], verify.map((v) => quoteLine(v.path)).join(""));
     const ids = hashed.ok ? hashed.stdout.trim().split("\n") : [];
     verify.forEach((v, i) => {
       if (ids[i] !== v.blob) changed.push(v.path);
     });
   }
   return changed;
+}
+
+/**
+ * One `--stdin-paths` line, C-quoted as git unquotes a line that starts with `"`: every path, so a name that starts
+ * with a quote, holds a newline or ends in a carriage return is still one line naming that file (`git.rs` `quote_line`).
+ */
+function quoteLine(path: string): string {
+  const body = path.replace(/["\\\x00-\x1f\x7f]/g, (c) => (c === '"' || c === "\\" ? `\\${c}` : `\\${c.charCodeAt(0).toString(8).padStart(3, "0")}`));
+  return `"${body}"\n`;
 }
 
 export function parseCommits(text: string): CommitRef[] {

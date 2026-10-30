@@ -370,10 +370,16 @@ fn upsert(
     Ok(())
 }
 
-/// One appended event; with a dedupe key, a repeat is ignored. Returns how many rows it added.
-fn event(tx: &Transaction, org: &str, task: &str, at: i64, kind: &str, text: &str, dedupe_key: Option<&str>) -> rusqlite::Result<usize> {
-    tx.execute(
-        "INSERT OR IGNORE INTO crew_events (org_id, task_id, at, kind, text, dedupe_key) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+/// One appended event; with a dedupe key, a repeat is ignored. Returns how many rows it added. The task's events are an
+/// order (its card's newest, its timeline): an event stamped now is never earlier than one already given, so a wall
+/// clock stepped back still puts it after them — an equal stamp goes by the row's id. Firstmate's `last_event` keeps the
+/// time it was emitted.
+pub(crate) fn event(conn: &Connection, org: &str, task: &str, at: i64, kind: &str, text: &str, dedupe_key: Option<&str>) -> rusqlite::Result<usize> {
+    conn.execute(
+        "INSERT OR IGNORE INTO crew_events (org_id, task_id, at, kind, text, dedupe_key) VALUES (?1, ?2,
+           CASE WHEN ?4 = 'last_event' THEN ?3
+                ELSE max(?3, coalesce((SELECT max(e.at) FROM crew_events e WHERE e.org_id = ?1 AND e.task_id = ?2), ?3)) END,
+           ?4, ?5, ?6)",
         params![org, task, at, kind, text, dedupe_key],
     )
 }
@@ -567,6 +573,38 @@ mod tests {
         assert_eq!(word(&store), "done");
         assert_eq!(events(&store).last(), Some(&ev(t5, "returned", "back in the fleet snapshot")));
         assert_eq!(store.conn().query_row("SELECT count(*) FROM crew_tasks", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    }
+
+    /// A task's card says its newest event and its timeline runs oldest first — an order, kept on the wall clock, which
+    /// can step back. After a step back the next snapshot's events, and an order the captain types then, are still the
+    /// newest: stamped never earlier than the task's events already given. Stamped with the clock as it read, the card
+    /// said "working" over a task done, for the length of the step, and the timeline put done before working for good.
+    /// Firstmate's own last event keeps the time it was emitted.
+    #[test]
+    fn events_after_a_clock_step_back_are_still_the_newest() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let org = store.org_id().to_string();
+        let before = T0 + 10 * MIN;
+        cycle(&store, "working", before);
+        cycle(&store, "done", T0);
+        let card = crate::crew::read::snapshot_view(&store.conn(), &org, T0, true, true, None).unwrap();
+        assert_eq!(card.tasks[0].last_event_text.as_deref(), Some("done"), "the card says what happened last");
+        event(&store.conn(), &org, ID, T0 + 1, "order", "land it 9c2e", None).unwrap();
+        let detail = crate::crew::read::task_view(&store.conn(), &org, ID, T0 + 1).unwrap().unwrap();
+        let timeline: Vec<(&str, &str)> = detail.events.iter().map(|e| (e.kind.as_str(), e.text.as_str())).collect();
+        assert_eq!(
+            timeline,
+            [
+                ("last_event", "working: running the tests 9c2e"),
+                ("state", "working"),
+                ("word", "working"),
+                ("pr", "PR #12 opened"),
+                ("word", "done"),
+                ("order", "land it 9c2e"),
+            ]
+        );
+        assert!(events(&store).iter().all(|(at, kind, _)| *at <= before || kind == "last_event"), "never later than the newest already given");
     }
 
     /// Done work clears, rule 7: "a done task whose word leaves done" is new again — so done must be able to leave. A

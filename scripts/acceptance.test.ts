@@ -13,7 +13,7 @@ const repo = join(import.meta.dir, "..");
 const scratch = mkdtempSync(join(tmpdir(), "kinas-ac10-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
-function ac10(name: string, storeText: string): { out: string; store: string } {
+function ac10(name: string, storeText: string, prefixes: Record<string, string> = {}): { out: string; store: string } {
   const home = join(scratch, name, "home dir");
   const data = join(home, "Library/Application Support/ai.sintralabs.kinas");
   const logs = join(home, "Library/Logs/ai.sintralabs.kinas");
@@ -32,6 +32,7 @@ function ac10(name: string, storeText: string): { out: string; store: string } {
       KINAS_PRIVATE_NAMES: ["no-such", "name", "9c2e"].join("-"),
       KINAS_CONVEX_KEY_PREFIX: "convex-9c2e-",
       KINAS_HOSTINGER_TOKEN_PREFIX: "hosting-9c2e",
+      ...prefixes,
     },
   });
   return { out: `${r.stdout}${r.stderr}`, store };
@@ -52,4 +53,17 @@ test("a leak is named by its file, path and all", () => {
   expect(out).toContain(`${store}: 1`);
   expect(out).toContain("FAIL  a credential header was found:");
   expect(out).toContain("FAIL  the Convex deploy key leaked");
+});
+
+test("a key prefix that starts with a dash is looked for, not read as grep's options", () => {
+  // A token is whatever the Keychain holds: one starting with `-f` made grep take the rest as a file of patterns, fail,
+  // and the scan count that failure as a hit — a clean store reported the key leaked.
+  const prefixes = { KINAS_CONVEX_KEY_PREFIX: "-f9c2e-convx", KINAS_HOSTINGER_TOKEN_PREFIX: "-f9c2e-hostn" };
+  const clean = ac10("dash-clean", "nothing secret here\n", prefixes).out;
+  expect(clean).toContain("PASS  the Convex deploy key is not in the store, the logs or kinas status --json");
+  expect(clean).toContain("PASS  the Hostinger API token is not in the store, the logs or kinas status --json");
+  const { out, store } = ac10("dash-leaky", "-f9c2e-convx-rest\n-f9c2e-hostn-rest\n", prefixes);
+  expect(out).toContain("FAIL  the Convex deploy key leaked");
+  expect(out).toContain("FAIL  the Hostinger API token leaked");
+  expect(out).toContain(`${store}: 1`);
 });

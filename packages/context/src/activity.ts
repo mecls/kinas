@@ -43,13 +43,17 @@ function crewEvents(prev: Crew, next: Crew, now: number): ActivityEvent[] {
   return events;
 }
 
-function fileEvents(prev: Section<ArtifactRow[]>, next: Observation): ActivityEvent[] {
+function fileEvents(prev: Section<ArtifactRow[]>, next: Observation, now: number): ActivityEvent[] {
   const before = new Map(prev.data.map((a) => [`${a.project}\0${a.path}`, a.modified_at]));
   const sessions = next.sessions.state === "ok" ? (next.sessions.data?.rows ?? []) : [];
+  // A reading stamped in what is now the future (the wall clock stepped back) is no moment to compare against: a file
+  // written since has an mtime below it. Then a file new to the list counts, and a known one counts when its mtime moved
+  // either way — an older mtime is a rewrite too.
+  const since = prev.at > now ? Number.NEGATIVE_INFINITY : prev.at;
   return next.artifacts.data
     .filter((a) => {
       const was = before.get(`${a.project}\0${a.path}`);
-      return was === undefined ? a.modified_at > prev.at : a.modified_at > was;
+      return was === undefined ? a.modified_at > since : a.modified_at !== was;
     })
     .map((a): ActivityEvent => {
       const writer = sessions.find((s) => s.status === "working" && s.project === a.project);
@@ -68,6 +72,6 @@ export function activityEvents(prev: Packet | null, next: Observation, now: numb
   if (prev?.crew.state === "ok" && prev.crew.data && next.crew.state === "ok" && next.crew.data && next.crew.at !== prev.crew.at) {
     events.push(...crewEvents(prev.crew.data, next.crew.data, now));
   }
-  if (prev?.artifacts.state === "ok" && next.artifacts.state === "ok") events.push(...fileEvents(prev.artifacts, next));
+  if (prev?.artifacts.state === "ok" && next.artifacts.state === "ok") events.push(...fileEvents(prev.artifacts, next, now));
   return events;
 }

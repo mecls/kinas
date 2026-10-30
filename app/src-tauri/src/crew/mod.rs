@@ -238,11 +238,8 @@ pub async fn crew_record_order(app: AppHandle, text: String) -> Result<bool, Cre
             let conn = store.conn();
             let workers = read::worker_panes(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the workers: {e}")))?;
             let Some(task) = orders::attribute(view.focused_pane.as_deref(), &workers) else { return Ok(false) };
-            conn.execute(
-                "INSERT INTO crew_events (org_id, task_id, at, kind, text, dedupe_key) VALUES (?1, ?2, ?3, 'order', ?4, NULL)",
-                rusqlite::params![store.org_id(), task, now_ms(), text],
-            )
-            .map_err(|e| CrewError::internal(format!("could not record the order: {e}")))?;
+            crate::readers::crew::mirror::event(&conn, store.org_id(), &task, now_ms(), "order", &text, None)
+                .map_err(|e| CrewError::internal(format!("could not record the order: {e}")))?;
             true
         };
         let _ = app.emit(crate::readers::runtime::CREW_CHANGED, ());

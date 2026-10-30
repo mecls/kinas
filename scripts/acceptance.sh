@@ -68,6 +68,7 @@ if want ac10; then
   # globs themselves: the data folder's path has a space in it, so a list of paths split on whitespace would name
   # files that do not exist (scripts/acceptance.test.ts).
   store_files() { for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] && echo "$f"; done; }
+  # A key prefix goes in after `-e`: a token that starts with `-` is a pattern, never grep's options.
   scan() { # scan <grep args…>: the files with a hit, one per line
     for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c "$@" "$f" || true); [ "$c" = "0" ] || echo "      $f: $c"; done
   }
@@ -93,9 +94,9 @@ if want ac10; then
     echo "SKIP  a Convex deploy key is saved, but there is no store, log or kinas on this Mac to look in"
   else
     leaks=0
-    hits=$(scan -F "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
+    hits=$(scan -F -e "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
     if [ -x "$KINAS" ]; then
-      c=$("$KINAS" status --json 2>/dev/null | grep -c -F "$prefix" || true)
+      c=$("$KINAS" status --json 2>/dev/null | grep -c -F -e "$prefix" || true)
       [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
     fi
     [ $leaks -eq 0 ] && pass "the Convex deploy key is not in the store, the logs or kinas status --json" || fail "the Convex deploy key leaked (above)"
@@ -112,9 +113,9 @@ if want ac10; then
     echo "SKIP  a Hostinger API token is saved, but there is no store, log or kinas on this Mac to look in"
   else
     leaks=0
-    hits=$(scan -F "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
+    hits=$(scan -F -e "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
     if [ -x "$KINAS" ]; then
-      c=$("$KINAS" status --json 2>/dev/null | grep -c -F "$prefix" || true)
+      c=$("$KINAS" status --json 2>/dev/null | grep -c -F -e "$prefix" || true)
       [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
     fi
     [ $leaks -eq 0 ] && pass "the Hostinger API token is not in the store, the logs or kinas status --json" || fail "the Hostinger API token leaked (above)"

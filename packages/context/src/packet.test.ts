@@ -163,6 +163,24 @@ describe("recent activity", () => {
     ]);
   });
 
+  test("a file written after the wall clock stepped back is still an event: an older mtime is a change too", () => {
+    // The packet before was read just ahead of a two-hour step back, so its stamps and mtimes read two hours ahead of
+    // the files written since: an edit then has an mtime below the one recorded, and a new file one below the reading.
+    const now = Date.now();
+    const ahead = now + 2 * 3_600_000;
+    const row = (path: string, modified_at: number) => ({ project: "acme", path, title: null, modified_at });
+    const prev = { ...packet, artifacts: { state: "ok", note: null, at: ahead, data: [row("docs/a-9c2e.md", ahead - 1_000)] } } as Packet;
+    const artifacts = { state: "ok" as const, note: null, at: now, data: [row("docs/a-9c2e.md", now - 60_000), row("docs/b-9c2e.md", now - 30_000)] };
+    const events = activityEvents(prev, { projects: [], commits: new Map(), artifacts, crew: prev.crew, sessions: { ...packet.sessions, data: null } }, now);
+    expect(events.map((e) => [e.kind, e.text, e.at])).toEqual([
+      ["file", "docs/a-9c2e.md changed", now - 60_000],
+      ["file", "docs/b-9c2e.md changed", now - 30_000],
+    ]);
+    // Unchanged since the reading before, it is not an event, whatever the clock did.
+    const same = { ...artifacts, data: [row("docs/a-9c2e.md", ahead - 1_000)] };
+    expect(activityEvents(prev, { projects: [], commits: new Map(), artifacts: same, crew: prev.crew, sessions: packet.sessions }, now)).toEqual([]);
+  });
+
   test("an artifact written while an agent works in its project names the agent", async () => {
     const plan = join(world.acme, "docs/plan.md");
     write(plan, "# Launch plan v2\n");

@@ -69,9 +69,13 @@ const LANGUAGES: Record<string, string> = {
   procfile: "bash",
 };
 
-/** The highlight.js id for an extension, or null to render plain. */
+/**
+ * The highlight.js id for an extension, or null to render plain. Own keys only: `ext` is a file's whole name when it
+ * has none, and a fence's info string is file content, so `constructor` or `__proto__` must not reach the prototype.
+ */
 export function languageFor(ext: string): string | null {
-  return LANGUAGES[ext.toLowerCase()] ?? null;
+  const key = ext.toLowerCase();
+  return Object.hasOwn(LANGUAGES, key) ? LANGUAGES[key]! : null;
 }
 
 /** The id for a markdown fence's info string (` ```ts `), which comes from untrusted file content. */

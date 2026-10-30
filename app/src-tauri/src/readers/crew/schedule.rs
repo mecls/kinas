@@ -40,9 +40,11 @@ impl Schedule {
     }
 
     /// When a run woken by `wake` at `now` may start: never sooner than 5 s after the last one. The backoff delays only
-    /// the baseline — a trigger file still runs the snapshot, because Firstmate changed something.
+    /// the baseline — a trigger file still runs the snapshot, because Firstmate changed something. A last run that is
+    /// now in the future is one the wall clock stepped back from (an NTP correction): the gap has passed since it, or
+    /// every wake would wait the length of the step.
     pub(crate) fn run_at(&self, wake: &CrewWake, now: i64) -> i64 {
-        let Some(last) = self.last_run else { return now };
+        let Some(last) = self.last_run.filter(|last| *last <= now) else { return now };
         let earliest = now.max(last + MIN_GAP_MS);
         match wake {
             CrewWake::File | CrewWake::Visible | CrewWake::Manual | CrewWake::Herdr => earliest,
@@ -88,6 +90,23 @@ mod tests {
         assert_eq!(s.run_at(&CrewWake::Visible, T0 + 1_000), T0 + 5_000);
         assert_eq!(s.run_at(&CrewWake::Manual, T0 + 1_000), T0 + 5_000);
         assert_eq!(s.run_at(&CrewWake::File, T0 + 9_000), T0 + 9_000, "later than 5 s runs at once");
+    }
+
+    /// The schedule runs on the wall clock, which can step back (an NTP correction, a Mac woken with a drifted clock).
+    /// The 5 s gap is a gap, not a moment the clock must reach again: a last run that is now in the future is one the
+    /// gap has passed since, so a filed task, the page coming on screen, Refresh and the baseline all still run the
+    /// snapshot — not after the length of the step.
+    #[test]
+    fn a_clock_that_went_back_does_not_silence_the_snapshot() {
+        let mut s = Schedule::new();
+        s.set_visible(true);
+        s.finished(T0, true);
+        let earlier = T0 - 2 * 60 * 60_000;
+        for wake in [CrewWake::File, CrewWake::Visible, CrewWake::Manual, CrewWake::Tick] {
+            assert_eq!(s.run_at(&wake, earlier), earlier, "{wake:?} after a step back");
+        }
+        assert_eq!(s.run_at(&CrewWake::File, T0 + 1_000), T0 + 5_000, "the gap still holds forward");
+        assert_eq!(s.run_at(&CrewWake::Tick, T0 + 1_000), T0 + 60_000);
     }
 
     #[test]

@@ -18,17 +18,26 @@ export interface UsageRow {
 const lisbon = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" });
 
 /**
- * The shapes the Rust reader's `jiff::Timestamp` parses (logs.rs `lisbon_date`): a date, `T` or a space, a time, and
- * always an offset. JavaScript's `Date` would also take a date alone, a zoneless time or `Sep 10 2026`, and the two
- * must agree line for line (AC-5).
+ * The one shape of timestamp both counters read (logs.rs `lisbon_date`, held to this grammar ahead of `jiff`): a date,
+ * `T`, `t` or a space, `HH:MM`, an optional `:SS` with up to nine fraction digits, and always `Z`, `z` or `±HH:MM` /
+ * `±HHMM` — with every field in range. JavaScript's `Date` would also take a date alone, a zoneless time, `Sep 10 2026`,
+ * hour 24 (as the next day's midnight) and February 30th (as March 2nd); jiff refuses them all, and the two must agree
+ * line for line (AC-5). The instant is computed from the fields, never from `Date`'s own parser.
  */
-const RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:[Zz]|[+-]\d{2}:?\d{2})$/;
+const RFC3339 = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[Tt ]([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,9}))?)?(?:[Zz]|([+-])([01]\d|2[0-3]):?([0-5]\d))$/;
 
 /** The Lisbon date of an RFC 3339 timestamp; null when it does not parse — such a line is malformed and skipped (R25). */
 export function lisbonDate(timestamp: string): string | null {
-  if (!RFC3339.test(timestamp)) return null;
-  const at = new Date(timestamp);
-  return Number.isNaN(at.getTime()) ? null : lisbon.format(at);
+  const m = RFC3339.exec(timestamp);
+  if (!m) return null;
+  const [year, month, day, hour, minute, second] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? "0"].map(Number) as [number, number, number, number, number, number];
+  const fraction = m[7] ? Math.floor(Number(`0.${m[7]}`) * 1000) : 0;
+  const civil = Date.UTC(year, month - 1, day, hour, minute, second, fraction);
+  // `Date.UTC` rolls a day the month does not have into the next month; jiff refuses it, so it is refused here.
+  const at = new Date(civil);
+  if (at.getUTCMonth() !== month - 1 || at.getUTCDate() !== day) return null;
+  const offsetMs = m[8] ? (m[8] === "-" ? -1 : 1) * (Number(m[9]) * 60 + Number(m[10])) * 60_000 : 0;
+  return lisbon.format(new Date(civil - offsetMs));
 }
 
 function jsonlFiles(dir: string): string[] {

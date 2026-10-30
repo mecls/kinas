@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { categoriesFor, hashedCategory } from "./category.ts";
+import { CATEGORIES, categoriesFor, hashedCategory } from "./category.ts";
 
 describe("a client folder's category (DESIGN.md §3.1)", () => {
   test("the hash is stable and lands in 1–6", () => {
@@ -36,5 +36,19 @@ describe("a client folder's category (DESIGN.md §3.1)", () => {
 
   test("the answer depends on the order given, not on anything else — so callers sort first", () => {
     expect(categoriesFor(["b", "a"], {})).toEqual(categoriesFor(["b", "a"], {}));
+  });
+});
+
+describe("a folder named like a property of every object", () => {
+  test("is seated like any other, never skipped and never handed Object.prototype's member", () => {
+    // `out[name]` for `constructor` found Object's constructor and read as "already seated": the folder got a function for
+    // its colour, and the sidebar's chip a `var(--cat-function Object() …)`. Own keys only, on both maps.
+    for (const name of ["constructor", "toString", "hasOwnProperty", "__proto__"]) {
+      const cat = categoriesFor([name, "alpha"], {})[name];
+      expect(typeof cat).toBe("number");
+      expect(cat).toBeGreaterThanOrEqual(1);
+      expect(cat).toBeLessThanOrEqual(CATEGORIES);
+    }
+    expect(categoriesFor(["constructor"], { constructor: 3 }).constructor).toBe(3);
   });
 });

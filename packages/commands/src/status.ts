@@ -150,10 +150,14 @@ const GOLD = "\x1b[33m";
 const RESET = "\x1b[0m";
 const LABEL_WIDTH = 19;
 
+/** 950 · 34k · 1.3M · 6.1B: one decimal while it is not .0. */
 function compact(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1).replace(/\.0$/, "")}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, "")}k`;
+  const shown = (v: number) => v.toFixed(1).replace(/\.0$/, "");
+  // The unit is chosen on the value as it will be shown, not as it is: 999,950 rounds to 1000.0k, which is 1M — the
+  // Usage page's compactTokens (app/src/usage/format.ts) moves up the same way, and the two say the same number.
+  if (n >= 1e9 || Number(shown(n / 1e6)) >= 1000) return `${shown(n / 1e9)}B`;
+  if (n >= 1e6 || Number(shown(n / 1e3)) >= 1000) return `${shown(n / 1e6)}M`;
+  if (n >= 1e3 || Math.round(n) >= 1000) return `${shown(n / 1e3)}k`;
   return String(n);
 }
 

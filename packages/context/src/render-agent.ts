@@ -13,10 +13,12 @@ import { ago, lisbonStamp } from "./time.ts";
 export const AGENT_HEADINGS = ["# Kinas context", "## Projects", "## Features in progress", "## Artifacts", "## Conventions", "## Crew", "## Sessions", "## Decisions", "## Quotas", "## Recent"] as const;
 
 /**
- * One line of the packet, whatever a source put in it: a newline inside a title, a hold reason or an event text would
- * start a new line of markdown — one that could read as `## Crew`, a heading hooks look for — so it becomes a space.
+ * One line of the packet, whatever a source put in it: a newline inside a title, a hold reason, an event text or a
+ * source's own error message would start a new line of markdown — one that could read as `## Crew`, a heading hooks
+ * look for — so it becomes a space. A lone carriage return is a line ending to CommonMark too, so it goes the same way.
+ * The operator's view and the launch screen fold their rows with it as well: one row per thing, whatever it says.
  */
-const flat = (line: string): string => line.replace(/\s*\n\s*/g, " ");
+export const flat = (line: string): string => line.replace(/\s*(?:\r\n?|\n)\s*/g, " ");
 
 const cell = (v: string | number | null | undefined): string => (v === null || v === undefined || v === "" ? "—" : flat(String(v).replace(/\|/g, "\\|")));
 
@@ -26,14 +28,14 @@ function table(head: string[], rows: (string | number | null)[][]): string {
 
 /** The one line a section shows when its source could not be read. */
 function missing(section: Section<unknown>): string | null {
-  if (section.state === "unavailable") return `_Unavailable: ${section.note ?? "could not be read"}._`;
+  if (section.state === "unavailable") return flat(`_Unavailable: ${section.note ?? "could not be read"}._`);
   if (section.state === "pending") return "_Not read yet._";
   return null;
 }
 
 function asOf(section: Section<unknown>, now: number): string {
   const stale = section.note ? ` · ${section.note}` : "";
-  return `_As of ${lisbonStamp(section.at)} (${ago(section.at, now)})${stale}._`;
+  return flat(`_As of ${lisbonStamp(section.at)} (${ago(section.at, now)})${stale}._`);
 }
 
 export function renderHeader(p: Packet): string {
@@ -45,7 +47,7 @@ export function renderHeader(p: Packet): string {
     `- Generated: ${lisbonStamp(p.generated_at)} Europe/Lisbon (${new Date(p.generated_at).toISOString()})`,
     `- Packet version: ${p.version}`,
     `- Kinas ${i.version} · projects root ${i.root}`,
-    `- Interactive sessions: ${i.harness ?? "harness not detected"} · ${i.model ?? "model not set"}`,
+    flat(`- Interactive sessions: ${i.harness ?? "harness not detected"} · ${i.model ?? "model not set"}`),
     "",
     "Sections: Projects, Features in progress, Artifacts, Conventions, Crew, Sessions, Decisions, Quotas, Recent. A section whose source could not be read says so in one line. Times are Europe/Lisbon.",
   ].join("\n");
@@ -89,7 +91,7 @@ export function renderArtifacts(p: Packet): string {
     lines.push("", `### ${project.name} — ${project.path}`, "");
     lines.push(rows.length === 0 ? "No artifacts found by convention." : table(["Path", "Title", "Modified"], rows.map((a) => [a.path, a.title, lisbonStamp(a.modified_at)])));
   }
-  if (s.note) lines.push("", `_${s.note}._`);
+  if (s.note) lines.push("", flat(`_${s.note}._`));
   return lines.join("\n");
 }
 
@@ -158,7 +160,7 @@ export function renderSessions(p: Packet): string {
   const s = p.sessions;
   const gone = missing(s);
   if (gone || !s.data) return `## Sessions\n\n${gone ?? "_Not read yet._"}`;
-  const head = `${asOf(s, p.generated_at)} Herdr${s.data.server ? ` v${s.data.server}` : ""}.`;
+  const head = flat(`${asOf(s, p.generated_at)} Herdr${s.data.server ? ` v${s.data.server}` : ""}.`);
   if (s.data.rows.length === 0) return `## Sessions\n\n${head}\n\nNo agent sessions.`;
   return `## Sessions\n\n${head}\n\n${table(
     ["Status", "Agent", "Workspace", "Project", "Title"],

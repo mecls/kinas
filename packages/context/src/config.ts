@@ -4,7 +4,8 @@
 //     "hub": ".", "firstmate_home": "~/Library/Application Support/ai.sintralabs.kinas/firstmate",
 //     "harness": "claude", "model": "opus" }
 //
-// Environment variables win over the file: KINAS_ROOT, FM_HOME, HERDR_SOCKET_PATH, CODEX_HOME, PI_CODING_AGENT_DIR.
+// Environment variables win over the file: KINAS_ROOT, FM_HOME, HERDR_SOCKET_PATH, CODEX_HOME, PI_CODING_AGENT_DIR,
+// CLAUDE_CONFIG_DIR.
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";

@@ -80,3 +80,20 @@ test("a timestamp is counted only in the RFC 3339 shape the Rust reader parses: 
   const [c, p] = roots("zoneless", [claudeLine("m1", "2026-09-10T10:00:00", 5, "claude-opus-5"), claudeLine("m2", "2026-09-10T10:00:00+01:00", 7, "claude-opus-5")], []);
   expect(recount(c, p)).toEqual([{ date: "2026-09-10", harness: "claude-code", provider: "anthropic", model: "claude-opus-5", tokens_in: 10, tokens_cache_read: 0, tokens_out: 7, messages: 1 }]);
 });
+
+test("a timestamp in the right shape with a value jiff refuses is skipped too: hour 24, second 60, a day the month does not have, an offset past 23 h", () => {
+  // JavaScript's Date takes `T24:00:00` as midnight of the next day and February 30th as March 2nd; jiff refuses both,
+  // so the recount would hold a message the store never counted (AC-5). The offset rule is the same shape rule as the
+  // hour's: Date refuses `+24:00`, and the Rust reader's grammar is held to this one.
+  for (const bad of ["2026-09-10T24:00:00Z", "2026-09-10T10:00:60Z", "2026-09-10T10:60:00Z", "2026-02-30T10:00:00Z", "2026-04-31T10:00:00Z", "2027-02-29T10:00:00Z", "2026-13-01T10:00:00Z", "2026-09-00T10:00:00Z", "2026-09-10T10:00:00+24:00", "2026-09-10T10:00:00+01:60"]) {
+    expect(lisbonDate(bad), bad).toBeNull();
+  }
+  expect(lisbonDate("2028-02-29T10:00:00Z")).toBe("2028-02-29");
+  expect(lisbonDate("2026-09-10T22:59:59.999Z")).toBe("2026-09-10");
+  expect(lisbonDate("2026-09-10T23:00:00Z")).toBe("2026-09-11");
+  // The offset is applied, not ignored: 00:30 at +02:00 is 22:30 UTC the evening before, 23:30 in Lisbon's summer.
+  expect(lisbonDate("2026-09-10T00:30:00+02:00")).toBe("2026-09-09");
+  expect(lisbonDate("2026-09-10T23:30:00-0100")).toBe("2026-09-11");
+  const [c, p] = roots("hour-24", [claudeLine("m1", "2026-09-10T24:00:00Z", 5, "claude-opus-5"), claudeLine("m2", "2026-02-30T10:00:00Z", 7, "claude-opus-5")], []);
+  expect(recount(c, p)).toEqual([]);
+});

@@ -87,4 +87,18 @@ describe("kinas crew status", () => {
     const moved = crewStatusFromStore(store([], { at: "9296f9b0000", tools: [] }), NOW, true);
     expect(crewStatusLines(moved)[0]).toBe("Firstmate   9296f9b — moved from f9f74a1");
   });
+
+  test("a home the app saw at no commit — on another branch, or not a clone — is not called pinned", () => {
+    // crew/mod.rs `health_json` writes `at: null` for a tangle and for a missing clone, not only before it has looked.
+    const tangle = crewStatusFromStore(store([], { installed: true, at: null, tools: [] }), NOW, true);
+    expect(tangle.at).toBeNull();
+    expect(crewStatusLines(tangle)[0]).toBe("Firstmate   not at the pin f9f74a1 — Settings → Crew says where the clone stands");
+    expect(crewStatusJson(tangle).at).toBeNull();
+    // Before the app has looked at all there is no health row: the pin is named without a claim about the clone, and the
+    // tools — every one installed a minute ago by `kinas crew setup` — are not called missing.
+    const unseen = crewStatusFromStore(store([], null), NOW, true);
+    expect(crewStatusLines(unseen)[0]).toBe("Firstmate   f9f74a1 (pin) — the app has not checked the clone yet");
+    expect(crewStatusLines(unseen)[1]).toBe("Tools       not checked by the app yet — open Settings → Crew");
+    expect(Object.keys(crewStatusJson(unseen))).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "tasks"]);
+  });
 });

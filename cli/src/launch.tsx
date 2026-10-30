@@ -2,7 +2,7 @@
 // terminal main.ts then holds through hold.ts until Enter, q or Ctrl+C (keymap.md), and piped it is printed and done.
 
 import { accentLine, bannerLines, BANNER_WIDTH, glyph, LOGO_WIDTH, logoLines, paint, type Polarity, type Tone } from "@kinas/commands/theme";
-import { age, ago, packetCounts, plural, until, type Packet, type QuotaLine, type Section } from "@kinas/context";
+import { age, ago, flat, packetCounts, plural, until, type Packet, type QuotaLine, type Section } from "@kinas/context";
 import { Box, renderToString, Text } from "ink";
 import { homedir } from "node:os";
 
@@ -24,8 +24,10 @@ export interface LaunchOptions {
 
 const tilde = (p: string) => (p.startsWith(`${homedir()}/`) ? `~${p.slice(homedir().length)}` : p);
 
+/** One row of the screen: a newline a source put in a title, a reason or an event text is folded, so a row never spills
+ *  into a second one without its glyph and indent (render-agent.ts `flat`, the same rule the packet keeps). */
 function Line({ children }: { children: string }) {
-  return <Text wrap="truncate-end">{children}</Text>;
+  return <Text wrap="truncate-end">{flat(children)}</Text>;
 }
 
 function Heading({ title, section, o }: { title: string; section?: Section<unknown>; o: LaunchOptions }) {

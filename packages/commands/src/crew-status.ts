@@ -10,8 +10,13 @@ export interface CrewStatus {
   installed: boolean;
   /** The pin, short. */
   pin: string;
-  /** The commit the app last saw Firstmate's home at, short; null before it has looked. */
+  /**
+   * The commit the app last saw Firstmate's home at, short; null before it has looked, and null when it looked and found
+   * no commit to name — a clone on another branch (a tangle) or no clone at all (`crew/mod.rs` `health_json`).
+   */
   at: string | null;
+  /** Whether the app has looked at the install at all (the `crew_health` setting exists). */
+  checked: boolean;
   tools: { name: string; version: string | null; ok: boolean }[];
   counts: { queued: number; in_flight: number; needs_decision: number; ci_red: number; ready: number; done_7d: number };
   waiting: number;
@@ -30,12 +35,14 @@ export function crewStatusFromStore(store: CrewStatusStore, now: number, install
   const rows = store.getCrewTasks(now);
   const words = rows.map((r) => ({ row: r, word: wordOf(r) }));
   const count = (w: CrewWord) => words.filter((x) => x.word === w).length;
-  const health = (store.getCrewHealth() ?? {}) as StoredHealth;
+  const stored_health = store.getCrewHealth();
+  const health = (stored_health ?? {}) as StoredHealth;
   const stored = Array.isArray(health.tools) ? (health.tools as { name?: unknown; version?: unknown; ok?: unknown }[]) : [];
   return {
     installed,
     pin: FIRSTMATE_PIN.slice(0, 7),
     at: typeof health.at === "string" ? health.at.slice(0, 7) : null,
+    checked: stored_health !== null && typeof stored_health === "object",
     tools: TOOLS.map((t) => {
       const seen = stored.find((s) => s.name === t.name);
       return { name: t.name, version: typeof seen?.version === "string" ? seen.version : null, ok: seen?.ok === true };
@@ -79,11 +86,22 @@ export function crewStatusJson(s: CrewStatus): Record<string, unknown> {
 
 export function crewStatusLines(s: CrewStatus): string[] {
   const missing = s.tools.filter((t) => !t.ok && TOOLS.find((x) => x.name === t.name)?.required);
-  const pin = s.at === null ? `${s.pin} (pinned)` : s.at === s.pin ? `${s.at} (pinned)` : `${s.at} — moved from ${s.pin}`;
+  // The clone's standing is the app's reading (Settings → Crew): no commit from it is a tangle or no clone, never "pinned".
+  const pin =
+    s.at === null
+      ? s.checked
+        ? `not at the pin ${s.pin} — Settings → Crew says where the clone stands`
+        : `${s.pin} (pin) — the app has not checked the clone yet`
+      : s.at === s.pin
+        ? `${s.at} (pinned)`
+        : `${s.at} — moved from ${s.pin}`;
   const c = s.counts;
+  // The tools' state is the app's reading too (`crew_health`, written when Settings → Crew checks them): before it has
+  // looked, nothing is "missing" — least of all what `kinas crew setup` installed a minute ago.
+  const tools = !s.checked ? "not checked by the app yet — open Settings → Crew" : missing.length === 0 ? `all ${s.tools.filter((t) => t.ok).length} installed` : `missing: ${missing.map((t) => t.name).join(", ")}`;
   return [
     `Firstmate   ${s.installed ? pin : "not installed — run kinas crew setup in the Work pane"}`,
-    `Tools       ${missing.length === 0 ? `all ${s.tools.filter((t) => t.ok).length} installed` : `missing: ${missing.map((t) => t.name).join(", ")}`}`,
+    `Tools       ${tools}`,
     `Crew        ${c.in_flight} in flight · ${c.queued} queued · ${c.needs_decision} needs decision · ${c.ci_red} CI red · ${c.ready} ready · ${c.done_7d} done this week`,
     `Waiting     ${s.waiting} on you`,
   ];

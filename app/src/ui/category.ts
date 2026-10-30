@@ -18,17 +18,20 @@ export function hashedCategory(name: string): Category {
  * colour only once all six are worn, and then by the hash alone.
  */
 export function categoriesFor(names: readonly string[], chosen: Readonly<Record<string, number | null | undefined>>): Record<string, Category> {
-  const out: Record<string, Category> = {};
+  // No prototype: `out["__proto__"] = 4` on a plain object sets its prototype, not a key.
+  const out: Record<string, Category> = Object.create(null) as Record<string, Category>;
   const worn = new Set<Category>();
+  // Own keys only, on both maps: a folder named `constructor` or `toString` must not read Object.prototype's member as
+  // its choice, nor as "already seated" — it was skipped, and wore a function for its colour.
   for (const name of names) {
-    const pick = chosen[name];
+    const pick = Object.hasOwn(chosen, name) ? chosen[name] : undefined;
     if (pick !== undefined && pick !== null && pick >= 1 && pick <= CATEGORIES) {
       out[name] = pick as Category;
       worn.add(pick as Category);
     }
   }
   for (const name of names) {
-    if (out[name]) continue;
+    if (Object.hasOwn(out, name)) continue;
     const seed = hashedCategory(name);
     let cat = seed;
     for (let step = 0; step < CATEGORIES; step++) {

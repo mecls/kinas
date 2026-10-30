@@ -46,6 +46,17 @@ describe("units are the API's, and binary throughout", () => {
     expect(bytes(554176512)).toBe("529 MiB");
   });
 
+  test("the unit is chosen on the value as it will be shown, not as it is", () => {
+    // 1,048,575 bytes rounds to 1,024 KiB, which is 1 MiB; the same step up at every boundary (as compactTokens does).
+    expect(bytes(1024 * 1024 - 1)).toBe("1 MiB");
+    expect(bytes(1023.5 * 1024)).toBe("1 MiB");
+    expect(bytes(1023.96 * 1024 ** 3)).toBe("1.00 TiB");
+    expect(bytes(1023.96 * 1024 ** 2)).toBe("1.0 GiB");
+    // And just under the rounding step, the lower unit still holds.
+    expect(bytes(1023.4 * 1024)).toBe("1023 KiB");
+    expect(bytes(1023.94 * 1024 ** 3)).toBe("1023.9 GiB");
+  });
+
   test("each unit is formatted as what it is", () => {
     expect(metricValue(12.5, "%")).toBe("13%");
     expect(metricValue(554176512, "bytes")).toBe("529 MiB");

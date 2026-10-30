@@ -48,10 +48,12 @@ const TIB = GIB * 1024;
  */
 export function bytes(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "—";
-  if (n >= TIB) return `${(n / TIB).toFixed(2)} TiB`;
-  if (n >= GIB) return `${(n / GIB).toFixed(1)} GiB`;
-  if (n >= MIB) return `${Math.round(n / MIB)} MiB`;
-  if (n >= KIB) return `${Math.round(n / KIB)} KiB`;
+  // The unit is chosen on the value as it will be shown, not as it is: 1,048,575 bytes rounds to 1,024 KiB, which is
+  // 1 MiB (as compactTokens chooses its unit).
+  if (n >= TIB || Number((n / GIB).toFixed(1)) >= 1024) return `${(n / TIB).toFixed(2)} TiB`;
+  if (n >= GIB || Math.round(n / MIB) >= 1024) return `${(n / GIB).toFixed(1)} GiB`;
+  if (n >= MIB || Math.round(n / KIB) >= 1024) return `${Math.round(n / MIB)} MiB`;
+  if (n >= KIB || Math.round(n) >= 1024) return `${Math.round(n / KIB)} KiB`;
   return `${Math.round(n)} B`;
 }
 

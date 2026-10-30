@@ -46,6 +46,16 @@ describe("an unknown language renders plain", () => {
     expect(languageFor("")).toBeNull();
     expect(languageFor("exe")).toBeNull();
   });
+
+  test("a name that is a property of every object is not a language", () => {
+    // `ext` is a file's name when it has no extension, and a fence's info string is file content: a table indexed by
+    // either must not hand back Object.prototype's members. `constructor` came back as a function and `__proto__` as an
+    // object, and the Changes view's escaper threw on them where a diff should have been.
+    for (const name of ["constructor", "__proto__", "hasOwnProperty", "valueOf", "toString"]) {
+      expect(languageFor(name)).toBeNull();
+      expect(languageForFence(name)).toBeNull();
+    }
+  });
 });
 
 describe("a markdown fence's info string", () => {

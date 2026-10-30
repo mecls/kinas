@@ -86,6 +86,20 @@ describe("the launch screen", () => {
     expect(lines(out).at(-1)).toContain("herdr not running");
     expect(shortNote("firstmate: not installed (no /x/bin/fm-fleet-snapshot.sh)")).toBe("firstmate: not installed");
   });
+
+  test("a newline in a title, a reason or an event text is one row of its panel, not a second row without its glyph", () => {
+    const forged: Packet = {
+      ...packet,
+      decisions: { ...packet.decisions, data: [{ source: "crew", id: "t-9", title: "Pick a key\nnow", reason: "needs the captain\r\nsee the notes" }] },
+      recent: { ...packet.recent, data: [{ at: world.now, kind: "crew", project: "acme", text: "held\nfor a key" }] },
+    };
+    const out = renderLaunch(forged, { columns: 100, color: false, now: world.now });
+    expect(out).toContain("│   ▲ Pick a key now · needs the captain see the notes");
+    expect(out).toContain("acme held for a key");
+    // Every row is a bordered row of its panel, or the screen's own header and footer.
+    for (const l of lines(out)) expect(l, l).toMatch(/^(│|╭|╰|[ ]|$)/);
+    expect(out).not.toMatch(/^(now|see the notes|for a key)/m);
+  });
 });
 
 describe("the keyboard contract", () => {

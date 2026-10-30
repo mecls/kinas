@@ -377,13 +377,14 @@ fn prs_of(app: &AppHandle, fleet: &Fleet, memo: &mut Memo, visible: bool, open: 
 }
 
 /// The PRs due a reading: the PR of every task not done, and of a done task whose last reading was open (done work
-/// clears, rule 2) — valid, and not read within `gap`. Sorted, deduplicated.
+/// clears, rule 2) — valid, and not read within `gap` (a gap: a reading stamped in what is now the future, after a
+/// clock step back, is not a fresh one). Sorted, deduplicated.
 fn due_prs<'a>(fleet: &'a Fleet, open: &HashSet<String>, checked: &HashMap<String, i64>, now: i64, gap: i64) -> Vec<&'a str> {
     let mut urls: Vec<&str> = fleet
         .tasks
         .iter()
         .filter_map(|t| t.pr_url.as_deref().filter(|url| !mirror::done_now(t) || open.contains(*url)))
-        .filter(|url| pr_url_ok(url) && checked.get(*url).is_none_or(|at| now - at >= gap))
+        .filter(|url| pr_url_ok(url) && checked.get(*url).is_none_or(|at| !(0..gap).contains(&(now - at))))
         .collect();
     urls.sort_unstable();
     urls.dedup();
@@ -482,6 +483,23 @@ mod tests {
         assert_eq!(read(&ran(Exit::TimedOut, "", Some("x"))).unwrap_err(), "the fleet snapshot did not answer within 20 s");
         assert_eq!(read(&ran(Exit::Signal, "", None)).unwrap_err(), "the fleet snapshot was stopped by a signal");
         assert!(read(&ran(Exit::Code(0), r#"{"schema":"fm-fleet-snapshot.v1","generated":"g"}"#, None)).is_ok());
+    }
+
+    /// The PR gap is a gap too: a reading stamped in what is now the future (the clock stepped back) is not one made
+    /// within the last minute, so the PR is asked again rather than left as it was for the length of the step.
+    #[test]
+    fn a_clock_that_went_back_does_not_hold_a_pr_s_last_reading() {
+        const URL: &str = "https://github.com/o/shop-9c2e/pull/1";
+        let fleet = Fleet {
+            generated: "g".into(),
+            tasks: vec![super::snapshot::TaskFacts { id: "t-9c2e".into(), backlog_state: Some("in_flight".into()), pr_url: Some(URL.into()), ..Default::default() }],
+            orphans: Vec::new(),
+        };
+        let now = 1_790_000_000_000;
+        let checked_later = HashMap::from([(URL.to_string(), now + 2 * 60 * 60_000)]);
+        assert_eq!(due_prs(&fleet, &HashSet::new(), &checked_later, now, 60_000), vec![URL], "a reading from the future is not a fresh one");
+        let checked_just_now = HashMap::from([(URL.to_string(), now - 1_000)]);
+        assert!(due_prs(&fleet, &HashSet::new(), &checked_just_now, now, 60_000).is_empty(), "the gap still holds forward");
     }
 
     #[test]

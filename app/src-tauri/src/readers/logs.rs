@@ -43,11 +43,57 @@ pub enum Parsed {
     Malformed,
 }
 
-/// The Europe/Lisbon calendar date of an RFC 3339 timestamp (R23).
+/// The Europe/Lisbon calendar date of an RFC 3339 timestamp (R23), in the one shape the recount script admits
+/// (`scripts/usage-recount.ts` `RFC3339`): a date, `T`, `t` or a space, `HH:MM`, an optional `:SS` with up to nine
+/// fraction digits, and always `Z`, `z` or `±HH:MM`/`±HHMM`. jiff alone takes more — an hour-only or sub-minute
+/// offset, a comma fraction, an RFC 9557 annotation, a six-digit year, the basic `20260910T100000Z`, a leap second —
+/// and a line in one of those shapes would be counted here and skipped there (AC-5), so the shape is checked first.
 pub fn lisbon_date(timestamp: &str) -> Option<String> {
+    if !rfc3339_shape(timestamp) {
+        return None;
+    }
     let ts: jiff::Timestamp = timestamp.parse().ok()?;
     let zoned = ts.in_tz("Europe/Lisbon").ok()?;
     Some(zoned.date().strftime("%Y-%m-%d").to_string())
+}
+
+/// The recount's grammar, field for field (`scripts/usage-recount.ts` `RFC3339`): month 01–12, day 01–31, hour 00–23,
+/// minute and second 00–59, a fraction of one to nine digits, and an offset of `Z` or `±HH[:]MM` with its hour 00–23.
+/// jiff alone would take a leap second and an offset hour of 24 or 25 (its range is ±25:59:59), and `new Date` alone
+/// would take hour 24 and February 30th; a day the month does not have is left to jiff, which refuses it as the
+/// recount does.
+fn rfc3339_shape(s: &str) -> bool {
+    let b = s.as_bytes();
+    let digits = |from: usize, to: usize| b.get(from..to).is_some_and(|d| d.iter().all(u8::is_ascii_digit));
+    // Two digits at `at`, within `lo..=hi`.
+    let field = |at: usize, lo: u32, hi: u32| digits(at, at + 2) && (lo..=hi).contains(&(u32::from(b[at] - b'0') * 10 + u32::from(b[at + 1] - b'0')));
+    let date = digits(0, 4) && b.get(4) == Some(&b'-') && field(5, 1, 12) && b.get(7) == Some(&b'-') && field(8, 1, 31);
+    let time = matches!(b.get(10), Some(b'T' | b't' | b' ')) && field(11, 0, 23) && b.get(13) == Some(&b':') && field(14, 0, 59);
+    if !date || !time {
+        return false;
+    }
+    let mut at = 16;
+    if b.get(at) == Some(&b':') {
+        if !field(at + 1, 0, 59) {
+            return false;
+        }
+        at += 3;
+        if b.get(at) == Some(&b'.') {
+            let fraction = b[at + 1..].iter().take_while(|c| c.is_ascii_digit()).count();
+            if !(1..=9).contains(&fraction) {
+                return false;
+            }
+            at += 1 + fraction;
+        }
+    }
+    match b.get(at) {
+        Some(b'Z' | b'z') => at + 1 == b.len(),
+        Some(b'+' | b'-') => {
+            let minutes = if b.get(at + 3) == Some(&b':') { at + 4 } else { at + 3 };
+            field(at + 1, 0, 23) && field(minutes, 0, 59) && minutes + 2 == b.len()
+        }
+        _ => false,
+    }
 }
 
 /// A token count. A whole number as it is; a float cut to its whole part, as the recount script's `num` cuts it — JSON
@@ -348,6 +394,34 @@ mod tests {
         }
         for bad in ["2026-09-10T10:00:00", "2026-09-10", "Sep 10 2026", " 2026-09-10T10:00:00Z", "2026-09-10T10:00:00.1234567890Z"] {
             assert_eq!(lisbon_date(bad), None, "{bad}");
+        }
+    }
+
+    /// AC-5, the other way round: jiff's grammar is wider than the recount's `RFC3339` — it also takes an hour-only or
+    /// a sub-minute offset, a comma fraction, an RFC 9557 annotation, a six-digit year, the basic `20260910T100000Z`
+    /// shape and a leap second (clamped to :59, where `new Date` gives NaN). A line in one of those shapes would be
+    /// counted here and skipped by the recount, one DIFF line in `check-usage.ts`; so the shape is checked first, and
+    /// both sides skip it.
+    #[test]
+    fn a_shape_only_jiff_takes_is_skipped_as_the_recount_skips_it() {
+        for bad in [
+            "2026-09-10T10:00:00+01",
+            "2026-09-10T10:00:00+01:00:30",
+            "2026-09-10T10:00:00,5Z",
+            "2026-09-10T10:00:00Z[Europe/Lisbon]",
+            "2026-09-10T10:00:00+01:00[u-ca=iso8601]",
+            "+002026-09-10T10:00:00Z",
+            "20260910T100000Z",
+            "2026-09-10T1000Z",
+            "2026-09-10T10:00:60Z",
+            "2026-09-10T10:00:00+24:00",
+            "2026-09-10T10:00:00-2530",
+        ] {
+            assert!(bad.parse::<jiff::Timestamp>().is_ok(), "the case is moot unless jiff takes it: {bad}");
+            assert_eq!(lisbon_date(bad), None, "{bad}");
+        }
+        for ok in ["2026-09-10T10:00:00-00:00", "2026-09-10T10:00:00.1Z", "2026-09-10T23:59:59+01:00", "2026-09-10T10:00Z"] {
+            assert_eq!(lisbon_date(ok).as_deref(), Some("2026-09-10"), "{ok}");
         }
     }
 

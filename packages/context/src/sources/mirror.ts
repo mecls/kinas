@@ -8,6 +8,7 @@ import { stat } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { CrewDecisionRow, CrewMirrorRow, ReaderRow } from "@kinas/store/types";
 import type { Crew, CrewBrief, CrewHold, CrewReport, CrewTask } from "../packet.ts";
+import { within } from "../time.ts";
 import { FLEET_SCHEMA, firstLine } from "./firstmate.ts";
 
 /** The mirror stands for the fleet while the collector's last success is younger than this. */
@@ -24,7 +25,7 @@ export interface MirrorStore {
 /** The crew from the mirror, or null when the mirror is not fresh enough to stand for the fleet. */
 export async function crewFromStore(store: MirrorStore, now: number, home: string): Promise<Crew | null> {
   const status = store.getReaderStatus().find((r) => r.reader === "crew");
-  if (!status?.last_success_at || now - status.last_success_at >= MIRROR_FRESH_MS) return null;
+  if (!status?.last_success_at || !within(status.last_success_at, now, MIRROR_FRESH_MS)) return null;
   const rows = store.getCrewMirror(now).filter((r) => r.gone_at === null);
 
   const inFlight: CrewTask[] = rows

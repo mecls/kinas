@@ -19,6 +19,15 @@ export function lisbonStamp(ms: number): string {
   return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
 }
 
+/**
+ * Whether something stamped `at` is less than `ms` old at `now`. A gap on the wall clock, not a moment to reach again:
+ * the clock can step back, and a stamp in what is now the future is not a recent one (as the app's caches, ee4222c).
+ */
+export function within(at: number, now: number, ms: number): boolean {
+  const gap = now - at;
+  return gap >= 0 && gap < ms;
+}
+
 /** now, 12m, 3h, 2d, 5w — the age of `ms` at `now`. Future times read as now. */
 export function age(ms: number, now: number): string {
   const s = Math.max(0, Math.floor((now - ms) / 1000));

@@ -276,6 +276,9 @@ pub(super) fn install_scan(state: &ChangesState, repo: &str, common: Option<Path
             dropped.extend(project.checkouts.remove(&top));
         }
     }
+    // "Changed it last" is an order: a stamp never earlier than one already given, so a wall clock stepped back still
+    // puts this change after them.
+    let now = project.checkouts.values().flat_map(|c| c.seen.values()).max().map_or(now, |latest| now.max(latest.saturating_add(1)));
     let mut new = Vec::new();
     let mut unknown = 0;
     for (top, base, marks) in sets {
@@ -997,6 +1000,26 @@ pub(super) mod tests {
         assert_eq!(after, b"# Shop\n\nRewritten later.\n");
         let v = crew_diff(&state, &captain.join("README.md"), &g).unwrap();
         assert_eq!((v.mark, v.added, v.removed, v.crew), (Mark::Modified, 2, 0, Some(CrewOf { tasks: 2, here: true })));
+    }
+
+    /// "The one that changed it last" (rule 14, Gate 2) is an order, kept on the wall clock, which can step back. One
+    /// worker deletes a file, the clock steps back, another rewrites it: the rewrite is still the later change, and the
+    /// view shows it — not the deletion, for the length of the step.
+    #[test]
+    fn the_last_change_stays_last_after_the_clock_steps_back() {
+        let (dir, captain, home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        let second = dir.path().canonicalize().unwrap().join("treehouse/shop-1/2/shop");
+        git(&clone, &["worktree", "add", "-q", &second.to_string_lossy(), "-b", "fm/second"]);
+        git(&second, &["push", "-q", "-u", "origin", "fm/second"]);
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        std::fs::remove_file(worktree.join("README.md")).unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 9_000);
+        std::fs::write(second.join("README.md"), "# Shop\n\nRewritten after the step.\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        let (source, _, after) = crew_text(&state, &captain.join("README.md"), EVERYWHERE, Some(&g)).unwrap();
+        assert_eq!((source.checkout.as_path(), source.mark), (second.as_path(), Mark::Modified), "the rewrite came last");
+        assert_eq!(after, b"# Shop\n\nRewritten after the step.\n");
     }
 
     #[test]

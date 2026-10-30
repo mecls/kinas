@@ -1,7 +1,8 @@
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AGENT_HEADINGS } from "@kinas/context";
+import { AGENT_HEADINGS, CACHE_FILE } from "@kinas/context";
 import { makeWorld, type World, type WorldOptions } from "@kinas/context/testing";
 
 // `kinas`, `kinas context` and `kinas open` end to end: a whole operation on disk, the CLI run as a process. Spawned
@@ -47,6 +48,25 @@ async function packetAfterRefresh(w: World) {
   const agent = await kinas(["context", "--agent"], w.env);
   expect(agent.code).toBe(0);
   return sections(agent.stdout);
+}
+
+/** Moves the cached packet's stamp, as a wall clock stepped back since it was written would read it. */
+function stampPacket(w: World, at: number): void {
+  const db = new Database(join(w.dataDir, CACHE_FILE));
+  try {
+    db.run("UPDATE packet_cache SET computed_at = ? WHERE key = 'packet'", [at]);
+  } finally {
+    db.close();
+  }
+}
+
+function packetStamp(w: World): number | null {
+  const db = new Database(join(w.dataDir, CACHE_FILE), { readonly: true });
+  try {
+    return (db.query("SELECT computed_at FROM packet_cache WHERE key = 'packet'").get() as { computed_at: number } | null)?.computed_at ?? null;
+  } finally {
+    db.close();
+  }
 }
 
 function onlyChanged(before: Map<string, string>, after: Map<string, string>, heading: string) {
@@ -102,6 +122,16 @@ describe("kinas context", () => {
     const blank = (m: Map<string, string>, w: World) => new Map([...m].map(([k, v]) => [k, v.replaceAll(w.base, "BASE")]));
     onlyChanged(blank(before, fresh), blank(after, offline), "## Quotas");
     expect(after.get("## Quotas")).toMatch(/\| Ollama \| session \| 90% \| — \| T \(AGE\) \| stale \|/);
+  });
+
+  test("a packet stamped in what is now the future (the wall clock stepped back) is read again, not reused", async () => {
+    const w = await start();
+    await packetAfterRefresh(w);
+    await w.herdr.stop();
+    stampPacket(w, Date.now() + 2 * 3_600_000);
+    const agent = await kinas(["context", "--agent"], w.env);
+    expect(agent.code).toBe(0);
+    expect(sections(agent.stdout).get("## Sessions")).toBe("## Sessions\n\n_Unavailable: herdr: not running._\n\n");
   });
 
   test("--cwd prints the packet inside the projects root and nothing outside it", async () => {
@@ -168,6 +198,20 @@ describe("kinas (the launch screen)", () => {
     for (const l of out) expect(Bun.stringWidth(l)).toBeLessThanOrEqual(100);
     expect(out.at(-1)).toContain("2 projects · 2 sessions");
   });
+
+  test("a cached packet stamped in what is now the future (the wall clock stepped back) is refreshed behind the screen", async () => {
+    const w = await start();
+    await packetAfterRefresh(w);
+    const ahead = Date.now() + 2 * 3_600_000;
+    stampPacket(w, ahead);
+    expect((await kinas([], w.env)).code).toBe(0);
+    // The detached refresh writes the packet again, stamped now; without one the stamp stays two hours ahead.
+    const deadline = Date.now() + 15_000;
+    while ((packetStamp(w) ?? ahead) >= ahead && Date.now() < deadline) await Bun.sleep(100);
+    expect(packetStamp(w)!).toBeLessThan(ahead);
+    // Let the child release its lease before the world is removed.
+    await Bun.sleep(300);
+  }, 30_000);
 });
 
 describe("kinas open, help and usage", () => {

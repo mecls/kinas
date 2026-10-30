@@ -65,6 +65,16 @@ describe("the CLI cache", () => {
     cache.close();
   });
 
+  test("a lease stamped in what is now the future (the wall clock stepped back) holds nothing back", () => {
+    // A refresh that died holding its lease, then a two-hour step back: the lease reads two hours ahead, and no refresh
+    // may start for the length of the step.
+    const cache = ContextCache.open(dir());
+    expect(cache.claimRefresh("o", 7_201_000, 60_000)).toBe(true);
+    expect(cache.claimRefresh("o", 1_000, 60_000)).toBe(true);
+    expect(cache.claimRefresh("o", 1_000, 60_000)).toBe(false);
+    cache.close();
+  });
+
   test("an event is recorded once, and recent is newest first", () => {
     const cache = ContextCache.open(dir());
     const event = (ref: string, at: number) => ({ ref, at, kind: "commit" as const, project: "p", text: ref });

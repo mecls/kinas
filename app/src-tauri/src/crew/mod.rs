@@ -336,14 +336,20 @@ pub fn crew_pane_state(app: AppHandle) -> PaneState {
     }
     let live = app.state::<CrewLive>().live();
     let now = now_ms();
-    if now - live.observed_at >= HERDR_FRESH_MS {
+    if wants_fresh_view(&live, now) {
         app.state::<ReaderControl>().crew_herdr();
     }
     pane_state_of(pane.session, &live, now)
 }
 
+/// Whether the view is old enough to ask the crew's thread for a fresh one: a gap, not a moment to reach again — a view
+/// stamped in what is now the future (the wall clock stepped back) is not a recent one.
+fn wants_fresh_view(live: &crate::readers::crew::LiveView, now: i64) -> bool {
+    !(0..HERDR_FRESH_MS).contains(&(now - live.observed_at))
+}
+
 fn pane_state_of(session: String, live: &crate::readers::crew::LiveView, now: i64) -> PaneState {
-    let stale = live.view.is_none() || now - live.observed_at > PANE_STALE_MS;
+    let stale = live.view.is_none() || !(0..=PANE_STALE_MS).contains(&(now - live.observed_at));
     let Some(view) = live.view.as_ref() else { return PaneState { session, workspace: None, word: None, profile: None, stale } };
     let focused = view.focused_pane.as_deref().and_then(|id| view.pane(id));
     let worker = focused.and_then(|p| live.worker_words.get(&p.id));
@@ -461,6 +467,23 @@ mod tests {
         assert_eq!((old.word, old.stale), (None, true), "a stale view drops the badge");
         let none = pane_state_of("default".into(), &LiveView::default(), now);
         assert_eq!((none.workspace, none.stale), (None, true));
+    }
+
+    /// "The badge is gone once Herdr's view is 15 s old", and a view 5 s old asks for a fresh one — on the wall clock,
+    /// which can step back. A view stamped in what is now the future is not a recent one: kept as fresh, it held the
+    /// badge of a pane the captain had left, and asked Herdr nothing, until the crew's next cycle (up to 30 min in a
+    /// backoff).
+    #[test]
+    fn a_view_stamped_in_the_future_is_stale_and_asks_again() {
+        let now = 1_790_000_000_000;
+        let later = now + 2 * 60 * 60_000;
+        let ahead = pane_state_of("default".into(), &live("w2:p2", &["claude"], later), now);
+        assert_eq!((ahead.word, ahead.stale), (None, true), "a view from the future draws no badge");
+        assert!(wants_fresh_view(&live("w2:p2", &["claude"], later), now), "and asks the crew's thread for a fresh one");
+        assert!(!wants_fresh_view(&live("w2:p2", &["claude"], now - HERDR_FRESH_MS + 1), now), "a recent view asks nothing");
+        assert!(wants_fresh_view(&live("w2:p2", &["claude"], now - HERDR_FRESH_MS), now));
+        let edge = pane_state_of("default".into(), &live("w2:p2", &["claude"], now - PANE_STALE_MS), now);
+        assert_eq!((edge.word, edge.stale), (Some("working"), false), "15 s old is not yet stale");
     }
 
     #[test]

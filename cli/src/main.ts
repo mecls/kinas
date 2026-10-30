@@ -29,7 +29,7 @@ import { join } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
 import { cliCommand, statusFromStore, statusJson, statusLines } from "@kinas/commands";
 import { colorEnabled, paint, polarityFromEnv } from "@kinas/commands/theme";
-import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, renderAgentPacket, renderOperator, type KinasConfig } from "@kinas/context";
+import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, renderAgentPacket, renderOperator, within, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
 import { crew, CREW_USAGE } from "./crew.ts";
@@ -112,7 +112,8 @@ async function launch(): Promise<number> {
     const org = currentOrg(config);
     const cached = cache?.readPacket(org) ?? null;
     const packet = cached?.packet ?? (await computePacket(config, cache, { now, skipCrew: true }));
-    const old = !cached || now - cached.computedAt > LAUNCH_REFRESH_AFTER_MS || packet.crew.state === "pending";
+    // Old once older than the limit (+ 1: at exactly the limit it is not yet), or stamped in what is now the future.
+    const old = !cached || !within(cached.computedAt, now, LAUNCH_REFRESH_AFTER_MS + 1) || packet.crew.state === "pending";
     if (old && cache?.claimRefresh(org, now, REFRESH_LEASE_MS)) spawnRefresh();
 
     const { MAX_COLUMNS, renderLaunch } = await import("./launch.tsx");
@@ -170,7 +171,7 @@ async function context(args: string[]): Promise<number> {
 
     const now = Date.now();
     const cached = cache?.readPacket(org);
-    const reuse = cached && now - cached.computedAt < CONTEXT_REUSE_MS && cached.packet.crew.state !== "pending";
+    const reuse = cached && within(cached.computedAt, now, CONTEXT_REUSE_MS) && cached.packet.crew.state !== "pending";
     const packet = reuse ? cached.packet : await computePacket(config, cache, { now });
     const agent = parsed.flags.has("--agent");
     const { text } = await cliCommand("context")!.run({

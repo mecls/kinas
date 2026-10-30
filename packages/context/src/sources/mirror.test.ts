@@ -83,3 +83,13 @@ test("a mirror six minutes old, or never written, stands for nothing", async () 
   expect(await crewFromStore(store(NOW - MIRROR_FRESH_MS - 60_000, [row("a-9c2e")]), NOW, "/h")).toBeNull();
   expect(await crewFromStore(store(null, [row("a-9c2e")]), NOW, "/h")).toBeNull();
 });
+
+test("a mirror stamped in what is now the future (the wall clock stepped back) is not a fresh one", async () => {
+  // The app quit just before a two-hour step back: the collector's last success reads two hours ahead, and the mirror
+  // must not stand for the fleet for the length of the step — as the app's own tool and mode caches (ee4222c).
+  expect(await crewFromStore(store(NOW + 2 * 3_600_000, [row("a-9c2e")]), NOW, "/h")).toBeNull();
+  expect(await crewFromStore(store(NOW + 1, [row("a-9c2e")]), NOW, "/h")).toBeNull();
+  expect(await crewFromStore(store(NOW, [row("a-9c2e")]), NOW, "/h")).not.toBeNull();
+  expect(await crewFromStore(store(NOW - MIRROR_FRESH_MS + 1, [row("a-9c2e")]), NOW, "/h")).not.toBeNull();
+  expect(await crewFromStore(store(NOW - MIRROR_FRESH_MS, [row("a-9c2e")]), NOW, "/h")).toBeNull();
+});

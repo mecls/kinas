@@ -44,6 +44,20 @@ pub fn argv(repo: &Path, sub: &str, rest: &[&str]) -> Vec<OsString> {
     args
 }
 
+/// One `--stdin-paths` line, C-quoted as git unquotes a line that starts with `"`: every path, so a name that starts
+/// with a quote, holds a newline or ends in a carriage return is still one line naming that file.
+fn quote_line(out: &mut Vec<u8>, path: &[u8]) {
+    out.push(b'"');
+    for &b in path {
+        match b {
+            b'"' | b'\\' => out.extend_from_slice(&[b'\\', b]),
+            0..=0x1f | 0x7f => out.extend_from_slice(format!("\\{b:03o}").as_bytes()),
+            _ => out.push(b),
+        }
+    }
+    out.extend_from_slice(b"\"\n");
+}
+
 /// NUL-separated output as paths under `repo`.
 fn paths_under<'a>(repo: &'a Path, out: &'a [u8]) -> impl Iterator<Item = PathBuf> + 'a {
     out.split(|&b| b == 0).filter(|p| !p.is_empty()).map(move |p| repo.join(OsStr::from_bytes(p)))
@@ -139,8 +153,7 @@ impl Git {
         let mut stdin = Vec::new();
         for file in files {
             let rel = file.strip_prefix(repo).unwrap_or(file);
-            stdin.extend_from_slice(rel.as_os_str().as_bytes());
-            stdin.push(b'\n');
+            quote_line(&mut stdin, rel.as_os_str().as_bytes());
         }
         let out = self.run(repo, "hash-object", &["--stdin-paths"], Some(stdin))?;
         let ids: Vec<String> = String::from_utf8_lossy(&out).lines().map(str::to_string).collect();
@@ -158,6 +171,8 @@ impl Git {
     pub fn ignored(&self, repo: &Path, files: &[PathBuf], folders: &[PathBuf]) -> Result<HashSet<PathBuf>, GitError> {
         let mut stdin = Vec::new();
         for (path, slash) in files.iter().map(|f| (f, false)).chain(folders.iter().map(|d| (d, true))) {
+            // `./` first: a leading `:` would be read as pathspec magic, and `check-ignore` takes no `:(literal)`.
+            stdin.extend_from_slice(b"./");
             stdin.extend_from_slice(path.strip_prefix(repo).unwrap_or(path).as_os_str().as_bytes());
             if slash {
                 stdin.push(b'/');
@@ -165,7 +180,12 @@ impl Git {
             stdin.push(0);
         }
         match self.run(repo, "check-ignore", &["-z", "--stdin"], Some(stdin)) {
-            Ok(out) => Ok(out.split(|&b| b == 0).filter(|p| !p.is_empty()).map(|p| repo.join(OsStr::from_bytes(p.strip_suffix(b"/").unwrap_or(p)))).collect()),
+            Ok(out) => Ok(out
+                .split(|&b| b == 0)
+                .filter(|p| !p.is_empty())
+                .map(|p| p.strip_prefix(b"./").unwrap_or(p))
+                .map(|p| repo.join(OsStr::from_bytes(p.strip_suffix(b"/").unwrap_or(p))))
+                .collect()),
             Err(GitError { exit: Some(1) }) => Ok(HashSet::new()),
             Err(e) => Err(e),
         }
@@ -238,7 +258,8 @@ impl Git {
         if files.is_empty() {
             return Ok(HashMap::new());
         }
-        let rels: Vec<String> = files.iter().map(|f| f.strip_prefix(repo).unwrap_or(f).to_string_lossy().into_owned()).collect();
+        // Literal: a name is never a pattern, and a leading `:` is never pathspec magic.
+        let rels: Vec<String> = files.iter().map(|f| format!(":(literal){}", f.strip_prefix(repo).unwrap_or(f).to_string_lossy())).collect();
         let mut rest: Vec<&str> = vec!["-z", "--full-tree", commit, "--"];
         rest.extend(rels.iter().map(String::as_str));
         let out = self.run(repo, "ls-tree", &rest, None)?;
@@ -588,6 +609,31 @@ pub(crate) mod tests {
         assert_eq!(git(&root, &["cat-file", "-t", &ids[0]]), "blob");
         let missing = Command::new("git").args(["cat-file", "-e", &ids[1]]).current_dir(&root).status().unwrap();
         assert!(!missing.success(), "the new file's object was not stored");
+    }
+
+    /// A name is a path, never a pattern or a quoted line. `hash-object --stdin-paths` unquotes a line that starts with
+    /// `"` and ends one at a newline; `ls-tree` and `check-ignore` read a leading `:` as pathspec magic. Unescaped, a
+    /// file named `"draft".md` failed the whole batch — every touched file in the burst marked M, and a crew checkout's
+    /// marks all gone — and `:notes.md` was answered for `notes.md`.
+    #[test]
+    fn odd_names_are_paths_not_patterns() {
+        let (_dir, root) = temp();
+        let names = ["\"draft\".md", ":notes.md", "a\nb.md", "back\\slash.md", "café.md", "README.md"];
+        let files: Vec<(&str, &[u8])> = names.iter().map(|n| (*n, b"# Same\n".as_slice())).collect();
+        repo_with(&root, &files);
+        let g = Git::find().expect("git is installed");
+        let head = g.head(&root).unwrap().unwrap();
+        let paths: Vec<PathBuf> = names.iter().map(|n| root.join(n)).collect();
+        let blob = git(&root, &["rev-parse", "HEAD:README.md"]);
+        assert_eq!(g.hash_objects(&root, &paths), Ok(vec![blob.clone(); names.len()]), "each file hashed as itself");
+        let blobs = g.blobs_at(&root, &head, &paths).unwrap();
+        assert_eq!(blobs.get(&root.join(":notes.md")), Some(&blob), "the file, not a pattern for notes.md");
+        assert_eq!(blobs.len(), names.len());
+
+        std::fs::write(root.join(".gitignore"), "local.md\n").unwrap();
+        assert_eq!(g.ignored(&root, &[root.join(":local.md")], &[]), Ok(HashSet::new()), "`:local.md` is not `local.md`");
+        std::fs::write(root.join(".gitignore"), ":local.md\n").unwrap();
+        assert_eq!(g.ignored(&root, &[root.join(":local.md")], &[]), Ok(HashSet::from([root.join(":local.md")])));
     }
 
     #[test]

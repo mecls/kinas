@@ -179,7 +179,7 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
         schedule.set_visible(app.state::<ReaderControl>().crew_visible());
         let now = now_ms();
         let cycle_at = due.map_or_else(|| schedule.run_at(&CrewWake::Tick, now), |d| d.min(schedule.run_at(&CrewWake::Tick, now)));
-        let herdr_at = if herdr_pending { last_herdr + HERDR_MIN_GAP_MS } else { i64::MAX };
+        let herdr_at = if herdr_pending { herdr_due(last_herdr, now) } else { i64::MAX };
         let next = cycle_at.min(herdr_at);
         match rx.recv_timeout(Duration::from_millis(next.saturating_sub(now).max(0) as u64)) {
             Ok(CrewWake::Herdr) => herdr_pending = true,
@@ -211,13 +211,24 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
             herdr_pending = false;
             schedule.finished(now_ms(), ok);
             due = None;
-        } else if herdr_pending && now - last_herdr >= HERDR_MIN_GAP_MS {
+        } else if herdr_pending && now >= herdr_due(last_herdr, now) {
             // Herdr only, for the chrome or after a launch.
             last_herdr = now;
             herdr_pending = false;
             let view = refresh_live(&app);
             first_answer(&app, started_at, &mut first_answer_seen, view.as_ref());
         }
+    }
+}
+
+/// When a Herdr-only ask may run: 2 s after the last one — a gap, not a moment to reach again, so an ask stamped in
+/// what is now the future (the wall clock stepped back) has had its gap, or a launch's fresh view would wait the length
+/// of the step.
+fn herdr_due(last_herdr: i64, now: i64) -> i64 {
+    if (0..HERDR_MIN_GAP_MS).contains(&(now - last_herdr)) {
+        last_herdr + HERDR_MIN_GAP_MS
+    } else {
+        now
     }
 }
 
@@ -474,6 +485,18 @@ mod tests {
         assert!(!herdr && wakes.len() > 1);
         drop(rx);
         flood.join().unwrap();
+    }
+
+    /// A Herdr-only ask waits for the 2 s gap after the last one — a gap, not a moment to reach again. After the wall
+    /// clock stepped back to between the last cycle and a later Herdr ask, the gap read negative and a launch's fresh
+    /// view waited the length of the step: the chrome read the old session meanwhile.
+    #[test]
+    fn a_clock_that_went_back_does_not_hold_a_herdr_ask() {
+        let now = 1_790_000_000_000;
+        assert_eq!(herdr_due(now - 500, now), now - 500 + HERDR_MIN_GAP_MS, "the gap still holds forward");
+        assert!(herdr_due(now - HERDR_MIN_GAP_MS, now) <= now);
+        assert!(herdr_due(0, now) <= now, "never asked");
+        assert!(herdr_due(now + 60_000, now) <= now, "an ask stamped in what is now the future: the gap has passed");
     }
 
     #[test]

@@ -7,5 +7,5 @@ export * from "./packet.ts";
 export { computePacket, currentOrg, decisionsFrom, LOCAL_ORG } from "./refresh.ts";
 export { AGENT_HEADINGS, flat, renderAgentPacket } from "./render-agent.ts";
 export { renderOperator } from "./render-operator.ts";
-export { age, ago, lisbonStamp, STALE_AFTER_MS, until } from "./time.ts";
+export { age, ago, lisbonStamp, STALE_AFTER_MS, until, within } from "./time.ts";
 export { KINAS_VERSION } from "./version.ts";

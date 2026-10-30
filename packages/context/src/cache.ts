@@ -9,6 +9,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import MIGRATION_0001 from "../migrations/0001_context_cache.sql" with { type: "text" };
 import { PACKET_VERSION, type ActivityKind, type ActivityRow, type Packet } from "./packet.ts";
+import { within } from "./time.ts";
 
 export const CACHE_FILE = "kinas-cli.sqlite";
 export const CACHE_MIGRATIONS: readonly { version: number; sql: string }[] = [{ version: 1, sql: MIGRATION_0001 }];
@@ -85,7 +86,7 @@ export class ContextCache {
     return this.db
       .transaction(() => {
         const row = this.db.query("SELECT computed_at FROM packet_cache WHERE org_id = ? AND key = 'refresh-lease'").get(org) as { computed_at: number } | null;
-        if (row && now - row.computed_at < leaseMs) return false;
+        if (row && within(row.computed_at, now, leaseMs)) return false;
         this.db.run(
           `INSERT INTO packet_cache (org_id, key, body, computed_at) VALUES (?, 'refresh-lease', ?, ?)
            ON CONFLICT (org_id, key) DO UPDATE SET body = excluded.body, computed_at = excluded.computed_at`,

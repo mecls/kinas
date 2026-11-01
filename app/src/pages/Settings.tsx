@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addClientFolder,
   getSettings,
@@ -27,6 +27,7 @@ import { CrewSection } from "../settings/CrewSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
 import { AccentField } from "../ui/AccentField.tsx";
 import { addedLine, listedFolders, removedFolders, seatFolders, type SeatedFolder } from "../shell/folders.ts";
+import { latestOnly } from "../shell/latest.ts";
 import { CATEGORIES } from "../ui/category.ts";
 import { Button, Card, Chip, Section, SectionHeader, Switch, TitleRow } from "../ui/index.ts";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
@@ -103,9 +104,13 @@ export function SettingsPage({
   const [copied, setCopied] = useState<number | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(
+  // Read on every visit and after every change, so two reads can be out at once — and get_settings waits on three
+  // Keychain calls, so they can finish in either order. Only the newest counts (shell/latest.ts): Light then Dark must
+  // not read back as Light because the first read was the slower one.
+  const load = useMemo(
     () =>
-      void getSettings().then(
+      latestOnly(
+        getSettings,
         (s) => {
           setSettings(s);
           setLoadError(null);
@@ -172,7 +177,7 @@ export function SettingsPage({
         </p>
       )}
       {!settings ? (
-        <p className="settings-help">{loadError ?? "Reading settings…"}</p>
+        <p className="settings-help">{failedRead("settings", loadError, false) ?? "Reading settings…"}</p>
       ) : (
         <>
           <Section className="settings-group" data-group="providers">

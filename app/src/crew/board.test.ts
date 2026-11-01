@@ -262,3 +262,30 @@ describe("fleetShown (done work clears, rule 4: seen means drawn)", () => {
     expect(fleetShown(undefined, 3, false)).toBe(false);
   });
 });
+
+describe("the Work page chrome's badge (first-mate PRD rule 24)", () => {
+  test("a worker's pane wears its task's word, every word the board draws", async () => {
+    const { paneBadge } = await import("./board.ts");
+    // failed, paused, unknown and gone were left out of the chrome's own table, so those workers wore no badge.
+    expect(paneBadge({ word: "paused", stale: false })).toBe("paused");
+    expect(paneBadge({ word: "failed", stale: false })).toBe("failed");
+    expect(paneBadge({ word: "unknown", stale: false })).toBe("unknown");
+    expect(paneBadge({ word: "working", stale: false })).toBe("working");
+    expect(paneBadge({ word: "CI red", stale: false })).toBe("red");
+  });
+
+  test("no badge from a guess: the first mate's pane, a shell, a stale view of Herdr", async () => {
+    const { paneBadge } = await import("./board.ts");
+    expect(paneBadge({ word: null, stale: false })).toBeUndefined();
+    expect(paneBadge({ word: "working", stale: true })).toBeUndefined();
+    expect(paneBadge(null)).toBeUndefined();
+  });
+
+  test("the Work page draws it from here, not from a table of its own", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    const work = readFileSync(join(import.meta.dir, "..", "pages", "Work.tsx"), "utf8");
+    expect(work).toMatch(/paneBadge\(pane\)/);
+    expect(work.includes("Partial<Record<CrewWord")).toBe(false);
+  });
+});

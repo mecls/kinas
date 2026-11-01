@@ -74,7 +74,8 @@ export function loadConfig(env: Env = process.env): KinasConfig {
 // works with Kinas quit), then this file's `root`, then the default (reader R1, amended 2026-09-16).
   const saved = readSetting(dataDir(env), "projects_root");
   const savedRoot = typeof saved === "string" && saved.trim() !== "" ? saved.trim() : undefined;
-  const root = expand(env.KINAS_ROOT || savedRoot || text("root") || "~/Documents/Projects/SintraLabs");
+  // Trimmed, and blank is unset, as the app reads it (paths.rs `projects_root_with`): the two judge the same root.
+  const root = expand(env.KINAS_ROOT?.trim() || savedRoot || text("root") || "~/Documents/Projects/SintraLabs");
   return {
     org: text("org") ?? "SintraLabs",
     instance: text("instance") ?? "operations",

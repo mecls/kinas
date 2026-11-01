@@ -17,8 +17,12 @@ export const AGENT_HEADINGS = ["# Kinas context", "## Projects", "## Features in
  * source's own error message would start a new line of markdown — one that could read as `## Crew`, a heading hooks
  * look for — so it becomes a space. A lone carriage return is a line ending to CommonMark too, so it goes the same way.
  * The operator's view and the launch screen fold their rows with it as well: one row per thing, whatever it says.
+ * Nor is any other control character obeyed: an escape, a bell, a backspace or a C1 control (a commit subject keeps
+ * whatever its author typed, `ESC ] 52` included, which sets a terminal's clipboard) becomes U+FFFD, shown as text. The
+ * one escape kept is a colour (`ESC [ … m`), which the CLI paints its own rows with.
  */
-export const flat = (line: string): string => line.replace(/\s*(?:\r\n?|\n)\s*/g, " ");
+export const flat = (line: string): string =>
+  line.replace(/\s*(?:\r\n?|\n)\s*/g, " ").replace(/\x1b\[[0-9;]*m|[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, (c) => (c.length > 1 ? c : "�"));
 
 const cell = (v: string | number | null | undefined): string => (v === null || v === undefined || v === "" ? "—" : flat(String(v).replace(/\|/g, "\\|")));
 
@@ -88,7 +92,7 @@ export function renderArtifacts(p: Packet): string {
   lines.push("Found by convention: AGENTS.md, README.md, docs/, plans/, specs/, and con-*, spec-*, plan-*, epic-* files. Paths are relative to the project; load what you need.");
   for (const project of p.projects.data.filter((r) => !r.error)) {
     const rows = s.data.filter((a) => a.project === project.name);
-    lines.push("", `### ${project.name} — ${project.path}`, "");
+    lines.push("", flat(`### ${project.name} — ${project.path}`), "");
     lines.push(rows.length === 0 ? "No artifacts found by convention." : table(["Path", "Title", "Modified"], rows.map((a) => [a.path, a.title, lisbonStamp(a.modified_at)])));
   }
   if (s.note) lines.push("", flat(`_${s.note}._`));
@@ -97,13 +101,15 @@ export function renderArtifacts(p: Packet): string {
 
 /**
  * A convention's own headings, pushed below its `### path` heading (`#` becomes `####`, capped at `######`), so no line
- * of a convention can read as one of the packet's `#`/`##` headings. Lines inside code fences are left alone.
+ * of a convention can read as one of the packet's `#`/`##` headings. Lines inside code fences are left alone. A line
+ * ends where CommonMark ends one — LF, CRLF or a lone CR — and comes out ending in LF; a heading may be indented by up
+ * to three spaces, as CommonMark reads one.
  */
 export function nestHeadings(body: string, by = 3): string {
   let fence: string | null = null;
   return body
-    .replace(/\n+$/, "")
-    .split("\n")
+    .replace(/(?:\r\n?|\n)+$/, "")
+    .split(/\r\n?|\n/)
     .map((line) => {
       const open = /^ {0,3}(`{3,}|~{3,})/.exec(line);
       if (open) {
@@ -112,8 +118,8 @@ export function nestHeadings(body: string, by = 3): string {
         return line;
       }
       if (fence !== null) return line;
-      const heading = /^(#{1,6})(\s.*)?$/.exec(line);
-      return heading ? `${"#".repeat(Math.min(6, heading[1]!.length + by))}${heading[2] ?? ""}` : line;
+      const heading = /^( {0,3})(#{1,6})([ \t].*)?$/.exec(line);
+      return heading ? `${heading[1]}${"#".repeat(Math.min(6, heading[2]!.length + by))}${heading[3] ?? ""}` : line;
     })
     .join("\n");
 }
@@ -125,7 +131,7 @@ export function renderConventions(p: Packet): string {
   if (gone) return [...lines, gone].join("\n");
   lines.push("The org-level rules every agent follows, in full. Their headings are nested one level below each file's.");
   for (const doc of s.data) {
-    lines.push("", `### ${doc.path}`, "", nestHeadings(doc.body));
+    lines.push("", flat(`### ${doc.path}`), "", nestHeadings(doc.body));
     if (doc.truncated) lines.push("", "_Cut at 64 KB; open the file for the rest._");
   }
   return lines.join("\n");

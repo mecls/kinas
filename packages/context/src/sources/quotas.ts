@@ -8,7 +8,7 @@
 // own cadence.
 
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { statusFromStore } from "@kinas/commands";
 import { openReadOnly, type SqliteReadOnlyStore } from "@kinas/store/sqlite-readonly";
@@ -115,35 +115,49 @@ export function codexWindows(line: string, now: number): QuotaLine[] | null {
   return windows.length > 0 ? windows : null;
 }
 
+/**
+ * The `limit` session logs written last. A log is named for when its session began and is written for as long as the
+ * session runs (`codex resume` writes the same one), so its name says nothing of when it last read the limits: one
+ * started first and still working is named before a later one that went idle, and a resumed one sits in the folder
+ * of the day it began.
+ */
 async function newestRollouts(sessions: string, limit: number): Promise<string[]> {
-  const names = async (dir: string) => (await readdir(dir).catch(() => [] as string[])).sort().reverse();
-  const out: string[] = [];
-  for (const y of (await names(sessions)).filter((n) => /^\d{4}$/.test(n))) {
-    for (const m of (await names(join(sessions, y))).filter((n) => /^\d{2}$/.test(n))) {
-      for (const d of (await names(join(sessions, y, m))).filter((n) => /^\d{2}$/.test(n))) {
-        for (const f of (await names(join(sessions, y, m, d))).filter((n) => n.startsWith("rollout-") && n.endsWith(".jsonl"))) {
-          out.push(join(sessions, y, m, d, f));
-          if (out.length >= limit) return out;
-        }
-      }
-    }
-  }
-  return out;
+  const under = async (dir: string, pattern: RegExp) => (await readdir(dir).catch(() => [] as string[])).filter((n) => pattern.test(n)).map((n) => join(dir, n));
+  const each = async (dirs: string[], pattern: RegExp) => (await Promise.all(dirs.map((d) => under(d, pattern)))).flat();
+  const days = await each(await each(await under(sessions, /^\d{4}$/), /^\d{2}$/), /^\d{2}$/);
+  const files = await each(days, /^rollout-.*\.jsonl$/);
+  const written = await Promise.all(files.map(async (file) => ({ file, at: (await stat(file).catch(() => null))?.mtimeMs ?? Number.NEGATIVE_INFINITY })));
+  return written
+    .sort((a, b) => b.at - a.at)
+    .slice(0, limit)
+    .map((w) => w.file);
 }
 
-/** `now` may be a clock, read after each log is read, so a line written meanwhile is not judged against an earlier moment. */
+/**
+ * The newest reading in the session logs written last. `now` may be a clock, read once the logs are read, so a line
+ * written meanwhile is not judged against an earlier moment.
+ */
 export async function codexQuotas(codexHome: string, now: number | (() => number)): Promise<QuotaLine[]> {
   const none = (note: string): QuotaLine[] => [{ provider: "Codex", window: null, left_pct: null, resets_at: null, updated_at: null, state: "not_connected", note }];
   if (!existsSync(codexHome)) return none("no Codex folder on this Mac");
-  for (const file of await newestRollouts(join(codexHome, "sessions"), 5)) {
-    const blob = Bun.file(file);
-    const tail = await blob.slice(Math.max(0, blob.size - 512 * 1024)).text();
+  const tails = await Promise.all(
+    (await newestRollouts(join(codexHome, "sessions"), 5)).map((file) => {
+      const blob = Bun.file(file);
+      return blob.slice(Math.max(0, blob.size - 512 * 1024)).text();
+    }),
+  );
+  const at = typeof now === "function" ? now() : now;
+  let newest: QuotaLine[] | null = null;
+  for (const tail of tails) {
     const lines = tail.split("\n");
-    const at = typeof now === "function" ? now() : now;
     for (let i = lines.length - 1; i >= 0; i--) {
       const windows = codexWindows(lines[i]!, at);
-      if (windows) return windows;
+      if (!windows) continue;
+      // A log's last reading is its newest; across logs the later stamp wins, the log written last on a tie.
+      const stamp = (w: QuotaLine[]) => w[0]!.updated_at ?? Number.NEGATIVE_INFINITY;
+      if (newest === null || stamp(windows) > stamp(newest)) newest = windows;
+      break;
     }
   }
-  return none("no rate-limit reading in recent Codex sessions");
+  return newest ?? none("no rate-limit reading in recent Codex sessions");
 }

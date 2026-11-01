@@ -125,11 +125,23 @@ fn absolute(path: &str) -> Result<PathBuf, ReaderError> {
     }
 }
 
-/// Resolved (R2, R3) and inside the root or allowed (R8).
+/// Resolved (R2, R3) and inside the root or allowed (R8). The reader's guard is taken only to copy what was allowed —
+/// never while the path is resolved or judged: `permitted` canonicalizes the root and every allowed path, one on a
+/// network share that stopped answering waits out the mount's timeout, and every reader command and the socket would
+/// wait with it. The socket and the folder listing judge the same way.
 fn checked(state: &ReaderState, root: &Path, path: &str) -> Result<(PathBuf, Kind), ReaderError> {
+    checked_with(state, root, path, &access::permitted)
+}
+
+/// How a real path is judged against the root and what was allowed: `access::permitted`, or a test's.
+type Permit<'a> = &'a dyn Fn(&Path, &Path, &HashSet<PathBuf>) -> bool;
+
+/// `checked` with the judge passed in, so a test can see the guard is free while a path is judged.
+fn checked_with(state: &ReaderState, root: &Path, path: &str, permit: Permit) -> Result<(PathBuf, Kind), ReaderError> {
     let path = absolute(path)?;
     let (real, kind) = access::resolve(&path).map_err(|d| ReaderError::denied(&d, &path))?;
-    if !access::permitted(&real, root, &state.lock().allowed) {
+    let allowed = state.lock().allowed.clone();
+    if !permit(&real, root, &allowed) {
         return Err(ReaderError::denied(&Denied::Outside, &real));
     }
     Ok((real, kind))
@@ -178,17 +190,7 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
         };
         let read_ms = started.elapsed().as_millis();
         let watch_started = std::time::Instant::now();
-        {
-            let mut inner = state.lock();
-            if kind == Kind::File {
-                inner.remember(real.clone());
-                // One watch at a time: the previous file's is dropped here (R29).
-                inner.watcher = watch::watch_file(app.clone(), real.clone());
-            }
-            if inner.pending_confirm.as_deref() == Some(real.as_path()) {
-                inner.pending_confirm = None;
-            }
-        }
+        record_open(&state, &real, kind, || watch::watch_file(app.clone(), real.clone()));
         log::info!("reader: read in {read_ms} ms, watch in {} ms", watch_started.elapsed().as_millis());
         Ok(ReaderDoc {
             display_path: access::display_path(&real, &root, &home()),
@@ -201,6 +203,26 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
         })
     })
     .await
+}
+
+/// An open, recorded: a file for `kinas open` with no path (R38) and its watch in place of the last one — one watch at a
+/// time (R29) — and the confirmation it answers cleared. The watch is made before the guard is taken: making one stats
+/// and canonicalizes the file's folder, which on a share that stopped answering waits out the mount. The previous
+/// file's watch is dropped after the guard is let go.
+fn record_open(state: &ReaderState, real: &Path, kind: Kind, watch: impl FnOnce() -> Option<notify::RecommendedWatcher>) {
+    let watcher = if kind == Kind::File { watch() } else { None };
+    let previous = {
+        let mut inner = state.lock();
+        if inner.pending_confirm.as_deref() == Some(real) {
+            inner.pending_confirm = None;
+        }
+        if kind != Kind::File {
+            return;
+        }
+        inner.remember(real.to_path_buf());
+        std::mem::replace(&mut inner.watcher, watcher)
+    };
+    drop(previous);
 }
 
 /// The open file again, for a live reload (R30).
@@ -543,6 +565,60 @@ mod tests {
         assert_eq!(image_bytes(&base.join("doc.pdf"), &yes).unwrap_err().code, "not_image");
         assert_eq!(image_bytes(&base.join("gone.png"), &yes).unwrap_err().code, "missing");
         assert_eq!(image_bytes(&base.join("p.png"), &|_: &Path| false).unwrap_err().code, "outside");
+    }
+
+    /// Reader R6, for every reader command: `permitted` canonicalizes the root and every path the captain allowed, and
+    /// one allowed path on a network share that stopped answering waits out the mount's timeout there. With the reader's
+    /// guard held through it, every reader command — and the socket, which takes the same guard — waited with it. A path
+    /// is judged against a copy of what was allowed, with no guard held.
+    #[test]
+    fn a_path_is_judged_with_no_guard_held() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = fs::canonicalize(dir.path()).unwrap();
+        let root = base.join("root");
+        for d in ["root", "share-9c2e", "elsewhere"] {
+            fs::create_dir_all(base.join(d)).unwrap();
+        }
+        for f in ["root/a.md", "share-9c2e/b.md", "elsewhere/c.md"] {
+            fs::write(base.join(f), "# x\n").unwrap();
+        }
+        let state = ReaderState::default();
+        state.lock().allowed.insert(base.join("share-9c2e"));
+        let held = std::cell::RefCell::new(Vec::new());
+        let permit = |real: &Path, root: &Path, allowed: &HashSet<PathBuf>| {
+            held.borrow_mut().push(state.0.try_lock().is_err());
+            access::permitted(real, root, allowed)
+        };
+        let at = |p: &str| base.join(p).display().to_string();
+        assert_eq!(checked_with(&state, &root, &at("root/a.md"), &permit).map(|(_, k)| k), Ok(Kind::File));
+        assert_eq!(checked_with(&state, &root, &at("share-9c2e/b.md"), &permit).map(|(_, k)| k), Ok(Kind::File), "allowed by a click");
+        assert_eq!(checked_with(&state, &root, &at("elsewhere/c.md"), &permit).unwrap_err().code, "outside");
+        assert_eq!(held.borrow().len(), 3, "every path was judged");
+        assert!(held.borrow().iter().all(|h| !h), "a path was judged while the reader's guard was held: {:?}", held.borrow());
+    }
+
+    /// R29's watch is on the open file's folder, and making one stats and canonicalizes that folder (notify's FSEvents
+    /// `watch`): for a file on a network share that went slow or stopped answering after its read, that waited out the
+    /// mount with the reader's guard held, and every reader command and `kinas open` waited too. The watch is made with
+    /// no guard held, and only installed under it.
+    #[test]
+    fn an_open_file_s_watch_is_made_with_no_guard_held() {
+        let state = ReaderState::default();
+        let file = PathBuf::from("/p/shop-9c2e/plan.md");
+        state.lock().pending_confirm = Some(file.clone());
+        let held = std::cell::Cell::new(None);
+        record_open(&state, &file, Kind::File, || {
+            held.set(Some(state.0.try_lock().is_err()));
+            None
+        });
+        assert_eq!(held.get(), Some(false), "the watch was made while the reader's guard was held");
+        let inner = state.lock();
+        assert_eq!((inner.recent.front(), inner.pending_confirm.as_ref()), (Some(&file), None), "remembered, and its confirmation answered");
+        drop(inner);
+        // A folder is not remembered and has no watch.
+        let folder = PathBuf::from("/p/shop-9c2e");
+        record_open(&state, &folder, Kind::Dir, || panic!("a folder is not watched"));
+        assert_eq!(state.lock().recent.len(), 1);
     }
 
     #[test]

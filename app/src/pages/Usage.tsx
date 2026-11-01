@@ -21,12 +21,23 @@ const WINDOW_ORDER = ["week", "session", "month_credits"] as const;
 const OLLAMA_ORDER = ["session", "week", "month_credits"] as const;
 /** The snapshot comes from App's one poller (usage/useUsageSnapshot.ts), shared with Home; the crew from App's one crew
  *  reading (crew/useCrew.ts). */
-export function UsagePage({ snapshot, error, crew = null }: { snapshot: UsageSnapshot | null; error: string | null; crew?: CrewSnapshot | null }) {
+export function UsagePage({
+  snapshot,
+  error,
+  crew = null,
+  crewError = null,
+}: {
+  snapshot: UsageSnapshot | null;
+  error: string | null;
+  crew?: CrewSnapshot | null;
+  /** The crew's reading itself failed (crew/useCrew.ts): the Crew section keeps the last one and says so. */
+  crewError?: string | null;
+}) {
   if (!snapshot) {
     return (
       <div className="usage">
         <TitleRow title="Usage" />
-        <p className="usage-note">{error ?? "Reading…"}</p>
+        <p className="usage-note">{failedRead("usage", error, false) ?? "Reading…"}</p>
       </div>
     );
   }
@@ -76,7 +87,7 @@ export function UsagePage({ snapshot, error, crew = null }: { snapshot: UsageSna
 
       <MacSection host={snapshot.host} reader={reader("host")} now={snapshot.now} />
 
-      <CrewSection crew={crew} />
+      <CrewSection crew={crew} error={crewError} />
     </div>
   );
 }
@@ -262,7 +273,8 @@ function HostingerSection({ metrics, reader, now }: { metrics: ProviderMetricVie
           ))}
         </Card>
       )}
-      <ReaderError name="Hostinger" reader={reader} testId="hostinger-error" />
+      {/* Beside rows only: with none, the line above already says why, and there is no last reading to show. */}
+      {shown.length > 0 && <ReaderError name="Hostinger" reader={reader} testId="hostinger-error" />}
       {bandwidth.length > 0 && (
         <p className="usage-note" data-testid="hostinger-billing-window">
           {hostinger.BILLING_WINDOW}

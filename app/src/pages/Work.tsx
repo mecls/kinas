@@ -1,21 +1,10 @@
 import { useEffect, useState } from "react";
-import { crewPaneState, type CrewWord, type PaneState } from "../api.ts";
+import { crewPaneState, type PaneState } from "../api.ts";
+import { paneBadge } from "../crew/board.ts";
 import type { Shortcuts } from "../settings/shortcuts.ts";
 import { copyTerminalSelection, focusTerminal } from "../shell/focus.ts";
 import { Terminal } from "../terminal/Terminal.tsx";
-import { TerminalChrome, type BadgeState } from "../ui/index.ts";
-
-/** The chrome's badge for a worker's word; a word the badge does not draw yet (failed, paused, unknown, gone) has none. */
-const BADGE_OF: Partial<Record<CrewWord, BadgeState>> = {
-  queued: "queued",
-  working: "working",
-  "needs decision": "decision",
-  blocked: "blocked",
-  "CI red": "red",
-  "PR open": "pr",
-  ready: "ready",
-  done: "done",
-};
+import { TerminalChrome } from "../ui/index.ts";
 
 /** How often the chrome asks what the pane is while the Work page shows (build spec §4 Work). */
 const PANE_POLL_MS = 5_000;
@@ -42,7 +31,7 @@ export function WorkPage({ active, shortcuts }: { active: boolean; shortcuts: Sh
     return () => window.clearInterval(timer);
   }, [active]);
 
-  const badge = pane?.word && !pane.stale ? BADGE_OF[pane.word] : undefined;
+  const badge = paneBadge(pane);
   return (
     <div className="work">
       <TerminalChrome

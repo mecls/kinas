@@ -23,6 +23,7 @@ import {
   treeChangesExport,
 } from "../api.ts";
 import { focusTerminal } from "../shell/focus.ts";
+import { unlessSuperseded } from "../shell/latest.ts";
 import { NOTICE_MS } from "../shell/notice.ts";
 import { CLIPBOARD_MAX_BYTES, writeClipboard } from "../terminal/clipboard.ts";
 import { onThemeChange } from "../theme.ts";
@@ -581,7 +582,10 @@ export function Reader({
 
   async function openFolder(path: string) {
     try {
-      const listing = await readerListDir(path);
+      // A later open, or ×, while the listing is out (a slow mount) wins: this folder's README must not land over it.
+      const listed = await unlessSuperseded(generation, () => readerListDir(path));
+      if (!listed) return;
+      const listing = listed.value;
       setFolder(path);
       setOverlay(null);
       const readme =
@@ -685,7 +689,10 @@ export function Reader({
       // Nor is a crew row's: its row, or its tab while the crew mark stands, opens the crew's copy (crew marks).
       if ((view === "crew" || asTab) && crewNow(path)?.here === false) return openCrewRow(path, scrollTop);
       try {
-        const target = await readerAllowClick(path);
+        // The door can take a while (a slow mount): a later click, or ×, meanwhile is what the captain asked for last.
+        const allowed = await unlessSuperseded(generation, () => readerAllowClick(path));
+        if (!allowed) return;
+        const target = allowed.value;
         if (target.kind === "dir") await openFolder(target.path);
         else await show(target.path, { fragment, scrollTop, pageProblem: asTab, changes: view === "changes", crew: view === "crew" });
       } catch (e) {
@@ -900,13 +907,19 @@ export function Reader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
 
-  // Live reload (R29, R30): Rust watches the open file's folder and names the file that changed.
+  // Live reload (R29, R30): Rust watches the open file's folder and names the file that changed. Two saves in a row are
+  // two reads, which can finish in either order, and the Changes view's diff takes longer for one text than another:
+  // only the newest reload counts (shell/latest.ts), or the reader shows the older text until the next save.
+  const reloads = useRef(0);
   useEffect(() => {
     const stop = onReaderChanged(async ({ path }) => {
       const current = docRef.current;
       if (!current || current.path !== path) return;
       try {
-        const text = await readerReadText(path);
+        const read = await unlessSuperseded(reloads, () => readerReadText(path));
+        if (!read) return;
+        const text = read.value;
+        const mine = reloads.current;
         const latest = docRef.current;
         if (!latest || latest.path !== path) return;
         setStatus((s) => (s?.sticky ? null : s));
@@ -916,7 +929,7 @@ export function Reader({
         const since = changesRef.current;
         const diffed = since === null ? null : await changesOf(path);
         const current = docRef.current;
-        if (!current || current.path !== path) return;
+        if (!current || current.path !== path || mine !== reloads.current) return;
         if (since !== null && !diffed) {
           setChangesOn(null);
           say(since ? `No changes since ${since} any more` : "No changes any more");

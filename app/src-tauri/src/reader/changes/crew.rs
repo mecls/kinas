@@ -385,16 +385,18 @@ pub(super) fn derive_view(root: &Path, tops: &[(PathBuf, String)], snaps: &HashM
 /// pushed, and now, from the checkout that changed it last. The door answers only for a path a watched root the reader
 /// may still read has in its crew view (ADR 0009); the crew's own paths never leave Rust.
 pub(super) fn crew_text(state: &super::ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool, git: Option<&Git>) -> Result<(Source, Vec<u8>, Vec<u8>), ReaderError> {
-    let source = {
+    // The roots that mark it, copied under the guard and judged with none held: `permitted` canonicalizes the projects
+    // root and every allowed path, and one on a share that stopped answering would hold every root's thread with it.
+    let marking: Vec<(PathBuf, Source)> = {
         let changes = state.lock();
         changes
             .roots
             .values()
-            .filter(|r| path.starts_with(&r.root) && path != r.root && permitted(&r.root))
-            .filter_map(|r| r.crew.sources.get(path).map(|s| (r.root.components().count(), s.clone())))
-            .max_by_key(|(depth, _)| *depth)
-            .map(|(_, s)| s)
+            .filter(|r| path.starts_with(&r.root) && path != r.root)
+            .filter_map(|r| r.crew.sources.get(path).map(|s| (r.root.clone(), s.clone())))
+            .collect()
     };
+    let source = marking.into_iter().filter(|(root, _)| permitted(root)).max_by_key(|(root, _)| root.components().count()).map(|(_, s)| s);
     let source = source.ok_or_else(|| ReaderError::new("not_watched", "Kinas is not following the crew's changes to this file"))?;
     let gone = || ReaderError::new("crew_gone", "The crew's copy is gone — its task has ended");
     let git = git.ok_or_else(gone)?;
@@ -1120,6 +1122,28 @@ pub(super) mod tests {
         git(&clone, &["worktree", "remove", "--force", &worktree.to_string_lossy()]);
         let gone = crew_diff(&state, &captain.join("README.md"), &g).unwrap_err();
         assert_eq!((gone.code, gone.message.as_str()), ("crew_gone", "The crew's copy is gone — its task has ended"));
+    }
+
+    /// ADR 0009's judge, `access::permitted`, canonicalizes the projects root and every path the captain allowed, and
+    /// one of those on a network share that stopped answering waits out the mount's timeout there. Judged under this
+    /// module's guard, every root's bursts, pushes and ↻ — and every tree being shown — waited with the crew's copy. A
+    /// root is judged with no guard held, as `old_text` judges one.
+    #[test]
+    fn the_crew_s_copy_is_judged_with_no_guard_held() {
+        let (_dir, captain, home, clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n")]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, _) = crew_watched(&captain, &home, &g);
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew 9c2e\n").unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        let held = std::cell::RefCell::new(Vec::new());
+        let permitted = |_: &Path| {
+            held.borrow_mut().push(state.0.try_lock().is_err());
+            true
+        };
+        let (source, _, after) = crew_text(&state, &captain.join("README.md"), &permitted, Some(&g)).unwrap();
+        assert_eq!((source.mark, after), (Mark::Modified, b"# Shop, by the crew 9c2e\n".to_vec()));
+        assert!(!held.borrow().is_empty(), "the root was judged");
+        assert!(held.borrow().iter().all(|h| !h), "a root was judged while the guard was held: {:?}", held.borrow());
     }
 
     #[test]

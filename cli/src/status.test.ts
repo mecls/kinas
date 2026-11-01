@@ -72,6 +72,26 @@ describe("kinas status", () => {
     expect(stdout).not.toContain("\x1b["); // no colour when not a TTY
   });
 
+  test("a model name or a reader's error with a control sequence in it is printed as text, never obeyed by the terminal", () => {
+    // Model names come from the transcripts and a reader's error from what a provider answered: an escape there would
+    // reach the terminal running `kinas status` as a command (OSC 52 sets its clipboard).
+    const dir = makeStore((db, org, now) => {
+      db.run("INSERT INTO reader_status VALUES (?, 'ollama-cloud', 'error', ?, NULL, ?, 600000, 43200000)", [org, now, "bad \x1b]52;c;ZWNobyBoaQ==\x07 key"]);
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now));
+      db.run(
+        "INSERT INTO usage_daily (org_id, date, provider, model, harness, source, machine, tokens_in, tokens_cache_read, tokens_out, messages) VALUES (?, ?, 'p', ?, 'pi', 'interactive', 'm', 1, 0, 1, 1)",
+        [org, today, "glm\x1b[2J\x07-9c2e"],
+      );
+    });
+    for (const env of [{}, { FORCE_COLOR: "1" }] as Record<string, string>[]) {
+      const { code, stdout } = run(["status"], { KINAS_DATA_DIR: dir, ...env });
+      expect(code).toBe(0);
+      expect(stdout).not.toMatch(/[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f-\x9f]|\x1b(?!\[[0-9;]*m)/);
+      expect(stdout).toContain("pi · glm\uFFFD[2J\uFFFD-9c2e");
+      expect(stdout).toContain("— · bad \uFFFD]52;c;ZWNobyBoaQ==\uFFFD key");
+    }
+  });
+
   test("FORCE_COLOR paints a stale line gold even when piped, as every other command and the README have it; NO_COLOR wins", () => {
     const forced = run(["status"], { KINAS_DATA_DIR: healthy, FORCE_COLOR: "1", NO_COLOR: "" });
     expect(forced.code).toBe(0);

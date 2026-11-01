@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { write } from "../testing/world.ts";
@@ -65,4 +65,27 @@ test("a quota stamped after now is stale, as the store's staleness rule has it: 
   const now = 1_790_000_000_000;
   expect(freshness("fresh", now + 2 * 3_600_000, now)).toBe("stale");
   expect(freshness("fresh", now - 60_000, now)).toBe("fresh");
+});
+
+test("the newest Codex reading wins, not the newest-named session: one still running beside a later one, or resumed", async () => {
+  // Codex names a session's log for when it started and keeps writing it while the session runs, `codex resume`
+  // included. A session started first and still working holds the reading of a minute ago; one started after it and
+  // idle since holds an older one, under a later name.
+  const home = join(base, "parallel");
+  const active = join(home, "sessions/2026/09/14/rollout-2026-09-14T10-00-00-a.jsonl");
+  const idle = join(home, "sessions/2026/09/14/rollout-2026-09-14T10-05-00-b.jsonl");
+  write(active, `${line(NOW - 60_000, { primary: { used_percent: 40, window_minutes: 300 } })}\n`);
+  write(idle, `${line(NOW - 50 * 60_000, { primary: { used_percent: 10, window_minutes: 300 } })}\n`);
+  utimesSync(idle, new Date(NOW - 50 * 60_000), new Date(NOW - 50 * 60_000));
+  expect((await codexQuotas(home, NOW)).map((q) => [q.left_pct, q.state])).toEqual([[60, "fresh"]]);
+
+  // Resumed today, the session's log is still in the folder of the day it began, behind five later sessions.
+  const resumed = join(base, "resumed");
+  write(join(resumed, "sessions/2026/09/01/rollout-2026-09-01T09-00-00-r.jsonl"), `${line(NOW - 30_000, { primary: { used_percent: 70, window_minutes: 300 } })}\n`);
+  for (let d = 2; d <= 7; d++) {
+    const old = join(resumed, `sessions/2026/09/0${d}/rollout-2026-09-0${d}T09-00-00-x.jsonl`);
+    write(old, `${line(NOW - 86_400_000, { primary: { used_percent: 5, window_minutes: 300 } })}\n`);
+    utimesSync(old, new Date(NOW - 86_400_000), new Date(NOW - 86_400_000));
+  }
+  expect((await codexQuotas(resumed, NOW)).map((q) => q.left_pct)).toEqual([30]);
 });

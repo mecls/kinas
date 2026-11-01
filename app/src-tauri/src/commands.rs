@@ -161,8 +161,18 @@ pub fn set_org_name(store: State<'_, Store>, name: String) -> Result<(), String>
 
 /// The projects folder the reader and the CLI work from (reader R1b): an absolute path that exists, stored
 /// canonicalized. The CLI reads this same setting from the store, so `kinas open` follows it with Kinas quit.
+///
+/// Async, with the typed path resolved on a blocking thread: a sync command runs on the main thread, and a folder on a
+/// network share that stopped answering froze the window for the mount's timeout (`no_command_on_the_main_thread_resolves_a_path`).
 #[tauri::command]
-pub fn set_projects_root(store: State<'_, Store>, path: String) -> Result<String, String> {
+pub async fn set_projects_root(store: State<'_, Store>, path: String) -> Result<String, String> {
+    let value = tauri::async_runtime::spawn_blocking(move || projects_folder(&path)).await.map_err(|e| format!("the projects folder was not checked: {e}"))??;
+    system::put_setting(&store.conn(), store.org_id(), crate::paths::SETTING_KEY, &serde_json::json!(value)).map_err(|e| e.to_string())?;
+    Ok(value)
+}
+
+/// A typed projects folder as `set_projects_root` stores it: `~` expanded, absolute, existing, a folder, canonicalized.
+fn projects_folder(path: &str) -> Result<String, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("the projects folder is empty".into());
@@ -182,9 +192,7 @@ pub fn set_projects_root(store: State<'_, Store>, path: String) -> Result<String
     if !real.is_dir() {
         return Err(format!("{} is not a folder", real.display()));
     }
-    let value = real.display().to_string();
-    system::put_setting(&store.conn(), store.org_id(), crate::paths::SETTING_KEY, &serde_json::json!(value)).map_err(|e| e.to_string())?;
-    Ok(value)
+    Ok(real.display().to_string())
 }
 
 /// The command Open in editor runs (reader R36): one trimmed line of at most 200 characters.
@@ -809,8 +817,8 @@ mod tests {
         out
     }
 
-    #[test]
-    fn no_command_on_the_main_thread_reaches_the_keychain() {
+    /// Every `.rs` file under `src/`, by its path from there, with its text.
+    fn crate_sources() -> Vec<(String, String)> {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = Vec::new();
         let mut stack = vec![src.clone()];
@@ -824,6 +832,43 @@ mod tests {
                 }
             }
         }
+        files
+    }
+
+    /// What resolves or stats a path: a caller's path on a network share that stopped answering waits out the mount's
+    /// timeout in any of these.
+    const DISK: [&str; 11] = ["canonicalize", "metadata(", ".is_dir()", ".is_file()", ".exists()", "try_exists", "read_dir", "fs::read", "access::resolve", "checked(", "real_root("];
+
+    /// Sync commands that resolve or stat a path: a sync command runs on the main thread, so a path typed into Settings
+    /// that lies on a dead share froze the window — `set_projects_root` did, through its `canonicalize`.
+    fn disk_on_the_main_thread(files: &[(String, String)]) -> Vec<String> {
+        let mut out = Vec::new();
+        for (path, text) in files {
+            for (name, is_async, code) in commands_in(text) {
+                if !is_async && DISK.iter().any(|k| code.contains(k)) {
+                    out.push(format!("{path}: {name}"));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn no_command_on_the_main_thread_resolves_a_path() {
+        let files = crate_sources();
+        let commands = files.iter().find(|(p, _)| p == "commands.rs").map(|(_, t)| commands_in(t)).unwrap_or_default();
+        assert!(commands.iter().any(|(name, ..)| name == "set_projects_root"), "the guard is not reading commands.rs");
+        assert_eq!(disk_on_the_main_thread(&files), Vec::<String>::new());
+        // The negative control: a sync command that canonicalizes or stats what it was handed is found; an async one is not.
+        let planted = |code: &str| vec![("x.rs".to_string(), format!("#[tauri::command]\n{code}\n"))];
+        assert_eq!(disk_on_the_main_thread(&planted("pub fn a(path: String) -> bool { std::fs::canonicalize(&path).is_ok() }")), ["x.rs: a"]);
+        assert_eq!(disk_on_the_main_thread(&planted("pub fn b(path: String) -> bool { std::path::Path::new(&path).is_dir() }")), ["x.rs: b"]);
+        assert!(disk_on_the_main_thread(&planted("pub async fn c(path: String) -> Result<bool, String> { Ok(std::path::Path::new(&path).exists()) }")).is_empty());
+    }
+
+    #[test]
+    fn no_command_on_the_main_thread_reaches_the_keychain() {
+        let files = crate_sources();
         let commands = files.iter().find(|(p, _)| p == "commands.rs").map(|(_, t)| commands_in(t)).unwrap_or_default();
         assert!(commands.iter().any(|(name, ..)| name == "save_ollama_key"), "the guard is not reading commands.rs");
         assert_eq!(keychain_on_the_main_thread(&files), Vec::<String>::new());

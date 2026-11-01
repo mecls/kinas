@@ -55,6 +55,25 @@ describe("the CLI cache", () => {
     cache.close();
   });
 
+  test("a packet begun earlier never replaces one begun later; one stamped in what is now the future is replaced", () => {
+    // Two `kinas context` runs read the same packet before and compute side by side; the one that began later can finish
+    // first — the mirror is read in milliseconds, the snapshot it fell back to takes seconds. Written last, the earlier
+    // one put its older crew back, and the next run counted the later one's change a second time against it.
+    const cache = ContextCache.open(dir());
+    const at = (generated_at: number) => ({ version: PACKET_VERSION, generated_at }) as Packet;
+    const now = Date.now();
+    cache.writePacket("o", at(now - 1_000));
+    cache.writePacket("o", at(now - 5_000));
+    expect(cache.readPacket("o")?.computedAt).toBe(now - 1_000);
+    cache.writePacket("o", at(now - 500));
+    expect(cache.readPacket("o")?.computedAt).toBe(now - 500);
+    // The clock stepped back two hours since the stored one was written: it is no later moment, and is replaced.
+    cache.writePacket("o", at(now + 7_200_000));
+    cache.writePacket("o", at(now - 100));
+    expect(cache.readPacket("o")?.computedAt).toBe(now - 100);
+    cache.close();
+  });
+
   test("one refresh at a time, until the lease runs out or is released", () => {
     const cache = ContextCache.open(dir());
     expect(cache.claimRefresh("o", 1_000, 60_000)).toBe(true);

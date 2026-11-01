@@ -48,6 +48,7 @@ import { CrewPage } from "./pages/Crew.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { InboxPage, type AnswerKind, type InboxBox } from "./pages/Inbox.tsx";
 import { TaskDetail } from "./crew/TaskDetail.tsx";
+import { taskHidden } from "./crew/detail.ts";
 import { useCrew } from "./crew/useCrew.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
@@ -686,7 +687,7 @@ export function App() {
             <InboxPage crew={crew} error={crewError} folders={folders} request={inboxRequest} onAnswer={answer} />
           </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
-            <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} />
+            <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} crewError={crewError} />
           </section>
           <section className="page" data-page="work" hidden={page !== "work"}>
             <WorkPage active={page === "work"} shortcuts={shortcuts} />
@@ -723,7 +724,7 @@ export function App() {
           />
           <TaskDetail
             id={reader.task}
-            hidden={reader.occupant !== "task"}
+            hidden={taskHidden(reader)}
             version={crew?.now ?? 0}
             folders={folders}
             onClose={closeReader}

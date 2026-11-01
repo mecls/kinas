@@ -3,10 +3,12 @@
 // use for a reader's own failure — "Convex: deploy key rejected · showing the last reading". Pure, so
 // readFailure.test.ts holds it.
 
-/** What failed to read, as the line names it. The crew's own errors already say "could not read the crew". */
+/** What failed to read, as the line names it. The crew's own errors already say "could not read the crew", and the
+ *  task panel's "could not read the task". */
 const LEAD = {
   usage: "Could not read the readings",
   crew: "Crew",
+  task: "Task",
   settings: "Could not read the settings",
 } as const;
 

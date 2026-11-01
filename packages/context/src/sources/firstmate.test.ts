@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SourceError, SourceTimeout } from "../source.ts";
@@ -53,6 +53,23 @@ describe("the crew from Firstmate's fleet snapshot", () => {
     snap.scout_reports.push({ id: "abs-9c2e", path: join(base, "reports", "secret.md") }, { id: "up-9c2e", path: `${h}/data/../../secret.md` });
     const crew = await crewFromSnapshot(snap, Date.now(), h);
     expect(crew.reports.map((r) => r.id)).toEqual(["t-095"]);
+  });
+
+  test("a report under the home that is a link to a file outside it is not read; a home reached through a link is", async () => {
+    // ADR 0019 again: the path is lexically inside the home, and the file it opens is not. The app opens a report only
+    // through the reader, which judges the real path; the packet read the link's target, whatever a worker linked.
+    const h = join(base, "linked", "firstmate");
+    const snap = snapshotFor(h) as { scout_reports: { id: string; path: string }[] };
+    write(join(base, "linked", "secret.md"), "TOKEN=not-for-the-packet-9c2e\n");
+    mkdirSync(join(h, "data", "t-777"), { recursive: true });
+    symlinkSync(join(base, "linked", "secret.md"), join(h, "data", "t-777", "report.md"));
+    snap.scout_reports.push({ id: "t-777", path: "data/t-777/report.md" });
+    expect((await crewFromSnapshot(snap, Date.now(), h)).reports.map((r) => r.id)).toEqual(["t-095"]);
+    // FM_HOME may itself be a link to the clone: its reports are inside it, as written.
+    const link = join(base, "linked", "fm-link");
+    symlinkSync(h, link);
+    const viaLink = JSON.parse(JSON.stringify(snap).replaceAll(h, link));
+    expect((await crewFromSnapshot(viaLink, Date.now(), link)).reports.map((r) => [r.id, r.first_line])).toEqual([["t-095", "Payments providers compared"]]);
   });
 
   test("another contract version is refused by name", async () => {

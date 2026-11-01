@@ -29,7 +29,7 @@ import { join } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
 import { cliCommand, statusFromStore, statusJson, statusLines } from "@kinas/commands";
 import { colorEnabled, paint, polarityFromEnv } from "@kinas/commands/theme";
-import { computePacket, ContextCache, currentOrg, insideRoot, loadConfig, renderAgentPacket, renderOperator, within, type KinasConfig } from "@kinas/context";
+import { computePacket, ContextCache, currentOrg, flat, insideRoot, loadConfig, renderAgentPacket, renderOperator, within, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
 import { crew, CREW_USAGE } from "./crew.ts";
@@ -217,7 +217,8 @@ async function status(args: string[]): Promise<number> {
     const tty = Boolean(process.stdout.isTTY);
     // Colour by the one rule every command keeps (theme.ts): a TTY, or FORCE_COLOR when piped; never with NO_COLOR.
     const color = colorEnabled();
-    const lines = statusLines(result, color);
+    // A model name or a reader's error is what a transcript or a provider said: printed as text, never obeyed (`flat`).
+    const lines = statusLines(result, color).map(flat);
     if (tty) {
       intro(paint("blue", "kinas status", color, true));
       log.message(lines.join("\n"));

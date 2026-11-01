@@ -200,7 +200,7 @@ function HomeUsage({ snapshot, error, onOpenUsage }: { snapshot: UsageSnapshot |
     return (
       <>
         <SectionHeader title="Usage" action={action} />
-        <p className={error ? "home-note home-error" : "home-note"}>{error ?? "Reading…"}</p>
+        <p className={error ? "home-note home-error" : "home-note"}>{failedRead("usage", error, false) ?? "Reading…"}</p>
       </>
     );
   }

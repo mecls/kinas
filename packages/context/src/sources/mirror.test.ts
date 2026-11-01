@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CrewDecisionRow, CrewMirrorRow, ReaderRow } from "@kinas/store/types";
@@ -125,5 +125,19 @@ test("a report path that leaves Firstmate's home is not read: only a report unde
     NOW,
     home,
   );
+  expect(crew!.reports.map((r) => [r.id, r.first_line])).toEqual([["in-9c2e", "Inside 9c2e"]]);
+});
+
+test("a report path under the home that links out of it is not read, as the snapshot's reports (ADR 0019)", async () => {
+  const base = mkdtempSync(join(tmpdir(), "kinas-mirror-"));
+  roots.push(base);
+  const home = join(base, "firstmate");
+  mkdirSync(join(home, "data", "in-9c2e"), { recursive: true });
+  writeFileSync(join(home, "data", "in-9c2e", "report.md"), "# Inside 9c2e\n");
+  writeFileSync(join(base, "secret.md"), "TOKEN=not-for-the-packet-9c2e\n");
+  mkdirSync(join(home, "data", "out-9c2e"), { recursive: true });
+  symlinkSync(join(base, "secret.md"), join(home, "data", "out-9c2e", "report.md"));
+  const scout = (id: string) => row(id, { kind: "scout", backlog_state: "done", state: null, done_at: NOW - 1_000, report_path: `data/${id}/report.md`, report_present: 1 });
+  const crew = await crewFromStore(store(NOW - 60_000, [scout("in-9c2e"), scout("out-9c2e")]), NOW, home);
   expect(crew!.reports.map((r) => [r.id, r.first_line])).toEqual([["in-9c2e", "Inside 9c2e"]]);
 });

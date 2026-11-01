@@ -6,6 +6,9 @@
 #
 #   scripts/acceptance.sh            everything
 #   scripts/acceptance.sh ac10 ac9   only some
+#   KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6
+#                                    AC-6 with its re-read from zero, which deletes every row of log_cursors in the
+#                                    live store: your approval, given only here; it backs up and checks first
 
 set -u
 cd "$(dirname "$0")/.."
@@ -240,9 +243,30 @@ if want ac6; then
   quit_app; start_app; sleep 30
   [ "$(sums)" = "$before" ] && pass "relaunch leaves past totals unchanged" || fail "relaunch changed past totals"
   quit_app
-  sqlite3 "$DB" "DELETE FROM log_cursors"
-  start_app; sleep 60
-  [ "$(sums)" = "$before" ] && pass "re-reading every transcript from zero leaves past totals unchanged" || fail "re-read changed past totals"
+  # Re-reading from zero means deleting every row of log_cursors in the live store: destructive, so it runs only on the
+  # captain's yes, after a fresh backup taken with the app quit has been opened and checked table by table against the
+  # store, and it proves afterwards that no other table moved. Without the yes it says what it would delete and stops.
+  rows=$(sqlite3 "$DB" "SELECT count(*) FROM log_cursors")
+  if [ "${KINAS_AC6_DELETE_CURSORS:-}" != yes ]; then
+    echo "SKIP  re-reading from zero deletes every row of log_cursors ($rows rows) in the live store, and nothing else; it needs your approval."
+    echo "      Run KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6: with Kinas quit it backs $DB up beside its folder,"
+    echo "      checks the backup's every table against the store, and only then deletes; it prints the restore command."
+  else
+    backup="$(dirname "$DATA")/ai.sintralabs.kinas-ac6-$(date +%Y%m%d-%H%M%S).sqlite"
+    # Every table's row count, `name count` per line, in name order.
+    counts() { sqlite3 "$1" "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name" | while read -r t; do echo "$t $(sqlite3 "$1" "SELECT count(*) FROM \"$t\"")"; done; }
+    if sqlite3 "$DB" ".backup '$backup'" && [ "$(sqlite3 "$backup" "PRAGMA integrity_check")" = ok ] && [ -n "$(counts "$DB")" ] && [ "$(counts "$backup")" = "$(counts "$DB")" ]; then
+      pass "backup checked: $backup has every table of the store, row for row ($(counts "$backup" | paste -sd, - | sed 's/,/, /g'))"
+      echo "      restore it with: quit Kinas, then sqlite3 '$DB' \".restore '$backup'\""
+      sqlite3 "$DB" "DELETE FROM log_cursors"
+      others() { counts "$1" | grep -v '^log_cursors '; }
+      [ "$(others "$DB")" = "$(others "$backup")" ] && pass "the delete touched log_cursors alone: every other table's count is the backup's" || fail "a table besides log_cursors changed: restore the backup (above)"
+      start_app; sleep 60
+      [ "$(sums)" = "$before" ] && pass "re-reading every transcript from zero leaves past totals unchanged" || fail "re-read changed past totals"
+    else
+      fail "the backup at $backup could not be taken or did not match the store; nothing was deleted"
+    fi
+  fi
 fi
 
 # Leave the app as it was found.

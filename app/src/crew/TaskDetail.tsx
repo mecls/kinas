@@ -5,7 +5,7 @@ import type { KeyboardEvent } from "react";
 import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
 import { BADGE_OF, lanesOf } from "./board.ts";
-import { checksOf, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
+import { bareHead, checksOf, detailFailure, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
 import { ageText, copiedText } from "./inbox.ts";
 
 // The right panel's second occupant (build spec §4 Task detail; mockup task-detail.html): what Firstmate reports about
@@ -38,7 +38,8 @@ export function TaskDetail({
 }) {
   /** The last answer, and the id it was for: null when the mirror never held that task. */
   const [answer, setAnswer] = useState<{ id: string; detail: CrewTaskDetail | null } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  /** The last failed read, and the id it was for: another card selected meanwhile is not said to have failed. */
+  const [error, setError] = useState<{ id: string; message: string } | null>(null);
 
   // The previous detail stays until `crew_task` answers (§4, Loading); a failure says why under the header.
   useEffect(() => {
@@ -50,7 +51,7 @@ export function TaskDetail({
         setAnswer({ id, detail });
         setError(null);
       },
-      (e) => live && setError(crewErrorOf(e)),
+      (e) => live && setError({ id, message: crewErrorOf(e) }),
     );
     return () => {
       live = false;
@@ -58,9 +59,11 @@ export function TaskDetail({
   }, [id, hidden, version]);
 
   // Another card's detail is never acted on, and never drawn under a selection whose own read failed (detail.ts).
-  const view = detailFor(answer, id, error !== null);
+  const view = detailFor(answer, id, error !== null && error.id === id);
   const shown = view.detail;
   const missing = view.current && shown === null;
+  const failure = detailFailure(error, id, shown !== null);
+  const head = bareHead(view, id);
   const lane = shown ? lanesOf([shown.task], folders)[0] : undefined;
   const gone = shown?.task.word === "gone";
   const pr = shown ? prDetail(shown) : null;
@@ -92,17 +95,14 @@ export function TaskDetail({
           onClose={onClose}
         />
       )}
-      {error && (
+      {/* No task drawn — on its way, failed, or not in the mirror: the id, and × to close the panel all the same. */}
+      {head !== null && <PanelHeader folder="" title={head} onClose={onClose} />}
+      {failure && (
         <p className="crew-error crew-detail-note" data-testid="crew-detail-error">
-          Could not read the task: {error}
+          {failure}
         </p>
       )}
-      {missing && (
-        <>
-          <PanelHeader folder="" title={id} onClose={onClose} />
-          <p className="crew-quiet crew-detail-note">Not in the fleet snapshot</p>
-        </>
-      )}
+      {missing && <p className="crew-quiet crew-detail-note">Not in the fleet snapshot</p>}
       {shown && !missing && gone && <p className="crew-quiet crew-detail-note" data-testid="crew-detail-gone">No longer in the fleet snapshot</p>}
       {shown && !missing && !gone && (
         <PanelBody>

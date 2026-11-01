@@ -1,5 +1,6 @@
 import type { CrewSnapshot } from "../api.ts";
 import { fleetAsOf, inFlight } from "../crew/board.ts";
+import { failedRead } from "../pages/readFailure.ts";
 import { MetricRow, Rows, Section, SectionHeader } from "../ui/index.ts";
 
 // Usage's Crew section (build spec §4 Usage; mockup usage-and-menu-bar.html): what the crew has running, counted by
@@ -14,14 +15,22 @@ export function crewRows(crew: CrewSnapshot): { harness: string; n: number }[] {
   return [...counts].map(([harness, n]) => ({ harness, n })).sort((a, b) => b.n - a.n || a.harness.localeCompare(b.harness));
 }
 
-export function CrewSection({ crew }: { crew: CrewSnapshot | null }) {
+/** `error`: the crew's reading itself failed after this one (crew/useCrew.ts) — said beside it, as Crew, Inbox and Home
+ *  say it, since its caption has stopped ageing (ADR 0004). */
+export function CrewSection({ crew, error = null }: { crew: CrewSnapshot | null; error?: string | null }) {
   if (!crew) return null;
   const rows = crewRows(crew);
   const queued = crew.tasks.filter((t) => t.word === "queued").length;
   if (rows.length === 0 && queued === 0) return null;
+  const unread = failedRead("crew", error, true);
   return (
     <Section className="usage-provider" data-section="crew">
       <SectionHeader title="Crew" caption={fleetAsOf(crew.generated, crew.now) ?? undefined} source="Firstmate's fleet snapshot" />
+      {unread && (
+        <p className="usage-note" data-testid="usage-crew-error">
+          {unread}
+        </p>
+      )}
       <Rows>
         {rows.map((r) => (
           <MetricRow key={r.harness} label={r.harness} used={null} value={r.n} unit="in flight" data-metric={`crew-${r.harness}`} />

@@ -36,6 +36,14 @@ export const BADGE_OF: Record<CrewWord, BadgeState> = {
   gone: "gone",
 };
 
+/**
+ * The Work page chrome's badge (first-mate PRD rule 24): a worker's pane wears its task's word, as its card does — every
+ * word, `failed` and `paused` included; the first mate's pane, a shell, or a view of Herdr gone stale wears none.
+ */
+export function paneBadge(pane: { word: CrewWord | null; stale: boolean } | null): BadgeState | undefined {
+  return pane?.word && !pane.stale ? BADGE_OF[pane.word] : undefined;
+}
+
 /** The caption's clock: the snapshot's own time, as a 24-hour local time. */
 const secondsClock = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour12: false });
 

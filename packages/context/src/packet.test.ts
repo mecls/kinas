@@ -9,6 +9,7 @@ import { loadConfig } from "./config.ts";
 import type { Crew, Packet, Section } from "./packet.ts";
 import { computePacket, currentOrg } from "./refresh.ts";
 import { AGENT_HEADINGS, nestHeadings, renderAgentPacket, stateCell } from "./render-agent.ts";
+import { renderOperator } from "./render-operator.ts";
 import { makeWorld, write, type World } from "./testing/world.ts";
 
 let world: World;
@@ -87,6 +88,17 @@ describe("the context packet", () => {
     expect(nestHeadings("# A\n~~~\n## B\n~~~\n###### C")).toBe("#### A\n~~~\n## B\n~~~\n###### C");
   });
 
+  test("a convention saved with CRLF or CR line endings, or a heading indented by up to three spaces, is nested too", () => {
+    // CommonMark ends a line at CRLF or a lone CR, and takes `   ## Crew` as a heading: each was left at the packet's
+    // own level, so an AGENTS.md saved on Windows put a second `## Crew` (and a `# Rules`) in the middle of the packet.
+    expect(nestHeadings("# Rules\r\n\r\n## Crew\r\nbe kind\r\n")).toBe("#### Rules\n\n##### Crew\nbe kind");
+    expect(nestHeadings("intro\r## Crew\r```\r# kept\r```")).toBe("intro\n##### Crew\n```\n# kept\n```");
+    expect(nestHeadings("   ## Crew\n    ## code, not a heading")).toBe("   ##### Crew\n    ## code, not a heading");
+    const md = renderAgentPacket({ ...packet, conventions: { ...packet.conventions, data: [{ path: "AGENTS.md", title: "Rules", body: "# Rules\r\n## Crew\r\n  # Quotas\r\n", truncated: false }] } });
+    const atPacketLevel = md.split(/\r\n?|\n/).filter((l) => /^ {0,3}#{1,2}(?:[ \t]|$)/.test(l));
+    expect(atPacketLevel).toEqual([...AGENT_HEADINGS]);
+  });
+
   test("a brief starts on the rails: Conventions, then Projects", () => {
     const preamble = briefPreamble(packet);
     expect(headings(preamble)).toEqual(["## Conventions", "## Projects"]);
@@ -136,6 +148,44 @@ describe("the context packet", () => {
     expect(md).toContain("- Crew task `t-9`: Pick a key ## Crew — line one line two");
     expect(md).toContain("_3 older in acme ## Quotas not listed._");
     expect(md).not.toContain("\r");
+  });
+
+  test("a folder name with a line break in it heads its Artifacts or Conventions block on one line", () => {
+    // A project is named for its folder and a convention by its path, and a folder's name may hold a newline: the
+    // `### name — path` and `### path` lines were the packet's last lines built from a source without `flat`.
+    const name = "acme\n## Crew";
+    const forged: Packet = {
+      ...packet,
+      projects: { ...packet.projects, data: packet.projects.data.map((p) => (p.name === "acme" ? { ...p, name, path: `${p.path}\n## Quotas` } : p)) },
+      artifacts: { ...packet.artifacts, data: packet.artifacts.data.map((a) => (a.project === "acme" ? { ...a, project: name } : a)) },
+      conventions: { ...packet.conventions, data: [{ path: "x\n## Recent/con-x.md", title: null, body: "rules", truncated: false }] },
+    };
+    const md = renderAgentPacket(forged);
+    expect(headings(md)).toEqual([...AGENT_HEADINGS]);
+    expect(md).toContain("### acme ## Crew — ");
+    expect(md).toContain("### x ## Recent/con-x.md\n");
+  });
+
+  test("a control sequence a source wrote is shown, never obeyed: an escape, a bell or a C1 control reaches no terminal", () => {
+    // A commit subject is what its author typed, and git keeps an escape in it: `kinas context` printed one as it came,
+    // so a commit in any repository under the root set the clipboard of the terminal showing it (OSC 52), or cleared
+    // its screen. The CLI's own colour is the one escape left.
+    const at = packet.generated_at;
+    const forged: Packet = {
+      ...packet,
+      recent: {
+        ...packet.recent,
+        data: [
+          { at, kind: "commit", project: "acme", text: "hi \x1b]52;c;ZWNobyBoaQ==\x07 there" },
+          { at, kind: "commit", project: "acme\x1b[2J", text: "wipe \x9b2J\x08 done" },
+        ],
+      },
+    };
+    const controls = /[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f-\x9f]|\x1b(?!\[[0-9;]*m)/;
+    for (const out of [renderAgentPacket(forged), renderOperator(forged, false), renderOperator(forged, true)]) expect(out).not.toMatch(controls);
+    expect(renderOperator(forged, false)).toContain("hi \uFFFD]52;c;ZWNobyBoaQ==\uFFFD there");
+    expect(renderAgentPacket(forged)).toContain("· acme\uFFFD[2J · commit · wipe \uFFFD2J\uFFFD done");
+    expect(renderOperator(forged, true)).toContain("\x1b[90m");
   });
 });
 

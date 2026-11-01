@@ -27,3 +27,14 @@ describe("a code block's grammar", () => {
     for (const name of ["constructor", "__proto__", "hasOwnProperty", "toString"]) expect(grammarFor(name)).toBeNull();
   });
 });
+
+describe("a fence written in capitals", () => {
+  test("reads as the same grammar as its lower-case spelling", () => {
+    // ```TS highlighted while ```TypeScript, ```YAML and ```Python stayed plain: the case rule held for aliases only.
+    expect(grammarFor("TypeScript")).toBe("typescript");
+    expect(grammarFor("YAML")).toBe("yaml");
+    expect(grammarFor("Python")).toBe("python");
+    expect(grammarFor("JavaScript")).toBe("javascript");
+    for (const name of ["Constructor", "__PROTO__", "HasOwnProperty"]) expect(grammarFor(name)).toBeNull();
+  });
+});

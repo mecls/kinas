@@ -24,6 +24,12 @@ describe("the projects root", () => {
   test("KINAS_ROOT wins over the file", () => {
     expect(loadConfig({ ...withFile("env.json", '{"root":"/from/file"}'), KINAS_ROOT: "/from/env" }).root).toBe("/from/env");
   });
+  test("KINAS_ROOT is trimmed, and a blank one is no root at all, as the app reads it (paths.rs projects_root_with)", () => {
+    // The app trims the variable and skips a blank one; the CLI took `" /from/env"` as a folder under the home and
+    // `"  "` as `~/  `, so `kinas open` judged and searched another root than the reader it hands paths to.
+    expect(loadConfig({ ...withFile("env-pad.json", '{"root":"/from/file"}'), KINAS_ROOT: " /from/env " }).root).toBe("/from/env");
+    expect(loadConfig({ ...withFile("env-blank.json", '{"root":"/from/file"}'), KINAS_ROOT: "   " }).root).toBe("/from/file");
+  });
   test("the file's root is used, with ~/ expanded", () => {
     expect(loadConfig(withFile("abs.json", '{"root":"/from/file"}')).root).toBe("/from/file");
     expect(loadConfig(withFile("tilde.json", '{"root":"~/x"}')).root).toBe(join(homedir(), "x"));

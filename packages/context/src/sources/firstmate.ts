@@ -4,7 +4,7 @@
 // observational cache of remote secondmate summaries. Kinas writes nothing into Firstmate.
 
 import { existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { run } from "../exec.ts";
 import type { Crew, CrewBrief, CrewHold, CrewReport, CrewTask } from "../packet.ts";
@@ -38,6 +38,21 @@ export function underHome(home: string, reported: string): string | null {
   const path = resolve(raw);
   const root = resolve(home);
   return path === root || path.startsWith(`${root}/`) ? path : null;
+}
+
+/**
+ * A scout report's first line, read only when the report is inside the home on disk as well as on paper: `underHome`
+ * judges the path as written, and a link inside the home to a file outside it is not followed — the app opens a report
+ * only through the reader, which judges the real path (ADR 0009, 0019). `id` defaults to the path.
+ */
+export async function readReport(home: string, reported: string, id: string | null): Promise<CrewReport | null> {
+  const path = underHome(home, reported);
+  if (path === null) return null;
+  const [real, realHome] = await Promise.all([realpath(path).catch(() => null), realpath(home).catch(() => resolve(home))]);
+  if (real === null || !(real === realHome || real.startsWith(`${realHome}/`))) return null;
+  const st = await stat(real).catch(() => null);
+  if (!st) return null;
+  return { id: id ?? path, path, first_line: await firstLine(real), modified_at: Math.floor(st.mtimeMs) };
 }
 
 /** The fleet snapshot's fields Kinas shows, its reports read only under `home`. Anything else stays Firstmate's business. */
@@ -84,10 +99,7 @@ export async function crewFromSnapshot(snapshot: unknown, now: number, home: str
     await Promise.all(
       list(s.scout_reports).map(async (r): Promise<CrewReport | null> => {
         const reported = str(r.path);
-        const path = reported === null ? null : underHome(home, reported);
-        const st = path ? await stat(path).catch(() => null) : null;
-        if (!path || !st) return null;
-        return { id: str(r.id) ?? path, path, first_line: await firstLine(path), modified_at: Math.floor(st.mtimeMs) };
+        return reported === null ? null : readReport(home, reported, str(r.id));
       }),
     )
   )

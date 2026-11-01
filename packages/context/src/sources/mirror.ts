@@ -4,11 +4,10 @@
 // the snapshot as before. The same fields either way: what is in flight, what is queued, what waits on the captain,
 // and the newest scout reports.
 
-import { stat } from "node:fs/promises";
 import type { CrewDecisionRow, CrewMirrorRow, ReaderRow } from "@kinas/store/types";
 import type { Crew, CrewBrief, CrewHold, CrewReport, CrewTask } from "../packet.ts";
 import { within } from "../time.ts";
-import { FLEET_SCHEMA, firstLine, underHome } from "./firstmate.ts";
+import { FLEET_SCHEMA, readReport } from "./firstmate.ts";
 
 /** The mirror stands for the fleet while the collector's last success is younger than this. */
 export const MIRROR_FRESH_MS = 5 * 60_000;
@@ -45,13 +44,8 @@ export async function crewFromStore(store: MirrorStore, now: number | (() => num
     await Promise.all(
       rows
         .filter((r) => r.kind === "scout" && r.report_present === 1 && r.report_path)
-        .map(async (r): Promise<CrewReport | null> => {
-          // Only under the home, as the snapshot's reports (firstmate.ts `underHome`, ADR 0019).
-          const path = underHome(home, r.report_path!);
-          const st = path === null ? null : await stat(path).catch(() => null);
-          if (!st || path === null) return null;
-          return { id: r.id, path, first_line: await firstLine(path), modified_at: Math.floor(st.mtimeMs) };
-        }),
+        // Only under the home, as the snapshot's reports (firstmate.ts `readReport`, ADR 0019).
+        .map((r): Promise<CrewReport | null> => readReport(home, r.report_path!, r.id)),
     )
   )
     .filter((r): r is CrewReport => r !== null)

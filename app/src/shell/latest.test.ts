@@ -68,3 +68,56 @@ describe("latestOnly: a read that lands after a newer one began is dropped", () 
     expect(failures).toEqual(["Error: new failure"]);
   });
 });
+
+describe("unlessSuperseded: one step of a request a later one can supersede", () => {
+  test("a step that lands after a later request began is dropped, answer and failure alike", async () => {
+    const { unlessSuperseded } = await import("./latest.ts");
+    const counter = { current: 0 };
+    const slow = deferred<string>();
+    const slowFail = deferred<string>();
+    const first = unlessSuperseded(counter, () => slow.promise);
+    const second = unlessSuperseded(counter, () => slowFail.promise);
+    const third = unlessSuperseded(counter, () => Promise.resolve("newest"));
+    slow.resolve("old folder");
+    slowFail.reject(new Error("old refusal"));
+    expect(await first).toBeNull();
+    expect(await second).toBeNull();
+    expect(await third).toEqual({ value: "newest" });
+  });
+
+  test("the newest step's failure is the caller's to say", async () => {
+    const { unlessSuperseded } = await import("./latest.ts");
+    const counter = { current: 0 };
+    await expect(unlessSuperseded(counter, () => Promise.reject(new Error("gone")))).rejects.toThrow("gone");
+  });
+
+  test("anything else that moves the counter on supersedes it too (the reader's × and its other opens)", async () => {
+    const { unlessSuperseded } = await import("./latest.ts");
+    const counter = { current: 0 };
+    const listing = deferred<number>();
+    const step = unlessSuperseded(counter, () => listing.promise);
+    counter.current++;
+    listing.resolve(3);
+    expect(await step).toBeNull();
+  });
+});
+
+describe("who reads through it", () => {
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const { join } = require("node:path") as typeof import("node:path");
+  const src = (file: string) => readFileSync(join(import.meta.dir, "..", file), "utf8");
+
+  test("Settings: a read begun before a change never lands over the one begun after it", () => {
+    // get_settings waits on three Keychain calls, so two reads in flight can finish in either order.
+    expect(src("pages/Settings.tsx")).toMatch(/latestOnly\(\s*getSettings,/);
+    // Positive control: the usage poller is written the same way.
+    expect(src("usage/useUsageSnapshot.ts")).toMatch(/latestOnly\(\s*getUsageSnapshot,/);
+  });
+
+  test("the reader: a click's door, a folder's listing and a live reload each yield to a later one", () => {
+    const reader = src("reader/Reader.tsx");
+    expect(reader).toMatch(/unlessSuperseded\(generation, \(\) => readerAllowClick\(path\)\)/);
+    expect(reader).toMatch(/unlessSuperseded\(generation, \(\) => readerListDir\(path\)\)/);
+    expect(reader).toMatch(/unlessSuperseded\(reloads, \(\) => readerReadText\(path\)\)/);
+  });
+});

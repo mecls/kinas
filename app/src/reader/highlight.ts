@@ -66,11 +66,13 @@ const LOADERS: Record<string, () => Promise<{ default: LanguageFn }>> = {
 /**
  * The grammar a block's `language-*` class asks for, or null to leave it plain. A source view's and a diff's class is
  * already a highlight.js id (language.ts mapped the extension); a markdown fence's is the word its author typed — ```ts,
- * ```sh, ```yml — which is mapped the way an extension is, so a fence in a plan reads as the file it quotes does. Own
- * keys only on both tables: a fence is file content.
+ * ```sh, ```yml — which is mapped the way an extension is, so a fence in a plan reads as the file it quotes does, in
+ * any case. Own keys only on both tables: a fence is file content.
  */
 export function grammarFor(id: string): string | null {
-  return Object.hasOwn(LOADERS, id) ? id : languageForFence(id);
+  // ```TypeScript is ```typescript, as ```TS is ```ts: a fence's word is matched without its case either way.
+  const key = id.toLowerCase();
+  return Object.hasOwn(LOADERS, key) ? key : languageForFence(key);
 }
 
 /** Whether a block is worth highlighting at all (R10). Plain monospace is the honest rendering of the rest. */

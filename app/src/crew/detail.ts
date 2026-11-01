@@ -1,4 +1,5 @@
 import type { CrewTaskDetail, CrewWord } from "../api.ts";
+import { failedRead } from "../pages/readFailure.ts";
 import type { Check } from "../ui/Panel.tsx";
 import type { BadgeState } from "../ui/StatusBadge.tsx";
 import type { TimelineItem } from "../ui/Timeline.tsx";
@@ -27,6 +28,26 @@ export function detailFor(
   const current = answer !== null && answer.id === id;
   return { detail: current || !failed ? (answer?.detail ?? null) : null, current };
 }
+
+/**
+ * The panel's failed read, said only under the task it was for — never under the next one while that one's read is on
+ * its way — in the pages' words (pages/readFailure.ts): Rust's message already says "could not read the task". `drawn`:
+ * the last good detail is still shown beside it.
+ */
+export function detailFailure(error: { id: string; message: string } | null, id: string | null, drawn: boolean): string | null {
+  return error !== null && error.id === id ? failedRead("task", error.message, drawn) : null;
+}
+
+/**
+ * The panel's own head while no task is drawn — its read on the way, failed, or the task not in the mirror: the id
+ * selected, so × is always there to close the panel. Null when a task is drawn (it has its own) or none is selected.
+ */
+export function bareHead(view: { detail: CrewTaskDetail | null }, id: string | null): string | null {
+  return view.detail === null ? id : null;
+}
+
+/** The detail is hidden whenever the panel is, or holds the reader: a closed panel reads nothing (`crew_task`). */
+export const taskHidden = (panel: { open: boolean; occupant: "reader" | "task" }): boolean => !panel.open || panel.occupant !== "task";
 
 /** "ship · no-mistakes · yolo off · claude · herdr · observed 09:31", without the parts Firstmate did not say. */
 export function settingsLine(d: CrewTaskDetail): string {

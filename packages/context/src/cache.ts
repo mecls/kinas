@@ -73,11 +73,18 @@ export class ContextCache {
     }
   }
 
+  /**
+   * Keeps the packet begun last. Runs started side by side read the same packet before, and the one begun later can
+   * finish first: written over it, the earlier one would put an older crew back, and the next run would count the later
+   * one's changes again. A stored stamp in what is now the future (the clock stepped back) is no later moment, and is
+   * replaced; the clock is read as the row is.
+   */
   writePacket(org: string, packet: Packet): void {
     this.db.run(
-      `INSERT INTO packet_cache (org_id, key, body, computed_at) VALUES (?, 'packet', ?, ?)
-       ON CONFLICT (org_id, key) DO UPDATE SET body = excluded.body, computed_at = excluded.computed_at`,
-      [org, JSON.stringify(packet), packet.generated_at],
+      `INSERT INTO packet_cache (org_id, key, body, computed_at) VALUES (?1, 'packet', ?2, ?3)
+       ON CONFLICT (org_id, key) DO UPDATE SET body = excluded.body, computed_at = excluded.computed_at
+       WHERE excluded.computed_at >= packet_cache.computed_at OR packet_cache.computed_at > ?4`,
+      [org, JSON.stringify(packet), packet.generated_at, Date.now()],
     );
   }
 

@@ -229,9 +229,23 @@ fn stored(store: &Store) -> Stored {
     }
 }
 
+#[cfg(test)]
 fn put_paths(store: &Store, key: &str, paths: &BTreeSet<String>) -> Result<(), String> {
     let conn = store.conn();
     put_setting(&conn, store.org_id(), key, &serde_json::json!(paths)).map_err(|e| e.to_string())
+}
+
+/// Read, change and write folder-view lists under one guard. A list read before it — in `snapshot`, which may walk the
+/// root first — is one another command may have written since, and writing it back would undo that change.
+fn change_paths<const N: usize>(store: &Store, keys: [&str; N], change: impl FnOnce(&mut [BTreeSet<String>; N])) -> Result<(), String> {
+    let conn = store.conn();
+    let org = store.org_id();
+    let mut lists = keys.map(|key| stored_paths(get_setting(&conn, org, key)));
+    change(&mut lists);
+    for (key, list) in keys.iter().zip(&lists) {
+        put_setting(&conn, org, key, &serde_json::json!(list)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// The listing as it stands: the root's real path, every folder in it, and what Settings keeps. Blocking — it may walk
@@ -324,42 +338,44 @@ pub fn set_folder_internal(store: State<'_, Store>, name: String, internal: bool
 /// and Home, by path. Async, because checking the path against the listing may walk the root.
 #[tauri::command]
 pub async fn set_folder_hidden(app: AppHandle, path: String, hidden: bool) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let snap = snapshot(&app);
-        listed(&snap, &path)?;
-        let mut list = snap.stored.hidden;
+    tauri::async_runtime::spawn_blocking(move || hide(&app.state::<Store>(), &snapshot(&app), &path, hidden))
+        .await
+        .map_err(|e| format!("the folder was not changed: {e}"))?
+}
+
+/// One listed folder off the sidebar and Home, or back on.
+fn hide(store: &Store, snap: &Snapshot, path: &str, hidden: bool) -> Result<(), String> {
+    listed(snap, path)?;
+    change_paths(store, [HIDDEN_KEY], |[list]| {
         if hidden {
-            list.insert(path);
+            list.insert(path.to_string());
         } else {
-            list.remove(&path);
+            list.remove(path);
         }
-        put_paths(&app.state::<Store>(), HIDDEN_KEY, &list)
     })
-    .await
-    .map_err(|e| format!("the folder was not changed: {e}"))?
 }
 
 /// Settings' Remove and Restore, by path. Restore also clears the folder from the hidden list: a folder that came back
 /// hidden would look as if Restore had done nothing (prd rule 6). Nothing on disk is touched.
 #[tauri::command]
 pub async fn set_folder_removed(app: AppHandle, path: String, removed: bool) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let snap = snapshot(&app);
-        listed(&snap, &path)?;
-        let store = app.state::<Store>();
-        let mut list = snap.stored.removed;
-        if removed {
-            list.insert(path);
-            return put_paths(&store, REMOVED_KEY, &list);
-        }
-        list.remove(&path);
-        let mut hidden = snap.stored.hidden;
-        hidden.remove(&path);
-        put_paths(&store, REMOVED_KEY, &list)?;
-        put_paths(&store, HIDDEN_KEY, &hidden)
+    tauri::async_runtime::spawn_blocking(move || remove(&app.state::<Store>(), &snapshot(&app), &path, removed))
+        .await
+        .map_err(|e| format!("the folder was not changed: {e}"))?
+}
+
+/// One listed folder removed from Settings' list, or restored — and shown — again.
+fn remove(store: &Store, snap: &Snapshot, path: &str, removed: bool) -> Result<(), String> {
+    listed(snap, path)?;
+    if removed {
+        return change_paths(store, [REMOVED_KEY], |[list]| {
+            list.insert(path.to_string());
+        });
+    }
+    change_paths(store, [REMOVED_KEY, HIDDEN_KEY], |[list, hidden]| {
+        list.remove(path);
+        hidden.remove(path);
     })
-    .await
-    .map_err(|e| format!("the folder was not changed: {e}"))?
 }
 
 /// What Add a client folder… did. `name` is the folder as the listing names it now.
@@ -468,37 +484,7 @@ pub async fn add_client_folder(app: AppHandle, window: tauri::WebviewWindow) -> 
     let outcome = tauri::async_runtime::spawn_blocking(move || -> Result<AddOutcome, String> {
         let (real, kind) = access::resolve(&pick).map_err(|_| "Choose a folder".to_string())?;
         check_pick(&real, kind, &root, &home())?;
-        let snap = snapshot(&app);
-        let store = app.state::<Store>();
-        let key = real.to_string_lossy().into_owned();
-        let decision = decide(&real, &snap.folders, &snap.stored.hidden, &snap.stored.removed);
-        let (mut hidden, mut removed, mut added) = (snap.stored.hidden, snap.stored.removed, snap.stored.added);
-        match decision {
-            AddDecision::Add => {
-                added.insert(key.clone());
-                put_paths(&store, ADDED_KEY, &added)?;
-            }
-            AddDecision::Show => {
-                hidden.remove(&key);
-                put_paths(&store, HIDDEN_KEY, &hidden)?;
-            }
-            AddDecision::Restore => {
-                removed.remove(&key);
-                hidden.remove(&key);
-                put_paths(&store, REMOVED_KEY, &removed)?;
-                put_paths(&store, HIDDEN_KEY, &hidden)?;
-            }
-            AddDecision::Already => {}
-        }
-        // Named as the listing names it now: an added `site` beside a discovered `site` is `<parent>/site`.
-        let folders = listing(&snap.root, &snap.folders, &added);
-        let name = folders.iter().position(|f| *f == real).and_then(|i| names_for(&snap.root, &folders).into_iter().nth(i)).unwrap_or_else(|| base(&real));
-        Ok(match decision {
-            AddDecision::Add => AddOutcome::Added { name },
-            AddDecision::Show => AddOutcome::Shown { name },
-            AddDecision::Restore => AddOutcome::Restored { name },
-            AddDecision::Already => AddOutcome::Already { name },
-        })
+        add(&app.state::<Store>(), &snapshot(&app), &real)
     })
     .await
     .map_err(|e| format!("the folder was not added: {e}"))??;
@@ -511,6 +497,38 @@ pub async fn add_client_folder(app: AppHandle, window: tauri::WebviewWindow) -> 
     };
     log::info!("projects: client folder {word} in {} ms", started.elapsed().as_millis());
     Ok(outcome)
+}
+
+/// A checked pick (`check_pick`), decided against the listing and written; named as the listing names it now.
+fn add(store: &Store, snap: &Snapshot, real: &Path) -> Result<AddOutcome, String> {
+    let key = real.to_string_lossy().into_owned();
+    let decision = decide(real, &snap.folders, &snap.stored.hidden, &snap.stored.removed);
+    match decision {
+        AddDecision::Add => change_paths(store, [ADDED_KEY], |[added]| {
+            added.insert(key.clone());
+        })?,
+        AddDecision::Show => change_paths(store, [HIDDEN_KEY], |[hidden]| {
+            hidden.remove(&key);
+        })?,
+        AddDecision::Restore => change_paths(store, [REMOVED_KEY, HIDDEN_KEY], |[removed, hidden]| {
+            removed.remove(&key);
+            hidden.remove(&key);
+        })?,
+        AddDecision::Already => {}
+    }
+    // Named as the listing names it now: an added `site` beside a discovered `site` is `<parent>/site`.
+    let mut added = snap.stored.added.clone();
+    if decision == AddDecision::Add {
+        added.insert(key);
+    }
+    let folders = listing(&snap.root, &snap.folders, &added);
+    let name = folders.iter().position(|f| f == real).and_then(|i| names_for(&snap.root, &folders).into_iter().nth(i)).unwrap_or_else(|| base(real));
+    Ok(match decision {
+        AddDecision::Add => AddOutcome::Added { name },
+        AddDecision::Show => AddOutcome::Shown { name },
+        AddDecision::Restore => AddOutcome::Restored { name },
+        AddDecision::Already => AddOutcome::Already { name },
+    })
 }
 
 #[cfg(test)]
@@ -633,6 +651,38 @@ mod tests {
         assert_eq!(names_for(&root, &folders), ["plain", "acme", "one/site", "two/site"]);
         // The gone folder's row is not pruned by listing: it is still in `added` for when it comes back.
         assert!(added.contains(root.join("gone").to_string_lossy().as_ref()));
+    }
+
+    /// Folder views (prd rules 5, 6, 10): each change reads the three lists in `snapshot`, and the listing may walk the
+    /// root before it — a second command waits for that walk, then reads the same lists the first one is about to
+    /// write. Written from what each had read, the last write dropped the other's change: the first folder hidden came
+    /// back on the sidebar, a restore undid a hide, one of two folders added was never listed. Every change lands.
+    #[test]
+    fn changes_made_while_another_reads_the_lists_all_land() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let tree = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tree.path()).unwrap();
+        plant(&root, &["acme-9c2e/.git".to_string(), "hub-9c2e/.git".to_string(), "shop-9c2e/.git".to_string()]);
+        for d in ["notes-9c2e", "drafts-9c2e"] {
+            fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let p = |name: &str| root.join(name).to_string_lossy().into_owned();
+        put_paths(&store, REMOVED_KEY, &BTreeSet::from([p("shop-9c2e")])).unwrap();
+        put_paths(&store, HIDDEN_KEY, &BTreeSet::from([p("shop-9c2e")])).unwrap();
+        let folders = discover_repos(&root, MAX_DEPTH);
+        // Five commands, each past its `snapshot` before any of them writes.
+        let snap = || Snapshot { root: root.clone(), folders: folders.clone(), stored: stored(&store) };
+        let (a, b, c, d, e) = (snap(), snap(), snap(), snap(), snap());
+        hide(&store, &a, &p("acme-9c2e"), true).unwrap();
+        hide(&store, &b, &p("hub-9c2e"), true).unwrap();
+        remove(&store, &c, &p("shop-9c2e"), false).unwrap();
+        assert!(matches!(add(&store, &d, &root.join("notes-9c2e")).unwrap(), AddOutcome::Added { .. }));
+        assert!(matches!(add(&store, &e, &root.join("drafts-9c2e")).unwrap(), AddOutcome::Added { .. }));
+        let now = stored(&store);
+        assert_eq!(now.hidden, BTreeSet::from([p("acme-9c2e"), p("hub-9c2e")]), "both hidden, the restored one shown");
+        assert!(now.removed.is_empty(), "restored");
+        assert_eq!(now.added, BTreeSet::from([p("drafts-9c2e"), p("notes-9c2e")]), "both added");
     }
 
     #[test]

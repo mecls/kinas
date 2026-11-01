@@ -148,3 +148,52 @@ describe("what the panel draws for the task selected (detailFor)", () => {
     expect(detailFor({ id: "a-9c2e", detail: null }, "a-9c2e", false)).toEqual({ detail: null, current: true });
   });
 });
+
+describe("the panel's own head and its failure line, for the task selected", () => {
+  const a = detail({}, { id: "a-9c2e" });
+
+  test("a failed read says it once, in the pages' words: Rust's message already names the task", async () => {
+    const { detailFailure } = await import("./detail.ts");
+    // It read "Could not read the task: could not read the task: database is locked".
+    const message = "could not read the task: database is locked";
+    expect(detailFailure({ id: "a-9c2e", message }, "a-9c2e", true)).toBe("Task: could not read the task: database is locked · showing the last reading");
+    expect(detailFailure({ id: "b-9c2e", message }, "b-9c2e", false)).toBe("Task: could not read the task: database is locked");
+  });
+
+  test("another task's failure is never said under the one selected now, while its read is on the way", async () => {
+    const { detailFailure } = await import("./detail.ts");
+    expect(detailFailure({ id: "a-9c2e", message: "could not read the task: database is locked" }, "b-9c2e", false)).toBeNull();
+    expect(detailFailure(null, "a-9c2e", true)).toBeNull();
+  });
+
+  test("with no task drawn — read failed, not in the mirror, on its way — the head names the id, so × is there", async () => {
+    const { bareHead } = await import("./detail.ts");
+    expect(bareHead(detailFor({ id: "a-9c2e", detail: a }, "b-9c2e", true), "b-9c2e")).toBe("b-9c2e");
+    expect(bareHead(detailFor(null, "b-9c2e", true), "b-9c2e")).toBe("b-9c2e");
+    expect(bareHead(detailFor({ id: "b-9c2e", detail: null }, "b-9c2e", false), "b-9c2e")).toBe("b-9c2e");
+    // A task drawn has its own head; nothing selected, none.
+    expect(bareHead(detailFor({ id: "a-9c2e", detail: a }, "a-9c2e", true), "a-9c2e")).toBeNull();
+    expect(bareHead(detailFor(null, null, false), null)).toBeNull();
+  });
+
+  test("the panel draws them, and the failure is kept with the id it was for", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    const panel = readFileSync(join(import.meta.dir, "TaskDetail.tsx"), "utf8");
+    expect(panel).toMatch(/setError\(\{ id, message: crewErrorOf\(e\) \}\)/);
+    expect(panel).toMatch(/detailFailure\(error, id, /);
+    expect(panel).toMatch(/bareHead\(view, id\)/);
+    expect(panel.includes("Could not read the task:")).toBe(false);
+  });
+
+  test("a closed panel reads nothing: the detail is hidden whenever the panel is", async () => {
+    const { taskHidden } = await import("./detail.ts");
+    // × left the occupant "task", so the hidden panel read crew_task again with every crew reading.
+    expect(taskHidden({ open: false, occupant: "task" })).toBe(true);
+    expect(taskHidden({ open: true, occupant: "reader" })).toBe(true);
+    expect(taskHidden({ open: true, occupant: "task" })).toBe(false);
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    expect(readFileSync(join(import.meta.dir, "..", "App.tsx"), "utf8")).toMatch(/hidden=\{taskHidden\(reader\)\}/);
+  });
+});

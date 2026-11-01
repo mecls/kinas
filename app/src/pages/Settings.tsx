@@ -268,7 +268,7 @@ export function SettingsPage({
                 disabled={settings.projects_root_from_env}
                 onBlur={(e) => {
                   const value = e.currentTarget.value.trim();
-                  if (value && value !== settings.projects_root) void act("projects", () => setProjectsRoot(value).then(() => {}));
+                  if (value && value !== settings.projects_root) void act("projects", () => setProjectsRoot(value).then(onProjectsChange));
                 }}
               />
               {settings.projects_root_from_env && <p className="problem">KINAS_ROOT is set in the environment, so it wins over this field.</p>}

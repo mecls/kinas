@@ -2,7 +2,7 @@
 // terminal main.ts then holds through hold.ts until Enter, q or Ctrl+C (keymap.md), and piped it is printed and done.
 
 import { accentLine, bannerLines, BANNER_WIDTH, glyph, LOGO_WIDTH, logoLines, paint, type Polarity, type Tone } from "@kinas/commands/theme";
-import { age, ago, flat, packetCounts, plural, until, type Packet, type QuotaLine, type Section } from "@kinas/context";
+import { age, ago, flat, packetCounts, plural, shown, until, type Packet, type QuotaLine, type Section } from "@kinas/context";
 import { Box, renderToString, Text } from "ink";
 import { homedir } from "node:os";
 
@@ -218,7 +218,8 @@ function Launch({ p, o }: { p: Packet; o: LaunchOptions }) {
   );
 }
 
+/** The packet's control characters are shown before a row is painted (`shown`): `Line` keeps the screen's own colours. */
 export function renderLaunch(packet: Packet, options: LaunchOptions): string {
   const columns = Math.min(options.columns, MAX_COLUMNS);
-  return `${renderToString(<Launch p={packet} o={{ ...options, columns }} />, { columns })}\n`;
+  return `${renderToString(<Launch p={shown(packet)} o={{ ...options, columns }} />, { columns })}\n`;
 }

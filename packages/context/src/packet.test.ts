@@ -187,6 +187,39 @@ describe("the context packet", () => {
     expect(renderAgentPacket(forged)).toContain("· acme\uFFFD[2J · commit · wipe \uFFFD2J\uFFFD done");
     expect(renderOperator(forged, true)).toContain("\x1b[90m");
   });
+
+  test("a convention's control characters are shown, never obeyed, in the packet and in a brief; its lines and tabs stay", () => {
+    // A convention is printed in full, and the hub's con-*.md files are found in every repository under it: `kinas
+    // context --agent` passed a convention's escapes to the terminal showing it as they came — `ESC ] 52` set its
+    // clipboard — the one body of text a source wrote that `flat` never sees.
+    const body = "# Rules\r\n\tindented\nhi \x1b]52;c;ZWNobyBoaQ==\x07 there\n\x1b[8mhidden\x9b2J\x00\n";
+    const forged: Packet = { ...packet, conventions: { ...packet.conventions, data: [{ path: "AGENTS.md", title: "Rules", body, truncated: false }] } };
+    for (const out of [renderAgentPacket(forged), briefPreamble(forged)]) {
+      // The agent packet paints nothing, so no escape at all belongs in it.
+      expect(out).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/);
+      expect(out).toContain("#### Rules\n\tindented\nhi \uFFFD]52;c;ZWNobyBoaQ==\uFFFD there\n\uFFFD[8mhidden\uFFFD2J\uFFFD\n");
+    }
+    expect(headings(renderAgentPacket(forged))).toEqual([...AGENT_HEADINGS]);
+  });
+
+  test("a source's own colour codes are shown too: only the CLI paints, so no title or subject can hide or recolour a row", () => {
+    // `flat` keeps `ESC [ … m` for the CLI's own colours, and a source's went through with them: a commit subject holding
+    // `ESC [ 8 m` concealed the rest of its row in `kinas context` — and, with no colour of the CLI's to reset it, every
+    // row after it and the shell's prompt.
+    const at = packet.generated_at;
+    const forged: Packet = {
+      ...packet,
+      decisions: { ...packet.decisions, data: [{ source: "crew", id: "t-9c2e", title: "Pick \x1b[30;40mblack on black", reason: "why \x1b[5m" }] },
+      recent: { ...packet.recent, data: [{ at, kind: "commit", project: "acme\x1b[31m", text: "fix \x1b[8mhidden" }] },
+    };
+    const sourced = /\x1b\[(?:30;40|5|31|8)m/;
+    expect(renderAgentPacket(forged)).not.toContain("\x1b");
+    expect(renderOperator(forged, false)).not.toContain("\x1b");
+    expect(renderOperator(forged, true)).not.toMatch(sourced);
+    expect(renderOperator(forged, false)).toContain("fix \uFFFD[8mhidden");
+    expect(renderOperator(forged, false)).toContain("Pick \uFFFD[30;40mblack on black — why \uFFFD[5m");
+    expect(renderOperator(forged, true)).toContain("\x1b[90m");
+  });
 });
 
 describe("recent activity", () => {

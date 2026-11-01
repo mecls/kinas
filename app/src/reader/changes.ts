@@ -190,6 +190,20 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
 
 const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false, crewOf: () => null, crewRollupOf: () => null, crewRowsIn: () => [] };
 
+/**
+ * What a live reload draws (tree changes rule 25; crew marks rule 14). `began` is the Changes view's baseline when the
+ * reload began, or null on another view; `now` is the view once the new text and its diff are in — the captain may have
+ * switched meanwhile — and `diffed` whether the reload has a diff of its own. `keep`: the body stays (the crew's copy is
+ * the crew's text). `diff`: still on Changes, the reload's diff. `usual`: the new text in its usual view. `gone`: still
+ * on Changes and back at its baseline — the usual view, and the reader says why.
+ */
+export function reloadDraws(began: string | null, now: { changes: string | null; crew: boolean }, diffed: boolean): "keep" | "diff" | "usual" | "gone" {
+  if (now.crew) return "keep";
+  if (now.changes === null) return "usual";
+  if (diffed) return "diff";
+  return began === null ? "keep" : "gone";
+}
+
 /** How many of a root's marks wait for a push, an added folder counting once (the palette's "2 changes not pushed yet"). */
 export const waitingCount = (summary: TreeChanges): number => summary.entries.filter((e) => e.waits).length;
 

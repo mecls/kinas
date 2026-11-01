@@ -19,10 +19,25 @@ export const AGENT_HEADINGS = ["# Kinas context", "## Projects", "## Features in
  * The operator's view and the launch screen fold their rows with it as well: one row per thing, whatever it says.
  * Nor is any other control character obeyed: an escape, a bell, a backspace or a C1 control (a commit subject keeps
  * whatever its author typed, `ESC ] 52` included, which sets a terminal's clipboard) becomes U+FFFD, shown as text. The
- * one escape kept is a colour (`ESC [ … m`), which the CLI paints its own rows with.
+ * one escape kept is a colour (`ESC [ … m`), which the CLI paints its own rows with — a source's own colours are gone
+ * by then (`shown`).
  */
 export const flat = (line: string): string =>
   line.replace(/\s*(?:\r\n?|\n)\s*/g, " ").replace(/\x1b\[[0-9;]*m|[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, (c) => (c.length > 1 ? c : "�"));
+
+/**
+ * A packet (or any reading) as the CLI shows it: every string a source put in it with its control characters as U+FFFD
+ * — an escape, a colour (`ESC [ … m`) included, a bell, a backspace, a NUL, a C1 control — and its tabs and line breaks
+ * kept, for `flat` to fold and `nestHeadings` to split. Each renderer takes its packet through this first and paints
+ * afterwards, so the one escape `flat` keeps is the CLI's own: no commit subject, title or convention can set a
+ * terminal's clipboard, or hide and recolour the rows after it.
+ */
+export function shown<T>(value: T): T {
+  if (typeof value === "string") return value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "�") as T;
+  if (Array.isArray(value)) return value.map(shown) as T;
+  if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shown(v)])) as T;
+  return value;
+}
 
 const cell = (v: string | number | null | undefined): string => (v === null || v === undefined || v === "" ? "—" : flat(String(v).replace(/\|/g, "\\|")));
 
@@ -214,6 +229,7 @@ export function renderFeatures(p: Packet): string {
   return `## Features in progress\n\n${rows.map((f) => flat(`- ${f.project} · ${f.slug}: ${f.line}`)).join("\n")}`;
 }
 
-export function renderAgentPacket(p: Packet): string {
+export function renderAgentPacket(packet: Packet): string {
+  const p = shown(packet);
   return `${[renderHeader(p), renderProjects(p), renderFeatures(p), renderArtifacts(p), renderConventions(p), renderCrew(p), renderSessions(p), renderDecisions(p), renderQuotas(p), renderRecent(p)].join("\n\n")}\n`;
 }

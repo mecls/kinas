@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { UsageDay } from "../api.ts";
-import { AXIS_LABEL_W, axisLabelDays, buildChart, niceTicks, periodRows, providerSlot } from "./chartModel.ts";
+import { AXIS_LABEL_W, axisLabelDays, buildChart, niceTicks, periodRows, providerLabel, providerSlot } from "./chartModel.ts";
 
 const row = (date: string, model: string, tokens_in: number, tokens_out: number, tokens_cache_read = 0, harness: UsageDay["harness"] = "claude-code"): UsageDay => ({
   date,
@@ -115,5 +115,17 @@ describe("axisLabelDays", () => {
     }
     expect(axisLabelDays(30, plotW(200) / 30)).toEqual([0, 14, 28]);
     expect(axisLabelDays(30, plotW(120) / 30)).toEqual([0, 28]);
+  });
+});
+
+describe("a provider's name is the transcript's word", () => {
+  test("a Pi provider named after an Object member reads as itself, never as the prototype's member", () => {
+    // Pi writes `message.provider` from its own config, and Rust stores it as written (readers/logs.rs). `__proto__`
+    // came back as Object.prototype — an object in the legend, which React refuses, and every page with it.
+    for (const name of ["constructor", "__proto__", "toString", "hasOwnProperty"]) expect(providerLabel(name)).toBe(name);
+    const usage = [{ ...row("2026-09-13", "m", 1, 1, 0, "pi"), provider: "__proto__" }];
+    expect(buildChart({ usage, days, first_usage_date: "2026-09-12" }, false).series.map((s) => s.label)).toEqual(["__proto__"]);
+    // Positive control: a known provider still reads in its own words.
+    expect(providerLabel("anthropic")).toBe("Anthropic");
   });
 });

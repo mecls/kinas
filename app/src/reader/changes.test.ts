@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChangeEntry, DirEntry, TreeChanges } from "../api.ts";
-import { captionFor, createChangesStore, crewCaption, crewWordsFor, folderMarksOf, mergeCrewRows, mergeDeleted, rowWords, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
+import { captionFor, createChangesStore, crewCaption, crewWordsFor, folderMarksOf, mergeCrewRows, mergeDeleted, reloadDraws, rowWords, sinceLabel, waitingCount, wordsFor } from "./changes.ts";
 
 const at1402 = new Date(2026, 8, 23, 14, 2).getTime();
 
@@ -258,5 +258,22 @@ describe("the store keeps each root's latest summary", () => {
     leave();
     store.accept(summary());
     expect(heard).toBe(2);
+  });
+});
+
+describe("what a live reload draws, the view having moved while it read (tree changes rule 25)", () => {
+  test("Changes left while the reload's diff was out: the new text in its usual view, never the diff under Rendered", () => {
+    expect(reloadDraws("14:02", { changes: null, crew: false }, true)).toBe("usual");
+  });
+
+  test("still on Changes: the reload's own diff, or — back at its baseline — the usual view, said", () => {
+    expect(reloadDraws("14:02", { changes: "14:02", crew: false }, true)).toBe("diff");
+    expect(reloadDraws("14:02", { changes: "14:02", crew: false }, false)).toBe("gone");
+  });
+
+  test("the usual view stays usual; the crew's copy is the crew's text, entered before or during the read", () => {
+    expect(reloadDraws(null, { changes: null, crew: false }, false)).toBe("usual");
+    expect(reloadDraws(null, { changes: null, crew: true }, false)).toBe("keep");
+    expect(reloadDraws("14:02", { changes: null, crew: true }, true)).toBe("keep");
   });
 });

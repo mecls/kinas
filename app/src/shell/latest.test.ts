@@ -120,4 +120,32 @@ describe("who reads through it", () => {
     expect(reader).toMatch(/unlessSuperseded\(generation, \(\) => readerListDir\(path\)\)/);
     expect(reader).toMatch(/unlessSuperseded\(reloads, \(\) => readerReadText\(path\)\)/);
   });
+
+  test("the reader's view toggle: a later click on Changes, the crew's copy or the usual view wins over an earlier one", () => {
+    const reader = src("reader/Reader.tsx");
+    expect(reader).toMatch(/unlessSuperseded\(viewAsk, \(\) => changesOf\(current\.path\)\)/);
+    expect(reader).toMatch(/unlessSuperseded\(viewAsk, \(\) => crewChangesOf\(current\.path\)\)/);
+    // Back to the usual view is a request too, though it reads nothing: it supersedes one on its way.
+    expect(reader).toMatch(/const leaveChanges = \(current: Doc\) => \{\s*viewAsk\.current\+\+;/);
+    // A live reload draws what the view is once its diff is in, not what it was when it began (changes.ts reloadDraws).
+    expect(reader).toMatch(/reloadDraws\(since, \{ changes: changesRef\.current, crew: crewRef\.current \}, diffed !== null\)/);
+  });
+
+  test("the confirmation card's Open: a click made while the door is out is what the captain asked for last", () => {
+    expect(src("reader/Reader.tsx")).toMatch(/unlessSuperseded\(generation, \(\) => readerConfirm\(pendingPath, true\)\)/);
+  });
+
+  test("a folder that cannot be listed, with nothing showing, says why on the page — not in a line that fades", () => {
+    const body = /async function openFolder\(path: string\) \{([\s\S]*?)\n  \}\n/.exec(src("reader/Reader.tsx"))![1]!;
+    const handler = body.slice(body.lastIndexOf("} catch (e) {"));
+    expect(handler).toMatch(/if \(!docRef\.current && !folderRef\.current\) setProblem\(/);
+    // Positive control: a click's own refusal is written the same way (follow).
+    expect(src("reader/Reader.tsx")).toMatch(/else if \(!docRef\.current && !folderRef\.current\) setProblem\(\{ displayPath: baseName\(path\), message \}\);/);
+  });
+
+  test("Settings: a new projects folder reads the client folders again, as every other folder change does", () => {
+    const settings = src("pages/Settings.tsx");
+    expect(settings).toMatch(/setProjectsRoot\(value\)\.then\(onProjectsChange\)/);
+    expect(settings).toMatch(/setFolderHidden\(f\.path, hidden\)\.then\(onProjectsChange\)/);
+  });
 });

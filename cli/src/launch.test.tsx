@@ -50,6 +50,24 @@ describe("the launch screen", () => {
     expect(narrow.indexOf("│ Projects")).toBeGreaterThan(narrow.indexOf("│ Kinas"));
   });
 
+  test("a source's control characters, colour codes included, are shown on the screen and never obeyed", () => {
+    // The screen folds every row through `flat`, which keeps `ESC [ … m` for the screen's own colours: a source's went
+    // through with them, so a commit subject holding `ESC [ 8 m` concealed the rest of the screen, and `ESC ] 52` in a
+    // task's title set the terminal's clipboard before `flat` showed it.
+    const forged: Packet = {
+      ...packet,
+      decisions: { ...packet.decisions, data: [{ source: "crew", id: "t-9c2e", title: "Pick \x1b[30;40mblack", reason: "why \x1b]52;c;aGk=\x07" }] },
+      recent: { ...packet.recent, data: [{ at: world.now, kind: "commit", project: "acme", text: "fix \x1b[8mhidden" }] },
+    };
+    const plain = renderLaunch(forged, { columns: 100, color: false, now: world.now });
+    expect(plain).not.toContain("\x1b");
+    expect(plain).toContain("fix \uFFFD[8mhidden");
+    expect(plain).toContain("Pick \uFFFD[30;40mblack");
+    const painted = renderLaunch(forged, { columns: 100, color: true, now: world.now });
+    expect(painted).not.toMatch(/\x1b\[(?:30;40|8)m|\x1b\]/);
+    expect(painted).toContain(CRIMSON);
+  });
+
   test("crimson is the accent line, plus the footer only when something needs a decision", () => {
     const count = (p: Packet) => renderLaunch(p, { columns: 100, color: true, now: world.now }).split(CRIMSON).length - 1;
     expect(count(packet)).toBe(2);

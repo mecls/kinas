@@ -12,6 +12,8 @@ use std::time::{Duration, Instant};
 
 /// How long the child gets between SIGHUP and SIGKILL when Kinas quits (R28).
 pub const QUIT_GRACE: Duration = Duration::from_secs(2);
+/// How long `defaults` may take to name the Mac's locale (`locale_lang`); it answers in milliseconds.
+const DEFAULTS_LIMIT: Duration = Duration::from_secs(2);
 
 /// What the pane runs.
 #[derive(Debug, Clone, PartialEq)]
@@ -164,17 +166,21 @@ fn home_dir() -> PathBuf {
 /// LANG from the environment when it names a UTF-8 locale, else from the macOS locale when such a
 /// locale exists, else en_US.UTF-8 (R32).
 fn locale_lang() -> String {
-    if let Ok(lang) = std::env::var("LANG") {
+    locale_lang_from(std::env::var("LANG").ok(), Path::new("/usr/bin/defaults"))
+}
+
+/// `locale_lang` with LANG and `defaults` passed in, so a test can hand it a `defaults` that never answers.
+fn locale_lang_from(lang: Option<String>, defaults: &Path) -> String {
+    if let Some(lang) = lang {
         if lang.to_ascii_uppercase().contains("UTF-8") {
             return lang;
         }
     }
-    let apple = std::process::Command::new("/usr/bin/defaults")
-        .args(["read", "-g", "AppleLocale"])
-        .output()
+    // Through `proc::run`, as every other child: a fixed argv, null stdin, its group killed at the limit.
+    let apple = crate::proc::run(&crate::proc::Run { program: defaults, args: &["read", "-g", "AppleLocale"], cwd: None, set: &[], limit: DEFAULTS_LIMIT })
         .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().split('@').next().unwrap_or("").to_string())
+        .filter(|ran| ran.ok())
+        .map(|ran| ran.stdout.trim().split('@').next().unwrap_or("").to_string())
         .unwrap_or_default();
     let candidate = format!("{apple}.UTF-8");
     if !apple.is_empty() && std::path::Path::new("/usr/share/locale").join(&candidate).is_dir() {
@@ -289,57 +295,176 @@ pub struct PtyState {
     inner: Arc<Mutex<Current>>,
 }
 
+/// What the webview sends while a session is on its way — keys, and the last size — kept for that session.
 #[derive(Default)]
+struct Pending {
+    input: Vec<u8>,
+    size: Option<(u16, u16)>,
+}
+
+/// The most input kept for a session still starting: the clipboard's limit, so any paste the pane takes is kept.
+const PENDING_MAX_BYTES: usize = crate::commands::CLIPBOARD_MAX_BYTES;
+
 struct Current {
-    session: Option<Arc<Session>>,
+    /// The running session, with the start that made it.
+    session: Option<(u64, Arc<Session>)>,
+    /// The last start begun, page load held for, or quit: a start that finishes behind a newer one is ended.
     generation: u64,
+    /// Some while a session is on its way: from launch, a page starting to load, or a start beginning, until it is in.
+    pending: Option<Pending>,
+}
+
+impl Default for Current {
+    /// Before the first start the pane is on its way too: the page's first keys wait for it.
+    fn default() -> Self {
+        Current { session: None, generation: 0, pending: Some(Pending::default()) }
+    }
 }
 
 impl PtyState {
-    /// Starts a new session, replacing (and terminating) any previous one, e.g. after a webview reload.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Current> {
+        self.inner.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Starts a new session, replacing (and terminating) any previous one: `begin`, then `spawn` — the two steps
+    /// `pty_start` takes on either side of its thread hop, in one call for the tests.
+    #[cfg(test)]
     pub fn start<D, E>(&self, profile: &Profile, cols: u16, rows: u16, on_data: D, on_exit: E) -> Result<Option<u32>, String>
     where
         D: Fn(Vec<u8>) + Send + 'static,
         E: FnOnce(Option<u32>) + Send + 'static,
     {
+        let generation = self.begin();
+        self.spawn(generation, profile, cols, rows, on_data, on_exit)
+    }
+
+    /// The window's page starts loading (lib.rs, `PageLoadEvent::Started`), before any of its script runs: it will start
+    /// the pane, and what it sends before that start begins waits for the new session — never the old page's shell, as
+    /// when a sync start on the main thread queued it. A start still on its way for the old page is overtaken.
+    pub fn hold(&self) {
+        let mut current = self.lock();
+        current.generation += 1;
+        current.pending.get_or_insert_with(Pending::default);
+    }
+
+    /// A start begins: the previous session is ended, and what the webview sends from now waits for the new one. Answers
+    /// the generation `spawn` installs under.
+    pub fn begin(&self) -> u64 {
         let (previous, generation) = {
-            let mut current = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+            let mut current = self.lock();
             current.generation += 1;
+            current.pending.get_or_insert_with(Pending::default);
             (current.session.take(), current.generation)
         };
-        if let Some(pid) = previous.and_then(|s| s.pid()) {
+        if let Some(pid) = previous.and_then(|(_, s)| s.pid()) {
             std::thread::spawn(move || terminate(pid, QUIT_GRACE));
         }
+        generation
+    }
+
+    /// Spawns the session `begin` asked for. Installed only if nothing newer — a start, a page load, quitting — came
+    /// meanwhile, and ended otherwise. What waited reaches it first: its size, then its keys, written with the session's
+    /// writer taken before the state is let go, so a key sent after waits behind them.
+    pub fn spawn<D, E>(&self, generation: u64, profile: &Profile, cols: u16, rows: u16, on_data: D, on_exit: E) -> Result<Option<u32>, String>
+    where
+        D: Fn(Vec<u8>) + Send + 'static,
+        E: FnOnce(Option<u32>) + Send + 'static,
+    {
         let inner = Arc::clone(&self.inner);
-        let session = Session::spawn(profile, cols, rows, on_data, move |code| {
+        let spawned = Session::spawn(profile, cols, rows, on_data, move |code| {
             let mut current = inner.lock().unwrap_or_else(|p| p.into_inner());
-            if current.generation == generation {
+            if current.session.as_ref().is_some_and(|(made_by, _)| *made_by == generation) {
                 current.session = None;
             }
             drop(current);
             on_exit(code);
-        })?;
+        });
+        let session = match spawned {
+            Ok(session) => Arc::new(session),
+            Err(e) => {
+                self.fail(generation);
+                return Err(e);
+            }
+        };
         let pid = session.pid();
-        self.inner.lock().unwrap_or_else(|p| p.into_inner()).session = Some(Arc::new(session));
+        let mut current = self.lock();
+        if current.generation != generation {
+            drop(current);
+            if let Some(pid) = pid {
+                std::thread::spawn(move || terminate(pid, QUIT_GRACE));
+            }
+            return Ok(pid);
+        }
+        let waited = current.pending.take().unwrap_or_default();
+        current.session = Some((generation, Arc::clone(&session)));
+        let mut writer = session.writer.lock().unwrap_or_else(|p| p.into_inner());
+        drop(current);
+        if let Some((cols, rows)) = waited.size {
+            let _ = session.resize(cols, rows);
+        }
+        if !waited.input.is_empty() {
+            let _ = writer.write_all(&waited.input).and_then(|_| writer.flush());
+        }
         Ok(pid)
     }
 
-    pub fn session(&self) -> Result<Arc<Session>, String> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .session
-            .clone()
-            .ok_or_else(|| "the terminal is not running".to_string())
+    /// A start that could not spawn: nothing waits any more, so the pane's keys are refused until the next start.
+    pub fn fail(&self, generation: u64) {
+        let mut current = self.lock();
+        if current.generation == generation {
+            current.pending = None;
+        }
     }
 
-    /// Called when Kinas quits.
+    /// The pane's keys: kept for a session on its way, else written to the running one.
+    pub fn write(&self, bytes: &[u8]) -> Result<(), String> {
+        let session = {
+            let mut current = self.lock();
+            if let Some(pending) = current.pending.as_mut() {
+                if pending.input.len() + bytes.len() > PENDING_MAX_BYTES {
+                    return Err("the terminal is still starting".into());
+                }
+                pending.input.extend_from_slice(bytes);
+                return Ok(());
+            }
+            current.session.as_ref().map(|(_, s)| Arc::clone(s))
+        };
+        session.ok_or_else(not_running)?.write(bytes)
+    }
+
+    /// The pane's size: kept for a session on its way, else applied to the running one.
+    pub fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
+        let session = {
+            let mut current = self.lock();
+            if let Some(pending) = current.pending.as_mut() {
+                pending.size = Some((cols, rows));
+                return Ok(());
+            }
+            current.session.as_ref().map(|(_, s)| Arc::clone(s))
+        };
+        session.ok_or_else(not_running)?.resize(cols, rows)
+    }
+
+    pub fn session(&self) -> Result<Arc<Session>, String> {
+        self.lock().session.as_ref().map(|(_, s)| Arc::clone(s)).ok_or_else(not_running)
+    }
+
+    /// Called when Kinas quits. A start still on its way lands after this and is ended.
     pub fn shutdown(&self) {
-        let session = self.inner.lock().unwrap_or_else(|p| p.into_inner()).session.take();
-        if let Some(pid) = session.and_then(|s| s.pid()) {
+        let session = {
+            let mut current = self.lock();
+            current.generation += 1;
+            current.pending = None;
+            current.session.take()
+        };
+        if let Some(pid) = session.and_then(|(_, s)| s.pid()) {
             terminate(pid, QUIT_GRACE);
         }
     }
+}
+
+fn not_running() -> String {
+    "the terminal is not running".to_string()
 }
 
 #[cfg(test)]
@@ -441,6 +566,29 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// Kinas started from Finder has no LANG, so every pane start asks `defaults` for the Mac's locale — and with no
+    /// limit a `defaults` that never answers (cfprefsd wedged) held the start for ever, and the terminal with it. Asked
+    /// through `proc::run` with a limit, as every other child is; past it, the fallback.
+    #[test]
+    fn a_defaults_that_never_answers_gives_the_fallback_within_its_limit() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let write_script = |name: &str, body: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        let stuck = write_script("defaults-stuck", "sleep 10; echo pt_PT");
+        let started = Instant::now();
+        assert_eq!(locale_lang_from(None, &stuck), "en_US.UTF-8");
+        assert!(started.elapsed() < DEFAULTS_LIMIT + Duration::from_secs(2), "took {:?}", started.elapsed());
+        // An answer within the limit is still taken, its `@` modifiers dropped; a UTF-8 LANG wins without asking.
+        let answers = write_script("defaults-ok", "echo 'pt_PT@rg=ptzzzz'");
+        assert_eq!(locale_lang_from(Some("C".into()), &answers), "pt_PT.UTF-8");
+        assert_eq!(locale_lang_from(Some("de_DE.UTF-8".into()), &stuck), "de_DE.UTF-8");
+    }
+
     #[test]
     fn shell_only_profile_just_execs_the_login_shell() {
         let p = Profile::login_shell_then("/bin/zsh", None, PathBuf::from("/x"), "en_US.UTF-8".into());
@@ -510,6 +658,65 @@ mod tests {
         terminate(session.pid().unwrap(), QUIT_GRACE);
         exit_rx.recv_timeout(Duration::from_secs(5)).expect("child survived terminate");
         assert!(started.elapsed() < Duration::from_secs(4));
+    }
+
+    /// `pty_start` runs off the main thread (it asks `defaults`, stats a folder under `~/Documents` and forks the shell),
+    /// so the webview's keys and sizes can reach Rust before the session exists: after a page starts loading, and while a
+    /// start is under way. They wait for that session and reach it first and in order — as they did when the main thread
+    /// queued them behind the start — never the old page's shell, never refused.
+    #[test]
+    fn what_the_pane_sends_while_it_starts_reaches_the_new_shell_first_and_in_order() {
+        let state = PtyState::default();
+        let (old_tx, old_rx) = mpsc::channel::<Vec<u8>>();
+        state.start(&sh("cat"), 80, 24, move |b| old_tx.send(b).unwrap(), |_| {}).unwrap();
+        state.hold();
+        state.write(b"one\r").unwrap();
+        let generation = state.begin();
+        state.write(b"two\r").unwrap();
+        state.resize(100, 30).unwrap();
+        let (data_tx, data_rx) = mpsc::channel::<Vec<u8>>();
+        let (exit_tx, exit_rx) = mpsc::channel();
+        let script = r#"read a; read b; read c; printf '%s|%s|%s|' "$a" "$b" "$c"; stty size"#;
+        state.spawn(generation, &sh(script), 80, 24, move |b| data_tx.send(b).unwrap(), move |c| exit_tx.send(c).unwrap()).unwrap();
+        state.write(b"three\r").unwrap();
+        exit_rx.recv_timeout(Duration::from_secs(10)).expect("the new shell did not finish");
+        let out = String::from_utf8_lossy(&data_rx.try_iter().flatten().collect::<Vec<u8>>()).into_owned();
+        assert!(out.contains("one|two|three|30 100"), "{out:?}");
+        let old = String::from_utf8_lossy(&old_rx.try_iter().flatten().collect::<Vec<u8>>()).into_owned();
+        assert!(!old.contains("one"), "the old page's shell got the new page's keys: {old:?}");
+        state.shutdown();
+    }
+
+    /// Two starts at once — Enter twice after `[process exited]`, or a reload during a start: the one begun last is the
+    /// pane's, and the other's shell is ended, never installed and never left running.
+    #[test]
+    fn a_start_overtaken_by_a_newer_one_is_ended_and_never_installed() {
+        let state = PtyState::default();
+        let first = state.begin();
+        let second = state.begin();
+        let (exit_tx, exit_rx) = mpsc::channel();
+        let newer = state.spawn(second, &sh("sleep 30"), 80, 24, |_| {}, |_| {}).unwrap();
+        state.spawn(first, &sh("sleep 30"), 80, 24, |_| {}, move |c| exit_tx.send(c).unwrap()).unwrap();
+        exit_rx.recv_timeout(Duration::from_secs(5)).expect("the overtaken start's shell was left running");
+        assert_eq!(state.session().unwrap().pid(), newer);
+        // Quitting during a start: the start lands after it, and its shell is ended too.
+        let late = state.begin();
+        state.shutdown();
+        let (exit_tx, exit_rx) = mpsc::channel();
+        state.spawn(late, &sh("sleep 30"), 80, 24, |_| {}, move |c| exit_tx.send(c).unwrap()).unwrap();
+        exit_rx.recv_timeout(Duration::from_secs(5)).expect("a shell started after quitting was left running");
+        assert!(state.session().is_err());
+    }
+
+    /// A start that fails leaves nothing waiting: the pane's keys are refused, as before, until Enter starts it again.
+    #[test]
+    fn after_a_failed_start_the_pane_s_keys_are_refused() {
+        let state = PtyState::default();
+        let generation = state.begin();
+        let gone = Profile { program: "/nonexistent/kinas-shell".into(), args: Vec::new(), cwd: std::env::temp_dir(), set_env: Vec::new() };
+        assert!(state.spawn(generation, &gone, 80, 24, |_| {}, |_| {}).is_err());
+        assert_eq!(state.write(b"x"), Err("the terminal is not running".to_string()));
+        assert!(state.resize(80, 24).is_err());
     }
 
     #[test]

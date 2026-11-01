@@ -42,6 +42,8 @@ pub struct Inner {
     pub socket: Option<PathBuf>,
     /// A download is under way: its save sheet is up, or its copy is being written. One at a time (export.rs).
     pub exporting: bool,
+    /// The newest `reader_open` begun, or `reader_close`: an open is recorded only when nothing began after it.
+    pub opened: u64,
 }
 
 impl Inner {
@@ -58,6 +60,13 @@ pub struct ReaderState(Mutex<Inner>);
 impl ReaderState {
     pub fn lock(&self) -> MutexGuard<'_, Inner> {
         self.0.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// An open begins: the ticket `record_open` is handed, newer than every open and close before it.
+    fn begin_open(&self) -> u64 {
+        let mut inner = self.lock();
+        inner.opened += 1;
+        inner.opened
     }
 }
 
@@ -170,6 +179,7 @@ async fn off_main<T: Send + 'static>(work: impl FnOnce() -> Result<T, ReaderErro
 pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDoc, ReaderError> {
     off_main(move || {
         let state = app.state::<ReaderState>();
+        let ticket = state.begin_open();
         let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
         // Each step is timed on its own, so a repeat of the freeze says in the log which one blocked.
@@ -190,7 +200,7 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
         };
         let read_ms = started.elapsed().as_millis();
         let watch_started = std::time::Instant::now();
-        record_open(&state, &real, kind, || watch::watch_file(app.clone(), real.clone()));
+        record_open(&state, &real, kind, ticket, || watch::watch_file(app.clone(), real.clone()));
         log::info!("reader: read in {read_ms} ms, watch in {} ms", watch_started.elapsed().as_millis());
         Ok(ReaderDoc {
             display_path: access::display_path(&real, &root, &home()),
@@ -209,20 +219,26 @@ pub async fn reader_open(app: tauri::AppHandle, path: String) -> Result<ReaderDo
 /// time (R29) — and the confirmation it answers cleared. The watch is made before the guard is taken: making one stats
 /// and canonicalizes the file's folder, which on a share that stopped answering waits out the mount. The previous
 /// file's watch is dropped after the guard is let go.
-fn record_open(state: &ReaderState, real: &Path, kind: Kind, watch: impl FnOnce() -> Option<notify::RecommendedWatcher>) {
-    let watcher = if kind == Kind::File { watch() } else { None };
-    let previous = {
+///
+/// Only the newest open is recorded: two in flight finish in either order, and the webview shows the one begun last
+/// (`ticket`, from `begin_open`) and drops the other's answer. An open a later one — or × — overtook is neither watched
+/// nor remembered, or the shown file would stop reloading and `kinas open` would reopen the file that was not shown.
+fn record_open(state: &ReaderState, real: &Path, kind: Kind, ticket: u64, watch: impl FnOnce() -> Option<notify::RecommendedWatcher>) {
+    let newest = || state.lock().opened == ticket;
+    let watcher = if kind == Kind::File && newest() { watch() } else { None };
+    let unused = {
         let mut inner = state.lock();
         if inner.pending_confirm.as_deref() == Some(real) {
             inner.pending_confirm = None;
         }
-        if kind != Kind::File {
-            return;
+        if kind == Kind::File && inner.opened == ticket {
+            inner.remember(real.to_path_buf());
+            std::mem::replace(&mut inner.watcher, watcher)
+        } else {
+            watcher
         }
-        inner.remember(real.to_path_buf());
-        std::mem::replace(&mut inner.watcher, watcher)
     };
-    drop(previous);
+    drop(unused);
 }
 
 /// The open file again, for a live reload (R30).
@@ -390,7 +406,18 @@ pub async fn reader_allow_click(app: tauri::AppHandle, path: String) -> Result<C
 
 #[tauri::command]
 pub fn reader_close(state: State<'_, ReaderState>) {
-    state.lock().watcher = None;
+    close(&state);
+}
+
+/// × (R29): the watch stops, dropped with no guard held, and an open still in flight is overtaken — it lands after the
+/// panel closed on it, and is neither watched nor remembered (`record_open`).
+fn close(state: &ReaderState) {
+    let watcher = {
+        let mut inner = state.lock();
+        inner.opened += 1;
+        inner.watcher.take()
+    };
+    drop(watcher);
 }
 
 /// Only http, https and mailto, with no control characters (R21).
@@ -607,7 +634,8 @@ mod tests {
         let file = PathBuf::from("/p/shop-9c2e/plan.md");
         state.lock().pending_confirm = Some(file.clone());
         let held = std::cell::Cell::new(None);
-        record_open(&state, &file, Kind::File, || {
+        let ticket = state.begin_open();
+        record_open(&state, &file, Kind::File, ticket, || {
             held.set(Some(state.0.try_lock().is_err()));
             None
         });
@@ -617,8 +645,36 @@ mod tests {
         drop(inner);
         // A folder is not remembered and has no watch.
         let folder = PathBuf::from("/p/shop-9c2e");
-        record_open(&state, &folder, Kind::Dir, || panic!("a folder is not watched"));
+        let ticket = state.begin_open();
+        record_open(&state, &folder, Kind::Dir, ticket, || panic!("a folder is not watched"));
         assert_eq!(state.lock().recent.len(), 1);
+    }
+
+    /// R29 and R38 with two opens in flight: a large log clicked, then a small plan before the log has been read. The
+    /// webview shows the one begun last and drops the other's late answer; the reader recorded whichever finished last,
+    /// so the log's folder was watched while the plan was on screen — the plan's saves never reloaded — and `kinas open`
+    /// with no path reopened the log. An open overtaken by a later one, or by ×, is neither watched nor remembered.
+    #[test]
+    fn an_open_overtaken_by_a_later_one_is_neither_watched_nor_remembered() {
+        let state = ReaderState::default();
+        let (log, plan) = (PathBuf::from("/p/shop-9c2e/build.log"), PathBuf::from("/p/shop-9c2e/plan.md"));
+        let watch = || notify::recommended_watcher(|_: notify::Result<notify::Event>| {}).ok();
+        let first = state.begin_open();
+        let second = state.begin_open();
+        record_open(&state, &plan, Kind::File, second, watch);
+        assert!(state.lock().watcher.is_some(), "the plan is watched");
+        record_open(&state, &log, Kind::File, first, || None);
+        let inner = state.lock();
+        assert_eq!(inner.recent.iter().collect::<Vec<_>>(), [&plan], "only the plan is remembered");
+        assert!(inner.watcher.is_some(), "the plan's watch was replaced by the log's");
+        drop(inner);
+        // × while an open is in flight: the open lands after it and is not watched.
+        let late = state.begin_open();
+        close(&state);
+        record_open(&state, &log, Kind::File, late, watch);
+        let inner = state.lock();
+        assert!(inner.watcher.is_none(), "an open the reader closed on is watched");
+        assert_eq!(inner.recent.front(), Some(&plan));
     }
 
     #[test]

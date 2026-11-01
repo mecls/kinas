@@ -109,6 +109,15 @@ function at(candidate: string, root: string, anywhere: boolean): Target | null {
   return { ok: true, path: real, kind };
 }
 
+/**
+ * A path, or a line naming one, as a terminal shows it. A file's name is whatever made it — a cloned repository names
+ * its folders — so its control characters become U+FFFD, shown rather than obeyed (`ESC ] 52` sets a terminal's
+ * clipboard), as `ls` shows such a name on a terminal. The line breaks between paths stay.
+ */
+export function forTerminal(text: string): string {
+  return text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "\uFFFD");
+}
+
 export type OpenRequest =
   | { v: 1; op: "open"; path: string; anywhere: boolean }
   | { v: 1; op: "reopen" }

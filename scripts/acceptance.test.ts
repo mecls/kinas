@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -14,7 +14,7 @@ const repo = join(import.meta.dir, "..");
 const scratch = mkdtempSync(join(tmpdir(), "kinas-ac10-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
-function ac10(name: string, storeText: string, prefixes: Record<string, string> = {}): { out: string; store: string } {
+function ac10(name: string, storeText: string, prefixes: Record<string, string> = {}, path?: string): { out: string; store: string } {
   const home = join(scratch, name, "home dir");
   const data = join(home, "Library/Application Support/ai.sintralabs.kinas");
   const logs = join(home, "Library/Logs/ai.sintralabs.kinas");
@@ -34,6 +34,7 @@ function ac10(name: string, storeText: string, prefixes: Record<string, string> 
       KINAS_CONVEX_KEY_PREFIX: "convex-9c2e-",
       KINAS_HOSTINGER_TOKEN_PREFIX: "hosting-9c2e",
       ...prefixes,
+      ...(path ? { PATH: path } : {}),
     },
   });
   return { out: `${r.stdout}${r.stderr}`, store };
@@ -69,10 +70,32 @@ test("a key prefix that starts with a dash is looked for, not read as grep's opt
   expect(out).toContain(`${store}: 1`);
 });
 
+test("a key's prefix reaches grep through a file descriptor, never its arguments, which ps shows every process", () => {
+  // ADR 0006 and keychain.md: never a secret in argv. The scan handed the Keychain's first twelve characters to grep as
+  // `-e <prefix>`, once per file, readable by any process on this Mac for as long as each grep ran.
+  const bin = join(scratch, "argv-bin");
+  const argv = join(scratch, "argv-grep.log");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "grep"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${argv}'\nexec /usr/bin/grep "$@"\n`);
+  chmodSync(join(bin, "grep"), 0o755);
+  const path = `${bin}:/usr/bin:/bin:/usr/sbin:/sbin`;
+  const clean = ac10("argv-clean", "nothing secret here\n", {}, path).out;
+  expect(clean).toContain("PASS  the Convex deploy key is not in the store, the logs or kinas status --json");
+  expect(clean).toContain("PASS  the Hostinger API token is not in the store, the logs or kinas status --json");
+  const { out, store } = ac10("argv-leaky", "convex-9c2e-rest\nhosting-9c2e-rest\n", {}, path);
+  expect(out).toContain("FAIL  the Convex deploy key leaked");
+  expect(out).toContain("FAIL  the Hostinger API token leaked");
+  expect(out).toContain(`${store}: 1`);
+  const calls = readFileSync(argv, "utf8");
+  expect(calls).toContain(store);
+  expect(calls).not.toContain("convex-9c2e-");
+  expect(calls).not.toContain("hosting-9c2e");
+}, 30_000);
+
 // AC-6 re-reads every transcript from zero by deleting log_cursors in the live store. The app is a stub here — `open`,
 // `pgrep`, `osascript` and `pkill` flip one file, `sleep` returns at once — so nothing on this Mac is started, quit or
 // waited for; the store is a scratch one of the real shape, and sqlite3 is the real one.
-function ac6(name: string, env: Record<string, string> = {}): { out: string; db: string; data: string } {
+function ac6(name: string, env: Record<string, string> = {}, stubs: Record<string, string> = {}): { out: string; db: string; data: string; running: string } {
   const home = join(scratch, name, "home dir");
   const data = join(home, "Library/Application Support/ai.sintralabs.kinas");
   mkdirSync(data, { recursive: true });
@@ -94,13 +117,17 @@ function ac6(name: string, env: Record<string, string> = {}): { out: string; db:
     writeFileSync(join(bin, tool), `#!/bin/sh\n${body}\n`);
     chmodSync(join(bin, tool), 0o755);
   };
-  stub("pgrep", `[ -f '${running}' ]`);
-  stub("open", `touch '${running}'`);
-  stub("osascript", `rm -f '${running}'`);
-  stub("pkill", `rm -f '${running}'`);
-  stub("sleep", "exit 0");
+  const stubbed: Record<string, string> = {
+    pgrep: `[ -f '${running}' ]`,
+    open: `touch '${running}'`,
+    osascript: `rm -f '${running}'`,
+    pkill: `rm -f '${running}'`,
+    sleep: "exit 0",
+    ...stubs,
+  };
+  for (const [tool, body] of Object.entries(stubbed)) stub(tool, body);
   const r = spawnSync("bash", ["scripts/acceptance.sh", "ac6"], { cwd: repo, encoding: "utf8", env: { ...process.env, HOME: home, PATH: `${bin}:/usr/bin:/bin`, ...env } });
-  return { out: `${r.stdout}${r.stderr}`, db, data };
+  return { out: `${r.stdout}${r.stderr}`, db, data, running };
 }
 
 const cursors = (db: string) => {
@@ -124,8 +151,10 @@ test("AC-6 deletes nothing from the live store unless the captain approves that 
 });
 
 test("approved, AC-6 backs the store up and checks the backup first, deletes log_cursors alone, and says how to restore", () => {
-  const { out, db, data } = ac6("ac6-approved", { KINAS_AC6_DELETE_CURSORS: "yes" });
+  const { out, db, data, running } = ac6("ac6-approved", { KINAS_AC6_DELETE_CURSORS: "yes" });
   expect(cursors(db)).toBe(0);
+  // Kinas was not running when the script began, and the script leaves it as it found it.
+  expect(existsSync(running)).toBe(false);
   const backups = readdirSync(dirname(data)).filter((f) => /^ai\.sintralabs\.kinas-ac6-\d{8}-\d{6}\.sqlite$/.test(f));
   expect(backups.length).toBe(1);
   const backup = join(dirname(data), backups[0]!);
@@ -139,3 +168,16 @@ test("approved, AC-6 backs the store up and checks the backup first, deletes log
   spawnSync("sqlite3", [db, `.restore '${backup}'`]);
   expect(cursors(db)).toBe(2);
 });
+
+test("approved, AC-6 backs up and deletes nothing while Kinas is still running: the quit is checked first", () => {
+  // A Kinas that does not quit — a quit refused, a process stuck on a dead share, SIGTERM not yet acted on a second
+  // later. The backup would be of a store still being written, and the delete would race the app's own cursor writes:
+  // a cursor it put back makes the re-read "from zero" pass without having read anything again.
+  const { out, db, data, running } = ac6("ac6-still-running", { KINAS_AC6_DELETE_CURSORS: "yes" }, { osascript: "exit 0", pkill: "exit 0" });
+  expect(existsSync(running)).toBe(true);
+  expect(cursors(db)).toBe(2);
+  expect(readdirSync(dirname(data)).filter((f) => f.includes("-ac6-"))).toEqual([]);
+  expect(out).toContain("FAIL  Kinas did not quit, so nothing was backed up or deleted");
+  expect(out).not.toContain("PASS  backup checked");
+  // Two quit attempts of twenty rounds each, every round a stub process: seconds on a loaded Mac.
+}, 30_000);

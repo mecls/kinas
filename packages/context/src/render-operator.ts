@@ -3,12 +3,14 @@
 import { glyph, paint } from "@kinas/commands/theme";
 import { packetCounts, plural } from "./counts.ts";
 import type { Packet } from "./packet.ts";
-import { flat } from "./render-agent.ts";
+import { flat, shown } from "./render-agent.ts";
 import { age } from "./time.ts";
 
 // A row is one line, whatever a source put in its title, reason or text: a newline there is folded (render-agent.ts
-// `flat`), so nothing an agent wrote starts a stray line without its glyph and indent.
-export function renderOperator(p: Packet, color: boolean): string {
+// `flat`), so nothing an agent wrote starts a stray line without its glyph and indent; and its control characters are
+// shown before any row is painted (`shown`), so the only colour on screen is the CLI's.
+export function renderOperator(packet: Packet, color: boolean): string {
+  const p = shown(packet);
   const c = packetCounts(p);
   const sessions = c.sessions === null ? flat(p.sessions.note ?? "herdr: not read") : plural(c.sessions, "session");
   const lines = [

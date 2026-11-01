@@ -92,6 +92,26 @@ describe("kinas status", () => {
     }
   });
 
+  test("a model name's or a reader error's own colour codes are shown, not obeyed: only `kinas status` paints", () => {
+    // The lines went through `flat` after they were painted, and `flat` keeps `ESC [ … m` for that paint: a model name
+    // holding `ESC [ 8 m` concealed the rest of the screen, its prompt included, since nothing of the CLI's reset it.
+    const dir = makeStore((db, org, now) => {
+      db.run("INSERT INTO reader_status VALUES (?, 'ollama-cloud', 'error', ?, NULL, ?, 600000, 43200000)", [org, now, "bad \x1b[30;40mkey"]);
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now));
+      db.run(
+        "INSERT INTO usage_daily (org_id, date, provider, model, harness, source, machine, tokens_in, tokens_cache_read, tokens_out, messages) VALUES (?, ?, 'p', ?, 'pi', 'interactive', 'm', 1, 0, 1, 1)",
+        [org, today, "glm\x1b[8m-9c2e"],
+      );
+    });
+    const plain = run(["status"], { KINAS_DATA_DIR: dir });
+    expect(plain.code).toBe(0);
+    expect(plain.stdout).not.toContain("\x1b");
+    expect(plain.stdout).toContain("pi · glm\uFFFD[8m-9c2e");
+    expect(plain.stdout).toContain("— · bad \uFFFD[30;40mkey");
+    const forced = run(["status"], { KINAS_DATA_DIR: dir, FORCE_COLOR: "1" });
+    expect(forced.stdout).not.toMatch(/\x1b\[(?:8|30;40)m/);
+  });
+
   test("FORCE_COLOR paints a stale line gold even when piped, as every other command and the README have it; NO_COLOR wins", () => {
     const forced = run(["status"], { KINAS_DATA_DIR: healthy, FORCE_COLOR: "1", NO_COLOR: "" });
     expect(forced.code).toBe(0);

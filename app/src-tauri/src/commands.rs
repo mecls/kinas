@@ -604,8 +604,13 @@ use tauri::State;
 
 /// Starts the pane's profile (R32). Output is delivered as raw bytes (R34); `on_exit` fires once with
 /// the exit code.
+///
+/// Async, with the profile and the spawn on a blocking thread: building the profile asks `defaults` for the locale
+/// (Kinas started from Finder has no LANG) and stats a folder under `~/Documents`, and the spawn forks the shell — on
+/// the main thread the window froze for all of it (`no_command_on_the_main_thread_resolves_a_path`). The start begins
+/// before anything else: what the pane sends meanwhile waits for this session (`PtyState::begin`, `hold`).
 #[tauri::command]
-pub fn pty_start(
+pub async fn pty_start(
     window: tauri::WebviewWindow,
     state: State<'_, PtyState>,
     on_data: Channel<InvokeResponseBody>,
@@ -613,39 +618,50 @@ pub fn pty_start(
     cols: u16,
     rows: u16,
 ) -> Result<Option<u32>, String> {
-    // The ground the window draws on now, whichever of Settings' three choices made it so; asked again at every
-    // start, so a pane restarted after a change opens on the right logo.
-    let light = matches!(window.theme(), Ok(tauri::Theme::Light));
-    let profile = pty::default_profile(light);
-    log::info!("terminal: starting {} {:?} in {}", profile.program, profile.args, profile.cwd.display());
-    state.start(
-        &profile,
-        cols,
-        rows,
-        move |bytes| {
-            let _ = on_data.send(InvokeResponseBody::Raw(bytes));
-        },
-        move |code| {
-            log::info!("terminal: child exited with {code:?}");
-            let _ = on_exit.send(code);
-        },
-    )
+    let state = state.inner().clone();
+    let generation = state.begin();
+    let starter = state.clone();
+    let started = tauri::async_runtime::spawn_blocking(move || {
+        // The ground the window draws on now, whichever of Settings' three choices made it so; asked again at every
+        // start, so a pane restarted after a change opens on the right logo.
+        let light = matches!(window.theme(), Ok(tauri::Theme::Light));
+        let profile = pty::default_profile(light);
+        log::info!("terminal: starting {} {:?} in {}", profile.program, profile.args, profile.cwd.display());
+        starter.spawn(
+            generation,
+            &profile,
+            cols,
+            rows,
+            move |bytes| {
+                let _ = on_data.send(InvokeResponseBody::Raw(bytes));
+            },
+            move |code| {
+                log::info!("terminal: child exited with {code:?}");
+                let _ = on_exit.send(code);
+            },
+        )
+    })
+    .await;
+    started.unwrap_or_else(|e| {
+        state.fail(generation);
+        Err(format!("the terminal did not start: {e}"))
+    })
 }
 
 #[tauri::command]
 pub fn pty_write(state: State<'_, PtyState>, data: String) -> Result<(), String> {
-    state.session()?.write(data.as_bytes())
+    state.write(data.as_bytes())
 }
 
 /// xterm's onBinary data (e.g. some mouse reports): one byte per element.
 #[tauri::command]
 pub fn pty_write_binary(state: State<'_, PtyState>, data: Vec<u8>) -> Result<(), String> {
-    state.session()?.write(&data)
+    state.write(&data)
 }
 
 #[tauri::command]
 pub fn pty_resize(state: State<'_, PtyState>, cols: u16, rows: u16) -> Result<(), String> {
-    state.session()?.resize(cols, rows)
+    state.resize(cols, rows)
 }
 
 #[tauri::command]
@@ -837,7 +853,8 @@ mod tests {
 
     /// What resolves or stats a path: a caller's path on a network share that stopped answering waits out the mount's
     /// timeout in any of these.
-    const DISK: [&str; 11] = ["canonicalize", "metadata(", ".is_dir()", ".is_file()", ".exists()", "try_exists", "read_dir", "fs::read", "access::resolve", "checked(", "real_root("];
+    /// `default_profile(` is the pane's: it asks `defaults` for the locale and stats a folder under `~/Documents`.
+    const DISK: [&str; 12] = ["canonicalize", "metadata(", ".is_dir()", ".is_file()", ".exists()", "try_exists", "read_dir", "fs::read", "access::resolve", "checked(", "real_root(", "default_profile("];
 
     /// Sync commands that resolve or stat a path: a sync command runs on the main thread, so a path typed into Settings
     /// that lies on a dead share froze the window — `set_projects_root` did, through its `canonicalize`.

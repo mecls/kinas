@@ -48,8 +48,11 @@ export function renderSource(text: string, language: string | null): Rendered {
  */
 export function renderImage(path: string): Rendered {
   const name = path.slice(path.lastIndexOf("/") + 1) || path;
+  // `classifyLink` reads `data-src` as a link: `#` starts a fragment, `?` a query, `%` an escape and `:` a scheme. Those
+  // four are escaped, so `issue#42.png` or `50% off.png` still resolves to itself.
+  const src = name.replace(/[%#?:]/g, (c) => encodeURIComponent(c));
   return {
-    html: `<div class="reader-image"><img data-src="${escape(name)}" alt="${escape(name)}"></div>`,
+    html: `<div class="reader-image"><img data-src="${escape(src)}" alt="${escape(name)}"></div>`,
     headings: [],
     frontmatter: null,
     diagrams: [],

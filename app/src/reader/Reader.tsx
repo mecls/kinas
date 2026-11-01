@@ -42,7 +42,7 @@ import { renderImage, renderSource } from "./source.ts";
 import { closeTab, moveTab, NO_TABS, openTab, rememberScroll, showNone, tabLabels, type Tabs } from "./tabs.ts";
 import { FileTree } from "./tree.tsx";
 import { ChangesCaption, RefreshButton } from "./treeHead.tsx";
-import { crewNow, markNow, sinceLabel, useCrewOf, useMarkOf } from "./changes.ts";
+import { crewNow, markNow, reloadDraws, sinceLabel, useCrewOf, useMarkOf } from "./changes.ts";
 import { renderDiff, renderRefusal } from "./diff.ts";
 import { Button, openFold, TabStrip } from "../ui/index.ts";
 import type { ReaderAt } from "../shell/history.ts";
@@ -602,7 +602,11 @@ export function Reader({
         setProblem(null);
       }
     } catch (e) {
-      say(readerErrorOf(e).message);
+      const message = readerErrorOf(e).message;
+      // As a click's refusal (follow below): with nothing showing, the reason takes the page — a status line would fade
+      // and leave an open, empty panel with no word of why (a folder macOS will not let Kinas list, say).
+      if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message });
+      else say(message);
     }
   }
 
@@ -930,7 +934,9 @@ export function Reader({
         const diffed = since === null ? null : await changesOf(path);
         const current = docRef.current;
         if (!current || current.path !== path || mine !== reloads.current) return;
-        if (since !== null && !diffed) {
+        // Drawn for the view the reader is on now: Changes left while the diff was out must not get the diff back.
+        const draws = reloadDraws(since, { changes: changesRef.current, crew: crewRef.current }, diffed !== null);
+        if (draws === "gone") {
           setChangesOn(null);
           say(since ? `No changes since ${since} any more` : "No changes any more");
         }
@@ -942,7 +948,7 @@ export function Reader({
           lines: text.text.split("\n").length,
           text: text.text,
           // The crew's copy is the crew's text, not this file's: a save here leaves it as it is (crew marks).
-          rendered: crewRef.current ? current.rendered : (diffed?.rendered ?? renderDoc(text.text, current.render, current.ext, current.path)),
+          rendered: draws === "keep" ? current.rendered : draws === "diff" && diffed ? diffed.rendered : renderDoc(text.text, current.render, current.ext, current.path),
         };
         docRef.current = next;
         setDoc(next);
@@ -1115,7 +1121,10 @@ export function Reader({
     if (!pendingPath) return;
     setConfirm(null);
     try {
-      await readerConfirm(pendingPath, true);
+      // The door canonicalizes the path, which can take a while (a slow mount, as a click's): a click meanwhile is what
+      // the captain asked for last, and this file must not land over it.
+      const allowed = await unlessSuperseded(generation, () => readerConfirm(pendingPath, true));
+      if (!allowed) return;
       await show(pendingPath, {});
     } catch (e) {
       say(readerErrorOf(e).message);
@@ -1153,10 +1162,17 @@ export function Reader({
     leaveChanges(current);
   };
 
+  /**
+   * The view toggle's own requests — Changes, the crew's copy, back to the usual view — each counted here: the crew's
+   * copy reads git and Changes a diff, so two clicks' answers can land in either order, and only the last click's counts.
+   */
+  const viewAsk = useRef(0);
+
   /** The crew's copy of the open file, from the toggle's fourth button (crew marks, rule 15). */
   const enterCrew = async (current: Doc) => {
     const gen = generation.current;
-    const crewed = await crewChangesOf(current.path);
+    const asked = await unlessSuperseded(viewAsk, () => crewChangesOf(current.path));
+    const crewed = asked?.value ?? null;
     const latest = docRef.current;
     if (!crewed || gen !== generation.current || !latest || latest.path !== current.path) return;
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };
@@ -1171,7 +1187,8 @@ export function Reader({
   /** The open file's Changes view, from the toggle. */
   const enterChanges = async (current: Doc) => {
     const gen = generation.current;
-    const diffed = await changesOf(current.path);
+    const asked = await unlessSuperseded(viewAsk, () => changesOf(current.path));
+    const diffed = asked?.value ?? null;
     const latest = docRef.current;
     if (!diffed || gen !== generation.current || !latest || latest.path !== current.path) return;
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };
@@ -1184,6 +1201,7 @@ export function Reader({
 
   /** The open file's usual view again: rendered or source, as its kind last chose. */
   const leaveChanges = (current: Doc) => {
+    viewAsk.current++;
     setChangesOn(null);
     setCrewOn(false);
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };

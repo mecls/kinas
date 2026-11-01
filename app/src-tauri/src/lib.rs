@@ -188,6 +188,11 @@ pub fn run() {
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
                 reader::changes::on_page_load(webview.app_handle());
+                // The page will start the pane off the main thread: what it sends before that start begins waits for
+                // the new session, never the old page's shell.
+                if let Some(pty) = webview.app_handle().try_state::<pty::PtyState>() {
+                    pty.hold();
+                }
             }
         })
         .on_window_event(|window, event| match event {

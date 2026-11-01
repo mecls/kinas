@@ -29,11 +29,11 @@ import { join } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
 import { cliCommand, statusFromStore, statusJson, statusLines } from "@kinas/commands";
 import { colorEnabled, paint, polarityFromEnv } from "@kinas/commands/theme";
-import { computePacket, ContextCache, currentOrg, flat, insideRoot, loadConfig, renderAgentPacket, renderOperator, within, type KinasConfig } from "@kinas/context";
+import { computePacket, ContextCache, currentOrg, flat, insideRoot, loadConfig, renderAgentPacket, renderOperator, shown, within, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
 import { crew, CREW_USAGE } from "./crew.ts";
-import { ask, LAUNCH_TIMEOUT_MS, launchAndAsk, OPEN_EXIT, type OpenRequest, outcome, resolveTarget } from "./open.ts";
+import { ask, forTerminal, LAUNCH_TIMEOUT_MS, launchAndAsk, OPEN_EXIT, type OpenRequest, outcome, resolveTarget } from "./open.ts";
 
 // 0, 1, 65, 66 and 77 come from open.ts, which owns `kinas open`'s codes.
 const EXIT = { ...OPEN_EXIT, missing: 2, newer: 3, stay: 10, usage: 64 } as const;
@@ -217,8 +217,9 @@ async function status(args: string[]): Promise<number> {
     const tty = Boolean(process.stdout.isTTY);
     // Colour by the one rule every command keeps (theme.ts): a TTY, or FORCE_COLOR when piped; never with NO_COLOR.
     const color = colorEnabled();
-    // A model name or a reader's error is what a transcript or a provider said: printed as text, never obeyed (`flat`).
-    const lines = statusLines(result, color).map(flat);
+    // A model name or a reader's error is what a transcript or a provider said: printed as text, never obeyed — its
+    // control characters shown before the lines are painted (`shown`), each line folded to one (`flat`).
+    const lines = statusLines(shown(result), color).map(flat);
     if (tty) {
       intro(paint("blue", "kinas status", color, true));
       log.message(lines.join("\n"));
@@ -245,7 +246,8 @@ async function open(args: string[]): Promise<number> {
     if (config.problem) printError(`kinas: ${config.problem}`);
     const target = resolveTarget(parsed.positional[0]!, { cwd: process.cwd(), root: config.root, anywhere });
     if (!target.ok) {
-      printError(target.message);
+      // stderr is for a person, piped or not: a path in a message is shown, never obeyed (`forTerminal`).
+      printError(forTerminal(target.message));
       return target.exit;
     }
     if ("pick" in target) {
@@ -276,12 +278,16 @@ async function open(args: string[]): Promise<number> {
       }
       const result = outcome(answer, { path, paths: request.op === "pick" ? request.paths : undefined, tty: Boolean(process.stderr.isTTY) });
       exit = result.exit;
-      if (result.stderr !== null) printError(result.stderr);
+      if (result.stderr !== null) printError(forTerminal(result.stderr));
       return result.stdout === null ? [] : [result.stdout];
     },
   });
-  // stdout carries exactly the resolved path, or nothing (R11).
-  if (lines && lines.length > 0) process.stdout.write(`${lines.join("\n")}\n`);
+  // stdout carries exactly the resolved path, or nothing (R11): byte for byte when piped, for the script reading it; on a
+  // terminal with its control characters shown, never obeyed (`forTerminal`).
+  if (lines && lines.length > 0) {
+    const text = `${lines.join("\n")}\n`;
+    process.stdout.write(process.stdout.isTTY ? forTerminal(text) : text);
+  }
   return exit;
 }
 

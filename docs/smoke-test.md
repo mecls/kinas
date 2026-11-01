@@ -601,6 +601,12 @@ Checks from PRD §5, run on this Mac against `/Applications/Kinas.app` and its r
   `usage_seen` (PRD R26 amended). Re-run on the fixed build (2026-09-14, after rebuilding the usage tables from
   the transcripts): `check-usage.ts` over all 34 past dates → all rows match; relaunch → 58 past rows unchanged;
   `DELETE FROM log_cursors` + relaunch → unchanged. **Passes.**
+  Amended 2026-11-01: never run that `DELETE` by hand. The re-read from zero deletes every row of `log_cursors` in the
+  live store, so it needs the captain's yes, given only as `KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6`:
+  it checks that Kinas has quit (and stops, deleting nothing, if it has not), takes a `.backup` beside the data folder,
+  checks it with `integrity_check` and every table's row count, prints the restore command
+  (`sqlite3 '<store>' ".restore '<backup>'"`, Kinas quit), deletes, and proves no other table's count moved. Without
+  the yes, AC-6 says what it would delete and stops.
 - **5.11 Host numbers** (2026-09-14): memory 16 GiB vs `hw.memsize` 16.0; disk free 17.14 GiB vs `df` 17.14 GiB;
   CPU 90.7 % after 9 s of `yes` on every core.
   Re-run 2026-09-15 after the Disk tile moved to Finder's number:

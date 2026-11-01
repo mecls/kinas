@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { classifyLink } from "./links.ts";
 import { renderImage, renderSource } from "./source.ts";
 
 // A source view is nothing but escaping (R9, R19). The reader shares its webview with the code that can type into
@@ -81,5 +82,16 @@ describe("an image opened by name", () => {
 
   test("a name needing escaping stays escaped", () => {
     expect(renderImage('/a/b/we"ird<.png').html).toContain('data-src="we&quot;ird&lt;.png"');
+  });
+
+  test("a name holding a character a link reads — #, ?, %, : — still resolves to the file itself", () => {
+    // classifyLink reads the bare name as a link: `issue#42.png` was `issue` with a fragment, `why?.png` lost its
+    // query, `50% off.png` did not decode and `a:b.png` was a scheme, so the image never showed, only its name.
+    for (const name of ["issue#42.png", "why?.png", "50% off.png", "a:b.png", "a%20b.png", "#1.png"]) {
+      const path = `/p/docs/${name}`;
+      const src = /data-src="([^"]*)"/.exec(renderImage(path).html)![1]!.replaceAll("&amp;", "&");
+      expect(classifyLink(src, path, "/p")).toEqual({ kind: "file", path, fragment: null });
+      expect(renderImage(path).html).toContain(`alt="${name}"`);
+    }
   });
 });

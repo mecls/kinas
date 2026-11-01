@@ -42,7 +42,8 @@ export interface ChartModel {
 /** How a provider is named on screen; an unknown one reads as stored rather than being hidden. */
 const PROVIDER_NAME: Record<string, string> = { anthropic: "Anthropic", ollama: "Ollama" };
 
-export const providerLabel = (provider: string) => PROVIDER_NAME[provider] ?? provider;
+/** Own keys only: a Pi transcript's `provider` is its file's word, and `__proto__` must not read Object.prototype. */
+export const providerLabel = (provider: string) => (Object.hasOwn(PROVIDER_NAME, provider) ? PROVIDER_NAME[provider]! : provider);
 
 export const modelKey = (row: Pick<UsageDay, "harness" | "model">) => `${row.harness} · ${row.model}`;
 

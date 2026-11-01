@@ -71,10 +71,16 @@ if want ac10; then
   # globs themselves: the data folder's path has a space in it, so a list of paths split on whitespace would name
   # files that do not exist (scripts/acceptance.test.ts).
   store_files() { for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] && echo "$f"; done; }
-  # A key prefix goes in after `-e`: a token that starts with `-` is a pattern, never grep's options.
   scan() { # scan <grep args…>: the files with a hit, one per line
     for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c "$@" "$f" || true); [ "$c" = "0" ] || echo "      $f: $c"; done
   }
+  # A key's prefix reaches grep through a file descriptor, never its arguments: argv is what `ps` shows every process on
+  # this Mac (ADR 0006, docs/external/keychain.md). Read from a file it is a pattern, a leading `-` included, never an
+  # option. printf is bash's own, so the prefix is in no process's argv on its way either.
+  scan_key() { # scan_key <prefix>: the files holding it, one per line
+    for f in "$DB"* "$LOGS"/*; do [ -f "$f" ] || continue; c=$(grep -a -c -F -f <(printf '%s\n' "$1") "$f" || true); [ "$c" = "0" ] || echo "      $f: $c"; done
+  }
+  in_status() { "$KINAS" status --json 2>/dev/null | grep -c -F -f <(printf '%s\n' "$1") || true; }
   if [ -z "$(store_files)" ]; then
     echo "SKIP  no store or log on this Mac yet, so there is nothing to scan for sk-ant-, Bearer or Convex headers"
   else
@@ -97,9 +103,9 @@ if want ac10; then
     echo "SKIP  a Convex deploy key is saved, but there is no store, log or kinas on this Mac to look in"
   else
     leaks=0
-    hits=$(scan -F -e "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
+    hits=$(scan_key "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
     if [ -x "$KINAS" ]; then
-      c=$("$KINAS" status --json 2>/dev/null | grep -c -F -e "$prefix" || true)
+      c=$(in_status "$prefix")
       [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
     fi
     [ $leaks -eq 0 ] && pass "the Convex deploy key is not in the store, the logs or kinas status --json" || fail "the Convex deploy key leaked (above)"
@@ -116,9 +122,9 @@ if want ac10; then
     echo "SKIP  a Hostinger API token is saved, but there is no store, log or kinas on this Mac to look in"
   else
     leaks=0
-    hits=$(scan -F -e "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
+    hits=$(scan_key "$prefix"); [ -z "$hits" ] || { echo "$hits"; leaks=1; }
     if [ -x "$KINAS" ]; then
-      c=$("$KINAS" status --json 2>/dev/null | grep -c -F -e "$prefix" || true)
+      c=$(in_status "$prefix")
       [ "$c" = "0" ] || { echo "      kinas status --json: $c"; leaks=1; }
     fi
     [ $leaks -eq 0 ] && pass "the Hostinger API token is not in the store, the logs or kinas status --json" || fail "the Hostinger API token leaked (above)"
@@ -251,6 +257,10 @@ if want ac6; then
     echo "SKIP  re-reading from zero deletes every row of log_cursors ($rows rows) in the live store, and nothing else; it needs your approval."
     echo "      Run KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6: with Kinas quit it backs $DB up beside its folder,"
     echo "      checks the backup's every table against the store, and only then deletes; it prints the restore command."
+  elif app_running; then
+    # quit_app gives up after its pkill and a second: a store still being written has no backup that holds, and the
+    # app's own cursor writes would race the delete.
+    fail "Kinas did not quit, so nothing was backed up or deleted: quit it, then run KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6 again"
   else
     backup="$(dirname "$DATA")/ai.sintralabs.kinas-ac6-$(date +%Y%m%d-%H%M%S).sqlite"
     # Every table's row count, `name count` per line, in name order.
@@ -269,8 +279,8 @@ if want ac6; then
   fi
 fi
 
-# Leave the app as it was found.
-[ $WAS_RUNNING -eq 1 ] && ! app_running && start_app >/dev/null
+# Leave the app as it was found: running if it was, quit if it was not.
+if [ $WAS_RUNNING -eq 1 ]; then app_running || start_app >/dev/null; elif app_running; then quit_app; fi
 
 echo
 [ $FAILED -eq 0 ] && echo "ALL REQUESTED CHECKS PASS" || echo "SOME CHECKS FAILED"

@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { listRecordFiles, readLock, readRecord } from "./records.ts";
 
 // Old decisions are never rewritten (AGENTS.md, docs/adr/): every record's `## Decision` section is
@@ -40,5 +43,26 @@ test("a superseded record names a later record that exists", () => {
     if (r.supersededBy === null) continue;
     expect(numbers.has(r.supersededBy), `${r.file} is superseded by ${r.supersededBy}, which does not exist`).toBe(true);
     expect(r.supersededBy > r.number, `${r.file} can only be superseded by a later record`).toBe(true);
+  }
+});
+
+test("a lock that cannot be read is an error, never an empty lock; only a missing one starts empty", () => {
+  // lock.ts adds a hash for every record the lock does not know. Read as empty, a lock left with merge-conflict markers
+  // (or truncated) knew no record, so lock.ts locked every decision as it stood — an edited one included — and said so as
+  // "19 records, 19 added".
+  const dir = mkdtempSync(join(tmpdir(), "kinas-adr-lock-"));
+  try {
+    const at = (name: string, text: string) => {
+      writeFileSync(join(dir, name), text);
+      return join(dir, name);
+    };
+    expect(() => readLock(at("conflict.lock", '<<<<<<< HEAD\n{ "0001": "a" }\n=======\n{ "0001": "b" }\n>>>>>>> other\n'))).toThrow();
+    expect(() => readLock(at("list.lock", "[]\n"))).toThrow();
+    expect(() => readLock(at("null.lock", "null\n"))).toThrow();
+    expect(() => readLock(at("number.lock", '{ "0001": 7 }\n'))).toThrow();
+    expect(readLock(at("good.lock", '{ "0001": "a" }\n'))).toEqual({ "0001": "a" });
+    expect(readLock(join(dir, "missing.lock"))).toEqual({});
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

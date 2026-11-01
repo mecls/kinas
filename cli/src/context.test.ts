@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_HEADINGS, CACHE_FILE } from "@kinas/context";
 import { makeWorld, type World, type WorldOptions } from "@kinas/context/testing";
@@ -249,6 +249,39 @@ describe("kinas open, help and usage", () => {
     const real = (p: string) => realpathSync.native(join(w.acme, p));
     expect(await kinas(["open", "dup"], w.env)).toMatchObject({ code: 0, stdout: `${real("two/dup.md")}\n${real("one/dup.md")}\n` });
   });
+
+  test("a path's control characters are shown on a terminal and never obeyed; piped, the path is exact", async () => {
+    // A file's name is whatever made it — a cloned repository names its folders — and `kinas open` printed it as it came:
+    // a folder named with `ESC ] 52` set the clipboard of the terminal the match was printed on, as a commit subject did
+    // in `kinas context` (2e664d2). On a terminal it is shown, as `ls` shows such a name; piped, R11's exact path stays.
+    const w = await start();
+    const dir = join(w.acme, "x\x1b]52;c;aGk=\x07y");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "evil-9c2e.md"), "# hi\n");
+    const real = realpathSync.native(join(dir, "evil-9c2e.md"));
+    expect(await kinas(["open", "evil-9c2e"], w.env)).toMatchObject({ code: 0, stdout: `${real}\n` });
+
+    // On a terminal, through script(1): stdout and stderr are both the terminal there.
+    const screen = join(w.base, "open-screen");
+    const tty = Bun.spawn(["/bin/sh", "-c", '/usr/bin/script -q /dev/null "$@" < /dev/null > "$KINAS_TEST_OUT" 2>&1', "sh", process.execPath, MAIN, "open", "evil-9c2e"], {
+      env: { ...w.env, KINAS_TEST_OUT: screen },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(await tty.exited).toBe(0);
+    const shown = readFileSync(screen, "utf8");
+    expect(shown).toContain(real.replace("\x1b", "\uFFFD").replace("\x07", "\uFFFD"));
+    expect(shown).not.toContain("\x1b]");
+    expect(shown).not.toContain("\x07");
+
+    // A refusal names the path on stderr, which is for a person whether or not it is piped.
+    const outside = join(w.base, "out\x1b]52;c;aGk=\x07side-9c2e.md");
+    writeFileSync(outside, "# out\n");
+    const refused = await kinas(["open", outside], w.env);
+    expect(refused.code).toBe(77);
+    expect(refused.stderr).toContain("out\uFFFD]52;c;aGk=\uFFFDside-9c2e.md is outside");
+    expect(refused.stderr).not.toContain("\x1b");
+  }, 30_000);
 
   test("--help names every command; unknown commands and options are 64", async () => {
     const w = await start();

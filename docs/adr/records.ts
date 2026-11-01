@@ -71,10 +71,22 @@ export function readRecord(file: string, dir = ADR_DIR): Record {
   };
 }
 
+/**
+ * The lock, record number → hash; empty only when there is no lock yet. A lock that is there and cannot be read — a
+ * merge left its conflict markers in, it was cut short, it is not an object of hashes — throws: read as empty, it would
+ * know no record, and lock.ts would lock every decision as it stands now, an edited one included.
+ */
 export function readLock(path = LOCK_PATH): { [number: string]: string } {
+  let text: string;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as { [number: string]: string };
-  } catch {
-    return {};
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw e;
   }
+  const lock: unknown = JSON.parse(text);
+  if (lock === null || typeof lock !== "object" || Array.isArray(lock) || !Object.values(lock).every((h) => typeof h === "string")) {
+    throw new Error(`${path} is not an object of record hashes`);
+  }
+  return lock as { [number: string]: string };
 }

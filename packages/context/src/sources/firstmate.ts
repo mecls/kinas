@@ -5,7 +5,7 @@
 
 import { existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { run } from "../exec.ts";
 import type { Crew, CrewBrief, CrewHold, CrewReport, CrewTask } from "../packet.ts";
 import { SourceError, SourceTimeout } from "../source.ts";
@@ -27,8 +27,21 @@ export async function firstLine(path: string): Promise<string | null> {
   }
 }
 
-/** The fleet snapshot's fields Kinas shows. Anything else in the contract stays Firstmate's business. */
-export async function crewFromSnapshot(snapshot: unknown, now: number): Promise<Crew> {
+/**
+ * A path Firstmate reported, relative to its home or absolute, only when it stays lexically inside the home — the app's
+ * `under_home` (crew/mod.rs). Under the home Kinas reads a report's first line for the packet and nothing outside it
+ * (ADR 0019); the path is what a worker wrote, so a `..` or a path elsewhere is not followed.
+ */
+export function underHome(home: string, reported: string): string | null {
+  const raw = isAbsolute(reported) ? reported : `${home}/${reported}`;
+  if (raw.split("/").includes("..")) return null;
+  const path = resolve(raw);
+  const root = resolve(home);
+  return path === root || path.startsWith(`${root}/`) ? path : null;
+}
+
+/** The fleet snapshot's fields Kinas shows, its reports read only under `home`. Anything else stays Firstmate's business. */
+export async function crewFromSnapshot(snapshot: unknown, now: number, home: string): Promise<Crew> {
   const s = (snapshot ?? {}) as Json;
   const schema = str(s.schema);
   if (schema !== FLEET_SCHEMA) throw new SourceError(`firstmate: unsupported snapshot contract ${schema ?? "(none)"}, expected ${FLEET_SCHEMA}`);
@@ -70,7 +83,8 @@ export async function crewFromSnapshot(snapshot: unknown, now: number): Promise<
   const reports: CrewReport[] = (
     await Promise.all(
       list(s.scout_reports).map(async (r): Promise<CrewReport | null> => {
-        const path = str(r.path);
+        const reported = str(r.path);
+        const path = reported === null ? null : underHome(home, reported);
         const st = path ? await stat(path).catch(() => null) : null;
         if (!path || !st) return null;
         return { id: str(r.id) ?? path, path, first_line: await firstLine(path), modified_at: Math.floor(st.mtimeMs) };
@@ -121,5 +135,5 @@ export async function readCrew(home: string, now: number, timeoutMs = FIRSTMATE_
   } catch {
     throw new SourceError("firstmate: the fleet snapshot is not JSON");
   }
-  return crewFromSnapshot(parsed, now);
+  return crewFromSnapshot(parsed, now, home);
 }

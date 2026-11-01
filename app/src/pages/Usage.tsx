@@ -8,6 +8,7 @@ import { asOfOldest, QuotaGauge, quotaDetail, shownUsed, sourcesOf } from "../us
 import { CrewSection } from "../usage/CrewSection.tsx";
 import { UsageChart } from "../usage/UsageChart.tsx";
 import { Card, EmptyState, Gauges, MetricRow, Rows, Section, SectionHeader, Table, TitleRow } from "../ui/index.ts";
+import { failedRead } from "./readFailure.ts";
 
 // The Usage page (DESIGN.md §5 Usage; build-spec §4): it answers how much of what we pay for is left. A hero row of the
 // three gauges that decide the day, then one section per provider with a single freshness caption. Every number and
@@ -36,10 +37,18 @@ export function UsagePage({ snapshot, error, crew = null }: { snapshot: UsageSna
   const claude = quotasOf("claude-plan", WINDOW_ORDER);
   const ollama = quotasOf("ollama-cloud", OLLAMA_ORDER);
   const settings = () => dispatchAppAction("settings");
+  // The snapshot itself could not be read again: the numbers below are the last good ones and their captions have
+  // stopped ageing (ADR 0004), so the page says so, as it says a reader's own failure.
+  const stale = failedRead("usage", error, true);
 
   return (
     <div className="usage">
       <TitleRow title="Usage" />
+      {stale && (
+        <p className="usage-note usage-read-error" data-testid="usage-read-error">
+          {stale}
+        </p>
+      )}
 
       <Gauges>
         {claude.length === 0 ? (

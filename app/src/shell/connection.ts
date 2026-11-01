@@ -1,4 +1,5 @@
 import type { ReaderView, UsageSnapshot } from "../api.ts";
+import { failedRead } from "../pages/readFailure.ts";
 import type { ConnectionState } from "../ui/Nav.tsx";
 import { asOf } from "../usage/format.ts";
 
@@ -20,8 +21,19 @@ export const VPS_NAME = "Hostinger VPS";
 /**
  * `null` while no machine is watched. Stale past the reader's own `stale_after_ms`, like every gauge — and stamped in
  * what is now the future, from before a backwards clock step, whose age is unknown (`packages/store/src/staleness.ts`).
+ *
+ * `readError`: the snapshot itself could not be read again (usage/useUsageSnapshot.ts), so this is the last good one
+ * and its `now` has stopped: "connected" can no longer be judged, and is stale for the same reason a stamp from the
+ * future is; every word keeps the read failure in its hover, as the Usage page says it (ADR 0004).
  */
-export function connectionOf(snapshot: Pick<UsageSnapshot, "now" | "readers">): Connection | null {
+export function connectionOf(snapshot: Pick<UsageSnapshot, "now" | "readers">, readError: string | null = null): Connection | null {
+  const row = judged(snapshot);
+  const failed = failedRead("usage", readError, true);
+  if (!row || !failed) return row;
+  return { ...row, state: row.state === "connected" ? "stale" : row.state, detail: `${row.detail} · ${failed}` };
+}
+
+function judged(snapshot: Pick<UsageSnapshot, "now" | "readers">): Connection | null {
   const reader = snapshot.readers.find((r): r is ReaderView => r.reader === "hostinger");
   if (!reader || reader.state === "not_configured") return null;
   if (reader.state === "error") return { name: VPS_NAME, state: "error", detail: reader.last_error ?? "the last reading failed" };

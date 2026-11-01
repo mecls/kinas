@@ -20,21 +20,27 @@ function commitEvents(next: Observation): ActivityEvent[] {
   );
 }
 
-function crewEvents(prev: Crew, next: Crew, now: number): ActivityEvent[] {
+/**
+ * `since` is when the reading compared against was taken. It names each change in its ref, rather than `now`: several
+ * `kinas context` runs that start together (a crew's agent sessions opening at once, each hook asking) all compare
+ * against the same cached packet and see the same change, and a ref is recorded once — so the change is too. A task
+ * that changes the same way again later is compared against a later reading, so that is a new event.
+ */
+function crewEvents(prev: Crew, next: Crew, since: number, now: number): ActivityEvent[] {
   const events: ActivityEvent[] = [];
   const before = new Map(prev.in_flight.map((t) => [t.id, t]));
   const after = new Map(next.in_flight.map((t) => [t.id, t]));
   for (const t of next.in_flight) {
     const was = before.get(t.id);
-    if (!was) events.push({ ref: `crew:${t.id}:in_flight:${now}`, at: now, kind: "crew", project: t.project, text: `${t.title} is in flight (${t.state})` });
-    else if (was.state !== t.state) events.push({ ref: `crew:${t.id}:${t.state}:${now}`, at: now, kind: "crew", project: t.project, text: `${t.title}: ${was.state} → ${t.state}` });
+    if (!was) events.push({ ref: `crew:${t.id}:in_flight:${since}`, at: now, kind: "crew", project: t.project, text: `${t.title} is in flight (${t.state})` });
+    else if (was.state !== t.state) events.push({ ref: `crew:${t.id}:${t.state}:${since}`, at: now, kind: "crew", project: t.project, text: `${t.title}: ${was.state} → ${t.state}` });
   }
   for (const t of prev.in_flight) {
-    if (!after.has(t.id)) events.push({ ref: `crew:${t.id}:left:${now}`, at: now, kind: "crew", project: t.project, text: `${t.title} left in flight` });
+    if (!after.has(t.id)) events.push({ ref: `crew:${t.id}:left:${since}`, at: now, kind: "crew", project: t.project, text: `${t.title} left in flight` });
   }
   const heldBefore = new Set(prev.blocked.map((b) => b.id));
   for (const b of next.blocked) {
-    if (!heldBefore.has(b.id)) events.push({ ref: `crew:${b.id}:held:${now}`, at: now, kind: "crew", project: null, text: `${b.title} is waiting on a decision` });
+    if (!heldBefore.has(b.id)) events.push({ ref: `crew:${b.id}:held:${since}`, at: now, kind: "crew", project: null, text: `${b.title} is waiting on a decision` });
   }
   const filedBefore = new Set([...prev.intake.map((b) => b.id), ...prev.in_flight.map((t) => t.id)]);
   for (const b of next.intake) {
@@ -70,7 +76,7 @@ function fileEvents(prev: Section<ArtifactRow[]>, next: Observation, now: number
 export function activityEvents(prev: Packet | null, next: Observation, now: number): ActivityEvent[] {
   const events = commitEvents(next);
   if (prev?.crew.state === "ok" && prev.crew.data && next.crew.state === "ok" && next.crew.data && next.crew.at !== prev.crew.at) {
-    events.push(...crewEvents(prev.crew.data, next.crew.data, now));
+    events.push(...crewEvents(prev.crew.data, next.crew.data, prev.crew.at, now));
   }
   if (prev?.artifacts.state === "ok" && next.artifacts.state === "ok") events.push(...fileEvents(prev.artifacts, next, now));
   return events;

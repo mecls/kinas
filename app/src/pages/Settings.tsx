@@ -30,6 +30,7 @@ import { addedLine, listedFolders, removedFolders, seatFolders, type SeatedFolde
 import { CATEGORIES } from "../ui/category.ts";
 import { Button, Card, Chip, Section, SectionHeader, Switch, TitleRow } from "../ui/index.ts";
 import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
+import { failedRead } from "./readFailure.ts";
 
 // Settings (PRD §3.9, amended 2026-09-15): a page, opened from the gear at the foot of the sidebar or ⌘,. It stays
 // mounted like the other pages, so it reads again each time it comes on screen. Esc goes back to the page it was
@@ -159,10 +160,17 @@ export function SettingsPage({
     recording: recording === target,
     onRecording: (on: boolean) => setRecording(on ? target : null),
   });
+  // Read again on every visit and after every change: a failed read keeps what was read before, and says so (ADR 0004).
+  const unread = settings ? failedRead("settings", loadError, true) : null;
 
   return (
     <div className="settings" ref={root} tabIndex={-1} onKeyDown={onKeyDown} data-recording={recording ? "true" : undefined}>
       <TitleRow title="Settings" />
+      {unread && (
+        <p className="problem" data-testid="settings-read-error">
+          {unread}
+        </p>
+      )}
       {!settings ? (
         <p className="settings-help">{loadError ?? "Reading settings…"}</p>
       ) : (

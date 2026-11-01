@@ -387,7 +387,8 @@ pub(crate) fn event(conn: &Connection, org: &str, task: &str, at: i64, kind: &st
 /// Firstmate's last event, once: the key is its raw line plus its emission time's bucket, and an event whose raw line
 /// matches the task's newest one within a bucket either side is the same event seen again.
 fn last_event(tx: &Transaction, org: &str, task: &str, raw: &str, line: &str, age: Option<i64>, now: i64) -> rusqlite::Result<usize> {
-    let at = age.filter(|a| *a >= 0).map_or(now, |a| now - a * 1_000);
+    // An age that gives no moment after 1970 — negative, or too large to be meant — is no age at all.
+    let at = age.filter(|a| *a >= 0).and_then(|a| a.checked_mul(1_000)).and_then(|ms| now.checked_sub(ms)).filter(|at| *at >= 0).unwrap_or(now);
     let bucket = at.div_euclid(1_000 * LAST_EVENT_BUCKET_S);
     let newest: Option<String> = tx
         .query_row(
@@ -874,6 +875,29 @@ mod tests {
         add("4", Some("OPEN"), Some(3));
         let open = open_pr_urls(&store.conn(), store.org_id()).unwrap();
         assert_eq!(open, HashSet::from(["https://github.com/o/shop-9c2e/pull/1".to_string()]));
+    }
+
+    /// `age_seconds` is Firstmate's word, read as any i64. One too large to be meant — garbage, or milliseconds where
+    /// seconds belong — overflowed `age * 1000`: a debug build's crew thread died on the panic, a release build stamped
+    /// the event wherever the wrapped sum fell. An age that does not give a moment after 1970 is an unknown age: now.
+    #[test]
+    fn an_absurd_last_event_age_is_stamped_now() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let snapshot = |age: &str| {
+            let json = format!(
+                r#"{{"schema":"fm-fleet-snapshot.v1","generated":"g","backlog":{{"records":[]}},"tasks":[{{"id":"{ID}",
+                "current_state":{{"state":"working"}},"paths":{{"status_log":{{"last_event":{{"raw":"r-{age}","state":"working","note":"n","age_seconds":{age}}}}}}}}}]}}"#
+            );
+            parse_fleet(&json).unwrap()
+        };
+        let last = |store: &Store| -> i64 {
+            store.conn().query_row("SELECT at FROM crew_events WHERE task_id = ?1 AND kind = 'last_event' ORDER BY id DESC LIMIT 1", params![ID], |r| r.get(0)).unwrap()
+        };
+        for (age, expected) in [("60", T0 - 60_000), ("9223372036854775807", T0), ("9223372036854775", T0), ("1790000000001", T0)] {
+            record(&mut store.conn(), store.org_id(), &Ok(snapshot(age)), &Found::default(), T0).unwrap().unwrap();
+            assert_eq!(last(&store), expected, "age_seconds {age}");
+        }
     }
 
     #[test]

@@ -172,6 +172,19 @@ describe("kinas context", () => {
     expect(open.stdout).toBe(`${realpathSync.native(join(w.acme, "README.md"))}\n`);
   });
 
+  test("a run started inside a git hook reads each project as itself, not the repository that ran the hook", async () => {
+    // Git exports where its repository is to every hook it runs (GIT_INDEX_FILE for a commit, GIT_DIR in a bare one), and
+    // a hook that starts an agent session starts its SessionStart hook with them: every project's git would then read
+    // the hook's repository, and its commits would be recorded under every project's name.
+    const w = await start();
+    const hook = { ...w.env, GIT_DIR: join(w.hub, ".git"), GIT_INDEX_FILE: join(w.hub, ".git/index"), GIT_WORK_TREE: w.hub };
+    const projects = sections((await kinas(["context", "--agent"], hook)).stdout).get("## Projects")!;
+    const acme = projects.split("\n").find((l) => l.startsWith("| acme |"))!;
+    expect(acme).toContain("| main | 2 | no upstream | T — Storefront skeleton |");
+    const recent = (await kinas(["context", "--agent"], w.env)).stdout.split("\n## Recent\n")[1]!;
+    expect(recent).not.toContain("· acme · commit · Hub rules");
+  });
+
   test("with no Kinas app, no Firstmate, no Herdr and no Codex, every section still answers in one line", async () => {
     const w = await start();
     await w.herdr.stop();

@@ -9,9 +9,10 @@
 //   KINAS_E2E_SKIP_BUILD=1    reuse the last debug build
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { specEnv } from "./env.ts";
 
 interface SpecSetup {
   setup?: (dataDir: string) => Promise<Record<string, string>> | Record<string, string>;
@@ -45,36 +46,12 @@ function run(command: string, args: string[], env: Record<string, string>): Prom
 const failed: string[] = [];
 for (const spec of specs) {
   const dataDir = mkdtempSync(join(tmpdir(), "kinas-e2e-"));
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    // A test app launched from inside a Herdr pane must not inherit that pane's identity.
-    if (value !== undefined && !key.toUpperCase().includes("HERDR")) env[key] = value;
-  }
-  env.KINAS_DATA_DIR = dataDir;
-  // No spec attaches Herdr's `default` session (build spec invariant 20): a plain shell unless the
-  // spec's setup asks for a throwaway session explicitly.
-  env.KINAS_PANE_SHELL_ONLY = "1";
-  // Readers see empty transcript roots, an unreachable Ollama and an in-memory Keychain unless the spec's
-  // setup says otherwise: no e2e run reads Miguel's history, calls ollama.com or touches his Keychain.
-  for (const sub of ["claude", "pi"]) mkdirSync(join(dataDir, "empty", sub), { recursive: true });
-  env.KINAS_CLAUDE_PROJECTS_DIR = join(dataDir, "empty", "claude");
-  env.KINAS_PI_SESSIONS_DIR = join(dataDir, "empty", "pi");
-  env.KINAS_OLLAMA_BASE_URL = "http://127.0.0.1:9";
-  // Unreachable by default, so no spec but the one that sets up a stub can reach a real Convex deployment.
-  env.KINAS_CONVEX_BASE_URL = "http://127.0.0.1:9";
-  // Same for Hostinger, and it matters more here: that token can restart or recreate a real machine.
-  env.KINAS_HOSTINGER_BASE_URL = "http://127.0.0.1:9";
-  env.KINAS_E2E_MEMORY_KEYCHAIN = "1";
-  // Test launches never register the real global hotkey or a login item.
-  env.KINAS_E2E_NO_SYSTEM_HOOKS = "1";
-  // The sidebar lists the repositories under the projects root (projects.rs) on every launch, so a spec that sets
-  // no root of its own gets an empty one here rather than Miguel's real folder.
-  mkdirSync(join(dataDir, "root"), { recursive: true });
-  env.KINAS_ROOT = join(dataDir, "root");
-  // The crew's tool health looks only in this (empty) folder and the system's own, never at the tools installed on this
-  // Mac (login_path.rs); a crew spec's setup points it at its stub tools instead.
-  mkdirSync(join(dataDir, "empty", "tools"), { recursive: true });
-  env.KINAS_E2E_TOOL_DIR = join(dataDir, "empty", "tools");
+  // The run's environment minus every variable that names a place the app or the CLI reads, plus the harness's own
+  // empty places and config file (env.ts): no e2e run reads Miguel's config, history or live Herdr unless its setup
+  // points it somewhere.
+  const { env, folders, files } = specEnv(process.env, dataDir);
+  for (const folder of folders) mkdirSync(folder, { recursive: true });
+  for (const [path, text] of Object.entries(files)) writeFileSync(path, text);
 
   const setupFile = join(specsDir, spec.replace(/\.e2e\.ts$/, ".setup.ts"));
   const hooks: SpecSetup = existsSync(setupFile) ? ((await import(setupFile)) as SpecSetup) : {};

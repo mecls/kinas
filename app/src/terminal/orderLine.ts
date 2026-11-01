@@ -59,7 +59,8 @@ export function feed(line: Line, data: string): { line: Line; submitted: string 
           if (code === 13 && !now.pasting) ({ line: now, submitted } = submit(now, submitted));
           else if (code === 127 || code === 8) now = backspace(now);
           else if (ctrl && (code === 99 || code === 117)) now = { ...now, text: "" };
-          else if (code !== undefined && code >= 0x20 && !ctrl) now = append(now, String.fromCodePoint(code));
+          // Past U+10FFFF is no character, and String.fromCodePoint would throw out of xterm's onData.
+          else if (code !== undefined && code >= 0x20 && code <= 0x10ffff && !ctrl) now = append(now, String.fromCodePoint(code));
         }
         i += csi[0].length;
         continue;

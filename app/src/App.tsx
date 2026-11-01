@@ -162,9 +162,9 @@ export function App() {
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page. The
   // sidebar's VPS row reads the same snapshot, so it never disagrees with the Usage page's Hostinger section.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
-  const connection = useMemo(() => (usage.snapshot ? connectionOf(usage.snapshot) : null), [usage.snapshot]);
+  const connection = useMemo(() => (usage.snapshot ? connectionOf(usage.snapshot, usage.error) : null), [usage.snapshot, usage.error]);
   // One crew reading for every page that shows the crew (crew/useCrew.ts): Crew, Inbox, and Home's night.
-  const { crew, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
+  const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
   const [inboxRequest, setInboxRequest] = useState<(InboxBox & { seq: number }) | null>(null);
   /** The launcher is on its way: Herdr can take seconds, and a second click would only queue behind it. */
@@ -660,6 +660,7 @@ export function App() {
               onGo={goTo}
               onLaunch={launchTask}
               crew={crew}
+              crewError={crewError}
               active={page === "home"}
               onReloadCrew={reloadCrew}
               onSelectTask={openTask}
@@ -670,6 +671,7 @@ export function App() {
           <section className="page" data-page="crew" hidden={page !== "crew"}>
             <CrewPage
               crew={crew}
+              error={crewError}
               active={page === "crew"}
               folders={folders}
               selected={reader.open && reader.occupant === "task" ? reader.task : null}
@@ -681,7 +683,7 @@ export function App() {
             />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
-            <InboxPage crew={crew} folders={folders} request={inboxRequest} onAnswer={answer} />
+            <InboxPage crew={crew} error={crewError} folders={folders} request={inboxRequest} onAnswer={answer} />
           </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
             <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} />

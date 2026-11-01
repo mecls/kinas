@@ -1,6 +1,6 @@
 //! Tauri commands the webview calls. Reads only; every write happens in the Rust core.
 
-use crate::keychain::{Keys, CONVEX_ACCOUNT, HOSTINGER_ACCOUNT, OLLAMA_ACCOUNT};
+use crate::keychain::{KeyStore, Keys, CONVEX_ACCOUNT, HOSTINGER_ACCOUNT, OLLAMA_ACCOUNT};
 use crate::readers::hostinger::{self, MetricsClient};
 use crate::pty::{self, PtyState};
 use crate::redact::redact;
@@ -74,9 +74,11 @@ pub struct SettingsView {
     pub projects_root_from_env: bool,
 }
 
-/// Settings (§3.9): everything the Settings page shows. Never a secret.
+/// Settings (§3.9): everything the Settings page shows. Never a secret. Async, with the Keychain's three questions and
+/// the hook's file read on a blocking thread (`keychain`): each question spawns `security`, which can wait on a locked
+/// Keychain, and a sync command waits on the main thread.
 #[tauri::command]
-pub fn get_settings(
+pub async fn get_settings(
     store: State<'_, Store>,
     keys: State<'_, Keys>,
     link: State<'_, crate::cli_link::CliLink>,
@@ -117,6 +119,12 @@ pub fn get_settings(
             text("hostinger_vm_label", ""),
         )
     };
+    let data_dir = control.data_dir().to_path_buf();
+    let (ollama_key_saved, convex_key_saved, hostinger_key_saved, claude_hook) = keychain(&keys, move |k| {
+        let saved = |account: &str| key_saved(k, account).unwrap_or(false);
+        Ok((saved(OLLAMA_ACCOUNT), saved(CONVEX_ACCOUNT), saved(HOSTINGER_ACCOUNT), claude_plan::hook_status(&data_dir, now_ms)))
+    })
+    .await?;
     Ok(SettingsView {
         org_name,
         appearance,
@@ -127,14 +135,14 @@ pub fn get_settings(
         hotkey_error: system.hotkey_error.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         autostart_error: system.autostart_error.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         cli_link: link.0.clone(),
-        ollama_key_saved: keys.0.get(OLLAMA_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
-        convex_key_saved: keys.0.get(CONVEX_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
+        ollama_key_saved,
+        convex_key_saved,
         convex_deployment_url,
         convex_plan,
-        hostinger_key_saved: keys.0.get(HOSTINGER_ACCOUNT).map(|k| k.is_some()).unwrap_or(false),
+        hostinger_key_saved,
         hostinger_vm_id,
         hostinger_vm_label,
-        claude_hook: claude_plan::hook_status(control.data_dir(), now_ms),
+        claude_hook,
         reader_editor,
         projects_root: projects_root.display().to_string(),
         projects_root_from_env: std::env::var("KINAS_ROOT").is_ok_and(|v| !v.trim().is_empty()),
@@ -224,12 +232,11 @@ pub fn set_menu_bar_quota(app: AppHandle, store: State<'_, Store>, value: String
     Ok(())
 }
 
-/// R30: registers first, and only a chord that registered is saved. No fallback chord.
+/// R30: registers first, and only a chord that registered is saved. No fallback chord: a refused one keeps the hotkey
+/// that worked (`system::register_hotkey`), which is still the one saved.
 #[tauri::command]
-pub fn set_global_hotkey(app: AppHandle, store: State<'_, Store>, system: State<'_, SystemState>, chord: String) -> Result<(), String> {
-    let result = system::register_hotkey(&app, &chord);
-    *system.hotkey_error.lock().unwrap_or_else(|p| p.into_inner()) = result.as_ref().err().cloned();
-    result?;
+pub fn set_global_hotkey(app: AppHandle, store: State<'_, Store>, chord: String) -> Result<(), String> {
+    system::register_hotkey(&app, &chord)?;
     system::put_setting(&store.conn(), store.org_id(), "global_hotkey", &serde_json::json!(chord)).map_err(|e| e.to_string())
 }
 
@@ -410,35 +417,57 @@ pub struct KeyStatus {
     pub saved: bool,
 }
 
+/// The Keychain's work on a blocking thread, as `hostinger_list_vms` and the reader commands do theirs: every call
+/// spawns `/usr/bin/security`, and a Keychain slow to answer — locked, or asking for a password — must not freeze the
+/// window, which a sync command would. The `Arc` is cloned because `State<'_, Keys>` cannot outlive the call.
+async fn keychain<T: Send + 'static>(keys: &Keys, work: impl FnOnce(&dyn KeyStore) -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    let store = std::sync::Arc::clone(&keys.0);
+    tauri::async_runtime::spawn_blocking(move || work(store.as_ref())).await.map_err(|e| format!("the Keychain did not answer: {e}"))?
+}
+
+/// Whether a secret is in the Keychain. Never the secret itself; every error redacted (ADR 0006), as below.
+fn key_saved(keys: &dyn KeyStore, account: &str) -> Result<bool, String> {
+    keys.get(account).map(|k| k.is_some()).map_err(|e| redact(&e))
+}
+
+/// Saves a secret, trimmed; `empty` is the refusal for nothing typed.
+fn save_key(keys: &dyn KeyStore, account: &str, secret: &str, empty: &str) -> Result<(), String> {
+    let secret = secret.trim();
+    if secret.is_empty() {
+        return Err(empty.into());
+    }
+    keys.set(account, secret).map_err(|e| redact(&e))
+}
+
+fn remove_key(keys: &dyn KeyStore, account: &str) -> Result<(), String> {
+    keys.remove(account).map_err(|e| redact(&e))
+}
+
 /// Settings: whether an Ollama Cloud API key is saved. Never returns the key itself (R4).
 #[tauri::command]
-pub fn ollama_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
-    Ok(KeyStatus { saved: keys.0.get(OLLAMA_ACCOUNT)?.is_some() })
+pub async fn ollama_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
+    Ok(KeyStatus { saved: keychain(&keys, |k| key_saved(k, OLLAMA_ACCOUNT)).await? })
 }
 
 /// Settings: saves the key in the Keychain (R4) and asks the Ollama reader to poll now.
 #[tauri::command]
-pub fn save_ollama_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>, key: String) -> Result<(), String> {
-    let key = key.trim();
-    if key.is_empty() {
-        return Err("the key is empty".into());
-    }
-    keys.0.set(OLLAMA_ACCOUNT, key).map_err(|e| redact(&e))?;
+pub async fn save_ollama_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>, key: String) -> Result<(), String> {
+    keychain(&keys, move |k| save_key(k, OLLAMA_ACCOUNT, &key, "the key is empty")).await?;
     control.refresh();
     Ok(())
 }
 
 /// Settings: removes the key. The Ollama gauge goes back to "Add API key" on the next poll.
 #[tauri::command]
-pub fn remove_ollama_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
-    keys.0.remove(OLLAMA_ACCOUNT)?;
+pub async fn remove_ollama_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
+    keychain(&keys, |k| remove_key(k, OLLAMA_ACCOUNT)).await?;
     control.refresh();
     Ok(())
 }
 
 #[tauri::command]
-pub fn convex_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
-    Ok(KeyStatus { saved: keys.0.get(CONVEX_ACCOUNT)?.is_some() })
+pub async fn convex_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
+    Ok(KeyStatus { saved: keychain(&keys, |k| key_saved(k, CONVEX_ACCOUNT)).await? })
 }
 
 /// Settings: saves the Convex deploy key in the Keychain and asks the reader to poll now (convex R2).
@@ -447,20 +476,16 @@ pub fn convex_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
 /// data, run functions, or read environment variables. Nothing here can check that, which is exactly why the
 /// GET-only guard test exists on the reader.
 #[tauri::command]
-pub fn save_convex_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>, key: String) -> Result<(), String> {
-    let key = key.trim();
-    if key.is_empty() {
-        return Err("the key is empty".into());
-    }
-    keys.0.set(CONVEX_ACCOUNT, key).map_err(|e| redact(&e))?;
+pub async fn save_convex_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>, key: String) -> Result<(), String> {
+    keychain(&keys, move |k| save_key(k, CONVEX_ACCOUNT, &key, "the key is empty")).await?;
     control.refresh();
     Ok(())
 }
 
 /// Settings: removes the key. The Convex gauges go back to "Add deploy key" on the next poll.
 #[tauri::command]
-pub fn remove_convex_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
-    keys.0.remove(CONVEX_ACCOUNT)?;
+pub async fn remove_convex_key(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
+    keychain(&keys, |k| remove_key(k, CONVEX_ACCOUNT)).await?;
     control.refresh();
     Ok(())
 }
@@ -494,24 +519,20 @@ pub struct VpsChoice {
 }
 
 #[tauri::command]
-pub fn hostinger_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
-    Ok(KeyStatus { saved: keys.0.get(HOSTINGER_ACCOUNT)?.is_some() })
+pub async fn hostinger_key_status(keys: State<'_, Keys>) -> Result<KeyStatus, String> {
+    Ok(KeyStatus { saved: keychain(&keys, |k| key_saved(k, HOSTINGER_ACCOUNT)).await? })
 }
 
 #[tauri::command]
-pub fn save_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderControl>, token: String) -> Result<(), String> {
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("the token is empty".into());
-    }
-    keys.0.set(HOSTINGER_ACCOUNT, token).map_err(|e| redact(&e))?;
+pub async fn save_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderControl>, token: String) -> Result<(), String> {
+    keychain(&keys, move |k| save_key(k, HOSTINGER_ACCOUNT, &token, "the token is empty")).await?;
     control.refresh();
     Ok(())
 }
 
 #[tauri::command]
-pub fn remove_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
-    keys.0.remove(HOSTINGER_ACCOUNT).map_err(|e| redact(&e))?;
+pub async fn remove_hostinger_token(keys: State<'_, Keys>, control: State<'_, ReaderControl>) -> Result<(), String> {
+    keychain(&keys, |k| remove_key(k, HOSTINGER_ACCOUNT)).await?;
     control.refresh();
     Ok(())
 }
@@ -703,6 +724,114 @@ mod tests {
         assert!(check_clipboard_text("ção ✓").is_ok());
         assert!(check_clipboard_text(&"a".repeat(CLIPBOARD_MAX_BYTES)).is_ok());
         assert!(check_clipboard_text(&"a".repeat(CLIPBOARD_MAX_BYTES + 1)).is_err());
+    }
+
+    /// A Keychain that fails every call with a message carrying a bearer token, a GitHub token and an Anthropic key.
+    struct Leaky;
+
+    const LEAK: &str = "security said: Bearer 9c2e-secret-token, ghp_9c2eFAKEabc and sk-ant-9c2e-FAKE";
+
+    impl KeyStore for Leaky {
+        fn get(&self, _: &str) -> Result<Option<String>, String> {
+            Err(LEAK.into())
+        }
+        fn set(&self, _: &str, _: &str) -> Result<(), String> {
+            Err(LEAK.into())
+        }
+        fn remove(&self, _: &str) -> Result<(), String> {
+            Err(LEAK.into())
+        }
+    }
+
+    /// ADR 0006: every error string is redacted before anything carries it on — Settings shows these. Saving redacted
+    /// already; removing a key and asking whether one is saved returned the Keychain's words as they came.
+    #[test]
+    fn every_keychain_error_settings_sees_is_redacted() {
+        let redacted = "security said: [redacted] [redacted] and [redacted]";
+        for account in [OLLAMA_ACCOUNT, CONVEX_ACCOUNT, HOSTINGER_ACCOUNT] {
+            assert_eq!(save_key(&Leaky, account, " key-9c2e ", "the key is empty").unwrap_err(), redacted, "save {account}");
+            assert_eq!(remove_key(&Leaky, account).unwrap_err(), redacted, "remove {account}");
+            assert_eq!(key_saved(&Leaky, account).unwrap_err(), redacted, "status {account}");
+        }
+        let keys = crate::keychain::MemoryKeyStore::default();
+        assert_eq!(save_key(&keys, OLLAMA_ACCOUNT, "  ", "the key is empty").unwrap_err(), "the key is empty");
+        save_key(&keys, OLLAMA_ACCOUNT, " key-9c2e ", "the key is empty").unwrap();
+        assert_eq!(keys.get(OLLAMA_ACCOUNT).unwrap().as_deref(), Some("key-9c2e"), "trimmed");
+        assert_eq!(key_saved(&keys, OLLAMA_ACCOUNT), Ok(true));
+        remove_key(&keys, OLLAMA_ACCOUNT).unwrap();
+        assert_eq!(key_saved(&keys, OLLAMA_ACCOUNT), Ok(false));
+    }
+
+    /// Each command's text as (name, is async, signature and body), for every line of `text` that is `#[tauri::command]`.
+    fn commands_in(text: &str) -> Vec<(String, bool, String)> {
+        let mut out = Vec::new();
+        let starts = text.split_inclusive('\n').scan(0, |at, line| {
+            let start = *at;
+            *at += line.len();
+            Some((start, line.trim() == "#[tauri::command]"))
+        });
+        for at in starts.filter(|(_, command)| *command).map(|(at, _)| at).collect::<Vec<_>>() {
+            let rest = &text[at..];
+            let Some(fn_at) = rest.find("fn ") else { continue };
+            let header = &rest[..fn_at];
+            let name: String = rest[fn_at + 3..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            let Some(open) = rest.find('{') else { continue };
+            let (mut depth, mut end) = (0, rest.len());
+            for (i, c) in rest[open..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = open + i + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            out.push((name, header.contains("async"), rest[..end].to_string()));
+        }
+        out
+    }
+
+    /// Sync commands that reach the Keychain: each spawns `/usr/bin/security`, and a sync command runs on the main
+    /// thread, so a Keychain slow to answer (locked, or asking for a password) froze the window.
+    fn keychain_on_the_main_thread(files: &[(String, String)]) -> Vec<String> {
+        let mut out = Vec::new();
+        for (path, text) in files {
+            for (name, is_async, code) in commands_in(text) {
+                if !is_async && ["Keys", "KeyStore", "_ACCOUNT"].iter().any(|k| code.contains(k)) {
+                    out.push(format!("{path}: {name}"));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn no_command_on_the_main_thread_reaches_the_keychain() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        let mut stack = vec![src.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    files.push((path.strip_prefix(&src).unwrap().display().to_string(), std::fs::read_to_string(&path).unwrap()));
+                }
+            }
+        }
+        let commands = files.iter().find(|(p, _)| p == "commands.rs").map(|(_, t)| commands_in(t)).unwrap_or_default();
+        assert!(commands.iter().any(|(name, ..)| name == "save_ollama_key"), "the guard is not reading commands.rs");
+        assert_eq!(keychain_on_the_main_thread(&files), Vec::<String>::new());
+        // The negative control: a sync command handed the key store, or naming an account, is found.
+        let planted = |code: &str| vec![("x.rs".to_string(), format!("#[tauri::command]\n{code}\n"))];
+        assert_eq!(keychain_on_the_main_thread(&planted("pub fn a(keys: State<'_, Keys>) -> bool { true }")), ["x.rs: a"]);
+        assert_eq!(keychain_on_the_main_thread(&planted("pub fn b(app: AppHandle) { let _ = app.state::<Keys>().0.get(OLLAMA_ACCOUNT); }")), ["x.rs: b"]);
+        assert!(keychain_on_the_main_thread(&planted("pub async fn c(keys: State<'_, Keys>) -> Result<(), String> { Ok(()) }")).is_empty());
     }
 
     #[test]

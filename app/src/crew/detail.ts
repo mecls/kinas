@@ -7,8 +7,26 @@ import { BADGE_OF } from "./board.ts";
 // The task detail's words (build spec §4 Task detail; mockup task-detail.html): pure, so detail.test.ts holds them and
 // crew/TaskDetail.tsx only draws. Everything here is what Firstmate or GitHub said — no plan, no recommendation.
 
-/** A 24-hour local clock, "09:31". */
+/**
+ * A 24-hour local clock, "09:31", "00:05": the Mac's own time zone, two-digit hours. The one rule the crew's surfaces say
+ * a time by — the task detail, the Inbox's "Copied 15:02", Home's Overnight and Settings → Crew's away line.
+ */
 export const clock = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+/**
+ * What the panel draws for the task selected (`id`), from the last answer `crew_task` gave (`answer`) and whether the
+ * last read failed. Its own answer is drawn and acted on. While another task's read is on its way, the last one stays
+ * drawn (§4, Loading) but is not `current`: its decision's actions must not answer for a card no longer selected. Once
+ * that read has failed, the last one is not drawn under the new selection at all — only the error is.
+ */
+export function detailFor(
+  answer: { id: string; detail: CrewTaskDetail | null } | null,
+  id: string | null,
+  failed: boolean,
+): { detail: CrewTaskDetail | null; current: boolean } {
+  const current = answer !== null && answer.id === id;
+  return { detail: current || !failed ? (answer?.detail ?? null) : null, current };
+}
 
 /** "ship · no-mistakes · yolo off · claude · herdr · observed 09:31", without the parts Firstmate did not say. */
 export function settingsLine(d: CrewTaskDetail): string {

@@ -104,6 +104,9 @@ export function steps(): Step[] {
       describe: () => "set Firstmate's backend to herdr (config/backend)",
       async perform(ctx) {
         if (!existsSync(join(ctx.home, ".git"))) return say(ctx, "skipped: Firstmate is not cloned");
+        // config/backend is written once, before any first mate exists (ADR 0018): a home the clone step left alone —
+        // local changes, another branch, no commit, a clone that never reached the pin — is not written into either.
+        if (ctx.homeProblem !== null) return say(ctx, "skipped: setup leaves Firstmate's home alone");
         const file = join(ctx.home, "config", "backend");
         const current = existsSync(file) ? (readFileSync(file, "utf8").split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "") : "";
         if (current === "herdr") return say(ctx, "already herdr");

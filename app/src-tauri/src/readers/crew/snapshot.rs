@@ -205,7 +205,6 @@ pub(crate) fn split_target(target: &str) -> Option<(&str, &str)> {
 }
 
 /// `^https://github\.com/[^/]+/[^/]+/pull/\d+$` — the only PR URL `gh` is ever handed (§10).
-#[allow(dead_code)]
 pub(crate) fn pr_url_ok(url: &str) -> bool {
     pr_number(url).is_some()
 }

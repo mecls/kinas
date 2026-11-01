@@ -28,6 +28,11 @@
   line-height: var(--lh-sm);
 }
 
+/* The snapshot could not be read again (ADR 0004): one line above the last good gauges, with their gap below it. */
+.usage-read-error {
+  margin-bottom: var(--space-3);
+}
+
 /* A provider with no readings sits in the hero row as a gauge-shaped card holding its empty state. */
 .usage-empty .ui-empty {
   margin-top: var(--space-2);

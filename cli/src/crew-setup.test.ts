@@ -179,6 +179,29 @@ describe("kinas crew setup", () => {
     expect(w.calls().filter((c) => c.includes("checkout") || c.startsWith("git clone"))).toEqual([]);
   });
 
+  test("a home setup leaves alone is left alone whole: its config/backend is neither written nor changed", async () => {
+    // ADR 0018: config/backend is written once, before any first mate exists. A home with local changes, or on another
+    // branch, is one a first mate is using; the clone step says "setup leaves it", and the backend step must not then
+    // write into it — with --yes it would switch a running first mate's backend without a word.
+    const dirty = world();
+    mkdirSync(join(dirty.home, ".git"), { recursive: true });
+    writeFileSync(join(dirty.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+    writeFileSync(join(dirty.home, ".git", "STUB_DIRTY"), " M bin/fm-fleet-snapshot.sh\n");
+    const left = await run(dirty, { yes: true });
+    expect(left.code).toBe(1);
+    expect(existsSync(join(dirty.home, "config", "backend"))).toBe(false);
+    expect(left.out).toContain("skipped: setup leaves Firstmate's home alone");
+
+    const tangle = world();
+    mkdirSync(join(tangle.home, ".git"), { recursive: true });
+    mkdirSync(join(tangle.home, "config"), { recursive: true });
+    writeFileSync(join(tangle.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+    writeFileSync(join(tangle.home, ".git", "STUB_BRANCH"), "fix-9c2e\n");
+    writeFileSync(join(tangle.home, "config", "backend"), "tmux\n");
+    await run(tangle, { yes: true });
+    expect(readFileSync(join(tangle.home, "config", "backend"), "utf8")).toBe("tmux\n");
+  });
+
   test("looking at an existing home takes no optional lock: git status must not refresh the index (ADR 0018)", async () => {
     const w = world();
     mkdirSync(join(w.home, ".git"), { recursive: true });

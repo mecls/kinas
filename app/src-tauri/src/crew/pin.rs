@@ -3,9 +3,10 @@
 //! Firstmate's floors (`fm-bootstrap.sh:909-926`, `fm-tasks-axi-lib.sh:45`, `fm-quota-axi-lib.sh:20` at the pin).
 //! Mirrored in `packages/commands/src/crew-tools.ts`. Moving the pin moves tool floors too, so it is the captain's
 //! decision, never a side effect.
-// The tools and the launcher's constants are read from their slices on (2: setup and health; 3: the launcher).
-#![allow(dead_code)]
 
+/// Where `kinas crew setup` clones from (`cli/src/crew-setup.ts`). The app never clones: here it is held to the CLI's
+/// twin by `equals_the_shared_fixture`, its only reader.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const FIRSTMATE_REPO: &str = "https://github.com/kunchenguid/firstmate";
 pub const FIRSTMATE_PIN: &str = "f9f74a1d91cc7e105ec3df2249eda4e07f9ba540"; // 2026-09-22; reviewed monthly
 pub const HOME_DIR: &str = "firstmate"; // under paths::data_dir()
@@ -19,6 +20,9 @@ pub struct Tool {
 }
 pub enum Source {
     Npm,
+    /// The app probes a release tool's `--version` and never installs one: what to download and its checksum are the
+    /// CLI's (`kinas crew setup`), held to it here by `equals_the_shared_fixture`, their only reader in the app.
+    #[cfg_attr(not(test), allow(dead_code))]
     GithubRelease { repo: &'static str, asset: &'static str, sha256: &'static str },
 }
 #[rustfmt::skip]

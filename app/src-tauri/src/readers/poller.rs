@@ -1,5 +1,5 @@
-//! When the Ollama reader may make a request (PRD R13). Pure scheduling on a supplied clock, so it is
-//! tested without waiting.
+//! When a polled provider reader — Ollama Cloud, Convex, Hostinger (`readers/runtime.rs`) — may make a request (PRD R13,
+//! the same rule for each). Pure scheduling on a supplied clock, so it is tested without waiting.
 
 pub const CADENCE_MS: i64 = 5 * 60 * 1000;
 /// Whatever the trigger, at most one request per 60 s.

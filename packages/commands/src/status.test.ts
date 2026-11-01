@@ -56,3 +56,28 @@ describe("statusFromStore judges a reading at the moment it is read", () => {
     expect(statusFromStore(store, NOW).quotas[0]!.state).toBe("stale");
   });
 });
+
+describe("This Mac in kinas status", () => {
+  const host = (age: number) =>
+    statusLines(
+      statusFromStore(
+        {
+          schemaVersion: () => 6,
+          getReaderStatus: () => [],
+          getQuotas: () => [],
+          getHost: () => ({ machine: "mac-9c2e", cpu_pct: 12.4, mem_used_gb: 7.2, mem_total_gb: 16, disk_used_gb: 200, disk_total_gb: 460, disk_available_gb: 280, updated_at: NOW - age }),
+          getUsageDaily: () => [],
+        } as unknown as StorageAdapter,
+        NOW,
+      ),
+      false,
+    ).find((l) => l.startsWith("This Mac"))!;
+
+  test("a reading past its dead limit shows no numbers as current, as the Usage page shows it: a dash where each reading was", () => {
+    // The app quit overnight: the last sample is 13 hours old, past the host reader's 12. Stale is marked; dead is older
+    // still, and printed as it was it would read as this Mac now.
+    expect(host(13 * 3_600_000)).toMatch(/^This Mac {11}CPU — · memory —\/16\.0 GiB · disk available — · as of (?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}$/);
+    expect(host(5 * 60_000)).toMatch(/^This Mac {11}CPU 12% · memory 7\.2\/16\.0 GiB · disk available 300 GB · as of \d{2}:\d{2} \(stale\)$/);
+    expect(host(30_000)).toMatch(/^This Mac {11}CPU 12% · memory 7\.2\/16\.0 GiB · disk available 300 GB · as of \d{2}:\d{2}$/);
+  });
+});

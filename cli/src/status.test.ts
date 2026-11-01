@@ -30,8 +30,9 @@ function makeStore(fill: (db: Database, org: string, now: number) => void, upTo 
   return dir;
 }
 
+/** The CLI as a process, piped; colour as the test asks for it, never as the shell running the tests has it. */
 function run(args: string[], env: Record<string, string>) {
-  const proc = Bun.spawnSync(["bun", MAIN, ...args], { env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawnSync(["bun", MAIN, ...args], { env: { ...process.env, FORCE_COLOR: "", NO_COLOR: "", ...env }, stdout: "pipe", stderr: "pipe" });
   return { code: proc.exitCode, stdout: proc.stdout.toString(), stderr: proc.stderr.toString() };
 }
 
@@ -69,6 +70,15 @@ describe("kinas status", () => {
     // 280 GiB = 300.6 GB, floored.
     expect(stdout).toMatch(/^This Mac {11}CPU 12% · memory 7\.2\/16\.0 GiB · disk available 300 GB/m);
     expect(stdout).not.toContain("\x1b["); // no colour when not a TTY
+  });
+
+  test("FORCE_COLOR paints a stale line gold even when piped, as every other command and the README have it; NO_COLOR wins", () => {
+    const forced = run(["status"], { KINAS_DATA_DIR: healthy, FORCE_COLOR: "1", NO_COLOR: "" });
+    expect(forced.code).toBe(0);
+    expect(forced.stdout).toMatch(/^\x1b\[33mClaude · week {6}76% left · .* \(stale\)\x1b\[0m$/m);
+    // The fresh line stays plain: gold is for what is stale, nothing else.
+    expect(forced.stdout).toMatch(/^Claude · session {3}58% left/m);
+    expect(run(["status"], { KINAS_DATA_DIR: healthy, FORCE_COLOR: "1", NO_COLOR: "1" }).stdout).not.toContain("\x1b[");
   });
 
   test("--json carries left_pct, ISO times and states, and nothing secret-shaped", () => {

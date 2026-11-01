@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getCrewSettings, type CrewSettings, type PinState } from "../api.ts";
+import { clock } from "../crew/detail.ts";
 import { ToolTable } from "../crew/ToolTable.tsx";
 import { Card } from "../ui/index.ts";
 
@@ -8,9 +9,10 @@ import { Card } from "../ui/index.ts";
 // modes. Everything here is read; changing any of it is asked of the first mate in its pane, or of kinas crew setup.
 // Self-contained like ConvexSection; read again whenever Settings comes on screen.
 
-const clock = (iso: string) => {
+/** Firstmate's ISO 8601 stamp on the crew's one clock (crew/detail.ts); one that does not parse is shown as written. */
+const isoClock = (iso: string) => {
   const at = Date.parse(iso);
-  return Number.isNaN(at) ? iso : new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return Number.isNaN(at) ? iso : clock(at);
 };
 
 function PinLine({ pin }: { pin: PinState }) {
@@ -94,8 +96,8 @@ export function CrewSection({ active }: { active: boolean }) {
               <>
                 <dt>Away</dt>
                 <dd>
-                  since {clock(settings.away.entered)}
-                  {settings.away.expected_return && ` · back ${clock(settings.away.expected_return)}`}
+                  since {isoClock(settings.away.entered)}
+                  {settings.away.expected_return && ` · back ${isoClock(settings.away.expected_return)}`}
                 </dd>
               </>
             )}

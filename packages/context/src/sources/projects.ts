@@ -4,7 +4,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
-import { run, splitZ, type RunResult } from "../exec.ts";
+import { gitEnv, run, splitZ, type RunResult } from "../exec.ts";
 import type { ProjectRow } from "../packet.ts";
 import { SourceError } from "../source.ts";
 
@@ -45,10 +45,6 @@ export async function discoverRepos(root: string, maxDepth = MAX_DEPTH): Promise
   }
   await walk(root, 0);
   return found.sort();
-}
-
-function gitEnv(): Record<string, string | undefined> {
-  return { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
 }
 
 type Git = (args: string[], stdin?: string) => Promise<RunResult>;

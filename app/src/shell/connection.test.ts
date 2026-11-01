@@ -49,6 +49,27 @@ describe("the VPS row's word (DESIGN.md §3.1)", () => {
   });
 });
 
+describe("the VPS row while the usage snapshot cannot be read (ADR 0004)", () => {
+  test("a connected row is stale: the last snapshot's age can no longer be judged, and the hover says why", () => {
+    const row = connectionOf({ now, readers: [reader({})] }, "database is locked");
+    expect(row).toEqual({ name: "Hostinger VPS", state: "stale", detail: `${asOf(now - 60_000, now)} · Could not read the readings: database is locked · showing the last reading` });
+  });
+
+  test("an error or a stale row keeps its word, and says the read failed too", () => {
+    expect(connectionOf({ now, readers: [reader({ state: "error", last_error: "api token rejected" })] }, "database is locked")).toEqual({
+      name: "Hostinger VPS",
+      state: "error",
+      detail: "api token rejected · Could not read the readings: database is locked · showing the last reading",
+    });
+    expect(connectionOf({ now, readers: [reader({ last_success_at: now - 300_001 })] }, "database is locked")?.state).toBe("stale");
+  });
+
+  test("no machine watched in the last snapshot is still no row; no failure changes nothing", () => {
+    expect(connectionOf({ now, readers: [reader({ state: "not_configured" })] }, "database is locked")).toBeNull();
+    expect(connectionOf({ now, readers: [reader({})] }, null)).toEqual(connectionOf({ now, readers: [reader({})] }));
+  });
+});
+
 describe("one usage poller (build spec §11.1)", () => {
   test("the sidebar draws the VPS row from App's one usage snapshot and never reads the snapshot itself", () => {
     const { readFileSync } = require("node:fs") as typeof import("node:fs");

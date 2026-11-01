@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { CrewTaskDetail } from "../api.ts";
-import { checksOf, clock, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
+import { checksOf, clock, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
 
 // The task detail's words (build spec §4 Task detail): only what Firstmate or GitHub said.
 
@@ -92,4 +92,59 @@ test("the worktree: present, gone, or not yet", () => {
   expect(worktreeWord(detail())).toBe("present");
   expect(worktreeWord(detail({ worktree_present: false }))).toBe("gone");
   expect(worktreeWord(detail({ worktree_present: null }))).toBeNull();
+});
+
+test("the clock is 24-hour local time with two-digit hours: midnight is 00:00, seven past five is 07:05", () => {
+  // Built from the Mac's own calendar, as the clock reads it, so the test holds in any time zone.
+  expect(clock(new Date(2026, 9, 31, 0, 0).getTime())).toBe("00:00");
+  expect(clock(new Date(2026, 9, 31, 7, 5).getTime())).toBe("07:05");
+  expect(clock(new Date(2026, 9, 31, 23, 59).getTime())).toBe("23:59");
+});
+
+test("the 24-hour local clock is written once: the Inbox, the task detail, Overnight and Settings → Crew share it", () => {
+  const { readdirSync, readFileSync, statSync } = require("node:fs") as typeof import("node:fs");
+  const { join, relative } = require("node:path") as typeof import("node:path");
+  const src = join(import.meta.dir, "..");
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) walk(path, out);
+      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) out.push(path);
+    }
+    return out;
+  };
+  const RULE = 'toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })';
+  const holders = walk(src)
+    .filter((path) => readFileSync(path, "utf8").includes(RULE))
+    .map((path) => relative(src, path));
+  expect(holders).toEqual(["crew/detail.ts"]);
+  // Positive control: each of the four surfaces still reaches it.
+  for (const file of ["crew/inbox.ts", "pages/overnight.ts", "settings/CrewSection.tsx"]) {
+    expect(readFileSync(join(src, file), "utf8")).toMatch(/import \{[^}]*\bclock\b[^}]*\} from "[./]+(crew\/)?detail\.ts"/);
+  }
+});
+
+describe("what the panel draws for the task selected (detailFor)", () => {
+  const a = detail({}, { id: "a-9c2e" });
+  const b = detail({}, { id: "b-9c2e" });
+
+  test("the selected task's own answer is drawn and can be acted on", () => {
+    expect(detailFor({ id: "a-9c2e", detail: a }, "a-9c2e", false)).toEqual({ detail: a, current: true });
+    // A failed re-read of the same task keeps it, beside the error (ADR 0004).
+    expect(detailFor({ id: "a-9c2e", detail: a }, "a-9c2e", true)).toEqual({ detail: a, current: true });
+  });
+
+  test("another card selected: the last task stays drawn while the new one is read, and nothing acts on it", () => {
+    expect(detailFor({ id: "a-9c2e", detail: a }, "b-9c2e", false)).toEqual({ detail: a, current: false });
+  });
+
+  test("another card selected and its read failed: the last task is not drawn under the new selection", () => {
+    expect(detailFor({ id: "a-9c2e", detail: a }, "b-9c2e", true)).toEqual({ detail: null, current: false });
+    expect(detailFor({ id: "b-9c2e", detail: b }, "b-9c2e", true).current).toBe(true);
+  });
+
+  test("nothing read yet, or nothing selected", () => {
+    expect(detailFor(null, "a-9c2e", false)).toEqual({ detail: null, current: false });
+    expect(detailFor({ id: "a-9c2e", detail: null }, "a-9c2e", false)).toEqual({ detail: null, current: true });
+  });
 });

@@ -7,6 +7,7 @@ import { useCleared } from "../crew/useCleared.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import { writeClipboard } from "../terminal/clipboard.ts";
 import { Button, EmptyState, Section, SectionHeader, TitleRow } from "../ui/index.ts";
+import { failedRead } from "./readFailure.ts";
 
 // Crew (build spec §4; DESIGN.md §5; mockup board.html): the first mate's fleet as Kinas mirrors it, one card per task
 // Firstmate knows. Three states: not installed (how to set up, and the tools), installed (Start the first mate now?, the
@@ -33,6 +34,7 @@ function StartFirstMate({ settings, blocked }: { settings: CrewSettings; blocked
 
 export function CrewPage({
   crew,
+  error = null,
   active,
   folders = [],
   selected = null,
@@ -43,6 +45,8 @@ export function CrewPage({
   onReload = () => {},
 }: {
   crew: CrewSnapshot | null;
+  /** The crew's reading itself failed (crew/useCrew.ts): the page keeps the last one and says so. */
+  error?: string | null;
   active: boolean;
   folders?: readonly SeatedFolder[];
   /** The task whose detail the panel shows. */
@@ -70,6 +74,7 @@ export function CrewPage({
   // draws is what the board has seen (done work clears, rule 4), so before setup nothing is stamped.
   const fleet = crew !== null && fleetShown(page, tasks.length, crew.reader.state === "error");
   useEffect(() => cleared.shown(fleet ? tasks : []), [cleared, tasks, fleet]);
+  const unread = failedRead("crew", error, crew !== null);
   return (
     <div className="page-in crew" data-crew={page}>
       <TitleRow title="Crew">
@@ -96,6 +101,11 @@ export function CrewPage({
           </Button>
         )}
       </TitleRow>
+      {unread && (
+        <p className="crew-error" data-testid="crew-read-error">
+          {unread}
+        </p>
+      )}
       {page === "uninstalled" && (
         <>
           <EmptyState

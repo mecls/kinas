@@ -25,7 +25,8 @@ const MAX_STATUS_BYTES = 262_144;
 export function parseStatus(text: string): Status | null {
   const gates: Status["gates"] = [];
   const slices: Status["slices"] = [];
-  for (const line of text.split("\n")) {
+  // A CRLF file's lines end in `\r`, which a regex `.` never matches: split on either ending.
+  for (const line of text.split(/\r?\n/)) {
     const gate = /^- Gate (\d+) · ([^:]+):\s*(.+)$/.exec(line);
     if (gate) {
       gates.push({ n: Number(gate[1]), name: gate[2]!.trim(), state: gate[3]!.trim() });

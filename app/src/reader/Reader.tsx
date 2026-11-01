@@ -28,7 +28,7 @@ import { CLIPBOARD_MAX_BYTES, writeClipboard } from "../terminal/clipboard.ts";
 import { onThemeChange } from "../theme.ts";
 import type { FrontmatterView } from "./frontmatter.ts";
 import { Header, type View } from "./Header.tsx";
-import { highlightCode, shouldHighlight } from "./highlight.ts";
+import { grammarFor, highlightCode, shouldHighlight } from "./highlight.ts";
 import { languageFor } from "./language.ts";
 import { classifyLink } from "./links.ts";
 import type { MenuItem } from "../ui/Menu.tsx";
@@ -796,12 +796,14 @@ export function Reader({
         ...images.map((img) => loadImage(img, current)),
         ...code.map(async (el) => {
           const text = el.textContent ?? "";
-          const id = /language-([\w-]+)/.exec(el.className)?.[1] ?? "";
+          // A fence's word, ```ts, is mapped to its grammar as an extension is; a source view's is one already.
+          const id = grammarFor(/language-([\w-]+)/.exec(el.className)?.[1] ?? "");
           if (!shouldHighlight(text)) {
             // A minified bundle is one enormous line: plain monospace is the honest rendering of it.
             el.dataset.highlight = "skipped";
             return;
           }
+          if (id === null) return;
           const html = await highlightCode(text, id);
           // A reload can swap the body while the grammar's chunk is still loading.
           if (html === null || !el.isConnected) return;

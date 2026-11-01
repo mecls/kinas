@@ -452,11 +452,11 @@ fn upsert(conn: &mut Connection, org_id: &str, vm: &Vm, metrics: &Metrics, now: 
         rows.push(Row::figure(METRIC_UPTIME, WINDOW_NOW, uptime.latest, uptime.unit.clone()));
     }
     // Both directions, summed — the upper bound, which is the safe direction while §7 Q1 and Q2 are open. The
-    // NULL limit is what keeps this a figure rather than a bar until they are answered (R10).
-    if metrics.outgoing.is_some() || metrics.incoming.is_some() {
-        let total = metrics.outgoing.as_ref().map(|s| s.sum).unwrap_or_default() + metrics.incoming.as_ref().map(|s| s.sum).unwrap_or_default();
-        let unit = metrics.outgoing.as_ref().or(metrics.incoming.as_ref()).and_then(|s| s.unit.clone());
-        rows.push(Row::figure(METRIC_BANDWIDTH, WINDOW_MONTH, total, unit));
+    // NULL limit is what keeps this a figure rather than a bar until they are answered (R10). Only when both came: a
+    // direction that is missing is not a zero (R6), and one alone is no upper bound, so the last sum ages into stale.
+    if let (Some(outgoing), Some(incoming)) = (&metrics.outgoing, &metrics.incoming) {
+        let unit = outgoing.unit.clone().or_else(|| incoming.unit.clone());
+        rows.push(Row::figure(METRIC_BANDWIDTH, WINDOW_MONTH, outgoing.sum + incoming.sum, unit));
     }
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -725,6 +725,33 @@ mod tests {
         assert_eq!(one(&store, METRIC_BANDWIDTH, "used"), Some(4.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0));
         assert_eq!(one(&store, METRIC_BANDWIDTH, "limit_value"), None);
         assert_eq!(one(&store, METRIC_BANDWIDTH, "used_pct"), None);
+    }
+
+    /// R6: a missing metric is omitted, never stored as zero. The month's traffic is both directions summed, so a
+    /// response whose `incoming_traffic` is null summed the outgoing alone — a quarter less traffic than the account
+    /// moved, stamped fresh. With a direction missing there is no sum: the last one stands and ages into stale.
+    #[test]
+    fn a_traffic_direction_that_is_missing_is_not_summed_as_zero() {
+        let (_dir, store) = store();
+        let org = store.org_id().to_string();
+        assert_eq!(poll(&mut store.conn(), &org, Some(TOKEN), Some(VM_ID), &Stub::ok(), 1_000), PollResult::Applied(5));
+        let updated = |store: &Store| -> i64 {
+            store.conn().query_row("SELECT updated_at FROM provider_metrics WHERE provider = 'hostinger' AND metric = 'bandwidth'", [], |r| r.get(0)).unwrap()
+        };
+        let both = one(&store, METRIC_BANDWIDTH, "used");
+        let mut half: serde_json::Value = serde_json::from_str(&metrics_fixture()).unwrap();
+        half["incoming_traffic"] = serde_json::Value::Null;
+        let stub = Stub { metrics_body: half.to_string(), ..Stub::ok() };
+        assert_eq!(poll(&mut store.conn(), &org, Some(TOKEN), Some(VM_ID), &stub, 2_000), PollResult::Applied(4), "the other four still read");
+        assert_eq!((one(&store, METRIC_BANDWIDTH, "used"), updated(&store)), (both, 1_000), "the last sum stands, with its own time");
+        assert_eq!(one(&store, METRIC_RAM, "used"), Some(554176512.0));
+
+        // A first reading with one direction writes no bandwidth row at all.
+        let (_fresh_dir, fresh) = super::tests::store();
+        let org = fresh.org_id().to_string();
+        assert_eq!(poll(&mut fresh.conn(), &org, Some(TOKEN), Some(VM_ID), &Stub { metrics_body: half.to_string(), ..Stub::ok() }, 1_000), PollResult::Applied(4));
+        let rows: i64 = fresh.conn().query_row("SELECT count(*) FROM provider_metrics WHERE metric = 'bandwidth'", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0);
     }
 
     #[test]

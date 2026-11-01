@@ -5,7 +5,7 @@ import type { KeyboardEvent } from "react";
 import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
 import { BADGE_OF, lanesOf } from "./board.ts";
-import { checksOf, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
+import { checksOf, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
 import { ageText, copiedText } from "./inbox.ts";
 
 // The right panel's second occupant (build spec §4 Task detail; mockup task-detail.html): what Firstmate reports about
@@ -57,14 +57,16 @@ export function TaskDetail({
     };
   }, [id, hidden, version]);
 
-  const shown = answer?.detail ?? null;
-  const missing = answer !== null && answer.id === id && answer.detail === null;
+  // Another card's detail is never acted on, and never drawn under a selection whose own read failed (detail.ts).
+  const view = detailFor(answer, id, error !== null);
+  const shown = view.detail;
+  const missing = view.current && shown === null;
   const lane = shown ? lanesOf([shown.task], folders)[0] : undefined;
   const gone = shown?.task.word === "gone";
   const pr = shown ? prDetail(shown) : null;
   const worktree = shown ? worktreeWord(shown) : null;
-  /** The footer acts on the newest open decision. */
-  const decision = shown && !gone ? (shown.decisions[0] ?? null) : null;
+  /** The footer acts on the newest open decision — of the task selected, never of the one shown before it. */
+  const decision = view.current && shown && !gone ? (shown.decisions[0] ?? null) : null;
   const act = (action: "approve" | "answer" | "deny") => {
     if (!decision) return;
     if (action === "approve") onApprove(decision.task_id, decision.key);

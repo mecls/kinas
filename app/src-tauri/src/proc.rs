@@ -34,8 +34,6 @@ pub(crate) enum Exit {
 }
 
 #[derive(Debug)]
-// `first_err`, `elapsed` and `ok` are read by the tool probes and the launcher (slices 2 and 3).
-#[allow(dead_code)]
 pub(crate) struct Ran {
     pub exit: Exit,
     pub stdout: String,
@@ -43,11 +41,9 @@ pub(crate) struct Ran {
     /// task, a path or a repository.
     pub first_err: Option<String>,
     pub last_err: Option<String>,
-    pub elapsed: Duration,
 }
 
 impl Ran {
-    #[allow(dead_code)]
     pub fn ok(&self) -> bool {
         self.exit == Exit::Code(0)
     }
@@ -111,7 +107,7 @@ fn run_with(r: &Run, inherited: impl IntoIterator<Item = (OsString, OsString)>) 
     let mut lines = err.lines().map(str::trim).filter(|l| !l.is_empty());
     let first_err = lines.next().map(str::to_string);
     let last_err = lines.next_back().map(str::to_string).or_else(|| first_err.clone());
-    Ok(Ran { exit, stdout: out.unwrap_or_default(), first_err, last_err, elapsed: started.elapsed() })
+    Ok(Ran { exit, stdout: out.unwrap_or_default(), first_err, last_err })
 }
 
 fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<String> {
@@ -155,9 +151,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pids = dir.path().join("pids");
         let script = format!("sleep 30 & echo $$ $! > '{}'; sleep 30", pids.display());
+        let started = Instant::now();
         let ran = sh(&script, Duration::from_secs(1));
+        let took = started.elapsed();
         assert_eq!(ran.exit, Exit::TimedOut);
-        assert!(ran.elapsed < Duration::from_secs(4), "took {:?}", ran.elapsed);
+        assert!(took < Duration::from_secs(4), "took {took:?}");
         let text = std::fs::read_to_string(&pids).unwrap();
         let ids: Vec<i32> = text.split_whitespace().map(|p| p.parse().unwrap()).collect();
         assert_eq!(ids.len(), 2, "{text}");

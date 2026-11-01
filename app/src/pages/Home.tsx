@@ -9,6 +9,7 @@ import { PROVIDER_LABEL, WINDOW_LABEL } from "../usage/format.ts";
 import { asOfOldest, QuotaGauge } from "../usage/QuotaGauge.tsx";
 import { attention, heroSlots } from "./home.ts";
 import { overnightRows, sinceCaption } from "./overnight.ts";
+import { failedRead } from "./readFailure.ts";
 
 // Home (DESIGN.md §5 Home; build-spec §4): the first screen, ⌘1. It answers what needs me: what happened overnight in
 // each client folder, what is waiting on me, and the three readings that decide the day with anything past its
@@ -30,6 +31,7 @@ export function HomePage({
   onGo,
   onLaunch,
   crew = null,
+  crewError = null,
   active = true,
   onReloadCrew = () => {},
   onSelectTask = () => {},
@@ -47,6 +49,8 @@ export function HomePage({
   onLaunch: () => void;
   /** App's one crew reading (crew/useCrew.ts); null, or not installed, and Home is as before the crew. */
   crew?: CrewSnapshot | null;
+  /** The crew's reading itself failed (crew/useCrew.ts): Overnight keeps the last one and says so. */
+  crewError?: string | null;
   /** Home is the page on screen: its coming on screen is a new load, which clears what Overnight has shown. */
   active?: boolean;
   /** A fresh crew reading, asked at each load. */
@@ -70,6 +74,7 @@ export function HomePage({
     cleared.shown(tasks.filter((t) => ids.has(t.id)));
   }, [cleared, tasks, counted]);
   const waiting = withCrew ? crew.decisions : [];
+  const crewUnread = failedRead("crew", crewError, crew !== null);
   return (
     <div className="page-in home">
       <TitleRow title="Home">
@@ -89,6 +94,11 @@ export function HomePage({
           caption={withCrew ? sinceCaption(crew.overnight_since, crew.now) : undefined}
           source={withCrew ? "the crew's timeline in Kinas" : undefined}
         />
+        {crewUnread && (
+          <p className="home-note home-error home-read-error" data-testid="home-crew-error">
+            {crewUnread}
+          </p>
+        )}
         {projects.length === 0 ? (
           <EmptyState>No client folders under the projects folder yet.</EmptyState>
         ) : folders.length === 0 ? (
@@ -198,9 +208,16 @@ function HomeUsage({ snapshot, error, onOpenUsage }: { snapshot: UsageSnapshot |
   const slots = heroSlots(snapshot);
   const readings = slots.flatMap((s) => (s.quota ? [s.quota] : []));
   const rows = attention(snapshot);
+  // The snapshot could not be read again: these are the last good numbers, said as the Usage page says it (ADR 0004).
+  const stale = failedRead("usage", error, true);
   return (
     <>
       <SectionHeader title="Usage" caption={asOfOldest(readings, snapshot.now)} source="Oldest reading on this section" action={action} />
+      {stale && (
+        <p className="home-note home-error home-read-error" data-testid="home-usage-error">
+          {stale}
+        </p>
+      )}
       <Gauges>
         {slots.map((s) =>
           s.quota ? (

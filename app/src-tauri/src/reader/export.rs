@@ -128,7 +128,8 @@ fn check_destination(parent: &Path, dest: &Path, protected: &[PathBuf]) -> Resul
 /// the destination last: a full disk or a pulled drive leaves the old file or the new one, never half of one.
 fn write_atomically(parent: &Path, name: &str, bytes: &[u8]) -> Result<(String, u64), Refused> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
-    let temp = parent.join(format!(".{name}.kinas-{}-{nanos}.tmp", std::process::id()));
+    // Not named after `name`: a name macOS allows, at its 255 characters, has no room for a suffix.
+    let temp = parent.join(format!(".kinas-{}-{nanos}.tmp", std::process::id()));
     let dest = parent.join(name);
     let written = (|| -> std::io::Result<()> {
         let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
@@ -366,6 +367,18 @@ mod tests {
         assert_eq!(write_bytes(text, &b.out.join("inside.md"), std::slice::from_ref(&b.out)), Err(Refused::Protected));
         assert_untouched(&b, &b.out, &before);
         assert_eq!(write_bytes(text, &b.out.join("missing/folder.md"), &[]), Err(Refused::Failed));
+    }
+
+    /// A name macOS allows — up to 255 characters — is a name the copy can be saved under. The temp file carried the
+    /// whole name plus 29 characters of its own, so a name past 226 could not be opened and every Download of it failed.
+    #[test]
+    fn a_long_name_macos_allows_is_saved() {
+        let b = bench();
+        let long = format!("{}.md", "a".repeat(252));
+        assert_eq!(write_copy(&b.source, &b.out.join(&long), &[], MAX), Ok((long.clone(), fs::metadata(&b.source).unwrap().len())));
+        let long = format!("{}.txt", "b".repeat(251));
+        assert_eq!(write_bytes(b"# x\n", &b.out.join(&long), &[]), Ok((long, 4)));
+        assert_eq!(names(&b.out).len(), 2, "no temp file is left");
     }
 
     #[test]

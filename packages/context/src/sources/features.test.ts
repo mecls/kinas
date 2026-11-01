@@ -72,3 +72,13 @@ test("featuresOf reads each project's tasks, skipping the templates and the fini
     { project: "p-9c2e", slug: "c-9c2e", line: "status unreadable" },
   ]);
 });
+
+test("a status file saved with CRLF line endings reads as the same file with LF, not as unreadable", () => {
+  // An editor that saves `\r\n` (or a checkout with core.autocrlf) leaves a `\r` at each line's end, and a JavaScript
+  // `.` never matches it: every gate line failed, and a feature at Gate 1 read "status unreadable".
+  const crlf = (text: string) => text.replaceAll("\n", "\r\n");
+  expect(featureLine(parseStatus(crlf(GATE_ONE)))).toBe("Gate 1 · Product in progress");
+  expect(featureLine(parseStatus(crlf(DONE)))).toBeNull();
+  const mid = DONE.replace("- [x] Slice 2 · installed", "- [ ] Slice 2 · installed");
+  expect(featureLine(parseStatus(crlf(mid)))).toBe("slice 2 of 2 — Slice 2 · installed");
+});

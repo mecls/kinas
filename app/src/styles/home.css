@@ -20,3 +20,8 @@
 .home-error {
   color: var(--danger);
 }
+
+/* A reading that failed after a good one (ADR 0004): the line sits above the last good rows, with their gap below it. */
+.home-read-error {
+  margin-bottom: var(--space-3);
+}

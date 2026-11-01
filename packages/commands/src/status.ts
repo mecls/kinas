@@ -157,11 +157,10 @@ const GOLD = "\x1b[33m";
 const RESET = "\x1b[0m";
 const LABEL_WIDTH = 19;
 
-/** Finder's "available" when the app has it (free + purgeable), else free space; whole GB, floored. */
-function diskText(h: HostRow): string {
-  return h.disk_available_gb === null
-    ? `disk free ${Math.floor((h.disk_total_gb - h.disk_used_gb) * GB_PER_GIB)} GB`
-    : `disk available ${Math.floor(h.disk_available_gb * GB_PER_GIB)} GB`;
+/** Finder's "available" when the app has it (free + purgeable), else free space; whole GB, floored. `dead`: a dash. */
+function diskText(h: HostRow, dead: boolean): string {
+  if (h.disk_available_gb === null) return `disk free ${dead ? "—" : `${Math.floor((h.disk_total_gb - h.disk_used_gb) * GB_PER_GIB)} GB`}`;
+  return `disk available ${dead ? "—" : `${Math.floor(h.disk_available_gb * GB_PER_GIB)} GB`}`;
 }
 
 /** The text lines of `kinas status`. `color` adds gold to stale lines (TTY only). */
@@ -194,8 +193,12 @@ export function statusLines(result: StatusResult, color: boolean): string[] {
   } else {
     const h = result.host;
     const stale = h.state === "stale";
-    const cpu = h.cpu_pct === null ? "—" : `${Math.round(h.cpu_pct)}%`;
-    const line = `${"This Mac".padEnd(LABEL_WIDTH)}CPU ${cpu} · memory ${h.mem_used_gb.toFixed(1)}/${h.mem_total_gb.toFixed(1)} GiB · ${diskText(h)} · as of ${lisbonClock(h.updated_at, result.now)}${stale ? " (stale)" : ""}`;
+    // Past its dead limit a reading is no longer this Mac's: a dash where each reading was, the totals kept, as the
+    // Usage page's This Mac shows it (Usage.tsx MacSection).
+    const dead = h.state === "dead";
+    const cpu = h.cpu_pct === null || dead ? "—" : `${Math.round(h.cpu_pct)}%`;
+    const used = dead ? "—" : h.mem_used_gb.toFixed(1);
+    const line = `${"This Mac".padEnd(LABEL_WIDTH)}CPU ${cpu} · memory ${used}/${h.mem_total_gb.toFixed(1)} GiB · ${diskText(h, dead)} · as of ${lisbonClock(h.updated_at, result.now)}${stale ? " (stale)" : ""}`;
     lines.push(paint(line, stale));
   }
   return lines;

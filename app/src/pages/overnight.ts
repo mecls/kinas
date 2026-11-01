@@ -1,5 +1,6 @@
 import type { CrewDecision, CrewTask, CrewWord } from "../api.ts";
 import { BADGE_OF, lanesOf } from "../crew/board.ts";
+import { clock } from "../crew/detail.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { Segments } from "../ui/Bar.tsx";
 import type { BadgeState } from "../ui/StatusBadge.tsx";
@@ -41,8 +42,6 @@ export function bucketOf(word: CrewWord): Bucket {
 
 /** The badges' order: what needs the captain first. */
 const BADGE_ORDER: CrewWord[] = ["needs decision", "ready", "failed", "blocked", "CI red", "PR open", "working", "paused", "unknown", "queued", "done"];
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** When a task last did something the captain would count: its newest event, its finish, or its filing. */
 const activityAt = (t: CrewTask) => Math.max(t.last_event_at ?? 0, t.done_at ?? 0, t.first_seen_at);

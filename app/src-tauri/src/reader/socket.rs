@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::access::{self, Denied, Kind};
-use super::{Inner, ReaderState};
+use super::ReaderState;
 
 pub const SOCKET_FILE: &str = "kinas.sock";
 /// Emitted to the webview for an accepted request: open the reader, in the panel on the right of the window, beside
@@ -104,7 +104,20 @@ fn show_pick(paths: Vec<String>, received_at_ms: i64, root: &Path) -> Option<Sho
 
 /// One request against the root and this session's state. Pure apart from canonicalize and stat, so every branch
 /// is tested without a socket.
-pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -> (Response, Option<ShowEvent>) {
+///
+/// The reader's guard is taken only to read the last file opened and what was allowed, and to record a confirmation
+/// asked for — never while a path is resolved or judged. A path on a network share that stopped answering waits out
+/// the mount's timeout in its stat, and with the guard held every reader command, and every other `kinas open`, waited
+/// with it.
+pub fn handle(line: &str, root: &Path, state: &ReaderState, received_at_ms: i64) -> (Response, Option<ShowEvent>) {
+    handle_with(line, root, state, received_at_ms, &access::resolve)
+}
+
+/// How a request's path becomes a real path and a kind: `access::resolve`, or a test's.
+type Resolve<'a> = &'a dyn Fn(&Path) -> Result<(PathBuf, Kind), Denied>;
+
+/// `handle` with the resolver passed in, so a test can see the guard is free while a path is resolved.
+fn handle_with(line: &str, root: &Path, state: &ReaderState, received_at_ms: i64, resolve: Resolve) -> (Response, Option<ShowEvent>) {
     let Ok(request) = serde_json::from_str::<Request>(line) else {
         return (Response::bad_request(), None);
     };
@@ -113,20 +126,23 @@ pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -
     }
     let real_root = access::real_root(root);
     let refuse = |denied: Denied, path: &Path| (Response::refused(denied.code(), denied.cli_message(path, &real_root)), None);
+    // Judged against a copy: `permitted` canonicalizes the root and every allowed path, and those can be on a share too.
+    let permitted = |real: &Path| {
+        let allowed = state.lock().allowed.clone();
+        access::permitted(real, root, &allowed)
+    };
 
     match request.op.as_str() {
         "open" => {
             let Some(path) = request.path.map(PathBuf::from).filter(|p| p.is_absolute()) else {
                 return (Response::bad_request(), None);
             };
-            match access::resolve(&path) {
+            match resolve(&path) {
                 Err(denied) => refuse(denied, &path),
-                Ok((real, kind)) if access::permitted(&real, root, &inner.allowed) => {
-                    (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms, &real_root))
-                }
+                Ok((real, kind)) if permitted(&real) => (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms, &real_root)),
                 // Outside the root: only a click in the app can open it (R7). Nothing is allowed here.
                 Ok((real, kind)) if request.anywhere => {
-                    inner.pending_confirm = Some(real.clone());
+                    state.lock().pending_confirm = Some(real.clone());
                     (Response::accepted("confirm", &real), show(&real, kind, true, received_at_ms, &real_root))
                 }
                 Ok((real, _)) => refuse(Denied::Outside, &real),
@@ -143,8 +159,8 @@ pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -
                     if !path.is_absolute() {
                         return None;
                     }
-                    let (real, kind) = access::resolve(&path).ok()?;
-                    (kind == Kind::File && access::permitted(&real, root, &inner.allowed)).then(|| real.display().to_string())
+                    let (real, kind) = resolve(&path).ok()?;
+                    (kind == Kind::File && permitted(&real)).then(|| real.display().to_string())
                 })
                 .collect();
             match matches.len() {
@@ -157,14 +173,13 @@ pub fn handle(line: &str, root: &Path, inner: &mut Inner, received_at_ms: i64) -
             }
         }
         "reopen" => {
-            let Some(last) = inner.recent.front().cloned() else {
+            let last = state.lock().recent.front().cloned();
+            let Some(last) = last else {
                 return (Response::refused("empty_history", "kinas open: nothing opened since Kinas started".into()), None);
             };
-            match access::resolve(&last) {
+            match resolve(&last) {
                 Err(denied) => refuse(denied, &last),
-                Ok((real, kind)) if access::permitted(&real, root, &inner.allowed) => {
-                    (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms, &real_root))
-                }
+                Ok((real, kind)) if permitted(&real) => (Response::accepted("opened", &real), show(&real, kind, false, received_at_ms, &real_root)),
                 Ok((real, _)) => refuse(Denied::Outside, &real),
             }
         }
@@ -232,10 +247,8 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
         None => return,
         Some(Err(())) => (Response::bad_request(), None),
         Some(Ok(line)) => {
-            let state = app.state::<ReaderState>();
-            let mut inner = state.lock();
             let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
-            handle(&line, &root, &mut inner, received_at_ms)
+            handle(&line, &root, &app.state::<ReaderState>(), received_at_ms)
         }
     };
     if let Ok(json) = serde_json::to_string(&response) {
@@ -301,8 +314,8 @@ mod tests {
     #[test]
     fn a_file_inside_the_root_is_opened_and_shown() {
         let t = tree();
-        let mut inner = Inner::default();
-        let (response, event) = handle(&open(&t.root.join("a.md"), false), &t.root, &mut inner, 7);
+        let state = ReaderState::default();
+        let (response, event) = handle(&open(&t.root.join("a.md"), false), &t.root, &state, 7);
         assert_eq!(serde_json::to_string(&response).unwrap(), format!(r#"{{"ok":true,"result":"opened","path":"{}"}}"#, t.root.join("a.md").display()));
         assert_eq!(
             event,
@@ -315,7 +328,7 @@ mod tests {
                 pick: Vec::new(),
             })
         );
-        let (_, folder) = handle(&open(&t.root.join("docs"), false), &t.root, &mut inner, 7);
+        let (_, folder) = handle(&open(&t.root.join("docs"), false), &t.root, &state, 7);
         assert_eq!(folder.map(|e| e.kind), Some(Kind::Dir));
     }
 
@@ -323,31 +336,31 @@ mod tests {
     fn outside_the_root_is_refused_without_anywhere_and_only_asks_with_it() {
         let t = tree();
         let outside = t.base.join("outside/b.md");
-        let mut inner = Inner::default();
+        let state = ReaderState::default();
 
-        let (response, event) = handle(&open(&outside, false), &t.root, &mut inner, 0);
+        let (response, event) = handle(&open(&outside, false), &t.root, &state, 0);
         assert_eq!(response, Response::refused("outside", format!("kinas open: {} is outside {}; add --anywhere to ask Kinas to open it", outside.display(), t.root.display())));
         assert_eq!(event, None);
-        assert_eq!(inner.pending_confirm, None);
+        assert_eq!(state.lock().pending_confirm, None);
 
-        let (response, event) = handle(&open(&outside, true), &t.root, &mut inner, 0);
+        let (response, event) = handle(&open(&outside, true), &t.root, &state, 0);
         assert_eq!(response, Response::accepted("confirm", &outside));
         assert!(event.is_some_and(|e| e.confirm));
-        assert_eq!(inner.pending_confirm, Some(outside));
-        assert!(inner.allowed.is_empty(), "a socket request never widens access by itself");
+        assert_eq!(state.lock().pending_confirm, Some(outside));
+        assert!(state.lock().allowed.is_empty(), "a socket request never widens access by itself");
     }
 
     #[test]
     fn missing_and_malformed_requests_are_refused_but_any_text_file_opens() {
         let t = tree();
-        let mut inner = Inner::default();
-        assert_eq!(handle(&open(&t.root.join("new.md"), false), &t.root, &mut inner, 0).0.code, Some("missing"));
+        let state = ReaderState::default();
+        assert_eq!(handle(&open(&t.root.join("new.md"), false), &t.root, &state, 0).0.code, Some("missing"));
         assert!(!t.root.join("new.md").exists());
         // A `.txt` is text, so it opens (R1). The socket reads no bytes to know that — `resolve` only stats — so a
         // binary path is accepted here and refused later, by `read_text` in the command.
-        assert_eq!(handle(&open(&t.root.join("notes.txt"), false), &t.root, &mut inner, 0).0, Response::accepted("opened", &t.root.join("notes.txt")));
+        assert_eq!(handle(&open(&t.root.join("notes.txt"), false), &t.root, &state, 0).0, Response::accepted("opened", &t.root.join("notes.txt")));
         for line in [r#"{"v":1,"op":"open","path":"relative.md"}"#, r#"{"v":2,"op":"reopen"}"#, r#"{"v":1,"op":"delete"}"#, "not json"] {
-            assert_eq!(handle(line, &t.root, &mut inner, 0), (Response::bad_request(), None), "{line}");
+            assert_eq!(handle(line, &t.root, &state, 0), (Response::bad_request(), None), "{line}");
         }
     }
 
@@ -355,39 +368,62 @@ mod tests {
     #[test]
     fn pick_lists_what_may_be_opened_without_allowing_anything() {
         let t = tree();
-        let mut inner = Inner::default();
+        let state = ReaderState::default();
         let pick = |paths: &[&Path]| {
             serde_json::json!({ "v": 1, "op": "pick", "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>() }).to_string()
         };
 
-        let (response, event) = handle(&pick(&[&t.root.join("a.md"), &t.root.join("docs")]), &t.root, &mut inner, 5);
+        let (response, event) = handle(&pick(&[&t.root.join("a.md"), &t.root.join("docs")]), &t.root, &state, 5);
         // The folder is not a file, so only the markdown is offered, and one match opens straight away.
         assert_eq!(response, Response::accepted("opened", &t.root.join("a.md")));
         assert!(event.is_some_and(|e| e.pick.is_empty()));
 
         let second = t.root.join("docs/README.md");
         std::fs::write(&second, "# r\n").unwrap();
-        let (response, event) = handle(&pick(&[&t.root.join("a.md"), &second]), &t.root, &mut inner, 5);
+        let (response, event) = handle(&pick(&[&t.root.join("a.md"), &second]), &t.root, &state, 5);
         assert_eq!(response, Response::picking(vec![t.root.join("a.md").display().to_string(), second.display().to_string()]));
         assert_eq!(event.map(|e| e.pick.len()), Some(2));
-        assert!(inner.allowed.is_empty(), "listing never widens access");
+        assert!(state.lock().allowed.is_empty(), "listing never widens access");
 
         // Outside the root, or missing: nothing to offer.
         let outside = t.base.join("outside/b.md");
-        assert_eq!(handle(&pick(&[&outside]), &t.root, &mut inner, 5).0.code, Some("missing"));
-        assert_eq!(handle(&pick(&[Path::new("relative.md")]), &t.root, &mut inner, 5).0.code, Some("missing"));
+        assert_eq!(handle(&pick(&[&outside]), &t.root, &state, 5).0.code, Some("missing"));
+        assert_eq!(handle(&pick(&[Path::new("relative.md")]), &t.root, &state, 5).0.code, Some("missing"));
     }
 
     #[test]
     fn reopen_uses_the_most_recent_file_and_rechecks_it() {
         let t = tree();
-        let mut inner = Inner::default();
+        let state = ReaderState::default();
         let reopen = r#"{"v":1,"op":"reopen"}"#;
-        assert_eq!(handle(reopen, &t.root, &mut inner, 0).0.code, Some("empty_history"));
-        inner.remember(t.root.join("a.md"));
-        assert_eq!(handle(reopen, &t.root, &mut inner, 0).0, Response::accepted("opened", &t.root.join("a.md")));
+        assert_eq!(handle(reopen, &t.root, &state, 0).0.code, Some("empty_history"));
+        state.lock().remember(t.root.join("a.md"));
+        assert_eq!(handle(reopen, &t.root, &state, 0).0, Response::accepted("opened", &t.root.join("a.md")));
         fs::remove_file(t.root.join("a.md")).unwrap();
-        assert_eq!(handle(reopen, &t.root, &mut inner, 0).0.code, Some("missing"));
+        assert_eq!(handle(reopen, &t.root, &state, 0).0.code, Some("missing"));
+    }
+
+    /// Reader R6: the socket handler only canonicalizes and stats — but `kinas open /Volumes/<a share that stopped
+    /// answering>/x.md` makes that one stat wait the mount's timeout, and with the reader's guard held through it every
+    /// reader command, and every other `kinas open`, waited too. Each path a request names is resolved with no guard held.
+    #[test]
+    fn a_client_s_path_is_resolved_with_no_guard_held() {
+        let t = tree();
+        let state = ReaderState::default();
+        state.lock().remember(t.root.join("a.md"));
+        let held = std::cell::RefCell::new(Vec::new());
+        let resolve = |p: &Path| {
+            held.borrow_mut().push(state.0.try_lock().is_err());
+            access::resolve(p)
+        };
+        let pick = serde_json::json!({ "v": 1, "op": "pick", "paths": [t.root.join("a.md"), t.root.join("notes.txt")] }).to_string();
+        for line in [open(&t.root.join("a.md"), false), open(&t.base.join("outside/b.md"), true), pick, r#"{"v":1,"op":"reopen"}"#.to_string()] {
+            let (response, _) = handle_with(&line, &t.root, &state, 0, &resolve);
+            assert!(response.ok, "{line}");
+        }
+        assert_eq!(held.borrow().len(), 5, "every path the requests named was resolved");
+        assert!(held.borrow().iter().all(|h| !h), "a path was resolved while the reader's guard was held: {:?}", held.borrow());
+        assert_eq!(state.lock().pending_confirm, Some(t.base.join("outside/b.md")), "the confirmation is still recorded");
     }
 
     #[test]

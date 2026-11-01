@@ -74,27 +74,22 @@ pub(crate) fn word_without_gone(w: &WordInput) -> &'static str {
     word_of(&WordInput { gone: false, ..*w })
 }
 
-/// Home's overnight buckets (§7): done; working; wait (on the captain); fail. Home reads them from slice 7.
-#[allow(dead_code)]
-pub(crate) fn overnight_bucket(word_without_gone: &str) -> &'static str {
-    match word_without_gone {
-        "done" => "done",
-        "needs decision" | "ready" => "wait",
-        "failed" | "blocked" | "CI red" => "fail",
-        _ => "working",
-    }
-}
-
-/// In flight = any word but queued, done and gone (§17, settled by default). The lanes' counts use it from slice 4.
-#[allow(dead_code)]
-pub(crate) fn in_flight(word: &str) -> bool {
-    !matches!(word, "queued" | "done" | "gone")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    /// Home's overnight buckets (§7): done; working; wait (on the captain); fail — the fixture's `overnight` column. Home
+    /// draws them in the webview (`app/src/pages/overnight.ts` `bucketOf`, from each row's `overnight_word`); here the
+    /// column checks `word_without_gone`, which is what the app sends.
+    fn overnight_bucket(word_without_gone: &str) -> &'static str {
+        match word_without_gone {
+            "done" => "done",
+            "needs decision" | "ready" => "wait",
+            "failed" | "blocked" | "CI red" => "fail",
+            _ => "working",
+        }
+    }
 
     fn text<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
         v.get(key).and_then(Value::as_str)
@@ -141,16 +136,6 @@ mod tests {
         let words: std::collections::HashSet<&str> = cases.iter().map(|c| c["word"].as_str().unwrap()).collect();
         for word in ["gone", "done", "failed", "needs decision", "blocked", "paused", "ready", "CI red", "PR open", "working", "queued", "unknown"] {
             assert!(words.contains(word), "no case says {word}");
-        }
-    }
-
-    #[test]
-    fn in_flight_is_every_word_but_queued_done_and_gone() {
-        for word in ["working", "needs decision", "blocked", "CI red", "PR open", "ready", "failed", "paused", "unknown"] {
-            assert!(in_flight(word), "{word}");
-        }
-        for word in ["queued", "done", "gone"] {
-            assert!(!in_flight(word), "{word}");
         }
     }
 

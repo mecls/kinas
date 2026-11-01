@@ -25,7 +25,7 @@ function snapshotFor(h: string): unknown {
 describe("the crew from Firstmate's fleet snapshot", () => {
   test("in flight with worktrees, open briefs, holds waiting on the captain, and the last reports", async () => {
     const h = join(base, "map");
-    const crew = await crewFromSnapshot(snapshotFor(h), Date.now());
+    const crew = await crewFromSnapshot(snapshotFor(h), Date.now(), h);
     expect(crew.schema).toBe("fm-fleet-snapshot.v1");
     expect(crew.in_flight).toEqual([{ id: "t-101", title: "Add login rate limiting", project: "acme", kind: "ship", state: "working", worktree: "/ops/clients/acme-t-101" }]);
     expect(crew.intake).toEqual([{ id: "t-103", title: "Write the onboarding email", repo: "hub", filed: "2026-09-14" }]);
@@ -34,18 +34,29 @@ describe("the crew from Firstmate's fleet snapshot", () => {
   });
 
   test("a task with a pending decision event is blocked too, once", async () => {
-    const snap = snapshotFor(join(base, "pending")) as { tasks: { hints: { pending_decision: boolean; last_event_text: string } }[] };
+    const pending = join(base, "pending");
+    const snap = snapshotFor(pending) as { tasks: { hints: { pending_decision: boolean; last_event_text: string } }[] };
     snap.tasks[0]!.hints.pending_decision = true;
     snap.tasks[0]!.hints.last_event_text = "decision: which rate?";
-    const crew = await crewFromSnapshot(snap, Date.now());
+    const crew = await crewFromSnapshot(snap, Date.now(), pending);
     expect(crew.blocked.map((b) => [b.id, b.reason])).toEqual([
       ["t-102", "Stripe or Adyen: the report is in"],
       ["t-101", "decision: which rate?"],
     ]);
   });
 
+  test("a scout report outside Firstmate's home is not read, however its path is written", async () => {
+    // ADR 0019: under the home Kinas reads a report's first line, and nothing outside it (crew/mod.rs `under_home`).
+    const h = join(base, "reports", "firstmate");
+    const snap = snapshotFor(h) as { scout_reports: { id: string; path: string }[] };
+    write(join(base, "reports", "secret.md"), "TOKEN=not-for-the-packet-9c2e\n");
+    snap.scout_reports.push({ id: "abs-9c2e", path: join(base, "reports", "secret.md") }, { id: "up-9c2e", path: `${h}/data/../../secret.md` });
+    const crew = await crewFromSnapshot(snap, Date.now(), h);
+    expect(crew.reports.map((r) => r.id)).toEqual(["t-095"]);
+  });
+
   test("another contract version is refused by name", async () => {
-    await expect(crewFromSnapshot({ schema: "fm-fleet-snapshot.v2" }, 0)).rejects.toThrow("unsupported snapshot contract fm-fleet-snapshot.v2");
+    await expect(crewFromSnapshot({ schema: "fm-fleet-snapshot.v2" }, 0, base)).rejects.toThrow("unsupported snapshot contract fm-fleet-snapshot.v2");
   });
 
   test("runs the snapshot script with FM_HOME and reads its JSON", async () => {

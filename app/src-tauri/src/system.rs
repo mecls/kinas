@@ -15,8 +15,11 @@ pub const MENU_BAR_CHOICES: [&str; 4] = ["claude-plan/session", "claude-plan/wee
 
 #[derive(Default)]
 pub struct SystemState {
+    /// Why no global hotkey is registered, for Settings; None while one is.
     pub hotkey_error: Mutex<Option<String>>,
     pub autostart_error: Mutex<Option<String>>,
+    /// The chord registered with macOS now, if any: what a refused rebind puts back.
+    hotkey: Mutex<Option<Shortcut>>,
 }
 
 pub fn get_setting(conn: &Connection, org_id: &str, key: &str) -> Option<serde_json::Value> {
@@ -148,17 +151,54 @@ pub fn bring_forward(app: &AppHandle) {
     }
 }
 
+/// The plugin's two calls a swap makes, so the swap is tested without registering anything with macOS.
+pub(crate) trait Hotkeys {
+    fn unregister_all(&self) -> Result<(), String>;
+    fn register(&self, shortcut: Shortcut) -> Result<(), String>;
+}
+
+impl Hotkeys for tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry> {
+    fn unregister_all(&self) -> Result<(), String> {
+        tauri_plugin_global_shortcut::GlobalShortcut::unregister_all(self).map_err(|e| e.to_string())
+    }
+    fn register(&self, shortcut: Shortcut) -> Result<(), String> {
+        tauri_plugin_global_shortcut::GlobalShortcut::register(self, shortcut).map_err(|e| e.to_string())
+    }
+}
+
+/// R30's swap: every chord off, then `next` on. When `next` is refused — another app holds it — `previous`, the chord
+/// that worked, is registered again, so a taken chord never leaves the captain without a hotkey until a restart. Answers
+/// what is registered afterwards, and the error.
+pub(crate) fn swap_hotkey(hotkeys: &dyn Hotkeys, previous: Option<Shortcut>, next: Shortcut, chord: &str) -> (Option<Shortcut>, Result<(), String>) {
+    if let Err(e) = hotkeys.unregister_all() {
+        return (previous, Err(e));
+    }
+    match hotkeys.register(next) {
+        Ok(()) => (Some(next), Ok(())),
+        Err(e) => (previous.filter(|p| hotkeys.register(*p).is_ok()), Err(format!("{chord} is taken or cannot be registered: {e}"))),
+    }
+}
+
+/// Registers `chord` in place of the hotkey registered now, which stays when `chord` is refused. Settings' line says
+/// why there is none only while there is none: a refused rebind that kept the old chord is the command's error alone.
 pub fn register_hotkey(app: &AppHandle, chord: &str) -> Result<(), String> {
-    if !has_command_modifier(chord) {
-        return Err("the global hotkey must include ⌘".into());
-    }
-    let shortcut: Shortcut = chord.parse().map_err(|e| format!("\"{chord}\" is not a valid chord: {e}"))?;
-    if !system_hooks_enabled() {
-        return Err("not registered during e2e runs".into());
-    }
-    let manager = app.global_shortcut();
-    manager.unregister_all().map_err(|e| e.to_string())?;
-    manager.register(shortcut).map_err(|e| format!("{chord} is taken or cannot be registered: {e}"))
+    let state = app.state::<SystemState>();
+    let result = (|| {
+        if !has_command_modifier(chord) {
+            return Err("the global hotkey must include ⌘".to_string());
+        }
+        let shortcut: Shortcut = chord.parse().map_err(|e| format!("\"{chord}\" is not a valid chord: {e}"))?;
+        if !system_hooks_enabled() {
+            return Err("not registered during e2e runs".into());
+        }
+        let mut registered = state.hotkey.lock().unwrap_or_else(|p| p.into_inner());
+        let (now, result) = swap_hotkey(app.global_shortcut(), *registered, shortcut, chord);
+        *registered = now;
+        result
+    })();
+    let none = state.hotkey.lock().unwrap_or_else(|p| p.into_inner()).is_none();
+    *state.hotkey_error.lock().unwrap_or_else(|p| p.into_inner()) = result.as_ref().err().filter(|_| none).cloned();
+    result
 }
 
 pub fn apply_launch_at_login(app: &AppHandle, enabled: bool) -> Result<(), String> {
@@ -188,11 +228,9 @@ pub fn setup(app: &AppHandle) {
         let autostart = get_setting(&conn, store.org_id(), "launch_at_login").and_then(|v| v.as_bool()).unwrap_or(true);
         (chord, autostart)
     };
-    let hotkey = register_hotkey(app, &chord);
-    if let Err(e) = &hotkey {
+    if let Err(e) = register_hotkey(app, &chord) {
         log::warn!("hotkey unavailable: {e}");
     }
-    *state.hotkey_error.lock().unwrap_or_else(|p| p.into_inner()) = hotkey.err();
 
     let login = apply_launch_at_login(app, autostart);
     if let Err(e) = &login {
@@ -268,6 +306,49 @@ mod tests {
             assert_eq!(stored_accent(Some(odd)), None);
         }
         assert_eq!(stored_accent(None), None);
+    }
+
+    /// macOS as far as the swap sees it: what is registered, and the chords another app holds.
+    struct FakeHotkeys {
+        registered: std::cell::RefCell<Vec<Shortcut>>,
+        taken: Vec<Shortcut>,
+    }
+
+    impl Hotkeys for FakeHotkeys {
+        fn unregister_all(&self) -> Result<(), String> {
+            self.registered.borrow_mut().clear();
+            Ok(())
+        }
+        fn register(&self, shortcut: Shortcut) -> Result<(), String> {
+            if self.taken.contains(&shortcut) {
+                return Err("HotKey already registered".into());
+            }
+            self.registered.borrow_mut().push(shortcut);
+            Ok(())
+        }
+    }
+
+    /// R30: only a chord that registered is saved — and a chord another app holds must not cost the captain the one
+    /// that works. Rebinding to a taken chord unregistered every chord first, so until a restart there was none.
+    #[test]
+    fn a_taken_chord_keeps_the_hotkey_that_worked() {
+        let chord = |c: &str| c.parse::<Shortcut>().unwrap();
+        let (working, taken, free) = (chord(DEFAULT_HOTKEY), chord("Cmd+Shift+K"), chord("Cmd+Alt+J"));
+        let mac = FakeHotkeys { registered: vec![working].into(), taken: vec![taken] };
+
+        let (now, result) = swap_hotkey(&mac, Some(working), taken, "Cmd+Shift+K");
+        assert_eq!(result, Err("Cmd+Shift+K is taken or cannot be registered: HotKey already registered".to_string()));
+        assert_eq!((now, mac.registered.borrow().clone()), (Some(working), vec![working]), "the working chord is back");
+
+        let (now, result) = swap_hotkey(&mac, Some(working), free, "Cmd+Alt+J");
+        assert_eq!(result, Ok(()));
+        assert_eq!((now, mac.registered.borrow().clone()), (Some(free), vec![free]), "a free chord replaces it");
+
+        // Nothing worked before (a launch whose chord was taken): there is nothing to put back.
+        let none = FakeHotkeys { registered: Vec::new().into(), taken: vec![taken] };
+        let (now, result) = swap_hotkey(&none, None, taken, "Cmd+Shift+K");
+        assert!(result.is_err());
+        assert_eq!((now, none.registered.borrow().len()), (None, 0));
     }
 
     #[test]

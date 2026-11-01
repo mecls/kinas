@@ -112,8 +112,10 @@ fn last_assistant_time(projects_root: &Path, session_id: &str) -> Option<i64> {
     })
 }
 
-/// Upserts each window unless the stored reading is newer ("older loses", R16). Returns how many changed.
-pub fn apply(conn: &mut Connection, org_id: &str, windows: &[Window], data_time: i64) -> Result<usize, String> {
+/// Upserts each window unless the stored reading is newer ("older loses", R16). Returns how many changed. A stored
+/// reading stamped after `now` is from before the wall clock stepped back: it is newer than nothing, and the next
+/// reading replaces it, as R12 promises when it reads such a row stale.
+pub fn apply(conn: &mut Connection, org_id: &str, windows: &[Window], data_time: i64, now: i64) -> Result<usize, String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let mut applied = 0;
     for w in windows {
@@ -125,7 +127,7 @@ pub fn apply(conn: &mut Connection, org_id: &str, windows: &[Window], data_time:
             )
             .optional()
             .map_err(|e| e.to_string())?;
-        if stored.is_some_and(|updated| data_time < updated) {
+        if stored.is_some_and(|updated| data_time < updated && updated <= now) {
             continue;
         }
         tx.execute(
@@ -187,7 +189,7 @@ pub fn ingest(conn: &mut Connection, org_id: &str, data_dir: &Path, projects_roo
         }
         Ok(HandOff::Windows { session_id, captured_at, windows }) => {
             let when = data_time(projects_root, session_id.as_deref(), captured_at.unwrap_or(file_time));
-            match apply(conn, org_id, &windows, when) {
+            match apply(conn, org_id, &windows, when, now) {
                 Ok(applied) => {
                     if applied > 0 {
                         status(conn, Outcome::Success);
@@ -324,9 +326,26 @@ mod tests {
         let store = Store::open(dir.path()).unwrap();
         let newer = [Window { window: "session", used_pct: 50.0, resets_at: 10 }];
         let older = [Window { window: "session", used_pct: 20.0, resets_at: 10 }];
-        assert_eq!(apply(&mut store.conn(), store.org_id(), &newer, 2_000).unwrap(), 1);
-        assert_eq!(apply(&mut store.conn(), store.org_id(), &older, 1_000).unwrap(), 0);
+        assert_eq!(apply(&mut store.conn(), store.org_id(), &newer, 2_000, 2_500).unwrap(), 1);
+        assert_eq!(apply(&mut store.conn(), store.org_id(), &older, 1_000, 3_000).unwrap(), 0);
         assert_eq!(quota(&store, "session"), Some((50.0, 10, 2_000)));
+    }
+
+    /// R16's "older loses" stops a hand-off that arrived out of order from replacing a newer one. A stored reading
+    /// stamped after now is from before the wall clock stepped back (R12 reads it stale, "the next reading puts it
+    /// right"): it is no newer than anything, or every reading after the step lost to it — the session gauge and the
+    /// menu bar held the old numbers, stale, for the length of the step.
+    #[test]
+    fn a_reading_stamped_before_a_clock_step_back_does_not_outlive_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let t0 = 1_789_390_320_000;
+        let before_step = [Window { window: "session", used_pct: 42.0, resets_at: 10 }];
+        assert_eq!(apply(&mut store.conn(), store.org_id(), &before_step, t0 + 2 * 3_600_000, t0 + 2 * 3_600_000).unwrap(), 1);
+        // The clock steps back two hours; Claude Code answers five minutes later.
+        let after_step = [Window { window: "session", used_pct: 80.0, resets_at: 10 }];
+        assert_eq!(apply(&mut store.conn(), store.org_id(), &after_step, t0 + 300_000, t0 + 300_001).unwrap(), 1);
+        assert_eq!(quota(&store, "session"), Some((80.0, 10, t0 + 300_000)));
     }
 
     #[test]

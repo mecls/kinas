@@ -5,6 +5,7 @@ import { ageText, copiedText, inboxGroups, reconcileRows, titleOf } from "../cre
 import type { SeatedFolder } from "../shell/folders.ts";
 import { Dot, EmptyState, InboxItem, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
+import { failedRead } from "./readFailure.ts";
 
 // Inbox (build spec §4 Inbox page; DESIGN.md 1.7; mockup inbox.html): everything waiting on the captain, from the
 // fleet — a worker's open decision, or a task Firstmate holds for them. Every item is answered the same way: Approve
@@ -85,11 +86,14 @@ function Item({
 
 export function InboxPage({
   crew,
+  error = null,
   folders = [],
   request = null,
   onAnswer = async () => false,
 }: {
   crew: CrewSnapshot | null;
+  /** The crew's reading itself failed (crew/useCrew.ts): the page keeps the last one and says so. */
+  error?: string | null;
   folders?: readonly SeatedFolder[];
   /** A box to open, from the task detail's Answer or Deny; `seq` makes a repeat distinct. */
   request?: (InboxBox & { seq: number }) | null;
@@ -115,10 +119,17 @@ export function InboxPage({
       });
   };
 
+  const unread = failedRead("crew", error, crew !== null);
+  const unreadLine = unread && (
+    <p className="crew-error" data-testid="crew-read-error">
+      {unread}
+    </p>
+  );
   if (!crew) {
     return (
       <div className="page-in inbox">
         <TitleRow title="Inbox" />
+        {unreadLine}
       </div>
     );
   }
@@ -149,6 +160,7 @@ export function InboxPage({
   return (
     <div className="page-in inbox">
       <TitleRow title="Inbox" />
+      {unreadLine}
       {crew.reader.state === "error" && crew.reader.last_error && (
         <p className="crew-error" data-testid="crew-error">
           Crew: {crew.reader.last_error} · showing the last reading

@@ -102,3 +102,28 @@ test("given a clock, the mirror is judged once the collector's status is read, n
   const landing = { ...base, getReaderStatus: () => ((clock = NOW + 3), base.getReaderStatus()) };
   expect((await crewFromStore(landing, () => clock, "/h"))?.in_flight.map((t) => t.id)).toEqual(["a-9c2e"]);
 });
+
+test("a report path that leaves Firstmate's home is not read: only a report under the home gives its first line", async () => {
+  // ADR 0019: under the home Kinas reads a report's first line for the packet, and nothing outside it. The path is
+  // Firstmate's, from what a worker wrote; the app opens one only inside the home (crew/mod.rs `under_home`).
+  const base = mkdtempSync(join(tmpdir(), "kinas-mirror-"));
+  roots.push(base);
+  const home = join(base, "firstmate");
+  mkdirSync(join(home, "data", "in-9c2e"), { recursive: true });
+  writeFileSync(join(home, "data", "in-9c2e", "report.md"), "# Inside 9c2e\n");
+  writeFileSync(join(base, "secret.md"), "TOKEN=not-for-the-packet-9c2e\n");
+  mkdirSync(join(base, "firstmate-old"), { recursive: true });
+  writeFileSync(join(base, "firstmate-old", "report.md"), "# Sibling 9c2e\n");
+  const scout = (id: string, report_path: string) => row(id, { kind: "scout", backlog_state: "done", state: null, done_at: NOW - 1_000, report_path, report_present: 1 });
+  const crew = await crewFromStore(
+    store(NOW - 60_000, [
+      scout("in-9c2e", "data/in-9c2e/report.md"),
+      scout("abs-9c2e", join(base, "secret.md")),
+      scout("up-9c2e", "data/../../secret.md"),
+      scout("sib-9c2e", join(base, "firstmate-old", "report.md")),
+    ]),
+    NOW,
+    home,
+  );
+  expect(crew!.reports.map((r) => [r.id, r.first_line])).toEqual([["in-9c2e", "Inside 9c2e"]]);
+});

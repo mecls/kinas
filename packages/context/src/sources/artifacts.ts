@@ -6,7 +6,7 @@
 
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { run, splitZ } from "../exec.ts";
+import { gitEnv, run, splitZ } from "../exec.ts";
 import type { ArtifactRow } from "../packet.ts";
 
 const TOP_DIRS = ["docs/", "plans/", "specs/"];
@@ -56,7 +56,7 @@ export async function readArtifacts(project: { name: string; path: string }): Pr
   const listed = await run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.md", "*.mdx"], {
     cwd: project.path,
     timeoutMs: 5_000,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" },
+    env: gitEnv(),
   });
   if (!listed.ok) return { rows: [], omitted: 0 };
 

@@ -442,7 +442,7 @@ mod tests {
     use super::*;
 
     fn ran(exit: Exit, stdout: &str, last_err: Option<&str>) -> Ran {
-        Ran { exit, stdout: stdout.into(), first_err: None, last_err: last_err.map(str::to_string), elapsed: Duration::ZERO }
+        Ran { exit, stdout: stdout.into(), first_err: None, last_err: last_err.map(str::to_string) }
     }
 
     /// A clone that is not there yet — a task queued before the first mate clones its project — has no repository, and

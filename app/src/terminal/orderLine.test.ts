@@ -59,3 +59,9 @@ test("a line stops growing at 2,000 characters", () => {
   const long = run("x".repeat(ORDER_CAP + 50), "\r").submitted[0]!;
   expect(long.length).toBe(ORDER_CAP);
 });
+
+test("a kitty key past the last code point is dropped, never thrown on", () => {
+  // String.fromCodePoint throws a RangeError above U+10FFFF: the line was lost and the error escaped xterm's onData.
+  expect(run("ab", "\x1b[1114112u", "c\r").submitted).toEqual(["abc"]);
+  expect(run("\x1b[1114111u\r").submitted).toEqual([String.fromCodePoint(0x10ffff)]);
+});

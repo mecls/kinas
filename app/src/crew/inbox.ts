@@ -1,4 +1,5 @@
 import type { CrewDecision, CrewSnapshot } from "../api.ts";
+import { clock } from "./detail.ts";
 
 // The Inbox's words (build spec §4 Inbox page; DESIGN.md 1.7; mockup inbox.html): pure, so inbox.test.ts holds them.
 
@@ -19,8 +20,6 @@ export function inboxGroups(c: CrewSnapshot): InboxGroups {
     reconcile: c.reconcile,
   };
 }
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** "Copied 15:02 — paste it into the first mate's pane", or null before a copy. */
 export function copiedText(copiedAt: number | null): string | null {

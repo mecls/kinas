@@ -215,7 +215,8 @@ async function status(args: string[]): Promise<number> {
       return EXIT.ok;
     }
     const tty = Boolean(process.stdout.isTTY);
-    const color = tty && colorEnabled();
+    // Colour by the one rule every command keeps (theme.ts): a TTY, or FORCE_COLOR when piped; never with NO_COLOR.
+    const color = colorEnabled();
     const lines = statusLines(result, color);
     if (tty) {
       intro(paint("blue", "kinas status", color, true));

@@ -1,13 +1,13 @@
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activityEvents } from "./activity.ts";
 import { briefPreamble } from "./brief.ts";
 import { ContextCache } from "./cache.ts";
 import { loadConfig } from "./config.ts";
 import type { Crew, Packet, Section } from "./packet.ts";
-import { computePacket } from "./refresh.ts";
+import { computePacket, currentOrg } from "./refresh.ts";
 import { AGENT_HEADINGS, nestHeadings, renderAgentPacket, stateCell } from "./render-agent.ts";
 import { makeWorld, write, type World } from "./testing/world.ts";
 
@@ -162,6 +162,29 @@ describe("recent activity", () => {
       ["crew", "Choose is waiting on a decision"],
       ["brief", "brief filed: New brief"],
     ]);
+  });
+
+  test("two refreshes that read the same packet before record a crew change once, not once each", async () => {
+    // A crew starting work opens several agent sessions at once, and each session's hook runs `kinas context --agent`:
+    // with the cached packet older than 30 s, each computes the packet from that same packet before, and each saw the
+    // same change. An event is recorded once by its ref, so the ref names the change, not the moment it was counted.
+    const w = await makeWorld();
+    const cache = ContextCache.open(w.dataDir);
+    try {
+      const config = loadConfig(w.env);
+      const began = Date.now() - 120_000;
+      await computePacket(config, cache, { now: began });
+      const file = join(w.fmHome, "snapshot.json");
+      const snapshot = JSON.parse(readFileSync(file, "utf8"));
+      snapshot.tasks.find((t: { id: string }) => t.id === "t-101").current_state.state = "review";
+      writeFileSync(file, JSON.stringify(snapshot));
+      await Promise.all([computePacket(config, cache, { now: began + 60_000 }), computePacket(config, cache, { now: began + 60_001 })]);
+      const changes = cache.recent(currentOrg(config), 100).filter((r) => r.text === "Add login rate limiting: working → review");
+      expect(changes.length).toBe(1);
+    } finally {
+      cache.close();
+      await w.cleanup();
+    }
   });
 
   test("a file written after the wall clock stepped back is still an event: an older mtime is a change too", () => {

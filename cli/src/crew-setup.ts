@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { atLeast, FIRSTMATE_PIN, FIRSTMATE_REPO, PREREQS, SETUP_HOOKS, TOOLS, versionOf, type Tool } from "@kinas/commands/crew-tools";
 import { confirm, type Io } from "./confirm.ts";
+import { forTerminal } from "./open.ts";
 
 export type StepId = "prereqs" | "gh" | "clone" | "backend" | "tools" | "hooks" | "summary";
 
@@ -173,14 +174,17 @@ export function steps(): Step[] {
  * floor and gh is signed in; 1 otherwise. `--dry-run` prints each step and touches nothing, not even a check. */
 export async function setup(opts: SetupOptions): Promise<number> {
   const home = opts.env.HOME ?? "";
-  const ctx: Ctx = { ...opts, localBin: join(home, ".local", "bin"), prereqsMissing: [], ghSignedIn: false, homeProblem: null, tools: new Map() };
-  opts.io.write(`Firstmate's home: ${opts.home}\n`);
+  // Setup prints what others wrote — config/backend's first line, git's and npm's own last line: its control characters
+  // are shown, never obeyed by the terminal (`forTerminal`; `ESC ] 52` sets its clipboard).
+  const io: Io = { write: (text) => opts.io.write(forTerminal(text)), readLine: () => opts.io.readLine() };
+  const ctx: Ctx = { ...opts, io, localBin: join(home, ".local", "bin"), prereqsMissing: [], ghSignedIn: false, homeProblem: null, tools: new Map() };
+  io.write(`Firstmate's home: ${opts.home}\n`);
   for (const step of steps()) {
     if (opts.dryRun) {
-      opts.io.write(`would: ${step.describe(ctx)}\n`);
+      io.write(`would: ${step.describe(ctx)}\n`);
       continue;
     }
-    opts.io.write(`\n${step.describe(ctx)}\n`);
+    io.write(`\n${step.describe(ctx)}\n`);
     await step.perform(ctx);
   }
   if (opts.dryRun) return 0;

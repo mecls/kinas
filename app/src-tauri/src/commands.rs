@@ -10,6 +10,7 @@ use crate::readings::{self, UsageSnapshot};
 use crate::store::{now_ms, Store};
 use crate::system::{self, SystemState};
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::AppHandle;
 
 /// Everything the Usage page shows, with states computed now (R12).
@@ -166,9 +167,26 @@ pub fn set_org_name(store: State<'_, Store>, name: String) -> Result<(), String>
 /// network share that stopped answering froze the window for the mount's timeout (`no_command_on_the_main_thread_resolves_a_path`).
 #[tauri::command]
 pub async fn set_projects_root(store: State<'_, Store>, path: String) -> Result<String, String> {
+    let ticket = PROJECTS_ROOT_SAVES.fetch_add(1, Ordering::SeqCst) + 1;
     let value = tauri::async_runtime::spawn_blocking(move || projects_folder(&path)).await.map_err(|e| format!("the projects folder was not checked: {e}"))??;
-    system::put_setting(&store.conn(), store.org_id(), crate::paths::SETTING_KEY, &serde_json::json!(value)).map_err(|e| e.to_string())?;
-    Ok(value)
+    save_projects_root(&store, &PROJECTS_ROOT_SAVES, ticket, &value)
+}
+
+/// The last `set_projects_root` begun: each takes the next ticket before its path is resolved.
+static PROJECTS_ROOT_SAVES: AtomicU64 = AtomicU64::new(0);
+
+/// A resolved projects folder, stored only when no save began after it (`ticket`). Resolving waits on the folder's disk,
+/// so two saves finish in either order, and the one begun last is the captain's; an older one that finishes later
+/// stores nothing and answers with the folder stored now — which Settings, reloading, shows.
+fn save_projects_root(store: &Store, saves: &AtomicU64, ticket: u64, value: &str) -> Result<String, String> {
+    let conn = store.conn();
+    let org = store.org_id();
+    if saves.load(Ordering::SeqCst) != ticket {
+        let stored = system::get_setting(&conn, org, crate::paths::SETTING_KEY).and_then(|v| v.as_str().map(str::to_string));
+        return Ok(stored.unwrap_or_else(|| crate::paths::projects_root(&conn, org).display().to_string()));
+    }
+    system::put_setting(&conn, org, crate::paths::SETTING_KEY, &serde_json::json!(value)).map_err(|e| e.to_string())?;
+    Ok(value.to_string())
 }
 
 /// A typed projects folder as `set_projects_root` stores it: `~` expanded, absolute, existing, a folder, canonicalized.
@@ -894,6 +912,27 @@ mod tests {
         assert_eq!(keychain_on_the_main_thread(&planted("pub fn a(keys: State<'_, Keys>) -> bool { true }")), ["x.rs: a"]);
         assert_eq!(keychain_on_the_main_thread(&planted("pub fn b(app: AppHandle) { let _ = app.state::<Keys>().0.get(OLLAMA_ACCOUNT); }")), ["x.rs: b"]);
         assert!(keychain_on_the_main_thread(&planted("pub async fn c(keys: State<'_, Keys>) -> Result<(), String> { Ok(()) }")).is_empty());
+    }
+
+    /// Settings saves the projects folder on blur, and resolving a typed path waits on its disk: one on a share that
+    /// answers slowly, then corrected to a local folder before that answer came. The correction was stored at once and
+    /// the slow one after it — so the store, the reader and the CLI kept the folder the captain had just replaced, and
+    /// Settings, reloading after each answer, showed it back. A save begun before another is never stored after it.
+    #[test]
+    fn a_projects_folder_saved_late_never_replaces_a_newer_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let saves = AtomicU64::new(0);
+        let begin = || saves.fetch_add(1, Ordering::SeqCst) + 1;
+        let stored = || system::get_setting(&store.conn(), store.org_id(), crate::paths::SETTING_KEY);
+        let (slow, quick) = (begin(), begin());
+        assert_eq!(save_projects_root(&store, &saves, quick, "/Users/me/Projects-9c2e"), Ok("/Users/me/Projects-9c2e".into()));
+        assert_eq!(save_projects_root(&store, &saves, slow, "/Volumes/share-9c2e/projects"), Ok("/Users/me/Projects-9c2e".into()), "answers with what is stored");
+        assert_eq!(stored(), Some(serde_json::json!("/Users/me/Projects-9c2e")));
+        // The newest save is stored as ever.
+        let next = begin();
+        assert_eq!(save_projects_root(&store, &saves, next, "/Users/me/Elsewhere-9c2e"), Ok("/Users/me/Elsewhere-9c2e".into()));
+        assert_eq!(stored(), Some(serde_json::json!("/Users/me/Elsewhere-9c2e")));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 // Conventions: the org-level rules every agent follows — the hub's AGENTS.md and every con-*.md under the hub,
 // printed in full in the agent packet because these are the rails.
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ConventionDoc } from "../packet.ts";
@@ -36,10 +36,20 @@ async function findConventionFiles(hub: string): Promise<string[]> {
   return found.sort();
 }
 
+function regularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 export async function readConventions(hub: string): Promise<ConventionDoc[]> {
   if (!existsSync(hub)) throw new SourceError(`no hub folder at ${hub}`);
   const agents = join(hub, "AGENTS.md");
-  const files = [...(existsSync(agents) ? [agents] : []), ...(await findConventionFiles(hub))];
+  // A regular file only (a link to one is followed), as the con-*.md files are: a FIFO never answers, and a link to
+  // /dev/zero never ends — the section's deadline gives up on it, but the read itself would go on growing.
+  const files = [...(regularFile(agents) ? [agents] : []), ...(await findConventionFiles(hub))];
   if (files.length === 0) throw new SourceError(`no AGENTS.md or con-*.md under ${hub}`);
 
   return Promise.all(

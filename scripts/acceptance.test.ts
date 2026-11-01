@@ -95,7 +95,7 @@ test("a key's prefix reaches grep through a file descriptor, never its arguments
 // AC-6 re-reads every transcript from zero by deleting log_cursors in the live store. The app is a stub here — `open`,
 // `pgrep`, `osascript` and `pkill` flip one file, `sleep` returns at once — so nothing on this Mac is started, quit or
 // waited for; the store is a scratch one of the real shape, and sqlite3 is the real one.
-function ac6(name: string, env: Record<string, string> = {}, stubs: Record<string, string> = {}): { out: string; db: string; data: string; running: string } {
+function ac6(name: string, env: Record<string, string> = {}, stubs: Record<string, string> = {}, sql = ""): { out: string; db: string; data: string; running: string } {
   const home = join(scratch, name, "home dir");
   const data = join(home, "Library/Application Support/ai.sintralabs.kinas");
   mkdirSync(data, { recursive: true });
@@ -109,6 +109,7 @@ function ac6(name: string, env: Record<string, string> = {}, stubs: Record<strin
               INSERT INTO usage_daily VALUES ('o', '2026-09-10', 'anthropic', 'opus', 'claude-code', 'm-9c2e', 10, 2, 5, 1);
               INSERT INTO usage_seen VALUES ('o', 'claude-code', 'k-9c2e');
               INSERT INTO log_cursors VALUES ('o', '/t-9c2e/a.jsonl', 1, 100, 0), ('o', '/t-9c2e/b.jsonl', 2, 200, 0);`);
+  if (sql) store.exec(sql);
   store.close();
   const bin = join(scratch, name, "bin");
   const running = join(scratch, name, "running");
@@ -160,6 +161,8 @@ test("approved, AC-6 backs the store up and checks the backup first, deletes log
   const backup = join(dirname(data), backups[0]!);
   expect(cursors(backup)).toBe(2);
   expect(out).toContain(`PASS  backup checked: ${backup} has every table of the store, row for row (log_cursors 2, usage_daily 1, usage_seen 1)`);
+  expect(out).toContain("PASS  rehearsed on a copy: the delete empties log_cursors and no other table's count moves");
+  expect(out.indexOf("PASS  rehearsed on a copy")).toBeLessThan(out.indexOf("PASS  the delete touched log_cursors alone"));
   expect(out).toContain("PASS  the delete touched log_cursors alone: every other table's count is the backup's");
   expect(out).toContain("PASS  re-reading every transcript from zero leaves past totals unchanged");
   const restore = out.split("\n").find((l) => l.includes("restore it with:"))!;
@@ -180,4 +183,55 @@ test("approved, AC-6 backs up and deletes nothing while Kinas is still running: 
   expect(out).toContain("FAIL  Kinas did not quit, so nothing was backed up or deleted");
   expect(out).not.toContain("PASS  backup checked");
   // Two quit attempts of twenty rounds each, every round a stub process: seconds on a loaded Mac.
+}, 30_000);
+
+test("approved, AC-6 rehearses the delete on a copy first: a delete that moves any other table never reaches the store", () => {
+  // The global rule: rehearse on a copy and prove nothing else changed, before the live store. AC-6 deleted in the store
+  // straight after the backup and compared afterwards, so a delete that reached further — here a trigger the store
+  // carries, emptying usage_seen with it — had already cost the store those rows when the check said "restore the backup".
+  const trigger = "CREATE TRIGGER wipe_seen_9c2e AFTER DELETE ON log_cursors BEGIN DELETE FROM usage_seen; END;";
+  const { out, db, data } = ac6("ac6-reaches-further", { KINAS_AC6_DELETE_CURSORS: "yes" }, {}, trigger);
+  expect(cursors(db)).toBe(2);
+  const live = new Database(db, { readonly: true });
+  try {
+    expect((live.query("SELECT count(*) AS n FROM usage_seen").get() as { n: number }).n).toBe(1);
+  } finally {
+    live.close();
+  }
+  expect(out).toContain("FAIL  rehearsed on a copy, the delete changed more than log_cursors (usage_seen 1 → 0): nothing was deleted from the store");
+  expect(out).not.toContain("the delete touched log_cursors alone");
+  expect(out).not.toContain("re-reading every transcript from zero");
+  // The checked backup is kept; the rehearsal's copy is not left behind beside it.
+  expect(readdirSync(dirname(data)).filter((f) => f.includes("-ac6-"))).toHaveLength(1);
+}, 30_000);
+
+test("AC-9 keeps kinas's output in a file of its own, never at a fixed name in /tmp, and leaves none behind", () => {
+  // `> /tmp/kinas-ac9.txt` wrote to a name any account on this Mac can claim first: a link planted there sends the
+  // truncate-and-write to whatever file it points at, and macOS follows links in /tmp whoever made them.
+  const home = join(scratch, "ac9-own-file", "home dir");
+  const data = join(home, "Library/Application Support/ai.sintralabs.kinas");
+  const tmp = join(scratch, "ac9-own-file", "tmp");
+  for (const d of [data, join(home, "Library/Logs/ai.sintralabs.kinas"), join(home, ".local/bin"), tmp]) mkdirSync(d, { recursive: true });
+  const store = new Database(join(data, "kinas.sqlite"), { create: true });
+  store.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)");
+  store.close();
+  const marker = `status-9c2e-${process.pid}-${Date.now()}`;
+  writeFileSync(join(home, ".local/bin/kinas"), `#!/bin/sh\necho '${marker}'\n`);
+  chmodSync(join(home, ".local/bin/kinas"), 0o755);
+  const bin = join(scratch, "ac9-own-file", "bin");
+  const running = join(scratch, "ac9-own-file", "running");
+  mkdirSync(bin, { recursive: true });
+  const stubs: Record<string, string> = { pgrep: `[ -f '${running}' ]`, open: `touch '${running}'`, osascript: `rm -f '${running}'`, pkill: `rm -f '${running}'`, sleep: "exit 0" };
+  for (const [tool, body] of Object.entries(stubs)) {
+    writeFileSync(join(bin, tool), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(bin, tool), 0o755);
+  }
+  const r = spawnSync("bash", ["scripts/acceptance.sh", "ac9"], { cwd: repo, encoding: "utf8", env: { ...process.env, HOME: home, TMPDIR: tmp, PATH: `${bin}:/usr/bin:/bin` } });
+  const out = `${r.stdout}${r.stderr}`;
+  expect(out).toContain(`      ${marker}`);
+  expect(out).toContain("PASS  kinas status exits 0");
+  const fixed = "/tmp/kinas-ac9.txt";
+  expect(existsSync(fixed) && readFileSync(fixed, "utf8").includes(marker)).toBe(false);
+  // Only the two scratch folders AC-9 hands kinas as data folders stay in its temporary folder; its output file goes.
+  expect(readdirSync(tmp, { withFileTypes: true }).filter((e) => !e.isDirectory()).map((e) => e.name)).toEqual([]);
 }, 30_000);

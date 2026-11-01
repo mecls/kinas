@@ -1,9 +1,9 @@
 import { afterAll, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { DB_FILE, openReadOnly, readSetting } from "./sqlite-readonly.ts";
+import { dataDir, DB_FILE, openReadOnly, readSetting } from "./sqlite-readonly.ts";
 
 // The app writes the store while the CLI reads it (ADR 0001). A reader that meets a lock — the app recovering the WAL
 // after a crash, a checkpoint that restarts it — must wait a moment, not fail: `kinas status` exiting 1 with "database
@@ -61,4 +61,15 @@ test("a setting is read through the same wait", async () => {
   const holder = await lockedElsewhere(600);
   expect(readSetting(dir, "projects_root")).toBe("/r");
   await holder.exited;
+});
+
+test("a blank KINAS_DATA_DIR is unset, as the app reads it; anything else is the folder, exactly as given", () => {
+  // paths.rs `data_dir_override`: empty or blank (Unicode white space) is unset. The CLI took "   " as a folder, relative
+  // to wherever it ran, while the app opened the default one — two stores, and `kinas status` reading neither the app's.
+  const fallback = join(homedir(), "Library/Application Support/ai.sintralabs.kinas");
+  for (const blank of [undefined, "", "   ", "\t\n", "\u00a0", "\u0085", "\u2028"]) expect(dataDir({ KINAS_DATA_DIR: blank }), JSON.stringify(blank)).toBe(fallback);
+  expect(dataDir({ KINAS_DATA_DIR: "/tmp/kinas-9c2e" })).toBe("/tmp/kinas-9c2e");
+  expect(dataDir({ KINAS_DATA_DIR: " /tmp/kinas 9c2e " })).toBe(" /tmp/kinas 9c2e ");
+  // Rust's `trim` is Unicode White_Space, which U+FEFF is not.
+  expect(dataDir({ KINAS_DATA_DIR: "\ufeff" })).toBe("\ufeff");
 });

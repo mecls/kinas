@@ -121,6 +121,18 @@ describe("who reads through it", () => {
     expect(reader).toMatch(/unlessSuperseded\(reloads, \(\) => readerReadText\(path\)\)/);
   });
 
+  test("a live reload of an open image reads it as an image, as its open did — never as text", () => {
+    // reader_read_text refuses an image's bytes ("Not a text file: …/chart.png"): a PNG saved over kept its old picture
+    // under that line, and an SVG's reload redrew the same element, so neither ever showed the new file.
+    const handler = /onReaderChanged\(async \(\{ path \}\) => \{([\s\S]*?)\n    \}\);\n/.exec(src("reader/Reader.tsx"))![1]!;
+    const image = handler.indexOf('current.render === "image"');
+    expect(image).toBeGreaterThan(-1);
+    expect(image).toBeLessThan(handler.indexOf("readerReadText"));
+    expect(handler.slice(image, handler.indexOf("readerReadText"))).toMatch(/unlessSuperseded\(reloads, \(\) => readerReadImage\(path\)\)/);
+    // Positive control: text still reloads through the same counter.
+    expect(handler).toMatch(/unlessSuperseded\(reloads, \(\) => readerReadText\(path\)\)/);
+  });
+
   test("the reader's view toggle: a later click on Changes, the crew's copy or the usual view wins over an earlier one", () => {
     const reader = src("reader/Reader.tsx");
     expect(reader).toMatch(/unlessSuperseded\(viewAsk, \(\) => changesOf\(current\.path\)\)/);
@@ -129,6 +141,31 @@ describe("who reads through it", () => {
     expect(reader).toMatch(/const leaveChanges = \(current: Doc\) => \{\s*viewAsk\.current\+\+;/);
     // A live reload draws what the view is once its diff is in, not what it was when it began (changes.ts reloadDraws).
     expect(reader).toMatch(/reloadDraws\(since, \{ changes: changesRef\.current, crew: crewRef\.current \}, diffed !== null\)/);
+  });
+
+  test("a click on the view already showing is a request too: Changes or the crew's copy on its way does not land over it", () => {
+    // Rendered pressed while Changes is out (Rendered still reads pressed), or Changes pressed while the crew's copy is:
+    // both returned before counting, so the older click's answer landed after the captain's last one.
+    const body = /const changeView = \(next: View\) => \{([\s\S]*?)\n  \};\n/.exec(src("reader/Reader.tsx"))![1]!;
+    expect(body.slice(0, body.indexOf('if (next === "changes")'))).toMatch(/viewAsk\.current\+\+;/);
+    // Positive control: the usual view's own door counts as well.
+    expect(src("reader/Reader.tsx")).toMatch(/const leaveChanges = \(current: Doc\) => \{\s*viewAsk\.current\+\+;/);
+  });
+
+  test("Changes pressed while a save lands: a diff begun before the save is asked again for the text on screen", () => {
+    // The live reload, begun on the usual view, draws the new text first; the diff, read from the file before the save,
+    // then landed over it and showed the old changes under the new text until the next save.
+    const body = /const enterChanges = async \(current: Doc\) => \{([\s\S]*?)\n  \};\n/.exec(src("reader/Reader.tsx"))![1]!;
+    expect(body.slice(0, body.indexOf("setChangesOn("))).toMatch(/if \(latest\.hash !== current\.hash\) return void enterChanges\(latest\);/);
+  });
+
+  test("an open overtaken while it says \"Opening …\" takes its line with it, whatever overtook it", () => {
+    // A slow `kinas open plan.md`, then a click on a folder with no README: the folder opened, and "Opening plan.md…"
+    // stayed under the header for good, in place of "Choose a file" (or beside a refused click's reason).
+    const body = /async function show\(([\s\S]*?)\n    \/\/ openFolder is hoisted below/.exec(src("reader/Reader.tsx"))![1]!;
+    const owner = /openingOf\.current = gen;\s*setOpening\(baseName\(path\)\);/;
+    expect(body).toMatch(owner);
+    expect(body.slice(body.lastIndexOf("} finally {"))).toMatch(/if \(openingOf\.current === gen\) setOpening\(null\);/);
   });
 
   test("the confirmation card's Open: a click made while the door is out is what the captain asked for last", () => {

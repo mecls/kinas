@@ -45,7 +45,7 @@ if [ "$1" = clone ]; then mkdir -p "$4/.git" "$4/bin"; echo stub > "$4/bin/fm-fl
 if [ "$1" = -C ]; then
   dir=$2; shift 2
   case "$1" in
-    checkout) if [ -f "$CALLS.no-checkout" ]; then echo "fatal: reference is not a tree: $5" >&2; exit 128; fi; echo "$5" > "$dir/.git/STUB_HEAD"; echo "$4" > "$dir/.git/STUB_BRANCH" ;;
+    checkout) if [ -s "$CALLS.no-checkout" ]; then cat "$CALLS.no-checkout" >&2; exit 128; fi; if [ -f "$CALLS.no-checkout" ]; then echo "fatal: reference is not a tree: $5" >&2; exit 128; fi; echo "$5" > "$dir/.git/STUB_HEAD"; echo "$4" > "$dir/.git/STUB_BRANCH" ;;
     rev-parse) cat "$dir/.git/STUB_HEAD" 2>/dev/null || exit 128 ;;
     symbolic-ref) cat "$dir/.git/STUB_BRANCH" 2>/dev/null || exit 1 ;;
     status) echo "git-env GIT_OPTIONAL_LOCKS=\${GIT_OPTIONAL_LOCKS:-unset}" >> "$CALLS"; cat "$dir/.git/STUB_DIRTY" 2>/dev/null ;;
@@ -240,6 +240,29 @@ describe("kinas crew setup", () => {
     expect(out).toContain(`the checkout of ${FIRSTMATE_PIN.slice(0, 7)} failed: fatal: reference is not a tree: ${FIRSTMATE_PIN}`);
     expect(out).not.toContain("the clone failed");
   });
+
+  test("what a file in the home or a tool says is shown on the terminal, never obeyed", async () => {
+    // Setup printed config/backend's first line in its question, and git's or npm's own last line in a failure, as they
+    // came: an `ESC ] 52` there set the clipboard of the terminal the captain runs setup in, as a commit subject did in
+    // `kinas context` (2e664d2) and a path in `kinas open` (2504ba2).
+    const home = world();
+    mkdirSync(join(home.home, ".git"), { recursive: true });
+    mkdirSync(join(home.home, "config"), { recursive: true });
+    writeFileSync(join(home.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+    writeFileSync(join(home.home, ".git", "STUB_BRANCH"), "main\n");
+    writeFileSync(join(home.home, "config", "backend"), "tmux\x1b]52;c;aGk=\x07\n");
+    const asked = await run(home, { answers: ["n"] });
+    expect(asked.out).toContain("config/backend says tmux\uFFFD]52;c;aGk=\uFFFD; set it to herdr? [y/N] ");
+    expect(asked.out).toContain("left as tmux\uFFFD]52;c;aGk=\uFFFD");
+    expect(asked.out).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/);
+
+    const tool = world();
+    writeFileSync(`${tool.env.CALLS}.no-checkout`, "fatal: \x1b]52;c;aGk=\x07\x1b[8mnot a tree\n");
+    const failed = await run(tool, { yes: true });
+    expect(failed.out).toContain(`the checkout of ${FIRSTMATE_PIN.slice(0, 7)} failed: fatal: \uFFFD]52;c;aGk=\uFFFD\uFFFD[8mnot a tree`);
+    expect(failed.out).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/);
+    // Two whole setups over stub processes: seconds on a loaded Mac.
+  }, 30_000);
 
   test("a clean clone that moved on by itself is reported, not reset", async () => {
     const w = world();

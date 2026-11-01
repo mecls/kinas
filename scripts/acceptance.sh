@@ -8,7 +8,8 @@
 #   scripts/acceptance.sh ac10 ac9   only some
 #   KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6
 #                                    AC-6 with its re-read from zero, which deletes every row of log_cursors in the
-#                                    live store: your approval, given only here; it backs up and checks first
+#                                    live store: your approval, given only here; it backs up, checks, and rehearses
+#                                    the delete on a copy first
 
 set -u
 cd "$(dirname "$0")/.."
@@ -171,14 +172,18 @@ if want ac9; then
   start_app || fail "app did not start"
   target=$(readlink "$KINAS" 2>/dev/null || true)
   case "$target" in "$APP/Contents/MacOS/"*) pass "$KINAS → $target" ;; *) fail "$KINAS → '${target}'" ;; esac
-  "$KINAS" status >/tmp/kinas-ac9.txt 2>&1; code=$?
+  # kinas's output goes to a file of AC-9's own (mktemp, in this user's TMPDIR): a fixed name in /tmp is one any account
+  # can claim first, and a link planted there sends the write to whatever file it names.
+  said=$(mktemp)
+  "$KINAS" status >"$said" 2>&1; code=$?
   [ $code -eq 0 ] && pass "kinas status exits 0" || fail "kinas status exited $code"
-  sed 's/^/      /' /tmp/kinas-ac9.txt
-  empty=$(mktemp -d); KINAS_DATA_DIR="$empty" "$KINAS" status >/tmp/kinas-ac9.txt 2>&1; code=$?
-  [ $code -eq 2 ] && pass "missing store exits 2: $(head -1 /tmp/kinas-ac9.txt)" || fail "missing store exited $code"
+  sed 's/^/      /' "$said"
+  empty=$(mktemp -d); KINAS_DATA_DIR="$empty" "$KINAS" status >"$said" 2>&1; code=$?
+  [ $code -eq 2 ] && pass "missing store exits 2: $(head -1 "$said")" || fail "missing store exited $code"
   newer=$(mktemp -d); sqlite3 "$DB" ".backup '$newer/kinas.sqlite'" && sqlite3 "$newer/kinas.sqlite" "INSERT INTO schema_migrations VALUES (99, 0)"
-  KINAS_DATA_DIR="$newer" "$KINAS" status >/tmp/kinas-ac9.txt 2>&1; code=$?
-  [ $code -eq 3 ] && pass "newer schema exits 3: $(head -1 /tmp/kinas-ac9.txt)" || fail "newer schema exited $code"
+  KINAS_DATA_DIR="$newer" "$KINAS" status >"$said" 2>&1; code=$?
+  [ $code -eq 3 ] && pass "newer schema exits 3: $(head -1 "$said")" || fail "newer schema exited $code"
+  rm -f "$said"
   n=$("$KINAS" status --json | grep -c -E 'sk-ant-|Bearer' || true)
   [ "$n" = "0" ] && pass "--json carries no secrets" || fail "--json matched $n secret-shaped strings"
   quit_app
@@ -251,12 +256,14 @@ if want ac6; then
   quit_app
   # Re-reading from zero means deleting every row of log_cursors in the live store: destructive, so it runs only on the
   # captain's yes, after a fresh backup taken with the app quit has been opened and checked table by table against the
-  # store, and it proves afterwards that no other table moved. Without the yes it says what it would delete and stops.
+  # store, and after the delete has been rehearsed on a copy of it with no other table moving; it proves afterwards that
+  # no other table moved in the store either. Without the yes it says what it would delete and stops.
   rows=$(sqlite3 "$DB" "SELECT count(*) FROM log_cursors")
   if [ "${KINAS_AC6_DELETE_CURSORS:-}" != yes ]; then
     echo "SKIP  re-reading from zero deletes every row of log_cursors ($rows rows) in the live store, and nothing else; it needs your approval."
     echo "      Run KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6: with Kinas quit it backs $DB up beside its folder,"
-    echo "      checks the backup's every table against the store, and only then deletes; it prints the restore command."
+    echo "      checks the backup's every table against the store, rehearses the delete on a copy of it, and only then deletes;"
+    echo "      it prints the restore command."
   elif app_running; then
     # quit_app gives up after its pkill and a second: a store still being written has no backup that holds, and the
     # app's own cursor writes would race the delete.
@@ -265,14 +272,33 @@ if want ac6; then
     backup="$(dirname "$DATA")/ai.sintralabs.kinas-ac6-$(date +%Y%m%d-%H%M%S).sqlite"
     # Every table's row count, `name count` per line, in name order.
     counts() { sqlite3 "$1" "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name" | while read -r t; do echo "$t $(sqlite3 "$1" "SELECT count(*) FROM \"$t\"")"; done; }
-    if sqlite3 "$DB" ".backup '$backup'" && [ "$(sqlite3 "$backup" "PRAGMA integrity_check")" = ok ] && [ -n "$(counts "$DB")" ] && [ "$(counts "$backup")" = "$(counts "$DB")" ]; then
-      pass "backup checked: $backup has every table of the store, row for row ($(counts "$backup" | paste -sd, - | sed 's/,/, /g'))"
+    if sqlite3 "$DB" ".backup '$backup'" && [ "$(sqlite3 "$backup" "PRAGMA integrity_check")" = ok ] && held=$(counts "$DB") && [ -n "$held" ] && [ "$(counts "$backup")" = "$held" ]; then
+      pass "backup checked: $backup has every table of the store, row for row ($(echo "$held" | paste -sd, - | sed 's/,/, /g'))"
       echo "      restore it with: quit Kinas, then sqlite3 '$DB' \".restore '$backup'\""
-      sqlite3 "$DB" "DELETE FROM log_cursors"
+      # What the delete must leave: every table's count but log_cursors', as the store and its checked backup hold them.
+      kept=$(echo "$held" | grep -v '^log_cursors ')
       others() { counts "$1" | grep -v '^log_cursors '; }
-      [ "$(others "$DB")" = "$(others "$backup")" ] && pass "the delete touched log_cursors alone: every other table's count is the backup's" || fail "a table besides log_cursors changed: restore the backup (above)"
-      start_app; sleep 60
-      [ "$(sums)" = "$before" ] && pass "re-reading every transcript from zero leaves past totals unchanged" || fail "re-read changed past totals"
+      # `moved <counts>`: every table besides log_cursors whose count is not the kept one, `name a → b`, comma-separated.
+      moved() { echo "$kept" | while read -r t n; do m=$(echo "$1" | awk -v t="$t" '$1 == t { print $2 }'); [ "$n" = "$m" ] || printf '%s %s → %s\n' "$t" "$n" "${m:-none}"; done | paste -sd, - | sed 's/,/, /g'; }
+      # Rehearsed first, on a copy of the checked backup (the global rule): the store's own triggers and keys go with the
+      # copy, so a delete that would reach any table besides log_cursors shows here, and the store is never touched.
+      copy_dir=$(mktemp -d) && rehearsal="$copy_dir/kinas.sqlite" && sqlite3 "$backup" ".backup '$rehearsal'" && sqlite3 "$rehearsal" "DELETE FROM log_cursors"; rehearsed=$?
+      after=""; left=""
+      if [ $rehearsed -eq 0 ]; then after=$(others "$rehearsal"); left=$(sqlite3 "$rehearsal" "SELECT count(*) FROM log_cursors"); fi
+      [ -n "${copy_dir:-}" ] && rm -rf "$copy_dir"
+      if [ $rehearsed -ne 0 ]; then
+        fail "the delete could not be rehearsed on a copy of the backup: nothing was deleted from the store"
+      elif [ "$after" != "$kept" ]; then
+        fail "rehearsed on a copy, the delete changed more than log_cursors ($(moved "$after")): nothing was deleted from the store"
+      elif [ "$left" != 0 ]; then
+        fail "rehearsed on a copy, the delete left $left rows in log_cursors: nothing was deleted from the store"
+      else
+        pass "rehearsed on a copy: the delete empties log_cursors and no other table's count moves"
+        sqlite3 "$DB" "DELETE FROM log_cursors"
+        [ "$(others "$DB")" = "$kept" ] && pass "the delete touched log_cursors alone: every other table's count is the backup's" || fail "a table besides log_cursors changed: restore the backup (above)"
+        start_app; sleep 60
+        [ "$(sums)" = "$before" ] && pass "re-reading every transcript from zero leaves past totals unchanged" || fail "re-read changed past totals"
+      fi
     else
       fail "the backup at $backup could not be taken or did not match the store; nothing was deleted"
     fi

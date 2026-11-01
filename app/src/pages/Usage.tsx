@@ -264,7 +264,8 @@ function HostingerSection({ metrics, reader, now }: { metrics: ProviderMetricVie
               label={hostinger.metricLabel(m.metric)}
               used={null}
               value={m.state === "dead" ? "—" : hostinger.metricValue(m.used, m.unit)}
-              unit={m.state === "dead" ? (reader?.last_error ?? "no recent reading") : hostinger.windowLabel(m.window)}
+              // A stale month says so where it is, as the machine's rows above it do (DESIGN.md §1, rule 4).
+              unit={m.state === "dead" ? (reader?.last_error ?? "no recent reading") : withStale(hostinger.windowLabel(m.window), m.state === "stale")}
               data-provider={m.provider}
               data-metric={m.metric}
               data-window={m.window}

@@ -10,9 +10,14 @@ import type { CrewDecisionRow, CrewMirrorRow, CrewStore, CrewTaskRow, HostRow, M
 
 export const DB_FILE = "kinas.sqlite";
 
-/** `KINAS_DATA_DIR`, else `~/Library/Application Support/ai.sintralabs.kinas`. */
+/**
+ * `KINAS_DATA_DIR`, else `~/Library/Application Support/ai.sintralabs.kinas`. Empty or blank (Unicode White_Space, as
+ * Rust's `trim` has it) is unset, as the app reads it (paths.rs `data_dir_override`); any other value is the folder,
+ * exactly as given — else the CLI read a store in a folder named "   " wherever it ran, and the app the default one.
+ */
 export function dataDir(env: Record<string, string | undefined> = process.env): string {
-  return env.KINAS_DATA_DIR || join(homedir(), "Library/Application Support/ai.sintralabs.kinas");
+  const set = env.KINAS_DATA_DIR;
+  return set !== undefined && !/^\p{White_Space}*$/u.test(set) ? set : join(homedir(), "Library/Application Support/ai.sintralabs.kinas");
 }
 
 export type OpenResult =

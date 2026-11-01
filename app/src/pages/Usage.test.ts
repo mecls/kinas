@@ -62,6 +62,19 @@ describe("the Hostinger section", () => {
     expect(html.includes("Hostinger: api token rejected · showing the last reading")).toBe(false);
   });
 
+  test("a stale month of traffic says so where it is, as the machine's other rows do (DESIGN.md §1, rule 4)", () => {
+    const bandwidth: ProviderMetricView = { ...ram, metric: "bandwidth", window: "month", used: 4 * 1024 ** 4, unit: "bytes", state: "stale" };
+    const html = usage({ snapshot: snapshot({ provider_metrics: [{ ...ram, state: "stale" }, bandwidth], readers: [reader("hostinger")] }), error: null });
+    const rows = /<div class="ui-metric-row"[^>]*data-metric="([^"]+)"[^>]*>([\s\S]*?)<\/span><\/span><\/div>/g;
+    const text = (metric: string) => [...html.matchAll(rows)].find((m) => m[1] === metric)?.[2]?.replace(/<[^>]+>/g, "") ?? "";
+    expect(text("ram")).toContain("stale");
+    expect(text("bandwidth")).toContain("calendar month to date (UTC) · stale");
+    // Positive control: a fresh month says only its window.
+    const fresh = usage({ snapshot: snapshot({ provider_metrics: [ram, { ...bandwidth, state: "fresh" }], readers: [reader("hostinger")] }), error: null });
+    expect(fresh).toContain("calendar month to date (UTC)");
+    expect(fresh.includes("stale")).toBe(false);
+  });
+
   test("a failed poll over a good reading keeps the rows and says so beside them", () => {
     const html = usage({ snapshot: snapshot({ provider_metrics: [ram], readers: [reader("hostinger", "error", "api token rejected")] }), error: null });
     expect(html).toContain("Hostinger: api token rejected · showing the last reading");

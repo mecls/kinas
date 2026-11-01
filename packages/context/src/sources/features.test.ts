@@ -82,3 +82,25 @@ test("a status file saved with CRLF line endings reads as the same file with LF,
   const mid = DONE.replace("- [x] Slice 2 · installed", "- [ ] Slice 2 · installed");
   expect(featureLine(parseStatus(crlf(mid)))).toBe("slice 2 of 2 — Slice 2 · installed");
 });
+
+test("a status.md that is not a regular file reads `status unreadable` at once, and is never opened", () => {
+  // A repository can hold `tasks/x/status.md` as a symlink to /dev/zero, and a folder can hold a FIFO by that name. The
+  // size check passed both (a device and a FIFO stat as 0 bytes), and readFileSync then never returned: /dev/zero grew
+  // without bound (a gigabyte a second, measured), and a FIFO with no writer blocked — synchronously, so no deadline
+  // could end it, and `kinas context`, every background refresh and every session hook hung with it. Run in a child, so
+  // the failure is a timeout and not this test process blocked for good.
+  const root = mkdtempSync(join(tmpdir(), "kinas-features-"));
+  roots.push(root);
+  mkdirSync(join(root, "p-9c2e", "tasks", "fifo-9c2e"), { recursive: true });
+  expect(Bun.spawnSync(["mkfifo", join(root, "p-9c2e", "tasks", "fifo-9c2e", "status.md")]).exitCode).toBe(0);
+  mkdirSync(join(root, "p-9c2e", "tasks", "ok-9c2e"), { recursive: true });
+  writeFileSync(join(root, "p-9c2e", "tasks", "ok-9c2e", "status.md"), GATE_ONE);
+  const code = `const { featuresOf } = await import(${JSON.stringify(join(import.meta.dir, "features.ts"))});
+    process.stdout.write(JSON.stringify(featuresOf([{ name: "p-9c2e", path: ${JSON.stringify(join(root, "p-9c2e"))} }])));`;
+  const child = Bun.spawnSync([process.execPath, "-e", code], { timeout: 15_000, killSignal: "SIGKILL" });
+  expect(child.exitCode).toBe(0);
+  expect(JSON.parse(child.stdout.toString())).toEqual([
+    { project: "p-9c2e", slug: "fifo-9c2e", line: "status unreadable" },
+    { project: "p-9c2e", slug: "ok-9c2e", line: "Gate 1 · Product in progress" },
+  ]);
+}, 30_000);

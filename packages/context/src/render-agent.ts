@@ -118,25 +118,34 @@ export function renderArtifacts(p: Packet): string {
  * A convention's own headings, pushed below its `### path` heading (`#` becomes `####`, capped at `######`), so no line
  * of a convention can read as one of the packet's `#`/`##` headings. Lines inside code fences are left alone. A line
  * ends where CommonMark ends one — LF, CRLF or a lone CR — and comes out ending in LF; a heading may be indented by up
- * to three spaces, as CommonMark reads one.
+ * to three spaces, as CommonMark reads one. Fences open and close as CommonMark has them: a backtick fence's info string
+ * holds no backtick (a line starting ```code``` is a paragraph), and a closing fence is the same character, at least as
+ * long, with nothing after it. A fence still open at the end — never closed, or cut by the 64 KB limit — is closed
+ * there, or it would run on through every section after it.
  */
 export function nestHeadings(body: string, by = 3): string {
-  let fence: string | null = null;
-  return body
-    .replace(/(?:\r\n?|\n)+$/, "")
-    .split(/\r\n?|\n/)
-    .map((line) => {
-      const open = /^ {0,3}(`{3,}|~{3,})/.exec(line);
-      if (open) {
-        if (fence === null) fence = open[1]!;
-        else if (open[1]!.startsWith(fence)) fence = null;
-        return line;
-      }
-      if (fence !== null) return line;
-      const heading = /^( {0,3})(#{1,6})([ \t].*)?$/.exec(line);
-      return heading ? `${heading[1]}${"#".repeat(Math.min(6, heading[2]!.length + by))}${heading[3] ?? ""}` : line;
-    })
-    .join("\n");
+  let fence: { marker: string; indent: number } | null = null;
+  const out: string[] = [];
+  for (const line of body.replace(/(?:\r\n?|\n)+$/, "").split(/\r\n?|\n/)) {
+    if (fence !== null) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+      if (close && close[1]![0] === fence.marker[0] && close[1]!.length >= fence.marker.length) fence = null;
+      out.push(line);
+      continue;
+    }
+    const open = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(line);
+    if (open && !(open[2]![0] === "`" && open[3]!.includes("`"))) {
+      fence = { marker: open[2]!, indent: open[1]!.length };
+      out.push(line);
+      continue;
+    }
+    const heading = /^( {0,3})(#{1,6})([ \t].*)?$/.exec(line);
+    out.push(heading ? `${heading[1]}${"#".repeat(Math.min(6, heading[2]!.length + by))}${heading[3] ?? ""}` : line);
+  }
+  // Only a fence opened at the margin: one indented under a list item ends with the item, and a closing line here would
+  // open a new fence instead.
+  if (fence !== null && fence.indent === 0) out.push(fence.marker);
+  return out.join("\n");
 }
 
 export function renderConventions(p: Packet): string {

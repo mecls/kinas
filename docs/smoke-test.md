@@ -605,8 +605,9 @@ Checks from PRD §5, run on this Mac against `/Applications/Kinas.app` and its r
   live store, so it needs the captain's yes, given only as `KINAS_AC6_DELETE_CURSORS=yes scripts/acceptance.sh ac6`:
   it checks that Kinas has quit (and stops, deleting nothing, if it has not), takes a `.backup` beside the data folder,
   checks it with `integrity_check` and every table's row count, prints the restore command
-  (`sqlite3 '<store>' ".restore '<backup>'"`, Kinas quit), deletes, and proves no other table's count moved. Without
-  the yes, AC-6 says what it would delete and stops.
+  (`sqlite3 '<store>' ".restore '<backup>'"`, Kinas quit), rehearses the delete on a copy of the backup (and stops,
+  deleting nothing, if any table but `log_cursors` moves there), deletes, and proves no other table's count moved.
+  Without the yes, AC-6 says what it would delete and stops.
 - **5.11 Host numbers** (2026-09-14): memory 16 GiB vs `hw.memsize` 16.0; disk free 17.14 GiB vs `df` 17.14 GiB;
   CPU 90.7 % after 9 s of `yes` on every core.
   Re-run 2026-09-15 after the Disk tile moved to Finder's number:

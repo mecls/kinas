@@ -99,6 +99,21 @@ describe("the context packet", () => {
     expect(atPacketLevel).toEqual([...AGENT_HEADINGS]);
   });
 
+  test("a convention's code fences open and close as CommonMark has them, so no heading leaks and no fence runs on", () => {
+    // `nestHeadings` took any line starting with three backticks for a fence: an inline ```code``` line opened one, so
+    // the convention's next `## Crew` was left at the packet's level; and "```js" inside a fence closed it, so its
+    // comments were rewritten and the real closing line opened a fence that left `# Title` at the packet's level.
+    expect(nestHeadings("```bun test``` runs the suite.\n## Crew\nx")).toBe("```bun test``` runs the suite.\n##### Crew\nx");
+    expect(nestHeadings("```\n```js\n# comment\n```\n# Title")).toBe("```\n```js\n# comment\n```\n#### Title");
+    expect(nestHeadings("````\n```\n# kept\n````\n## Crew")).toBe("````\n```\n# kept\n````\n##### Crew");
+    // A fence the convention never closes — or one its 64 KB cut ends inside — ran on to the packet's end, so every
+    // section after it read as code. It is closed where the convention ends.
+    expect(nestHeadings("# Rules\n```sh\nbun test\n")).toBe("#### Rules\n```sh\nbun test\n```");
+    expect(nestHeadings("~~~~\n# kept")).toBe("~~~~\n# kept\n~~~~");
+    const md = renderAgentPacket({ ...packet, conventions: { ...packet.conventions, data: [{ path: "AGENTS.md", title: "Rules", body: "# Rules\n```sh\nbun test", truncated: true }] } });
+    expect(md).toContain("#### Rules\n```sh\nbun test\n```\n\n_Cut at 64 KB; open the file for the rest._\n\n## Crew");
+  });
+
   test("a brief starts on the rails: Conventions, then Projects", () => {
     const preamble = briefPreamble(packet);
     expect(headings(preamble)).toEqual(["## Conventions", "## Projects"]);

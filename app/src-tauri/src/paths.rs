@@ -7,12 +7,18 @@ use tauri::{AppHandle, Manager};
 /// app data folder Tauri derives from the identifier:
 /// `~/Library/Application Support/ai.sintralabs.kinas`.
 pub fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    if let Some(dir) = std::env::var_os("KINAS_DATA_DIR") {
-        return Ok(PathBuf::from(dir));
+    if let Some(dir) = data_dir_override(std::env::var_os("KINAS_DATA_DIR")) {
+        return Ok(dir);
     }
     app.path()
         .app_data_dir()
         .map_err(|e| format!("could not resolve the app data folder: {e}"))
+}
+
+/// `KINAS_DATA_DIR` as the folder it names. Empty or blank is unset, as the CLI reads it (`dataDir` in
+/// `packages/store/src/sqlite-readonly.ts`): a relative empty path would put the store wherever the app was started.
+fn data_dir_override(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    value.filter(|v| !v.to_string_lossy().trim().is_empty()).map(PathBuf::from)
 }
 
 const DEFAULT_ROOT: &str = "~/Documents/Projects/SintraLabs";
@@ -117,6 +123,21 @@ mod tests {
         assert_eq!(projects_root_from(None, &file("bad.json", Some("{nope")), home), fallback);
         assert_eq!(projects_root_from(None, &file("absent.json", None), home), fallback);
         assert_eq!(projects_root_from(Some(""), &file("absent2.json", None), home), fallback);
+    }
+
+    /// `KINAS_DATA_DIR=` (set, but empty) gave the app a relative empty path — its store in whatever folder it was
+    /// started from, every Download refused as "Kinas won't write there" (an empty protected folder holds every path) —
+    /// while the CLI, which reads `KINAS_DATA_DIR || <default>`, opened the default folder's store. Empty or blank is
+    /// unset; any other value is the folder, as it is written.
+    #[test]
+    fn an_empty_or_blank_kinas_data_dir_is_unset() {
+        use std::ffi::OsString;
+        assert_eq!(data_dir_override(None), None);
+        for unset in ["", " ", "\t \n"] {
+            assert_eq!(data_dir_override(Some(OsString::from(unset))), None, "{unset:?}");
+        }
+        assert_eq!(data_dir_override(Some(OsString::from("/tmp/kinas-9c2e"))), Some(PathBuf::from("/tmp/kinas-9c2e")));
+        assert_eq!(data_dir_override(Some(OsString::from(" /tmp/kinas 9c2e "))), Some(PathBuf::from(" /tmp/kinas 9c2e ")));
     }
 
     // Reader R1, amended: Settings sits between the environment and the config file.

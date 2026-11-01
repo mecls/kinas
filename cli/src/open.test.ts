@@ -135,6 +135,28 @@ describe("asking the app", () => {
     s.close();
   });
 
+  test("an answer that arrives in pieces, one cut inside a character, is read whole: the path is exact (R11)", async () => {
+    // Each piece was decoded on its own, so the two halves of a UTF-8 character became two U+FFFD and `kinas open`
+    // printed a path that does not exist. A Unix socket on macOS carries 8 KB at a time, so a picker's answer of long
+    // paths arrives in pieces; the app sends one line however it is cut.
+    const path = "/r/reunião-9c2e/ação.md";
+    const line = Buffer.from(`${JSON.stringify({ ok: true, result: "opened", path })}\n`, "utf8");
+    const cut = line.indexOf(Buffer.from("ã", "utf8")) + 1;
+    const socket = join(base, "pieces.sock");
+    const srv = net.createServer((c) => {
+      c.on("data", () => {
+        c.write(line.subarray(0, cut));
+        setTimeout(() => c.end(line.subarray(cut)), 100);
+      });
+    });
+    await new Promise<void>((ok) => srv.listen(socket, () => ok()));
+    try {
+      expect(await ask(socket, request)).toEqual({ kind: "answer", body: { ok: true, result: "opened", path } });
+    } finally {
+      srv.close();
+    }
+  });
+
   test("a listener that never answers is silent after the timeout", async () => {
     const s = await server("silent.sock", null);
     const started = Date.now();

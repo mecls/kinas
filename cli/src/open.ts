@@ -157,9 +157,12 @@ export function ask(socketPath: string, request: OpenRequest, timeoutMs = ANSWER
       done(answer);
     };
     socket.setTimeout(timeoutMs, () => finish({ kind: "silent" }));
+    // Decoded across pieces, as the Herdr source reads its socket: a piece can end inside a UTF-8 character, and each
+    // decoded alone turned its halves into two U+FFFD in the path printed.
+    socket.setEncoding("utf8");
     socket.on("connect", () => socket.write(`${JSON.stringify(request)}\n`));
-    socket.on("data", (chunk) => {
-      buffer += chunk.toString("utf8");
+    socket.on("data", (chunk: string) => {
+      buffer += chunk;
       const newline = buffer.indexOf("\n");
       if (newline >= 0) finish(parseResponse(buffer.slice(0, newline)));
     });

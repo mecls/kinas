@@ -373,6 +373,8 @@ export function Reader({
   const [picks, setPicks] = useState<{ paths: string[]; root: string } | null>(null);
   const [status, setStatus] = useState<{ text: string; sticky: boolean } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  /** The open that put "Opening …" up (its generation): only that one takes it down, however it ends. */
+  const openingOf = useRef(0);
   /** The last request carried out: the shell is told after the report of where it landed (below). */
   const [settled, setSettled] = useState<number | null>(null);
   /** The file last left and where it was scrolled, read as it stopped showing (`leaveTab`). */
@@ -490,7 +492,10 @@ export function Reader({
     ): Promise<void> {
       const gen = ++generation.current;
       const timer = window.setTimeout(() => {
-        if (gen === generation.current && !docRef.current) setOpening(baseName(path));
+        if (gen === generation.current && !docRef.current) {
+          openingOf.current = gen;
+          setOpening(baseName(path));
+        }
       }, OPENING_AFTER_MS);
       try {
         const opened = await readerOpen(path);
@@ -573,6 +578,9 @@ export function Reader({
         }
       } finally {
         window.clearTimeout(timer);
+        // The line is this open's and ends with it, overtaken or not: a folder with no README, a refused click or ×
+        // draws no line of its own to replace it.
+        if (openingOf.current === gen) setOpening(null);
       }
     },
     // openFolder is hoisted below and only reads refs and setters.
@@ -719,31 +727,48 @@ export function Reader({
     [say, show, openDeleted, openCrewRow],
   );
 
-  const loadImage = useCallback(async (img: HTMLImageElement, current: Doc) => {
-    const src = img.dataset.src ?? "";
-    const target = classifyLink(src, current.path, current.root);
-    const fallBack = () => {
-      img.dataset.failed = "1";
-      img.hidden = true;
-      const label = document.createElement(target.kind === "external" ? "a" : "span");
-      label.className = "reader-image-alt";
-      label.textContent = img.alt || src;
-      if (target.kind === "external") label.setAttribute("href", target.url);
-      img.after(label);
-    };
-    // Remote images are never fetched (R20).
-    if (target.kind !== "file") return fallBack();
-    try {
-      const bytes = await readerReadImage(target.path);
-      if (!img.isConnected) return;
-      const url = URL.createObjectURL(new Blob([bytes], { type: mimeOf(target.path) }));
-      blobs.current.add(url);
-      img.src = url;
-      img.dataset.loaded = "1";
-    } catch {
-      fallBack();
+  /** An image's bytes, drawn on its element as a Blob; the Blob it drew before is let go. */
+  const showBytes = useCallback((img: HTMLImageElement, bytes: ArrayBuffer, path: string) => {
+    const url = URL.createObjectURL(new Blob([bytes], { type: mimeOf(path) }));
+    blobs.current.add(url);
+    const before = img.src;
+    // One that could not be read before (a file past the limit, since made smaller) shows again, without its name.
+    if (img.dataset.failed) {
+      delete img.dataset.failed;
+      img.hidden = false;
+      if (img.nextElementSibling?.classList.contains("reader-image-alt")) img.nextElementSibling.remove();
     }
+    img.src = url;
+    img.dataset.loaded = "1";
+    if (blobs.current.delete(before)) URL.revokeObjectURL(before);
   }, []);
+
+  const loadImage = useCallback(
+    async (img: HTMLImageElement, current: Doc) => {
+      const src = img.dataset.src ?? "";
+      const target = classifyLink(src, current.path, current.root);
+      const fallBack = () => {
+        img.dataset.failed = "1";
+        img.hidden = true;
+        const label = document.createElement(target.kind === "external" ? "a" : "span");
+        label.className = "reader-image-alt";
+        label.textContent = img.alt || src;
+        if (target.kind === "external") label.setAttribute("href", target.url);
+        img.after(label);
+      };
+      // Remote images are never fetched (R20).
+      if (target.kind !== "file") return fallBack();
+      try {
+        const bytes = await readerReadImage(target.path);
+        // Gone, or drawn meanwhile by a live reload, whose read began after this one: the newer bytes stay.
+        if (!img.isConnected || img.dataset.loaded) return;
+        showBytes(img, bytes, target.path);
+      } catch {
+        if (!img.dataset.loaded) fallBack();
+      }
+    },
+    [showBytes],
+  );
 
   // Draws what the swap could not reuse, then reports how long the open took.
   const hydrate = useCallback(
@@ -919,7 +944,18 @@ export function Reader({
     const stop = onReaderChanged(async ({ path }) => {
       const current = docRef.current;
       if (!current || current.path !== path) return;
+      // An image is read again as an image, as its open read it: `reader_read_text` refuses its bytes ("Not a text
+      // file"), and redrawing its element would keep the picture already there.
+      const image = current.render === "image";
       try {
+        if (image) {
+          const read = await unlessSuperseded(reloads, () => readerReadImage(path));
+          const img = body.current?.querySelector<HTMLImageElement>("img[data-src]");
+          if (!read || docRef.current?.path !== path || !img) return;
+          setStatus((s) => (s?.sticky ? null : s));
+          showBytes(img, read.value, path);
+          return;
+        }
         const read = await unlessSuperseded(reloads, () => readerReadText(path));
         if (!read) return;
         const text = read.value;
@@ -959,7 +995,7 @@ export function Reader({
       }
     });
     return () => void stop.then((u) => u());
-  }, [say, setChangesOn]);
+  }, [say, setChangesOn, showBytes]);
 
   // The shell speaks through the reader's status line: a pin's result, or Rust's reason for refusing one.
   useEffect(() => {
@@ -1148,6 +1184,9 @@ export function Reader({
   const changeView = (next: View) => {
     const current = docRef.current;
     if (!current) return;
+    // Every click is the toggle's newest request, the view already showing included: Rendered pressed while Changes is
+    // on its way (Rendered still reads pressed), or Changes while the crew's copy is, keeps that one from landing after.
+    viewAsk.current++;
     if (next === "changes") {
       if (changesRef.current === null) void enterChanges(current);
       return;
@@ -1191,6 +1230,8 @@ export function Reader({
     const diffed = asked?.value ?? null;
     const latest = docRef.current;
     if (!diffed || gen !== generation.current || !latest || latest.path !== current.path) return;
+    // Saved while the diff was out, and drawn by the live reload in the usual view: this diff may be of the text before.
+    if (latest.hash !== current.hash) return void enterChanges(latest);
     pending.current = { mode: "new", fragment: null, scrollTop: 0 };
     const next: Doc = { ...latest, rendered: diffed.rendered, crewText: undefined };
     setCrewOn(false);

@@ -73,7 +73,10 @@ export function featuresOf(projects: readonly { name: string; path: string }[]):
       if (!existsSync(file)) continue;
       let status: Status | null = null;
       try {
-        if (statSync(file).size <= MAX_STATUS_BYTES) status = parseStatus(readFileSync(file, "utf8"));
+        // A regular file only (a link to one is followed): a FIFO or a link to /dev/zero stats as 0 bytes, and reading it
+        // blocks or never ends — synchronously, so no deadline could stop it.
+        const st = statSync(file);
+        if (st.isFile() && st.size <= MAX_STATUS_BYTES) status = parseStatus(readFileSync(file, "utf8"));
       } catch {
         status = null;
       }

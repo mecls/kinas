@@ -33,7 +33,7 @@ Its scripts spawn workers into Herdr, run `git`, `gh`, `claude` and the crew too
 
 ## Never
 
-- Kinas's own code opens nothing for writing under the home: not `data/`, not `state/`, not `config/`, not `projects/`. Status files are append-only, provenance-guarded event logs; a foreign write fails toward a wake.
+- Kinas's own code opens nothing for writing under the home: not `data/`, not `state/`, not `config/`, not `projects/`. Status files are append-only, provenance-guarded event logs; a foreign write fails toward a wake. Amended 2026-11-01: the one exception is ADR 0019's, `config/backend`, written once by `kinas crew setup` with the captain's yes before any first mate exists — and only as a plain file of the home's own `config/` folder: a link there, or a FIFO, is left as it is and never followed or opened.
 - Kinas never runs `fm-send.sh`, `fm-bootstrap.sh`, `fm-control.sh`, `fm-teardown.sh`, `fm-spawn.sh`, `fm-tasks-axi.sh`, `fm-captain-hold.sh` (any subcommand) or `fm-afk-return.sh`; never reads `state/*.status`, `.meta`, `.wake-queue`, `brief.md`, pane captures or the `.afk-contract`'s words; never parses `backlog.md`.
 - Kinas never runs `quota-axi` (it reads Claude Code's credential and calls Anthropic) and never reads under `~/.claude`.
 - Nothing about a task — title, id, path, label, URL, key, summary, answer, order text, a script's stderr — reaches the log or `kinas status --json`.

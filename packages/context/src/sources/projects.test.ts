@@ -96,6 +96,25 @@ describe("projects through git plumbing", () => {
     expect((await readRepo(repo, "repo")).row.dirty).toBe(2);
   });
 
+  test("a tracked file replaced by a FIFO counts as changed, is never opened, and the touched clean files stay clean", async () => {
+    // diff-index gives a FIFO in the working tree a regular file's mode, so it went to `hash-object --stdin-paths`, which
+    // opened it and waited for a writer until git's 5 s limit killed the batch: the project took five seconds on every
+    // refresh, and every touched-but-unchanged file in the repository read dirty with it.
+    const repo = join(tempDir(), "repo");
+    write(join(repo, "same-9c2e.md"), "# Same\n");
+    write(join(repo, "piped-9c2e.md"), "# Piped\n");
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "First");
+    utimesSync(join(repo, "same-9c2e.md"), new Date(), new Date(Date.now() + 5_000));
+    unlinkSync(join(repo, "piped-9c2e.md"));
+    expect(Bun.spawnSync(["mkfifo", join(repo, "piped-9c2e.md")]).exitCode).toBe(0);
+
+    const started = performance.now();
+    expect((await readRepo(repo, "repo")).row.dirty).toBe(1);
+    expect(performance.now() - started).toBeLessThan(4_000);
+  }, 30_000);
+
   test("ahead and behind its upstream", async () => {
     const origin = repoWithHistory();
     const clone = join(tempDir(), "clone");

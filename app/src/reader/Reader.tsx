@@ -530,8 +530,6 @@ export function Reader({
           await openFolder(opened.path);
           return;
         }
-        toTab(opened.path, opened.display_path);
-        pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
         // A file always carries a mode; only a folder has none, and that returned above.
         const render = opened.render ?? "source";
         // Asked to open on Changes: the diff is fetched before anything is drawn, so the usual view never flashes first.
@@ -539,6 +537,10 @@ export function Reader({
         // Asked for the crew's copy (crew marks, rule 14): the same, from the crew's checkout.
         const crewed = !diffed && opts.crew ? await crewChangesOf(opened.path) : null;
         if (gen !== generation.current) return;
+        // The tab and the swap after the diffs, not before: a live reload of the file showing, landing while they were
+        // out, would take this swap for its own and leave this file's header over that file's text.
+        toTab(opened.path, opened.display_path);
+        pending.current = { mode: "new", fragment: opts.fragment ?? null, scrollTop: opts.scrollTop, receivedAt: opts.receivedAt };
         const next: Doc = {
           path: opened.path,
           displayPath: opened.display_path,
@@ -572,6 +574,8 @@ export function Reader({
           setTabs(leave);
           docRef.current = null;
           setDoc(null);
+          // The file's own sticky line ("… was removed; showing the last version") goes with it: nothing shows now.
+          setStatus((s) => (s?.sticky ? null : s));
           setProblem({ displayPath: path, message: error.message });
         } else {
           say(error.message);
@@ -607,6 +611,7 @@ export function Reader({
         setChangesOn(null);
         docRef.current = null;
         setDoc(null);
+        setStatus((s) => (s?.sticky ? null : s));
         setProblem(null);
       }
     } catch (e) {
@@ -718,6 +723,7 @@ export function Reader({
           setTabs(leave);
           docRef.current = null;
           setDoc(null);
+          setStatus((s) => (s?.sticky ? null : s));
           setProblem({ displayPath: tabsRef.current.list.find((t) => t.path === path)?.displayPath ?? baseName(path), message });
         } else if (!docRef.current && !folderRef.current) setProblem({ displayPath: baseName(path), message });
         else say(message);
@@ -1276,6 +1282,8 @@ export function Reader({
     const current = docRef.current;
     if (openCrew || !crewRef.current || !current) return;
     if (current.crew) {
+      // A new body, so a swap: without one the layout effect keeps the crew's diff, "not pushed", on screen.
+      pending.current = { mode: "new", fragment: null, scrollTop: 0 };
       const next: Doc = { ...current, rendered: renderRefusal("No changes by the crew any more"), text: "", crewText: "" };
       docRef.current = next;
       setDoc(next);

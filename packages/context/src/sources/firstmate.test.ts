@@ -103,3 +103,26 @@ test("a crew process gets FM_HOME and none of Herdr's variables (PRD rule 29)", 
   const env = crewEnv({ PATH: "/usr/bin", HOME: "/h", HERDR_SESSION: "default", HERDR_PANE_ID: "w1:p1", herdr_env: "1", FM_HOME: "/elsewhere" }, "/h/firstmate");
   expect(env).toEqual({ PATH: "/usr/bin", HOME: "/h", FM_HOME: "/h/firstmate" });
 });
+
+test("a scout report that is not a regular file is never opened, from the snapshot or the mirror: the packet does not wait", () => {
+  // A worker writes its report where Firstmate's records say; a FIFO at that path, inside the home, passed every check
+  // (lexically and really under the home, and it stats), and its first line was read: that read never returned, and no
+  // deadline covers the reports, so `kinas context`, every refresh and every session hook waited for good. Run in a
+  // child, so the failure is a timeout and not this process stuck.
+  const h = join(base, "fifo-report", "firstmate");
+  const snap = snapshotFor(h) as { scout_reports: { id: string; path: string }[] };
+  mkdirSync(join(h, "data", "t-fifo-9c2e"), { recursive: true });
+  expect(Bun.spawnSync(["mkfifo", join(h, "data", "t-fifo-9c2e", "report.md")]).exitCode).toBe(0);
+  snap.scout_reports.push({ id: "t-fifo-9c2e", path: "data/t-fifo-9c2e/report.md" });
+  const status = { reader: "crew", state: "ok", last_attempt_at: Date.now(), last_success_at: Date.now(), last_error: null, stale_after_ms: 180_000, dead_after_ms: 43_200_000 };
+  const scout = (id: string) => ({ id, title: id, project: null, project_name: "p-9c2e", kind: "scout", backlog_state: "done", state: null, worktree_path: null, report_path: `data/${id}/report.md`, report_present: 1, captain_actionable: 0, snapshot_generated: "2026-09-25T09:00:00Z", done_at: Date.now() - 1_000, gone_at: null });
+  const code = `const { crewFromSnapshot } = await import(${JSON.stringify(join(import.meta.dir, "firstmate.ts"))});
+    const { crewFromStore } = await import(${JSON.stringify(join(import.meta.dir, "mirror.ts"))});
+    const fromSnapshot = await crewFromSnapshot(${JSON.stringify(snap)}, Date.now(), ${JSON.stringify(h)});
+    const store = { getReaderStatus: () => [${JSON.stringify(status)}], getCrewMirror: () => [${JSON.stringify(scout("t-095"))}, ${JSON.stringify(scout("t-fifo-9c2e"))}], getCrewDecisions: () => [] };
+    const fromMirror = await crewFromStore(store, Date.now(), ${JSON.stringify(h)});
+    process.stdout.write(JSON.stringify([fromSnapshot, fromMirror].map((c) => c.reports.map((r) => [r.id, r.first_line]))));`;
+  const child = Bun.spawnSync([process.execPath, "-e", code], { timeout: 15_000, killSignal: "SIGKILL" });
+  expect(child.exitCode).toBe(0);
+  expect(JSON.parse(child.stdout.toString())).toEqual([[["t-095", "Payments providers compared"]], [["t-095", "Payments providers compared"]]]);
+}, 30_000);

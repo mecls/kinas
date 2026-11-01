@@ -43,7 +43,9 @@ export function underHome(home: string, reported: string): string | null {
 /**
  * A scout report's first line, read only when the report is inside the home on disk as well as on paper: `underHome`
  * judges the path as written, and a link inside the home to a file outside it is not followed — the app opens a report
- * only through the reader, which judges the real path (ADR 0009, 0019). `id` defaults to the path.
+ * only through the reader, which judges the real path (ADR 0009, 0019). A regular file only, as a missing one is not
+ * listed: a worker can leave a FIFO at the path, and its read never returns — nor does any deadline cover the reports.
+ * `id` defaults to the path.
  */
 export async function readReport(home: string, reported: string, id: string | null): Promise<CrewReport | null> {
   const path = underHome(home, reported);
@@ -51,7 +53,7 @@ export async function readReport(home: string, reported: string, id: string | nu
   const [real, realHome] = await Promise.all([realpath(path).catch(() => null), realpath(home).catch(() => resolve(home))]);
   if (real === null || !(real === realHome || real.startsWith(`${realHome}/`))) return null;
   const st = await stat(real).catch(() => null);
-  if (!st) return null;
+  if (!st?.isFile()) return null;
   return { id: id ?? path, path, first_line: await firstLine(real), modified_at: Math.floor(st.mtimeMs) };
 }
 

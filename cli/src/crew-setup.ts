@@ -8,7 +8,7 @@
 // never runs quota-axi — an npm tool's version is read from the package.json its command links to.
 
 import { spawn } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { atLeast, FIRSTMATE_PIN, FIRSTMATE_REPO, PREREQS, SETUP_HOOKS, TOOLS, versionOf, type Tool } from "@kinas/commands/crew-tools";
@@ -109,12 +109,20 @@ export function steps(): Step[] {
         // local changes, another branch, no commit, a clone that never reached the pin — is not written into either.
         if (ctx.homeProblem !== null) return say(ctx, "skipped: setup leaves Firstmate's home alone");
         const file = join(ctx.home, "config", "backend");
-        const current = existsSync(file) ? (readFileSync(file, "utf8").split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "") : "";
+        const found = backendFile(file);
+        if (found === null) return say(ctx, "skipped: config/backend is not a plain file of Firstmate's home — setup leaves it");
+        const current = found.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "";
         if (current === "herdr") return say(ctx, "already herdr");
         const question = current ? `config/backend says ${current}; set it to herdr?` : "Set Firstmate's backend to herdr?";
         if (!(await ask(ctx, question))) return say(ctx, current ? `left as ${current}` : "left unset");
         mkdirSync(dirname(file), { recursive: true });
-        writeFileSync(file, "herdr\n");
+        // Never through a link, even one made since it was looked at: O_NOFOLLOW refuses it rather than write past it.
+        const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o644);
+        try {
+          writeFileSync(fd, "herdr\n");
+        } finally {
+          closeSync(fd);
+        }
         say(ctx, "herdr");
       },
     },
@@ -251,6 +259,46 @@ async function currentBranch(ctx: Ctx): Promise<string | null> {
   return r.code === 0 && line !== "" ? line : null;
 }
 
+/** The most of config/backend setup reads: its first line is one word. */
+const BACKEND_BYTES = 64 * 1024;
+
+/** What is at `path`, its link never followed: a missing one is "absent". */
+function entry(path: string): "absent" | "dir" | "file" | "other" {
+  try {
+    const st = lstatSync(path);
+    return st.isDirectory() ? "dir" : st.isFile() ? "file" : "other";
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "ENOENT" ? "absent" : "other";
+  }
+}
+
+/**
+ * config/backend's text (its first 64 KB), "" when there is none yet, or null when it is not a plain file of the home's
+ * own `config` folder. The home is Firstmate's, and a first mate can leave anything there: a link — the file or its
+ * folder — would take setup's `herdr` over whatever file it names, outside the home too, and a FIFO would block setup
+ * for good. Neither is followed, opened or written; setup says so and leaves it.
+ */
+function backendFile(file: string): string | null {
+  const folder = entry(dirname(file));
+  const kind = folder === "dir" ? entry(file) : folder;
+  if (kind === "absent") return "";
+  if (kind !== "file") return null;
+  let fd: number;
+  try {
+    fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch {
+    return null;
+  }
+  try {
+    const buffer = Buffer.alloc(BACKEND_BYTES);
+    return buffer.subarray(0, readSync(fd, buffer, 0, BACKEND_BYTES, 0)).toString("utf8");
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** A tool's version and whether it meets its floor. A release tool is asked `--version`; an npm tool is never run. */
 async function probe(tool: Tool, ctx: Ctx): Promise<ToolResult> {
   const path = which(tool.name, ctx);
@@ -357,7 +405,10 @@ interface Ran {
  * A command in its own process group, killed whole at the limit (`npm install -g` starts children of its own), with
  * the setup environment and no stdin. `packages/context/src/exec.ts::run` kills only the direct child. Git runs with
  * optional locks off, so looking at an existing home (`git status`) never refreshes its index: Kinas writes nothing
- * under the home but `config/backend` (ADR 0018).
+ * under the home but `config/backend` (ADR 0018). Ctrl+C, a hangup or a TERM is passed on to the group: a terminal
+ * signals only its foreground group, and a `git clone` or `npm install -g` the captain stopped would otherwise finish
+ * behind them — a clone left at origin's head, never the pin. The group gets the signal itself, so git removes a clone
+ * it had not finished; then setup dies of it, as it would have.
  */
 function group(cmd: string[], ctx: Ctx, limitMs: number): Promise<Ran> {
   return new Promise((resolve) => {
@@ -370,6 +421,22 @@ function group(cmd: string[], ctx: Ctx, limitMs: number): Promise<Ran> {
       resolve({ code: null, stdout: "", stderr: (e as Error).message });
       return;
     }
+    const passOn = STOP_SIGNALS.map((signal) => {
+      const handler = () => {
+        try {
+          if (child.pid) process.kill(-child.pid, signal);
+        } catch {
+          // Already gone.
+        }
+        stopPassing();
+        process.kill(process.pid, signal);
+      };
+      process.on(signal, handler);
+      return [signal, handler] as const;
+    });
+    const stopPassing = () => {
+      for (const [signal, handler] of passOn) process.off(signal, handler);
+    };
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (d: Buffer) => (stdout += d.toString()));
@@ -383,14 +450,19 @@ function group(cmd: string[], ctx: Ctx, limitMs: number): Promise<Ran> {
     }, limitMs);
     events(child).on("error", (e: Error) => {
       clearTimeout(timer);
+      stopPassing();
       resolve({ code: null, stdout, stderr: `${stderr}${e.message}` });
     });
     events(child).on("close", (code: number | null) => {
       clearTimeout(timer);
+      stopPassing();
       resolve({ code, stdout, stderr });
     });
   });
 }
+
+/** What stops setup from outside while a step runs: Ctrl+C, the terminal closing, a kill. */
+const STOP_SIGNALS = ["SIGINT", "SIGHUP", "SIGTERM"] as const;
 
 /** The login shell's PATH, asked once, with the rule the app uses (login_path.rs): one line, absolute folders only. */
 export async function loginPath(env: Record<string, string | undefined> = process.env): Promise<string | null> {

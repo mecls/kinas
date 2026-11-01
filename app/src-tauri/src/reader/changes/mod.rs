@@ -341,10 +341,12 @@ fn old_text(state: &ChangesState, path: &Path, permitted: &dyn Fn(&Path) -> bool
         // Not in the tree at the baseline: every line is new.
         None | Some(BaseText::NotText) => Vec::new(),
         Some(BaseText::Copy(bytes)) => bytes.to_vec(),
-        Some(BaseText::Blob { head, .. }) => git
-            .ok_or(())
-            .and_then(|g| g.blob_text(&head.repo, &head.commit, path).map_err(|_| ()))
-            .map_err(|()| no_baseline(since_ms, "git could not read it back"))?,
+        // No further than the reader's ceiling (R10), as a copy is never taken past it: rule 23 says so instead.
+        Some(BaseText::Blob { head, .. }) => match git.map(|g| g.blob_head(&head.repo, &head.commit, path, access::MAX_TEXT_BYTES as usize)) {
+            Some(Ok((bytes, false))) => bytes,
+            Some(Ok((_, true))) => return Err(no_copy(since_ms, NoCopy::TooLarge, mark)),
+            _ => return Err(no_baseline(since_ms, "git could not read it back")),
+        },
         Some(BaseText::NoCopy(reason)) => return Err(no_copy(since_ms, *reason, mark)),
     };
     Ok((since_ms, mark, bytes))
@@ -1242,12 +1244,11 @@ fn judge(baseline: &Baseline, path: &Path, hashes: &HashMap<PathBuf, String>, gi
 }
 
 /// Whether a deleted clean-tracked file was one the tree listed, by its blob's head. (An image is never a blob: it
-/// has no copy of any kind.) With no git to ask, it counts as listed — a D when unsure, as an M is.
+/// has no copy of any kind.) With no git to ask, it counts as listed — a D when unsure, as an M is. Only the head is
+/// read: the tree's own filter reads no more of a file on disk.
 fn blob_listed(git: Option<&Git>, head: &baseline::Head, path: &Path) -> bool {
     let Some(git) = git else { return true };
-    git.blob_text(&head.repo, &head.commit, path).map_or(true, |bytes| {
-        crate::reader::access::sniff(&bytes[..bytes.len().min(crate::reader::access::SNIFF_BYTES)]) == crate::reader::access::Content::Text
-    })
+    git.blob_head(&head.repo, &head.commit, path, access::SNIFF_BYTES).map_or(true, |(bytes, _)| access::sniff(&bytes) == access::Content::Text)
 }
 
 /// Rule 3's "the same text": byte-equal to the copy, or hashing to HEAD's blob. With neither, the same size and
@@ -1778,6 +1779,46 @@ mod tests {
         std::fs::remove_file(root.join("notes.md")).unwrap();
         std::fs::remove_file(root.join("logo.png")).unwrap();
         assert_eq!(marked(&git_burst(&state, &root, &g, &["notes.md", "logo.png"]), &root), ["D logo.png", "D notes.md"]);
+    }
+
+    /// A deleted clean-tracked file is judged by its blob's head (rule 5): text, a D; a binary, no row. The whole blob was
+    /// read for those 4 KiB — a committed video's gigabytes, held in memory — and a blob whose stream outlasted git's
+    /// 10 s (a big one, a slow share) failed, so it counted as listed: a D on a binary the tree never had. Here git
+    /// streams a binary head and then keeps going, as such a blob does.
+    #[test]
+    fn a_deleted_blob_is_judged_by_its_head_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let fake = dir.path().join("git");
+        std::fs::write(&fake, "#!/bin/sh\nhead -c 8192 /dev/zero\nexec sleep 30\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let g = Git::at(fake);
+        let head = Head { repo: dir.path().to_path_buf(), commit: "c0ffee".into() };
+        let started = Instant::now();
+        assert!(!blob_listed(Some(&g), &head, &dir.path().join("demo-9c2e.mov")), "a binary head: never a row");
+        assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+    }
+
+    /// The reader shows no text over its 4 MB ceiling (R10), and a deleted file's baseline is no exception (rules 22 and
+    /// 23): an untracked one over it had no copy and said so, but a clean-tracked one was read back from git whole and
+    /// drawn — a 30 MB export's every line as a row, and all of its text, through IPC to a webview that froze on it.
+    /// Read no further than the ceiling, and refused with rule 23's words.
+    #[test]
+    fn a_deleted_tracked_file_over_the_reader_s_ceiling_is_refused_not_drawn() {
+        // Long lines, so the one at the ceiling is a few thousand rows to diff, not half a million.
+        let line = format!("{}\n", "row,9c2e,".repeat(113));
+        let big: Vec<u8> = line.bytes().cycle().take(access::MAX_TEXT_BYTES as usize + 1).collect();
+        let (_dir, root, state, g) = watched_repo(&[("data/export.csv", &big), ("notes.md", b"# Notes\n")]);
+        std::fs::remove_file(root.join("data/export.csv")).unwrap();
+        assert_eq!(marked(&git_burst(&state, &root, &g, &["data/export.csv"]), &root), ["D data/export.csv"]);
+        let refused = view(&state, &root.join("data/export.csv"), Some(&g)).unwrap_err();
+        assert_eq!(refused.code, "no_baseline");
+        assert_eq!(refused.message.rsplit(" — ").next(), Some("it is larger than 4 MB"));
+        // One at the ceiling still draws.
+        let (_dir, root, state, g) = watched_repo(&[("data/export.csv", &big[..access::MAX_TEXT_BYTES as usize])]);
+        std::fs::remove_file(root.join("data/export.csv")).unwrap();
+        git_burst(&state, &root, &g, &["data/export.csv"]);
+        assert!(view(&state, &root.join("data/export.csv"), Some(&g)).is_ok());
     }
 
     #[test]

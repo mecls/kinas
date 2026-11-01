@@ -2,7 +2,7 @@
 // printed in full in the agent packet because these are the rails.
 
 import { existsSync, statSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ConventionDoc } from "../packet.ts";
 import { SourceError } from "../source.ts";
@@ -54,7 +54,8 @@ export async function readConventions(hub: string): Promise<ConventionDoc[]> {
 
   return Promise.all(
     files.map(async (file) => {
-      const bytes = await readFile(file);
+      // Only as far as the cut, and one byte past it to know there is more: read whole, a huge one failed the section.
+      const bytes = Buffer.from(await Bun.file(file).slice(0, MAX_CONVENTION_BYTES + 1).arrayBuffer());
       const truncated = bytes.byteLength > MAX_CONVENTION_BYTES;
       const body = (truncated ? bytes.subarray(0, MAX_CONVENTION_BYTES) : bytes).toString("utf8");
       return { path: relative(hub, file), title: firstHeading(body), body, truncated };

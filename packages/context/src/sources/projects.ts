@@ -1,7 +1,7 @@
 // Projects: every git repository under the root, read through plumbing only — symbolic-ref, rev-parse, diff-index,
 // ls-files, hash-object, rev-list. Nothing here writes to a repository: no index refresh, optional locks off.
 
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import { gitEnv, run, splitZ, type RunResult } from "../exec.ts";
@@ -56,9 +56,10 @@ function gitIn(cwd: string): Git {
 /**
  * Paths whose working-tree content differs from HEAD (staged or not). diff-index compares against the index's stat
  * data without refreshing it, so a file it cannot vouch for (all-zero id) is hashed and compared with HEAD's blob:
- * a touched-but-unchanged file is not counted.
+ * a touched-but-unchanged file is not counted. Only a regular file is hashed: diff-index gives a FIFO the mode of one,
+ * and `hash-object` would open it and wait for a writer until git's limit killed the batch.
  */
-async function changedAgainstHead(git: Git): Promise<string[]> {
+async function changedAgainstHead(git: Git, top: string): Promise<string[]> {
   const raw = await git(["diff-index", "-z", "--no-abbrev", "HEAD", "--"]);
   if (!raw.ok) return [];
   const parts = raw.stdout.split("\0");
@@ -72,7 +73,7 @@ async function changedAgainstHead(git: Git): Promise<string[]> {
     const unknownContent = /^0+$/.test(dstSha ?? "");
     // Regular files only, as the app hashes: `hash-object` opens a path and follows a symlink, and one whose target is
     // gone or a folder failed the whole batch. A symlink the stat data cannot vouch for counts.
-    if (status === "M" && unknownContent && srcMode === dstMode && (srcMode === "100644" || srcMode === "100755")) {
+    if (status === "M" && unknownContent && srcMode === dstMode && (srcMode === "100644" || srcMode === "100755") && regularFile(join(top, path))) {
       verify.push({ path, blob: srcSha ?? "" });
     } else {
       changed.push(path);
@@ -86,6 +87,15 @@ async function changedAgainstHead(git: Git): Promise<string[]> {
     });
   }
   return changed;
+}
+
+/** A regular file in the working tree, its link never followed (lstat): anything else is not hashed, and counts. */
+function regularFile(path: string): boolean {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -141,7 +151,8 @@ export async function readRepo(path: string, name: string): Promise<{ row: Proje
   const headId = head.ok ? head.stdout.trim() : null;
   const dirty = new Set(splitZ(untracked.stdout));
   if (headId) {
-    for (const p of await changedAgainstHead(git)) dirty.add(p);
+    // diff-index names a path from the top of the working tree, wherever the repository was found from.
+    for (const p of await changedAgainstHead(git, top.stdout.trim() || path)) dirty.add(p);
   } else {
     const staged = await git(["ls-files", "-z", "--cached"]);
     for (const p of splitZ(staged.stdout)) dirty.add(p);

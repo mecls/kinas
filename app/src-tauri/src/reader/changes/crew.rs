@@ -210,10 +210,10 @@ fn is_symlink(path: &Path) -> bool {
 }
 
 /// Whether a file deleted since the base was one the tree listed: an image, or text by its blob's head (rule 5). With
-/// no answer from git, it counts as listed — the checkout's other reads decide whether it is readable at all.
+/// no answer from git, it counts as listed — the checkout's other reads decide whether it is readable at all. Only the
+/// blob's head is read.
 fn was_listed(git: &Git, top: &Path, commit: &str, path: &Path) -> bool {
-    crate::reader::access::is_image(path)
-        || git.blob_text(top, commit, path).map_or(true, |bytes| crate::reader::access::sniff(&bytes[..bytes.len().min(crate::reader::access::SNIFF_BYTES)]) == crate::reader::access::Content::Text)
+    access::is_image(path) || git.blob_head(top, commit, path, access::SNIFF_BYTES).map_or(true, |(bytes, _)| access::sniff(&bytes) == access::Content::Text)
 }
 
 /// The commit a checkout's branch last pushed: its upstream, else `origin/<branch>` (the tree changes clear on push
@@ -408,8 +408,23 @@ pub(super) fn crew_text(state: &super::ChangesState, path: &Path, permitted: &dy
         return Err(gone());
     }
     let file = source.checkout.join(&source.rel);
-    let before = if source.mark == Mark::Added { Vec::new() } else { git.blob_text(&source.checkout, &commit, &file).map_err(|_| gone())? };
-    let after = if source.mark == Mark::Deleted { Vec::new() } else { access::read_text(&file).map_err(|_| gone())?.text.into_bytes() };
+    // Over the reader's ceiling (R10), then or now, is the reader's own refusal: "gone" is for a checkout that has gone.
+    let before = match source.mark {
+        Mark::Added => Vec::new(),
+        _ => match git.blob_head(&source.checkout, &commit, &file, access::MAX_TEXT_BYTES as usize) {
+            Ok((bytes, false)) => bytes,
+            Ok((_, true)) => return Err(ReaderError::new("too_large", "Too large to read here — it is larger than 4 MB")),
+            Err(_) => return Err(gone()),
+        },
+    };
+    let after = match source.mark {
+        Mark::Deleted => Vec::new(),
+        _ => match access::read_text(&file) {
+            Ok(text) => text.text.into_bytes(),
+            Err(too_large @ access::Denied::TooLarge(_)) => return Err(ReaderError::denied(&too_large, path)),
+            Err(_) => return Err(gone()),
+        },
+    };
     Ok((source, before, after))
 }
 
@@ -885,6 +900,66 @@ pub(super) mod tests {
         let refused = crew_text(&state, &captain.join("docs/plan.md"), &|_| true, Some(&g)).expect_err("a link in place of a tracked file is no door");
         assert_eq!(refused.code, "not_watched");
         assert!(crew_text(&state, &captain.join("notes.md"), &|_| true, Some(&g)).is_err());
+    }
+
+    /// A worker's checkout where a tracked file is now a FIFO (a test's named pipe at a tracked path): `diff-index` reports
+    /// it M, and the scan opened it to sniff its head — a read that waits for a writer for ever. The project's thread hung
+    /// there, so its crew marks never moved again, on any of the captain's trees. Not a file the tree lists: no mark, and
+    /// no wait.
+    #[test]
+    fn a_fifo_in_a_crew_checkout_is_no_mark_and_never_waited_on() {
+        let (_dir, captain, home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("docs/plan.md", b"# Plan\n")]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        let pipe = worktree.join("docs/plan.md");
+        std::fs::remove_file(&pipe).unwrap();
+        crate::reader::access::fifo::make(&pipe);
+        std::fs::write(worktree.join("README.md"), "# Shop, by the crew\n").unwrap();
+
+        let scan = {
+            let (g, top) = (g.clone(), worktree.clone());
+            crate::reader::access::fifo::within(Duration::from_secs(20), &pipe, move || marks_of(&g, &top))
+        };
+        let (base, marks) = scan.expect("the scan never came back: it waited on the FIFO");
+        assert!(matches!(base, Base::Commit(_)), "{base:?}");
+        assert_eq!(marks, ["M README.md"], "the FIFO is no mark; the real edit is");
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        assert_eq!(crew_marked(&state, &captain), ["M README.md 1"]);
+    }
+
+    /// A crew file over the reader's 4 MB ceiling (R10) — a fixture the worker regenerated, or one it deleted — is the
+    /// reader's own refusal. Every failure to read it said "The crew's copy is gone — its task has ended" while the task
+    /// ran on (rule 14's words are for a checkout that has gone), and the deleted one's whole blob was read back and
+    /// drawn, every line a row.
+    #[test]
+    fn a_crew_file_over_the_reader_s_ceiling_is_too_large_not_gone() {
+        let line = format!("{}\n", "row,9c2e,".repeat(113));
+        let big: Vec<u8> = line.bytes().cycle().take(crate::reader::access::MAX_TEXT_BYTES as usize + 1).collect();
+        let (_dir, captain, home, _clone, worktree) = crew_fixture(&[("README.md", b"# Shop\n"), ("data/export.csv", &big), ("data/seed.csv", &big)]);
+        let g = Git::find().expect("git is installed");
+        let (state, repo, clone) = crew_watched(&captain, &home, &g);
+        std::fs::write(worktree.join("data/export.csv"), [&big[..], b"row\n"].concat()).unwrap();
+        std::fs::remove_file(worktree.join("data/seed.csv")).unwrap();
+        crew_rescan(&state, &repo, &clone, &g, 6_000);
+        assert_eq!(crew_marked(&state, &captain), ["M data/export.csv 1", "D data/seed.csv 1"]);
+        for name in ["data/export.csv", "data/seed.csv"] {
+            let refused = crew_text(&state, &captain.join(name), &|_| true, Some(&g)).expect_err("over the ceiling");
+            assert_eq!(refused.code, "too_large", "{name}: {}", refused.message);
+        }
+    }
+
+    /// A file the crew deleted is judged by its blob's head (rule 5), and only the head is read: the whole blob was, and
+    /// one whose stream outlasted git's 10 s counted as listed — a crew row for a binary the tree never had.
+    #[test]
+    fn a_blob_the_crew_deleted_is_judged_by_its_head_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let fake = dir.path().join("git");
+        std::fs::write(&fake, "#!/bin/sh\nhead -c 8192 /dev/zero\nexec sleep 30\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let started = Instant::now();
+        assert!(!was_listed(&Git::at(fake), dir.path(), "c0ffee", &dir.path().join("demo-9c2e.mov")), "a binary head: no mark");
+        assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
     }
 
     fn marks_of(g: &Git, top: &Path) -> (Base, Vec<String>) {

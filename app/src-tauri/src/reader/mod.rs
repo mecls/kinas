@@ -276,10 +276,11 @@ pub async fn reader_list_dir(app: tauri::AppHandle, path: String) -> Result<DirL
 /// Whether a file's head reads as text, for the tree's filter (R8).
 ///
 /// Reads at most `SNIFF_BYTES`, not the file: a video sitting in a folder must cost one page, not its whole
-/// length. An unreadable file answers false, so a permission error omits one row instead of failing the listing.
+/// length. An unreadable file answers false, so a permission error omits one row instead of failing the listing; so does
+/// anything but a regular file (`open_regular`) — a FIFO at a tracked path in a crew checkout waited here for ever.
 fn reads_as_text(real: &Path) -> bool {
     use std::io::Read;
-    let Ok(mut file) = std::fs::File::open(real) else {
+    let Ok(Some(mut file)) = access::open_regular(real) else {
         return false;
     };
     let mut head = [0u8; access::SNIFF_BYTES];

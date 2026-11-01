@@ -186,3 +186,40 @@ describe("who reads through it", () => {
     expect(settings).toMatch(/setFolderHidden\(f\.path, hidden\)\.then\(onProjectsChange\)/);
   });
 });
+
+describe("the reader swaps in every document it is handed", () => {
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const { join } = require("node:path") as typeof import("node:path");
+  const reader = readFileSync(join(import.meta.dir, "..", "reader/Reader.tsx"), "utf8");
+
+  test("each document drawn is set after its own swap, with nothing between that could take the swap first", () => {
+    // The layout effect swaps the body only for a `pending` it finds, and clears it. Set before an await, another draw in
+    // the meantime — a live reload of the file showing — took it: a marked row clicked while the open file was saved
+    // showed the new file's header over the old file's text. Not set at all, the body kept what it had: a crew row
+    // whose crew pushed kept the crew's diff, "not pushed", in place of "No changes by the crew any more".
+    const draws = [...reader.matchAll(/setDoc\((?!null)/g)].map((m) => m.index!);
+    const lineOf = (at: number) => reader.slice(0, at).split("\n").length;
+    const unswapped = draws
+      .filter((at) => {
+        const swap = reader.lastIndexOf("pending.current = {", at);
+        const between = reader.slice(swap, at);
+        return swap < 0 || /\bawait\b/.test(between) || /setDoc\(/.test(between);
+      })
+      .map(lineOf);
+    expect(unswapped).toEqual([]);
+    // Positive control: the guard reads real draws — the opens, the reload, the three view changes and the two rows.
+    expect(draws.length).toBeGreaterThanOrEqual(9);
+  });
+
+  test("a file that stops showing takes its sticky line with it: nothing is \"showing the last version\" any more", () => {
+    // plan.md removed (the sticky "plan.md was removed; showing the last version"), then a folder with no README, a
+    // refused tab or a file that cannot be shown took the page: the line stayed above "Choose a file" or the reason.
+    const gone = [...reader.matchAll(/docRef\.current = null;/g)].map((m) => m.index!);
+    const lineOf = (at: number) => reader.slice(0, at).split("\n").length;
+    const kept = gone.filter((at) => !reader.slice(at, at + 400).split("\n").slice(0, 6).join("\n").includes("setStatus((s) => (s?.sticky ? null : s));")).map(lineOf);
+    expect(kept).toEqual([]);
+    expect(gone.length).toBe(3);
+    // Positive control: a file that opens clears it the same way.
+    expect(reader).toMatch(/setProblem\(null\);\s*setOpening\(null\);\s*setStatus\(\(s\) => \(s\?\.sticky \? null : s\)\);/);
+  });
+});

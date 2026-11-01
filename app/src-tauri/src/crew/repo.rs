@@ -11,7 +11,7 @@ pub(crate) fn origin_repo(folder: &Path) -> Option<String> {
     let dir = if git.is_dir() { git } else { gitdir_of(&git, folder)? };
     let url = origin_url(&dir.join("config")).or_else(|| {
         // A worktree's git directory has no config of its own: `commondir` names the repository's.
-        let common = std::fs::read_to_string(dir.join("commondir")).ok()?;
+        let common = small_file(&dir.join("commondir"))?;
         let common = dir.join(common.trim());
         origin_url(&common.join("config"))
     })?;
@@ -20,14 +20,21 @@ pub(crate) fn origin_repo(folder: &Path) -> Option<String> {
 
 /// `gitdir: <path>` from a `.git` file, relative to the folder when it is not absolute.
 fn gitdir_of(file: &Path, folder: &Path) -> Option<PathBuf> {
-    let text = std::fs::read_to_string(file).ok()?;
+    let text = small_file(file)?;
     let line = text.lines().find_map(|l| l.trim().strip_prefix("gitdir:"))?.trim();
     (!line.is_empty()).then(|| folder.join(line))
 }
 
+/// One of a repository's own small files, as text: a regular file only, and only so much of it (`read_regular`). A
+/// client folder's `.git` is the folder's, and agents work there: one that is a FIFO, or a link to `/dev/zero`, is no
+/// repository — never a wait, never a read without end.
+fn small_file(path: &Path) -> Option<String> {
+    crate::reader::access::read_regular(path, crate::reader::access::SMALL_FILE_BYTES).ok()
+}
+
 /// `[remote "origin"]`'s `url`: section names case-insensitive, the subsection exact, as git reads them.
 fn origin_url(config: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(config).ok()?;
+    let text = small_file(config)?;
     let mut in_origin = false;
     for line in text.lines() {
         let line = line.trim();
@@ -171,6 +178,37 @@ mod tests {
         fs::write(modules.join("config"), "[remote \"origin\"]\n\turl = https://github.com/o/lib-9c2e\n").unwrap();
         fs::write(sub.join(".git"), "gitdir: ../../.git/modules/lib\n").unwrap();
         assert_eq!(origin_repo(&sub).as_deref(), Some("o/lib-9c2e"));
+    }
+
+    /// Every client folder's `origin` is read for the sidebar (`list_projects`), Add to crew and crew marks. A `.git` that
+    /// is a FIFO — or a link to one, or a `config` that is one — was read as text: the read waited for a writer for ever,
+    /// so the sidebar's folders never came, and a link to `/dev/zero` grew a string by gigabytes. Only a regular file is
+    /// read, and only so much of it.
+    #[test]
+    fn a_git_file_or_config_that_is_a_fifo_is_never_waited_on() {
+        use crate::reader::access::fifo;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let ask = |folder: PathBuf, pipe: &Path| fifo::within(Duration::from_secs(3), pipe, move || origin_repo(&folder));
+
+        let shop = dir.path().join("shop-9c2e");
+        fs::create_dir_all(&shop).unwrap();
+        fifo::make(&shop.join(".git"));
+        assert_eq!(ask(shop.clone(), &shop.join(".git")), Some(None), "a `.git` that is a FIFO");
+
+        let linked = dir.path().join("linked-9c2e");
+        fs::create_dir_all(&linked).unwrap();
+        std::os::unix::fs::symlink(shop.join(".git"), linked.join(".git")).unwrap();
+        assert_eq!(ask(linked, &shop.join(".git")), Some(None), "a `.git` that links to one");
+
+        let config = dir.path().join("config-9c2e");
+        fs::create_dir_all(config.join(".git")).unwrap();
+        fifo::make(&config.join(".git/config"));
+        assert_eq!(ask(config.clone(), &config.join(".git/config")), Some(None), "a config that is one");
+
+        // A regular one still reads.
+        repo_with(&dir.path().join("plain-9c2e"), ORIGIN);
+        assert_eq!(origin_repo(&dir.path().join("plain-9c2e")).as_deref(), Some("owner-9c2e/shop"));
     }
 
     #[test]

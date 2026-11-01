@@ -76,7 +76,8 @@ pub fn projects_root_from(env_root: Option<&str>, config: &Path, home: &Path) ->
     if let Some(root) = env_root.filter(|r| !r.is_empty()) {
         return expand(root, home);
     }
-    let from_file = std::fs::read_to_string(config)
+    // A regular file of a config's size only: this is read on every reader command, and under the store's guard.
+    let from_file = crate::reader::access::read_regular(config, crate::reader::access::SMALL_FILE_BYTES)
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
         .and_then(|value| value.get("root").and_then(|r| r.as_str()).map(|r| r.trim().to_string()))
@@ -123,6 +124,20 @@ mod tests {
         assert_eq!(projects_root_from(None, &file("bad.json", Some("{nope")), home), fallback);
         assert_eq!(projects_root_from(None, &file("absent.json", None), home), fallback);
         assert_eq!(projects_root_from(Some(""), &file("absent2.json", None), home), fallback);
+    }
+
+    /// The projects folder is read on every reader command, the socket's every request and every settings read — under
+    /// the store's guard in `get_settings`. A config file that was a FIFO waited for a writer for ever there, and the
+    /// window and `kinas open` with it. A config that is not a regular file is no config: the default, at once.
+    #[test]
+    fn a_config_that_is_a_fifo_is_the_default_and_never_waited_on() {
+        use crate::reader::access::fifo;
+        let dir = tempfile::tempdir().unwrap();
+        let pipe = dir.path().join("config-9c2e.json");
+        fifo::make(&pipe);
+        let config = pipe.clone();
+        let root = fifo::within(std::time::Duration::from_secs(3), &pipe, move || projects_root_from(None, &config, Path::new("/Users/someone")));
+        assert_eq!(root, Some(PathBuf::from("/Users/someone/Documents/Projects/SintraLabs")));
     }
 
     /// `KINAS_DATA_DIR=` (set, but empty) gave the app a relative empty path — its store in whatever folder it was

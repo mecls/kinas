@@ -119,15 +119,18 @@ export function codexWindows(line: string, now: number): QuotaLine[] | null {
  * The `limit` session logs written last. A log is named for when its session began and is written for as long as the
  * session runs (`codex resume` writes the same one), so its name says nothing of when it last read the limits: one
  * started first and still working is named before a later one that went idle, and a resumed one sits in the folder
- * of the day it began.
+ * of the day it began. Regular files only (a link to one is followed): the folder is an agent's, and a FIFO there never
+ * answers a read — nor does any deadline cover the Codex line, so the packet would wait on it for good.
  */
 async function newestRollouts(sessions: string, limit: number): Promise<string[]> {
   const under = async (dir: string, pattern: RegExp) => (await readdir(dir).catch(() => [] as string[])).filter((n) => pattern.test(n)).map((n) => join(dir, n));
   const each = async (dirs: string[], pattern: RegExp) => (await Promise.all(dirs.map((d) => under(d, pattern)))).flat();
   const days = await each(await each(await under(sessions, /^\d{4}$/), /^\d{2}$/), /^\d{2}$/);
   const files = await each(days, /^rollout-.*\.jsonl$/);
-  const written = await Promise.all(files.map(async (file) => ({ file, at: (await stat(file).catch(() => null))?.mtimeMs ?? Number.NEGATIVE_INFINITY })));
+  const written = await Promise.all(files.map(async (file) => ({ file, st: await stat(file).catch(() => null) })));
   return written
+    .filter((w) => w.st?.isFile())
+    .map((w) => ({ file: w.file, at: w.st!.mtimeMs }))
     .sort((a, b) => b.at - a.at)
     .slice(0, limit)
     .map((w) => w.file);

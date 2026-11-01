@@ -65,3 +65,16 @@ test("a kitty key past the last code point is dropped, never thrown on", () => {
   expect(run("ab", "\x1b[1114112u", "c\r").submitted).toEqual(["abc"]);
   expect(run("\x1b[1114111u\r").submitted).toEqual([String.fromCodePoint(0x10ffff)]);
 });
+
+test("mouse reports and private replies are not typing: a CSI with a < = > parameter is dropped whole", () => {
+  // A wheel or a click in a worker's pane under Herdr is an SGR mouse report through xterm's onData, CSI < b ; x ; y M —
+  // and xterm answers a DA2 query with CSI > 0 ; 276 ; 0 c. The parser took only 0-9 ; : ? as parameter bytes, so each
+  // report dropped its ESC [ and put "<64;12;5M" in the order the captain typed next.
+  const mouse = "\x1b[<64;12;5M\x1b[<65;12;5M\x1b[<0;3;9M\x1b[<0;3;9m";
+  expect(run(mouse, "deploy the thing 9c2e\r").submitted).toEqual(["deploy the thing 9c2e"]);
+  expect(run("ab", "\x1b[>0;276;0c", "\x1b[=1;2c", "c\r").submitted).toEqual(["abc"]);
+  // An intermediate byte (ECMA-48 0x20–0x2F) before the final one is part of the sequence too: DECSCUSR's reply shape.
+  expect(run("ab", "\x1b[2 q", "c\r").submitted).toEqual(["abc"]);
+  // Positive control: a kitty key and an arrow still read as before.
+  expect(run("abc", "\x1b[D", "\x1b[127u", "\x1b[13u").submitted).toEqual(["ab"]);
+});

@@ -43,3 +43,16 @@ describe("artifacts by convention", () => {
     expect(omitted).toBe(0);
   });
 });
+
+test("a title's code fences open and close as CommonMark has them, as a convention's do (nestHeadings)", () => {
+  // `firstHeading` took any line starting with three backticks or tildes for a fence, either kind closing either: a
+  // README opening on an inline ```code``` line hid its title, and a ``` line inside a ~~~ fence closed it, so the
+  // heading after the fence was skipped — the Artifacts table showed "—" for both.
+  expect(firstHeading("```npm i``` installs it.\n# Acme storefront 9c2e\n")).toBe("Acme storefront 9c2e");
+  expect(firstHeading("~~~\n```\n~~~\n# Title 9c2e\n")).toBe("Title 9c2e");
+  expect(firstHeading("````\n```\n# kept\n````\n# After 9c2e\n")).toBe("After 9c2e");
+  // CRLF files close their fences too.
+  expect(firstHeading("```sh\r\n# a comment\r\n```\r\n# Real 9c2e\r\n")).toBe("Real 9c2e");
+  // Four spaces in is indented code, not a fence: the heading after it is the title.
+  expect(firstHeading("    ```\n# Indented 9c2e\n")).toBe("Indented 9c2e");
+});

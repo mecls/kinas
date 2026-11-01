@@ -24,6 +24,13 @@ pub fn handoff_path(data_dir: &Path) -> PathBuf {
     data_dir.join(INBOX_FILE)
 }
 
+/// The hand-off file's text. Another process writes it, and both readers hold the store's guard — `hook_status` on the
+/// main thread too — so only a regular file is read, and only so much of it: a FIFO in its place would wait for a writer
+/// for ever, and everything behind the store with it.
+fn read_handoff(path: &Path) -> std::io::Result<String> {
+    crate::reader::access::read_regular(path, crate::reader::access::SMALL_FILE_BYTES)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Window {
     pub window: &'static str,
@@ -160,7 +167,8 @@ pub fn ingest(conn: &mut Connection, org_id: &str, data_dir: &Path, projects_roo
             log::error!("claude-plan: could not record status: {e}");
         }
     };
-    let text = match std::fs::read_to_string(&path) {
+    // The status line's file, read under the caller's store guard: a regular file of a hand-off's size, never a wait.
+    let text = match read_handoff(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             status(conn, Outcome::NotConfigured("never seen — add the Claude Code hook in Settings"));
@@ -221,7 +229,7 @@ pub struct HookStatus {
 /// into last seen 0 minutes ago.
 pub fn hook_status(data_dir: &Path, clock: impl FnOnce() -> i64) -> HookStatus {
     let path = handoff_path(data_dir);
-    let captured = std::fs::read_to_string(&path).ok().map(|text| {
+    let captured = read_handoff(&path).ok().map(|text| {
         serde_json::from_str::<Value>(&text).ok().and_then(|j| j["captured_at"].as_i64()).or_else(|| {
             std::fs::metadata(&path)
                 .and_then(|m| m.modified())
@@ -406,6 +414,33 @@ mod tests {
         let before = hook_status(dir.path(), || captured - 2 * 60 * 60_000);
         assert_eq!((before.state, before.minutes_ago), ("last_seen", Some(0)));
         assert_eq!(hook_status(dir.path(), || captured).state, "receiving", "written just now");
+    }
+
+    /// The hand-off file is another process's (the status line's), and it was read whole as whatever it was. A FIFO in its
+    /// place waited for a writer for ever: in `ingest`, under the store's guard, so every command and reader behind the
+    /// store froze with it; in `hook_status`, under the guard again, on the main thread for the Usage page and the menu
+    /// bar. Only a regular file of a hand-off's size is read; anything else is a failed read, said as one.
+    #[test]
+    fn a_hand_off_that_is_a_fifo_is_never_waited_on() {
+        use crate::reader::access::fifo;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("inbox")).unwrap();
+        let pipe = handoff_path(dir.path());
+        fifo::make(&pipe);
+        let limit = std::time::Duration::from_secs(3);
+
+        let data = dir.path().to_path_buf();
+        let status = fifo::within(limit, &pipe, move || hook_status(&data, || 0).state);
+        assert_eq!(status, Some("never_seen"));
+
+        let data = dir.path().to_path_buf();
+        let ingested = fifo::within(limit, &pipe, move || {
+            let store = Store::open(&data.join("store")).unwrap();
+            let result = ingest(&mut store.conn(), store.org_id(), &data, &data.join("projects"), 5);
+            let state: String = store.conn().query_row("SELECT state FROM reader_status WHERE reader = 'claude-plan'", [], |r| r.get(0)).unwrap();
+            (matches!(result, IngestResult::Failed(_)), state)
+        });
+        assert_eq!(ingested, Some((true, "error".to_string())), "a failed read, recorded as one");
     }
 
     #[test]

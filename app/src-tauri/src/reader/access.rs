@@ -244,12 +244,22 @@ pub struct Text {
 /// Sniff before the UTF-8 check, so a binary file is refused as "not a text file" rather than as "not UTF-8":
 /// the first names what is wrong, the second describes a symptom. `NotUtf8` is kept for the case the sniff cannot
 /// see — a clean head over a tail that is not valid UTF-8.
+///
+/// The file is judged as it is opened (`open_regular`), not by the path's earlier resolve: a save that swapped a FIFO or
+/// a device in since is refused rather than waited on, and a file that grew past the limit since its stat costs at most
+/// the limit and one byte.
 pub fn read_text(real: &Path) -> Result<Text, Denied> {
-    let meta = std::fs::metadata(real).map_err(io_denied)?;
+    use std::io::Read;
+    let file = open_regular(real).map_err(io_denied)?.ok_or(Denied::NotText)?;
+    let meta = file.metadata().map_err(io_denied)?;
     if meta.len() > MAX_TEXT_BYTES {
         return Err(Denied::TooLarge(meta.len()));
     }
-    let bytes = std::fs::read(real).map_err(io_denied)?;
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    file.take(MAX_TEXT_BYTES + 1).read_to_end(&mut bytes).map_err(io_denied)?;
+    if bytes.len() as u64 > MAX_TEXT_BYTES {
+        return Err(Denied::TooLarge(bytes.len() as u64));
+    }
     let body = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
     if sniff(&body[..SNIFF_BYTES.min(body.len())]) == Content::Binary {
         return Err(Denied::NotText);
@@ -259,6 +269,37 @@ pub fn read_text(real: &Path) -> Result<Text, Denied> {
     let mtime_ms = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0);
     Ok(Text { text, hash, mtime_ms, size: meta.len() })
 }
+
+/// A regular file opened for reading — a link to one is followed — or `None` for anything else: a FIFO, which waits for
+/// a writer when it is opened for reading, or a device such as `/dev/zero`, which never ends. Judged by the path first,
+/// so a device is never opened; then opened non-blocking (no effect on a regular file) and judged again by what was
+/// opened, so a swap between the two cannot slip one past.
+pub fn open_regular(path: &Path) -> std::io::Result<Option<std::fs::File>> {
+    use std::os::unix::fs::OpenOptionsExt;
+    if !std::fs::metadata(path)?.is_file() {
+        return Ok(None);
+    }
+    // Read-only: no write, create or truncate flag.
+    let file = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(path)?;
+    Ok(file.metadata()?.is_file().then_some(file))
+}
+
+/// The whole of a small regular file another process writes — a config, a `.git` file, the status line's hand-off — at
+/// most `max` bytes: refused when it is not a regular file (`open_regular`) or longer, so none of them can make a reader
+/// wait, or read without end.
+pub fn read_regular(path: &Path, max: u64) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind, Read};
+    let file = open_regular(path)?.ok_or_else(|| Error::new(ErrorKind::InvalidInput, "not a regular file"))?;
+    let mut bytes = Vec::new();
+    file.take(max + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max {
+        return Err(Error::new(ErrorKind::FileTooLarge, format!("larger than {max} bytes")));
+    }
+    String::from_utf8(bytes).map_err(|_| Error::new(ErrorKind::InvalidData, "not UTF-8"))
+}
+
+/// The most of a small file `read_regular` reads for a caller: a config or a `.git` file is a few hundred bytes.
+pub const SMALL_FILE_BYTES: u64 = 1024 * 1024;
 
 pub fn fnv1a(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -281,6 +322,37 @@ pub fn display_path(real: &Path, root: &Path, home: &Path) -> String {
         return format!("~/{}", rel.to_string_lossy());
     }
     real.display().to_string()
+}
+
+/// What the tests of every file read hand a reader: a FIFO, which waits for a writer when it is opened for reading, and
+/// a deadline, so a reader that waits on one fails its test rather than hanging the run.
+#[cfg(test)]
+pub(crate) mod fifo {
+    use std::path::Path;
+    use std::time::Duration;
+
+    /// A FIFO at `path`.
+    pub(crate) fn make(path: &Path) {
+        use std::os::unix::ffi::OsStrExt;
+        let c = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: a NUL-terminated path, read by the call only.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0, "mkfifo failed");
+    }
+
+    /// `work` on a thread of its own, answered within `limit`, or None while it is still waiting. A reader left waiting
+    /// on `fifo` is let go — a writer comes and goes at once — so a failed test leaves no thread behind on it.
+    pub(crate) fn within<T: Send + 'static>(limit: Duration, fifo: &Path, work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(work());
+        });
+        let answer = rx.recv_timeout(limit).ok();
+        if answer.is_none() {
+            use std::os::unix::fs::OpenOptionsExt;
+            let _ = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(fifo);
+        }
+        answer
+    }
 }
 
 #[cfg(test)]
@@ -385,6 +457,45 @@ mod tests {
         let text = read_text(&bom).unwrap();
         assert_eq!(text.text, "# Title\n");
         assert_eq!(text.hash, fnv1a(b"# Title\n"));
+    }
+
+    /// A file the reader resolved as a regular one can be a FIFO by the time it is read — an agent's save swapped in, or a
+    /// crew checkout's file (`changes::crew::crew_text` reads a worker's path as it stands). `metadata` gave it 0 bytes,
+    /// under the limit, and `fs::read` then waited for a writer for ever, on a reader thread the Changes view or the
+    /// reload never heard back from. What is read is judged by the file actually opened: a regular file, or nothing.
+    #[test]
+    fn read_text_refuses_a_fifo_and_never_waits_on_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let pipe = dir.path().join("plan-9c2e.md");
+        fifo::make(&pipe);
+        let path = pipe.clone();
+        assert_eq!(fifo::within(std::time::Duration::from_secs(3), &pipe, move || read_text(&path)), Some(Err(Denied::NotText)));
+        // A regular file still reads, whole.
+        let file = dir.path().join("notes-9c2e.md");
+        fs::write(&file, "# Notes\n").unwrap();
+        assert_eq!(read_text(&file).map(|t| t.text), Ok("# Notes\n".to_string()));
+    }
+
+    /// The small files other processes write are read whole, but never past `max`, never as anything but a regular file
+    /// (a link to one is followed), and never by waiting.
+    #[test]
+    fn read_regular_reads_a_small_regular_file_and_nothing_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config-9c2e");
+        fs::write(&file, "0123456789").unwrap();
+        assert_eq!(read_regular(&file, 10).unwrap(), "0123456789");
+        assert_eq!(read_regular(&file, 9).unwrap_err().kind(), std::io::ErrorKind::FileTooLarge);
+        let link = dir.path().join("link-9c2e");
+        symlink(&file, &link).unwrap();
+        assert_eq!(read_regular(&link, 10).unwrap(), "0123456789", "a link to a regular file is followed");
+        assert_eq!(read_regular(dir.path(), 10).unwrap_err().kind(), std::io::ErrorKind::InvalidInput, "a folder");
+        assert_eq!(read_regular(Path::new("/dev/null"), 10).unwrap_err().kind(), std::io::ErrorKind::InvalidInput, "a device");
+        assert_eq!(read_regular(&dir.path().join("absent"), 10).unwrap_err().kind(), std::io::ErrorKind::NotFound);
+        let pipe = dir.path().join("pipe-9c2e");
+        fifo::make(&pipe);
+        let path = pipe.clone();
+        let read = fifo::within(std::time::Duration::from_secs(3), &pipe, move || read_regular(&path, 10).map_err(|e| e.kind()));
+        assert_eq!(read, Some(Err(std::io::ErrorKind::InvalidInput)), "a FIFO, without waiting");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 // Computes the packet: every source read at once, each with its own deadline, each stamped. Nothing here blocks on
 // the network — every source is a local file, a local socket, or local git.
 
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { DB_FILE } from "@kinas/store/sqlite-readonly";
@@ -40,9 +40,13 @@ export function decisionsFrom(crew: Section<Crew | null>, sessions: Section<Sess
   return rows;
 }
 
+/**
+ * A harness's settings file, a regular file only (a link to one is followed): the folder is the harness's, its agents
+ * write there, and a FIFO or a link to /dev/zero never ends a read — synchronous here, so no deadline could stop it.
+ */
 function readJson(path: string): Record<string, unknown> | null {
   try {
-    return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>) : null;
+    return statSync(path).isFile() ? (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>) : null;
   } catch {
     return null;
   }

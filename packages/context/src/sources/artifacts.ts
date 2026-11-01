@@ -20,17 +20,30 @@ export function isArtifact(rel: string): boolean {
   return base === "AGENTS.md" || rel === "README.md" || TOP_DIRS.some((d) => rel.startsWith(d)) || PREFIXES.test(base);
 }
 
-/** The first ATX heading after any front matter; null when there is none in the first 8 KB. */
+/**
+ * The first ATX heading after any front matter; null when there is none in the first 8 KB. Code fences open and close
+ * as CommonMark has them, as `nestHeadings` reads a convention's: a backtick fence's info string holds no backtick (a
+ * line starting ```code``` is a paragraph), and a fence closes only on the same character, at least as long, with
+ * nothing after it.
+ */
 export function firstHeading(text: string): string | null {
-  let lines = text.split("\n");
+  let lines = text.split(/\r\n?|\n/);
   if (lines[0]?.trim() === "---") {
     const end = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
     if (end > 0) lines = lines.slice(end + 1);
   }
-  let fenced = false;
+  let fence: string | null = null;
   for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-    if (fenced) continue;
+    if (fence !== null) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+      if (close && close[1]![0] === fence[0] && close[1]!.length >= fence.length) fence = null;
+      continue;
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (open && !(open[1]![0] === "`" && open[2]!.includes("`"))) {
+      fence = open[1]!;
+      continue;
+    }
     const m = /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
     if (m?.[1]) return m[1];
   }

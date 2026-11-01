@@ -49,9 +49,10 @@ export function feed(line: Line, data: string): { line: Line; submitted: string 
         i += end ? 2 + end.index + end[0].length : rest.length;
         continue;
       }
-      // CSI: ESC [ params final. A kitty-protocol key (CSI code ; mods u) is read for Enter, ⌫ and ⌃C/⌃U; any other
-      // CSI — arrows, function keys, focus reports — is dropped.
-      const csi = /^\x1b\[([0-9;:?]*)([\x40-\x7e])/.exec(rest);
+      // CSI: ESC [ params intermediates final, as ECMA-48 has them — parameter bytes 0x30–0x3F (`<`, `=`, `>` and `?`
+      // included), intermediates 0x20–0x2F. A kitty-protocol key (CSI code ; mods u) is read for Enter, ⌫ and ⌃C/⌃U;
+      // any other CSI — arrows, function keys, focus reports, an SGR mouse report (CSI < …M), a DA2 reply — is dropped.
+      const csi = /^\x1b\[([\x30-\x3f]*)[\x20-\x2f]*([\x40-\x7e])/.exec(rest);
       if (csi) {
         if (csi[2] === "u") {
           const [code, mods] = csi[1]!.split(";").map((p) => Number(p.split(":")[0]));

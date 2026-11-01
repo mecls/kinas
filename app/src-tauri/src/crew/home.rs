@@ -59,9 +59,10 @@ fn git(home: &Path, args: &[&str]) -> Option<String> {
     ran.ok().then(|| ran.stdout.lines().next().unwrap_or("").trim().to_string()).filter(|l| !l.is_empty())
 }
 
-/// `config/backend`'s first non-empty line: the one file under the home Kinas writes (`kinas crew setup`), read back.
+/// `config/backend`'s first non-empty line: the one file under the home Kinas writes (`kinas crew setup`), read back —
+/// a regular file only, and only so much of it: it is Firstmate's config too, in the home the first mate works in.
 pub(crate) fn backend(home: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(home.join("config/backend")).ok()?;
+    let text = crate::reader::access::read_regular(&home.join("config/backend"), crate::reader::access::SMALL_FILE_BYTES).ok()?;
     text.lines().map(str::trim).find(|l| !l.is_empty()).map(str::to_string)
 }
 
@@ -123,5 +124,18 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("config")).unwrap();
         std::fs::write(dir.path().join("config/backend"), "\n  herdr \nx\n").unwrap();
         assert_eq!(backend(dir.path()).as_deref(), Some("herdr"));
+    }
+
+    /// `config/backend` is Firstmate's own config, and the first mate works in its home. A FIFO there was read as text and
+    /// waited for a writer for ever: Settings → Crew never answered. Not a regular file: no backend, at once.
+    #[test]
+    fn a_backend_that_is_a_fifo_is_none_and_never_waited_on() {
+        use crate::reader::access::fifo;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("config")).unwrap();
+        let pipe = dir.path().join("config/backend");
+        fifo::make(&pipe);
+        let home = dir.path().to_path_buf();
+        assert_eq!(fifo::within(std::time::Duration::from_secs(3), &pipe, move || backend(&home)), Some(None));
     }
 }

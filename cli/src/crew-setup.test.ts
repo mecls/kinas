@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FIRSTMATE_PIN, TOOLS } from "@kinas/commands/crew-tools";
@@ -41,7 +42,7 @@ function world(opts: { shaOf?: (asset: string, pinned: string) => string; signed
   script(
     join(stub, "git"),
     `echo "git $*" >> "$CALLS"
-if [ "$1" = clone ]; then mkdir -p "$4/.git" "$4/bin"; echo stub > "$4/bin/fm-fleet-snapshot.sh"; exit 0; fi
+if [ "$1" = clone ]; then if [ -f "$CALLS.slow-clone" ]; then sleep 1; echo cloned >> "$CALLS.slow-clone"; fi; mkdir -p "$4/.git" "$4/bin"; echo stub > "$4/bin/fm-fleet-snapshot.sh"; exit 0; fi
 if [ "$1" = -C ]; then
   dir=$2; shift 2
   case "$1" in
@@ -262,6 +263,77 @@ describe("kinas crew setup", () => {
     expect(failed.out).toContain(`the checkout of ${FIRSTMATE_PIN.slice(0, 7)} failed: fatal: \uFFFD]52;c;aGk=\uFFFD\uFFFD[8mnot a tree`);
     expect(failed.out).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/);
     // Two whole setups over stub processes: seconds on a loaded Mac.
+  }, 30_000);
+
+  test("config/backend is read and written only as a plain file of the home: never through a link, never a FIFO", async () => {
+    // The home is Firstmate's, and a first mate can leave anything at config/backend. A link there — or a config folder
+    // that is a link — took setup's `herdr` over the file it named, a file of the captain's outside the home, with no
+    // question asked under --yes; and a FIFO there blocked setup at the backend step for good.
+    const atPin = (w: World) => {
+      mkdirSync(join(w.home, ".git"), { recursive: true });
+      writeFileSync(join(w.home, ".git", "STUB_HEAD"), `${FIRSTMATE_PIN}\n`);
+      writeFileSync(join(w.home, ".git", "STUB_BRANCH"), "main\n");
+    };
+    const linked = world();
+    atPin(linked);
+    mkdirSync(join(linked.home, "config"), { recursive: true });
+    const precious = join(linked.user, "precious-9c2e.txt");
+    writeFileSync(precious, "export PATH=/opt/9c2e\n");
+    symlinkSync(precious, join(linked.home, "config", "backend"));
+    const viaFile = await run(linked, { yes: true });
+    expect(readFileSync(precious, "utf8")).toBe("export PATH=/opt/9c2e\n");
+    expect(lstatSync(join(linked.home, "config", "backend")).isSymbolicLink()).toBe(true);
+    expect(viaFile.out).toContain("skipped: config/backend is not a plain file of Firstmate's home — setup leaves it");
+    expect(viaFile.out).not.toContain("export PATH");
+
+    const folder = world();
+    atPin(folder);
+    const elsewhere = join(folder.user, "elsewhere-9c2e");
+    mkdirSync(elsewhere, { recursive: true });
+    writeFileSync(join(elsewhere, "backend"), "tmux\n");
+    symlinkSync(elsewhere, join(folder.home, "config"));
+    const viaFolder = await run(folder, { yes: true });
+    expect(readFileSync(join(elsewhere, "backend"), "utf8")).toBe("tmux\n");
+    expect(viaFolder.out).toContain("skipped: config/backend is not a plain file of Firstmate's home — setup leaves it");
+
+    // A FIFO blocks the read, synchronously: in a child, so the failure is a timeout and not this test process stuck.
+    const fifo = world();
+    atPin(fifo);
+    mkdirSync(join(fifo.home, "config"), { recursive: true });
+    expect(Bun.spawnSync(["mkfifo", join(fifo.home, "config", "backend")]).exitCode).toBe(0);
+    const code = `const { setup } = await import(${JSON.stringify(join(import.meta.dir, "crew-setup.ts"))});
+      let out = "";
+      const io = { write: (t) => void (out += t), readLine: async () => null };
+      const code = await setup({ dryRun: false, yes: true, home: ${JSON.stringify(fifo.home)}, io, env: ${JSON.stringify(fifo.env)}, tmp: ${JSON.stringify(fifo.root)} });
+      process.stdout.write(JSON.stringify({ code, out }));`;
+    const child = Bun.spawnSync([process.execPath, "-e", code], { timeout: 20_000, killSignal: "SIGKILL" });
+    expect(child.exitCode).toBe(0);
+    expect(JSON.parse(child.stdout.toString()).out).toContain("skipped: config/backend is not a plain file of Firstmate's home — setup leaves it");
+    expect(lstatSync(join(fifo.home, "config", "backend")).isFIFO()).toBe(true);
+    // Three whole setups over stub processes: seconds on a loaded Mac.
+  }, 60_000);
+
+  test("Ctrl+C stops the step that is running too: a clone or an install never finishes behind the captain's back", async () => {
+    // Each step runs in a process group of its own, so its limit can kill it whole; but Ctrl+C reaches only the
+    // terminal's foreground group. Setup died and its `git clone` went on, finishing a clone at origin's head that never
+    // reached the pin (and that the next setup reads as moved on), as an `npm install -g` would go on installing.
+    const w = world();
+    writeFileSync(`${w.env.CALLS}.slow-clone`, "");
+    const code = `const { setup } = await import(${JSON.stringify(join(import.meta.dir, "crew-setup.ts"))});
+      const io = { write: () => {}, readLine: async () => null };
+      await setup({ dryRun: false, yes: true, home: ${JSON.stringify(w.home)}, io, env: ${JSON.stringify(w.env)}, tmp: ${JSON.stringify(w.root)} });`;
+    // Its own group, as a terminal's foreground job is: Ctrl+C is SIGINT to that group.
+    const child = spawn(process.execPath, ["-e", code], { detached: true, stdio: "ignore" });
+    const exited = new Promise<void>((done) => (child as unknown as NodeJS.EventEmitter).on("exit", () => done()));
+    const until = Date.now() + 15_000;
+    while (!w.calls().some((c) => c.startsWith("git clone")) && Date.now() < until) await Bun.sleep(50);
+    expect(w.calls().some((c) => c.startsWith("git clone"))).toBe(true);
+    process.kill(-child.pid!, "SIGINT");
+    await exited;
+    // The stub clone sleeps a second before it writes; three is ample for one left running to finish.
+    await Bun.sleep(3_000);
+    expect(readFileSync(`${w.env.CALLS}.slow-clone`, "utf8")).toBe("");
+    expect(existsSync(join(w.home, ".git"))).toBe(false);
   }, 30_000);
 
   test("a clean clone that moved on by itself is reported, not reset", async () => {

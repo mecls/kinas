@@ -58,6 +58,14 @@ fn quote_line(out: &mut Vec<u8>, path: &[u8]) {
     out.extend_from_slice(b"\"\n");
 }
 
+/// `<commit>:<path from the repository's top>`, the object `cat-file` reads.
+fn blob_spec(repo: &Path, commit: &str, file: &Path) -> String {
+    let rel = file.strip_prefix(repo).unwrap_or(file);
+    let mut spec = OsString::from(format!("{commit}:"));
+    spec.push(rel.as_os_str());
+    spec.to_string_lossy().into_owned()
+}
+
 /// A path asked of `check-ignore`, and whether it is a folder (asked with a trailing slash).
 type Asked<'a> = (&'a PathBuf, bool);
 
@@ -311,12 +319,70 @@ impl Git {
     }
 
     /// A file's text at `commit`, as a checkout would write it: filters and line endings applied.
+    #[cfg(test)]
     pub fn blob_text(&self, repo: &Path, commit: &str, file: &Path) -> Result<Vec<u8>, GitError> {
-        let rel = file.strip_prefix(repo).unwrap_or(file);
-        let mut spec = OsString::from(format!("{commit}:"));
-        spec.push(rel.as_os_str());
-        let spec = spec.to_string_lossy().into_owned();
-        self.run(repo, "cat-file", &["--filters", &spec], None)
+        self.run(repo, "cat-file", &["--filters", &blob_spec(repo, commit, file)], None)
+    }
+
+    /// At most the first `max` bytes of a file's text at `commit`, as `blob_text` gives it, and whether there was more:
+    /// what tells a binary from text (rule 5), and what the reader may show (R10), without the rest of a blob that may be
+    /// gigabytes — read whole, a committed video held them all in memory, and one whose stream outlasted `GIT_TIMEOUT`
+    /// failed. Git is stopped once they are in.
+    pub fn blob_head(&self, repo: &Path, commit: &str, file: &Path, max: usize) -> Result<(Vec<u8>, bool), GitError> {
+        let mut child = Command::new(&self.exe)
+            .args(argv(repo, "cat-file", &["--filters", &blob_spec(repo, commit, file)]))
+            .envs(ENV)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| GitError { exit: None })?;
+        let stdout = child.stdout.take();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut head = Vec::new();
+            if let Some(out) = stdout {
+                let _ = out.take(max as u64 + 1).read_to_end(&mut head);
+            }
+            let _ = tx.send(head);
+        });
+        let deadline = Instant::now() + GIT_TIMEOUT;
+        let stop = |child: &mut std::process::Child| {
+            let _ = child.kill();
+            let _ = child.wait();
+        };
+        let Ok(mut head) = rx.recv_timeout(GIT_TIMEOUT) else {
+            stop(&mut child);
+            return Err(GitError { exit: None });
+        };
+        if head.len() > max {
+            // There is more, and it is never read.
+            stop(&mut child);
+            head.truncate(max);
+            return Ok((head, true));
+        }
+        // All of it came, so git has closed its output: its exit says whether it was a blob at all.
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(5)),
+                _ => {
+                    stop(&mut child);
+                    return Err(GitError { exit: None });
+                }
+            }
+        };
+        if status.success() {
+            Ok((head, false))
+        } else {
+            Err(GitError { exit: status.code() })
+        }
+    }
+
+    /// A git at `exe`: a test's stand-in.
+    #[cfg(test)]
+    pub(crate) fn at(exe: PathBuf) -> Git {
+        Git { exe }
     }
 
     /// One call: the fixed environment, stdin closed (or fed, for `hash_objects`), both outputs drained on threads so a

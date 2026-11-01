@@ -89,3 +89,18 @@ test("the newest Codex reading wins, not the newest-named session: one still run
   }
   expect((await codexQuotas(resumed, NOW)).map((q) => q.left_pct)).toEqual([30]);
 });
+
+test("a Codex log that is not a regular file is never opened: the reading still comes, and the packet does not wait", () => {
+  // Codex's session logs are an agent's own folder. A FIFO there named like a rollout was the newest log (its mtime is
+  // when it was made), and its read never returned: no deadline covers the Codex line, so `kinas context`, every
+  // refresh and every session hook waited for good. Run in a child, so the failure is a timeout and not this process stuck.
+  const home = join(base, "fifo");
+  write(join(home, "sessions/2026/09/14/rollout-2026-09-14T10-00-00-a-9c2e.jsonl"), `${line(NOW - 60_000, { primary: { used_percent: 25, window_minutes: 300 } })}\n`);
+  expect(Bun.spawnSync(["mkfifo", join(home, "sessions/2026/09/14/rollout-2026-09-14T11-00-00-fifo-9c2e.jsonl")]).exitCode).toBe(0);
+  const code = `const { codexQuotas } = await import(${JSON.stringify(join(import.meta.dir, "quotas.ts"))});
+    const lines = await codexQuotas(${JSON.stringify(home)}, ${NOW});
+    process.stdout.write(JSON.stringify(lines.map((q) => [q.provider, q.left_pct])));`;
+  const child = Bun.spawnSync([process.execPath, "-e", code], { timeout: 15_000, killSignal: "SIGKILL" });
+  expect(child.exitCode).toBe(0);
+  expect(JSON.parse(child.stdout.toString())).toEqual([["Codex", 75]]);
+}, 30_000);

@@ -8,9 +8,9 @@
 - Gate 2 · Architecture: APPROVED 2026-11-15 — `architecture.md` (private, main checkout,
   `tasks/crew-firstmate-current/architecture.md`), approved as written; read at `6923c35`, the review branch's tip, and
   re-checked against `main` once it lands; one PRD clarification marked in `prd.md` (AC-5: no URL in the log)
-- Gate 3 · Program design: in progress — `build-spec.md` §11 written 2026-11-15 (private, main checkout,
-  `tasks/crew-firstmate-current/build-spec.md`); §0–§10 and §13–§18 drafted with it; awaiting approval
-- Gate 4 · Slice plan: pending
+- Gate 3 · Program design: APPROVED 2026-11-15 — `build-spec.md` §11 (private, main checkout), approved as written,
+  with §11.5's eight least-confident decisions standing as written
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12
 
 ## Slices
 - [ ] Slice 0 · the probe: Firstmate at `427056c` in a throwaway Herdr session on Herdr 0.9.0, its snapshot, capacity

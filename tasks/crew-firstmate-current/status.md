@@ -40,11 +40,16 @@
   scratch clone of Firstmate at `427056c` lived in that session's scratchpad only; re-clone to read it, and run none of
   its scripts outside a throwaway probe with `HERDR_SESSION` set.
 - **Missing on this Mac (2026-11-15):** Build 3's private documents (`tasks/first-mate/architecture.md`,
-  `build-spec.md`, `tasks.md`, `review-2026-09-23.md`, `plan-2026-09-23.md`, `build_mockups.py`) and
-  `scripts/private-names` are in neither checkout nor anywhere Spotlight finds. AC-10's private-names check cannot run
-  until the captain restores the list. The new documents use only made-up folders (`shop`, `harbor-api`).
+  `build-spec.md`, `tasks.md`, `review-2026-09-23.md`, `plan-2026-09-23.md`, `build_mockups.py`) are in neither
+  checkout nor anywhere Spotlight finds. `scripts/private-names` was restored in the main checkout at 18:46 the same
+  day (by the interface polish's session); this branch's diff and messages, and the review branch's, have 0 hits. The new documents use only made-up folders (`shop`, `harbor-api`).
 - This Mac has no Kinas install, no data directory and no Firstmate home (2026-11-15); Herdr 0.9.0, Claude Code
   2.1.325, every crew tool at Kinas's pinned version.
 - Worktree `.claude/worktrees/crew-firstmate-current`, branch `feat/crew-firstmate-current`, from `origin/main` at
   `0f63948`, made with `--no-track`. It holds only the gate documents until the review branch lands; then it is
   rebased onto `main` before slice 0. Nothing is pushed without the captain's word.
+- **Another session is building the interface polish** (`.claude/worktrees/interface-polish`, branch
+  `feat/interface-polish`, Gates 1–4 approved 2026-11-15, twelve slices). Its slice 0 already wrote **DESIGN.md 1.11**,
+  so this feature's DESIGN.md amendment becomes **1.12** if that lands first; its slices 5 and 8 touch the dark theme,
+  Home and Usage, and its mockup `crew-and-files.html` the crew. Rebase onto whichever lands first and re-read the
+  crew surfaces then. Never run the e2e suite while its session runs one or a cargo build.

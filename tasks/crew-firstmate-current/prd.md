@@ -229,7 +229,10 @@ first mate's privacy check (its AC-10), extended to the new fields.
   unchanged throughout.
 - **AC-4 · Branch.** The detail shows `branch fm/…`. The card does not, and neither does the log nor the status JSON.
 - **AC-5 · A held question's PR.** A held task with a contribution row: the Inbox item shows its question's three
-  lines and `PR #12`. Open the PR logs the open under `KINAS_E2E_NO_OPEN` with the URL. Approve still copies exactly
+  lines and `PR #12`. Open the PR is refused for an `http://` URL, and otherwise logs, under `KINAS_E2E_NO_OPEN`, that
+  a link was not opened, without the URL (rule 19); a Rust test proves the command opens exactly the stored URL of the
+  task it is given. *(Clarified at Gate 2, 2026-11-15: the draft had the log carry the URL, which rule 19
+  forbids.)* Approve still copies exactly
   `On <id>: Approved — go ahead.`, and the count is the same with and without the contribution row. A row for a task
   that is not held adds nothing. An `http://` URL shows no Open the PR.
 - **AC-6 · Free lanes.** No `config/lane-capacity`: the capacity script is not run (the stub records its calls) and

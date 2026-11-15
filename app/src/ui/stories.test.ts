@@ -29,6 +29,11 @@ const FILE: Record<string, string> = {
   Switch: "Field",
   "Tab strip": "TabStrip",
   "Title bar": "TitleBar",
+  "Status bar": "StatusBar",
+  "Usage popover": "UsagePopover",
+  "Palette row": "PaletteRow",
+  "Line counts": "LineCounts",
+  "Settings row": "SettingsRow",
 };
 
 /** Not in app/src/ui/ yet, each with its reason. */
@@ -37,6 +42,12 @@ const NOT_YET: Record<string, string> = {
   Palette: "the palette's own (app/src/palette/), on the tokens since slice 6 — not a library piece",
   "Tab bar": "the phone — not built in this pass (DESIGN.md §3.3)",
   "Launch form": "the phone and the palette's launch form — Build 3",
+  // 1.11, the interface polish (tasks/interface-polish): each leaves this list in the slice that builds it.
+  "Status bar": "the interface polish, slice 1 (static) and 6",
+  "Usage popover": "the interface polish, slice 6",
+  "Palette row": "the interface polish, slice 2",
+  "Line counts": "the interface polish, slice 10",
+  "Settings row": "the interface polish, slice 9",
 };
 
 const stories = new Map(STORIES.map((s) => [s.component, s.states.map((st) => st.name)]));

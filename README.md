@@ -159,6 +159,16 @@ repository to the first mate in one sentence. Amended 2026-09-29 (done work clea
 stays on the Crew page and in Home's night while they show it, and is gone the next time that page opens or reloads;
 one whose PR is still open stays until the PR is merged or closed. The mirror keeps every row, and `kinas crew status`
 lists them all.
+Amended 2026-11-15 (the interface polish, `tasks/interface-polish/prd.md`): **⌘K finds everything** — files and folders
+under the projects folder (by name, as `kinas open` finds them), the reader's open tabs, client folders, crew tasks,
+inbox items, Herdr's workspaces, every setting and every command — in groups, each row with its folder and its chord;
+before anything is typed it lists the last eight things you opened anywhere in Kinas. The sidebar's **Search** row
+opens it too. A **status bar** along the window's foot keeps the three usage readings, the crew's counts and the VPS in
+view on every page; a click on the readings shows every provider's windows and resets. In the sidebar each client
+folder says what the crew is doing in it — needs you, failed or working — with up to three tasks in flight beneath
+it, and the VPS line has moved to the status bar. **Settings** has a section list and a search, one row per setting.
+A changed file in a tree shows how many lines it gained and lost. The file index lives in memory, walks only the
+projects folder and is never written anywhere; no search is logged. No key was added.
 
 ## The crew
 
@@ -192,6 +202,9 @@ Amended 2026-09-22 (design system): the same section chooses the **accent** — 
 primary buttons and the selected card's edge — from six swatches or any colour. A shade whose text would fall under
 4.5:1 in either theme is not saved; the field offers the nearest one that passes. The fonts (Inter, JetBrains Mono,
 Bricolage Grotesque for the wordmark — all OFL) ship inside the app; nothing is fetched.
+
+Amended 2026-11-15 (the interface polish): the dark ground is a neutral gray, with no blue in its surfaces or text; the
+light ground is unchanged.
 
 The `kinas` CLI reads on both grounds without being told which it is on: royal blue and crimson are exact,
 and its text uses the terminal's own foreground, bright black and yellow — which in the Kinas pane are the

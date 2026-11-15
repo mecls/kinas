@@ -23,6 +23,12 @@ Herdr is the session runtime in the Work page's terminal (Herdr 0.9.0 today). Th
   the crew thread's last `api snapshot` view, and only for a task whose endpoint is in the session Kinas attached;
   it asks Herdr nothing new.
 
+- Amended 2026-11-15 (the interface polish, `tasks/interface-polish/prd.md` rule 13): the ⌘K palette lists the
+  workspaces of the crew thread's live view — the same `api snapshot`, under the same limits (reused when younger than
+  5 s, asked at most every 2 s) — and Enter on one runs `workspace focus <id>`, as Open in the terminal does. It asks
+  Herdr nothing new and types nothing into any pane. With no attached session (a plain-shell pane) the palette says
+  "Herdr is not running".
+
 ## What it can do
 
 Split, create, focus, run a command in a pane — and, through `pane send-text` / `send-key`, type into one. Typed text is the dangerous half: when Claude Code or Pi has the pane, it arrives as a prompt.

@@ -596,6 +596,17 @@ time the crew is used for real (2026-09-25, slice 9). Each is also an `outstandi
 - [ ] The morning after a night of crew work, read from Home and the menu bar
 - [ ] Whether the order log's redaction is enough for what is actually pasted into worker panes
 
+## The interface polish (2026-11-15, `tasks/interface-polish/prd.md`)
+
+- [ ] ⌘K from the Work pane, type part of a file name you know: it is in Files within a blink, Enter opens it in the
+      reader, Esc or a click gives the terminal its keys back.
+- [ ] ⌘K with nothing typed: Recent lists what you last opened, across a relaunch.
+- [ ] The status bar on every page; a click on the readings opens the popover; its resets agree with the Usage page.
+- [ ] A client folder with crew work says needs you, failed or working, and lists its tasks in flight.
+- [ ] Settings: the section list scrolls the page; typing "key" leaves only the key rows.
+- [ ] Save a file in a watched tree: its row shows "+N −M" before its mark.
+- [ ] Dark theme by eye against `tasks/interface-polish/mockups/*.html` (their "Dark, new" switch); light unchanged.
+
 ## Throughput, page switch, renderer
 
 - [ ] `yes | head -n 2000000` completes and ⌘K still opens the palette while it runs —

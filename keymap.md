@@ -66,6 +66,16 @@ Settings' list; the defaults are the eight above, and ⌘5 is no longer the term
 | Enter | Run the selected command |
 | Esc | Close the palette; focus returns to the element that had it, the terminal included |
 
+Amended 2026-11-15 (the interface polish, `tasks/interface-polish/prd.md` rules 2, 9, 12–19, 23–25): **no chord is added
+and none changes meaning.** The palette keeps exactly the four keys above; what it searches grows (files, folders,
+tasks, inbox items, workspaces, settings and commands), and typing now filters all of them, not command titles only.
+Its rows and the nav rows show the chord bound now as a `Kbd` — never a written-in default. The new controls are
+click-only and reachable by Tab, in this order: the sidebar's **Search** row (after the wordmark, before Home; it
+opens the palette as ⌘K does), and, after the page and the reader, the **status bar's** readings, crew counts and
+VPS line. The readings open the **Usage popover**, which takes the keys only while open, as a Menu does: Esc closes it
+and gives focus back to the readings. Settings' search field is the first Tab stop of the Settings page. None of them
+takes a key from the terminal pane, which keeps every key without ⌘.
+
 ## Terminal pane (Work page), while it has focus
 
 **Every keystroke without ⌘ goes to the PTY**, exactly as xterm.js encodes it, with one exception: ⌫ over a

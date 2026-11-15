@@ -16,7 +16,8 @@
 ## Slices (build-spec.md §12, approved 2026-11-15)
 - [ ] Slice 0 · *(waiting, 2026-11-15: `feat/review-session-code-bugs` is not on `origin/main` and has no remote
   branch; verified green at `6923c35` the same day — check green, the full e2e alone 40/40 specs, 221 cases — and
-  pushed on the captain's word as PR #48; slice 0 starts once it is merged)* ground, docs first, and the probe: wait for the review branch on `main`, rebase, baseline; Firstmate
+  pushed on the captain's word as PR #48, merged by fast-forward and deployed to `/Applications` at 21:42Z —
+  `origin/main` is `6923c35`; slice 0 may start)* ground, docs first, and the probe: wait for the review branch on `main`, rebase, baseline; Firstmate
   `427056c` in a throwaway Herdr session (AC-1), stop if it fails; ADR 0020, DESIGN.md 1.11, docs/external, README
 - [ ] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line)
 - [ ] Slice 2 · in review (the word in Rust, the CLI and the fixture; the badge; Overnight; the status JSON)
@@ -43,7 +44,7 @@
   `build-spec.md`, `tasks.md`, `review-2026-09-23.md`, `plan-2026-09-23.md`, `build_mockups.py`) are in neither
   checkout nor anywhere Spotlight finds. `scripts/private-names` was restored in the main checkout at 18:46 the same
   day (by the interface polish's session); this branch's diff and messages, and the review branch's, have 0 hits. The new documents use only made-up folders (`shop`, `harbor-api`).
-- This Mac has no Kinas install, no data directory and no Firstmate home (2026-11-15); Herdr 0.9.0, Claude Code
+- This Mac had no Kinas install until 2026-11-15 21:47, when `6923c35` was installed (schema 6, no Firstmate home yet); Herdr 0.9.0, Claude Code
   2.1.325, every crew tool at Kinas's pinned version.
 - Worktree `.claude/worktrees/crew-firstmate-current`, branch `feat/crew-firstmate-current`, from `origin/main` at
   `0f63948`, made with `--no-track`. It holds only the gate documents until the review branch lands; then it is

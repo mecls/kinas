@@ -1,0 +1,36 @@
+# Status: Firstmate, current — the pin moves to Firstmate's main and the crew pages show what it now publishes
+
+- Gate 1 · Product: in progress — `prd.md` written 2026-11-15 from the captain's five answers (§7); awaiting approval,
+  with its two open questions (§7: the word **in review**; free lanes in two places)
+  - Mockups: written 2026-11-15, awaiting approval — `fleet-board`, `task-detail`, `inbox`, `settings-crew`, generated
+    by `build_mockups.py` (private, beside this file; regenerate rather than edit the HTML)
+- Gate 2 · Architecture: pending — to be read from the code at `feat/review-session-code-bugs`'s tip once it lands
+- Gate 3 · Program design: pending
+- Gate 4 · Slice plan: pending
+
+## Slices
+- [ ] Slice 0 · the probe: Firstmate at `427056c` in a throwaway Herdr session on Herdr 0.9.0, its snapshot, capacity
+  and ledger read by Kinas's parser (AC-1)
+
+## Notes for a fresh session
+
+- The captain's ask (2026-11-15): "FirstMate has new updates and also Claude now allows us to directly use FirstMate
+  and third-party applications. Verify, then, if possible, simply adopt FirstMate entirely and we keep Claude as the
+  main coding agent for Kinas." Their five answers are in `prd.md` §7: move the pin and use the new features; accept
+  the snapshot's `local-only` latch with a new ADR superseding 0019; show all four new facts; the captain turns
+  Firstmate's options on in the first mate's chat; `feat/review-session-code-bugs` lands first.
+- **A correction the captain has not yet seen approved:** "PRs that need you" turned out, in Firstmate's contract, to
+  be a held task's PR (`contributions.captain[]` rows exist only for held tasks), so it is `prd.md` rule 8 — a PR line
+  and Open the PR on the held item — not a new Inbox group or count. Raised at the Gate 1 summary.
+- The verification and the second pass are in `tasks/first-mate/review-2026-11-15.md` (private, main checkout). A
+  scratch clone of Firstmate at `427056c` lived in that session's scratchpad only; re-clone to read it, and run none of
+  its scripts outside a throwaway probe with `HERDR_SESSION` set.
+- **Missing on this Mac (2026-11-15):** Build 3's private documents (`tasks/first-mate/architecture.md`,
+  `build-spec.md`, `tasks.md`, `review-2026-09-23.md`, `plan-2026-09-23.md`, `build_mockups.py`) and
+  `scripts/private-names` are in neither checkout nor anywhere Spotlight finds. AC-10's private-names check cannot run
+  until the captain restores the list. The new documents use only made-up folders (`shop`, `harbor-api`).
+- This Mac has no Kinas install, no data directory and no Firstmate home (2026-11-15); Herdr 0.9.0, Claude Code
+  2.1.325, every crew tool at Kinas's pinned version.
+- Worktree `.claude/worktrees/crew-firstmate-current`, branch `feat/crew-firstmate-current`, from `origin/main` at
+  `0f63948`, made with `--no-track`. It holds only the gate documents until the review branch lands; then it is
+  rebased onto `main` before slice 0. Nothing is pushed without the captain's word.

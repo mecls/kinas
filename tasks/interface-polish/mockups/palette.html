@@ -1,0 +1,615 @@
+<!doctype html>
+<!--
+  A Gate 1 mockup: one plain HTML file per screen, throwaway by design — no framework, no build
+  step, no script tag. Style it with DESIGN.md's semantic tokens only (the <style> below opens with every
+  token of app/src/styles/tokens.css, written by `bun scripts/mockup-template.ts` — re-run it when a token
+  changes; do not add a raw hex, a raw px size or a raw spacing value).
+  Review it inside Kinas with `kinas open tasks/<feature-slug>/mockups/<screen>.html`: the reader
+  renders it in a sandbox that allows inline styles and nothing external, so keep no link tag, no
+  web font and no script tag — the brand fonts fall back to the system stack there. Iterate until
+  the captain says "yes, that"; where DESIGN.md and this file disagree, DESIGN.md wins and the
+  mockup is corrected before Gate 1 is approved. Nothing about a screen is decided in a component
+  before it was decided here. DESIGN.md's `--text-md 13/20` is `--fs-md` / `--lh-md` below.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interface polish · The palette</title>
+<style>
+/* ===== Tokens, generated from app/src/styles/tokens.css by scripts/mockup-template.ts — do not edit ===== */
+:root{
+  --brand-accent: #00549e;
+  --brand-font-ui: "Inter";
+  --brand-font-mono: "JetBrains Mono";
+  --brand-font-display: "Bricolage Grotesque";
+  --bg: #f4f2ec;
+  --surface: #ffffff;
+  --surface-2: #edeae2;
+  --line: #e3dfd5;
+  --line-strong: #cfc9bc;
+  --ink: #1b1f27;
+  --ink-2: #5b6170;
+  --ink-3: #8a8f9b;
+  --accent: var(--brand-accent);
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --meter: #5b6170;
+  --meter-track: #e9e5dc;
+  --ok: #2e8b57;
+  --warn: #b87a12;
+  --danger: #c4262e;
+  --stale: #7c818d;
+  --ok-soft: color-mix(in oklab, var(--ok) 12%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, var(--surface));
+  --cat-1: #3e7c8a;
+  --cat-2: #7a62b0;
+  --cat-3: #8a6a4e;
+  --cat-4: #6b6f2a;
+  --cat-5: #a8527a;
+  --cat-6: #4e5f8c;
+  --shadow-float: 0 8px 24px rgb(20 23 30 / 0.12), 0 1px 3px rgb(20 23 30 / 0.08);
+  --scrim: rgb(10 20 32 / 0.3);
+  --term-bg: #f4f2ec;
+  --term-fg: #0a1420;
+  --term-selection: #ccddec;
+  --ansi-black: #e3dfd5;
+  --ansi-red: #a61b23;
+  --ansi-green: #1f6b47;
+  --ansi-yellow: #855c00;
+  --ansi-blue: #1d5f9e;
+  --ansi-magenta: #8a2a80;
+  --ansi-cyan: #0f6674;
+  --ansi-white: #3a4553;
+  --ansi-bright-black: #5b6170;
+  --ansi-bright-red: #c4262e;
+  --ansi-bright-green: #1d7a4f;
+  --ansi-bright-yellow: #6f4e00;
+  --ansi-bright-blue: #00549e;
+  --ansi-bright-magenta: #7b2f73;
+  --ansi-bright-cyan: #0b5561;
+  --ansi-bright-white: #0a1420;
+  --font-ui: var(--brand-font-ui), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: var(--brand-font-mono), "SF Mono", ui-monospace, Menlo, monospace;
+  --font-display: var(--brand-font-display), var(--font-ui);
+  --fs-xs: 11px;
+  --lh-xs: 16px;
+  --fs-sm: 12px;
+  --lh-sm: 18px;
+  --fs-md: 13px;
+  --lh-md: 20px;
+  --fs-lg: 15px;
+  --lh-lg: 22px;
+  --fs-xl: 20px;
+  --lh-xl: 28px;
+  --fs-num: 28px;
+  --lh-num: 32px;
+  --m-fs-sm: 13px;
+  --m-lh-sm: 18px;
+  --m-fs-body: 15px;
+  --m-lh-body: 22px;
+  --m-fs-title: 20px;
+  --m-lh-title: 26px;
+  --m-fs-large: 28px;
+  --m-lh-large: 34px;
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-1h: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --sidebar-w: 220px;
+  --panel-w: 360px;
+  --panel-w-min: 320px;
+  --pane-min: 280px;
+  --chrome-h: 32px;
+  --strip-h: 96px;
+  --page-max: 1120px;
+  --row-h: 36px;
+  --row-h-progress: 56px;
+  --hit: 28px;
+  --hit-touch: 44px;
+  --tabbar-h: 49px;
+  --focus-w: 2px;
+  --icon: 16px;
+  --icon-sm: 14px;
+  --dot: 7px;
+  --dot-ring: 1.75px;
+  --chip: 10px;
+  --bar-h: 4px;
+  --bar-h-inline: 2px;
+  --dur-fast: 150ms;
+  --dur-slow: 200ms;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]){
+    --bg: #14171e;
+    --surface: #1b1f27;
+    --surface-2: #232833;
+    --line: #2b3140;
+    --line-strong: #3a4152;
+    --ink: #edeef2;
+    --ink-2: #a1a7b4;
+    --ink-3: #6e7482;
+    --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+    --accent-ink: #0e1420;
+    --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --meter: #a1a7b4;
+    --meter-track: #2b3140;
+    --ok: #4fb37a;
+    --warn: #d9a03a;
+    --danger: #e5575e;
+    --stale: #7c818d;
+    --ok-soft: color-mix(in oklab, var(--ok) 18%, var(--surface));
+    --danger-soft: color-mix(in oklab, var(--danger) 18%, var(--surface));
+    --cat-1: #5fa3b2;
+    --cat-2: #9d88d6;
+    --cat-3: #b08e70;
+    --cat-4: #a3a85a;
+    --cat-5: #cf7aa0;
+    --cat-6: #7688b8;
+    --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --scrim: rgb(5 6 8 / 0.55);
+    --term-bg: #10192b;
+    --term-fg: #e7eef7;
+    --term-selection: #18406b;
+    --ansi-black: #2b3140;
+    --ansi-red: #e5575e;
+    --ansi-green: #4fb286;
+    --ansi-yellow: #dfae3c;
+    --ansi-blue: #3d8fd9;
+    --ansi-magenta: #c27ab8;
+    --ansi-cyan: #4ab3c2;
+    --ansi-white: #c9c6bf;
+    --ansi-bright-black: #a1a7b4;
+    --ansi-bright-red: #f06a70;
+    --ansi-bright-green: #7fd3a8;
+    --ansi-bright-yellow: #f0c96a;
+    --ansi-bright-blue: #72b0ea;
+    --ansi-bright-magenta: #dca2d4;
+    --ansi-bright-cyan: #7fd0db;
+    --ansi-bright-white: #e7eef7;
+    color-scheme:dark;
+  }
+}
+/* Set data-theme="dark" on <html> to check the other theme. */
+:root[data-theme="dark"]{
+  --bg: #14171e;
+  --surface: #1b1f27;
+  --surface-2: #232833;
+  --line: #2b3140;
+  --line-strong: #3a4152;
+  --ink: #edeef2;
+  --ink-2: #a1a7b4;
+  --ink-3: #6e7482;
+  --accent: color-mix(in oklab, var(--brand-accent), white 32%);
+  --accent-ink: #0e1420;
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter: #a1a7b4;
+  --meter-track: #2b3140;
+  --ok: #4fb37a;
+  --warn: #d9a03a;
+  --danger: #e5575e;
+  --stale: #7c818d;
+  --ok-soft: color-mix(in oklab, var(--ok) 18%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 18%, var(--surface));
+  --cat-1: #5fa3b2;
+  --cat-2: #9d88d6;
+  --cat-3: #b08e70;
+  --cat-4: #a3a85a;
+  --cat-5: #cf7aa0;
+  --cat-6: #7688b8;
+  --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --scrim: rgb(5 6 8 / 0.55);
+  --term-bg: #10192b;
+  --term-fg: #e7eef7;
+  --term-selection: #18406b;
+  --ansi-black: #2b3140;
+  --ansi-red: #e5575e;
+  --ansi-green: #4fb286;
+  --ansi-yellow: #dfae3c;
+  --ansi-blue: #3d8fd9;
+  --ansi-magenta: #c27ab8;
+  --ansi-cyan: #4ab3c2;
+  --ansi-white: #c9c6bf;
+  --ansi-bright-black: #a1a7b4;
+  --ansi-bright-red: #f06a70;
+  --ansi-bright-green: #7fd3a8;
+  --ansi-bright-yellow: #f0c96a;
+  --ansi-bright-blue: #72b0ea;
+  --ansi-bright-magenta: #dca2d4;
+  --ansi-bright-cyan: #7fd0db;
+  --ansi-bright-white: #e7eef7;
+  color-scheme:dark;
+}
+/* ===== End of the generated tokens ===== */
+
+/* ===== Base ===== */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 var(--fs-md)/var(--lh-md) var(--font-ui);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.ink2,.unit{color:var(--ink-2)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+/* ===== Proposed for DESIGN.md 1.11 (interface polish): new tokens, and the mockup's theme switch ===== */
+/* The sandbox runs no script, so the switch is three radios read with :has(). "Light" restates today's light
+   values unchanged (rule 5); "Dark, new" is rule 6; "Dark, today" is today's dark, for comparison. */
+:root{
+  --tracking-caps: 0.06em;   /* group labels and table headers only (rule 8) */
+  --keycap: 18px;            /* a Keycap's height and least width */
+  --ok-ink: #1e7048;         /* "+N" in a line count (rule 37) */
+  --danger-ink: #b0222a;     /* "−N" in a line count (rule 37) */
+}
+:root:has(#t-light:checked){
+  --bg:#f4f2ec; --surface:#ffffff; --surface-2:#edeae2; --line:#e3dfd5; --line-strong:#cfc9bc;
+  --ink:#1b1f27; --ink-2:#5b6170; --ink-3:#8a8f9b;
+  --accent:var(--brand-accent); --accent-ink:#ffffff; --accent-soft:color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --meter:#5b6170; --meter-track:#e9e5dc;
+  --ok:#2e8b57; --warn:#b87a12; --danger:#c4262e; --stale:#7c818d;
+  --ok-soft:color-mix(in oklab, var(--ok) 12%, var(--surface)); --danger-soft:color-mix(in oklab, var(--danger) 12%, var(--surface));
+  --cat-1:#3e7c8a; --cat-2:#7a62b0; --cat-3:#8a6a4e; --cat-4:#6b6f2a; --cat-5:#a8527a; --cat-6:#4e5f8c;
+  --shadow-float:0 8px 24px rgb(20 23 30 / 0.12), 0 1px 3px rgb(20 23 30 / 0.08); --scrim:rgb(10 20 32 / 0.3);
+  --term-bg:#f4f2ec; --term-fg:#0a1420;
+  --ok-ink:#1e7048; --danger-ink:#b0222a;
+  color-scheme:light;
+}
+:root:has(#t-dark:checked){
+  --bg:#0f0f0f; --surface:#171717; --surface-2:#212121; --line:#272727; --line-strong:#363636;
+  --ink:#ededed; --ink-2:#a3a3a3; --ink-3:#6e6e6e;
+  --accent:color-mix(in oklab, var(--brand-accent), white 32%); --accent-ink:#0e1420; --accent-soft:color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter:#a3a3a3; --meter-track:#272727;
+  --ok:#4fb37a; --warn:#d9a03a; --danger:#e5575e; --stale:#7c818d;
+  --ok-soft:color-mix(in oklab, var(--ok) 18%, var(--surface)); --danger-soft:color-mix(in oklab, var(--danger) 18%, var(--surface));
+  --cat-1:#5fa3b2; --cat-2:#9d88d6; --cat-3:#b08e70; --cat-4:#a3a85a; --cat-5:#cf7aa0; --cat-6:#7688b8;
+  --shadow-float:0 8px 24px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4); --scrim:rgb(0 0 0 / 0.6);
+  --term-bg:#0f0f0f; --term-fg:#ededed;
+  --ok-ink:var(--ok); --danger-ink:var(--danger);
+  color-scheme:dark;
+}
+:root:has(#t-old:checked){
+  --bg:#14171e; --surface:#1b1f27; --surface-2:#232833; --line:#2b3140; --line-strong:#3a4152;
+  --ink:#edeef2; --ink-2:#a1a7b4; --ink-3:#6e7482;
+  --accent:color-mix(in oklab, var(--brand-accent), white 32%); --accent-ink:#0e1420; --accent-soft:color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --meter:#a1a7b4; --meter-track:#2b3140;
+  --ok:#4fb37a; --warn:#d9a03a; --danger:#e5575e; --stale:#7c818d;
+  --ok-soft:color-mix(in oklab, var(--ok) 18%, var(--surface)); --danger-soft:color-mix(in oklab, var(--danger) 18%, var(--surface));
+  --cat-1:#5fa3b2; --cat-2:#9d88d6; --cat-3:#b08e70; --cat-4:#a3a85a; --cat-5:#cf7aa0; --cat-6:#7688b8;
+  --shadow-float:0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3); --scrim:rgb(5 6 8 / 0.55);
+  --term-bg:#10192b; --term-fg:#e7eef7;
+  --ok-ink:var(--ok); --danger-ink:var(--danger);
+  color-scheme:dark;
+}
+
+/* ===== The mockup's own frame (not part of the design) ===== */
+body{padding:var(--space-4)}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-4);margin:0 0 var(--space-3);font-size:var(--fs-sm);line-height:var(--lh-sm);color:var(--ink-2)}
+.controls b{color:var(--ink);font-weight:600}
+.controls label{display:inline-flex;align-items:center;gap:var(--space-1);cursor:pointer}
+.notes{max-width:var(--page-max);margin:var(--space-4) 0 0;padding-left:var(--space-5);color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm)}
+.notes li{margin-bottom:var(--space-1)}
+.notes b{color:var(--ink);font-weight:600}
+
+/* ===== The window ===== */
+.win{position:relative;min-width:1080px;height:820px;display:grid;grid-template-rows:var(--chrome-h) minmax(0,1fr) var(--hit);
+  border:1px solid var(--line-strong);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg);box-shadow:var(--shadow-float)}
+.titlebar{display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);border-bottom:1px solid var(--line);color:var(--ink-2)}
+.lights{display:flex;gap:var(--space-2);margin-right:var(--space-5)}
+.lights i{width:var(--space-3);height:var(--space-3);border-radius:var(--radius-pill);background:var(--line-strong)}
+.tb-ico{width:var(--icon);height:var(--icon);display:inline-grid;place-items:center}
+.cols{display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);min-height:0}
+.cols.with-panel{grid-template-columns:var(--sidebar-w) minmax(0,1fr) var(--panel-w)}
+svg.i{width:var(--icon);height:var(--icon);flex:none;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+svg.i.sm{width:var(--icon-sm);height:var(--icon-sm)}
+
+/* ===== Sidebar ===== */
+.sidebar{display:flex;flex-direction:column;min-height:0;padding:var(--space-3) var(--space-2) var(--space-2);border-right:1px solid var(--line);overflow:hidden}
+.wordmark{padding:0 var(--space-2) var(--space-3);font:600 var(--fs-xl)/var(--lh-xl) var(--font-display);letter-spacing:-0.01em}
+.search{display:flex;align-items:center;gap:var(--space-2);height:var(--hit);margin:0 0 var(--space-2);padding:0 var(--space-1h) 0 var(--space-2);
+  border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.search .kc{margin-left:auto}
+.nav{display:flex;flex-direction:column;gap:var(--space-0)}
+.row{display:flex;align-items:center;gap:var(--space-2);min-height:var(--hit);padding:0 var(--space-2);border-radius:var(--radius-sm);color:var(--ink);white-space:nowrap}
+.row:hover,.row.hover{background:var(--surface-2)}
+.row[aria-current]{background:var(--accent-soft)}
+.row .ico{color:var(--ink-2);display:inline-grid}
+.row .end{margin-left:auto;display:inline-flex;align-items:center;gap:var(--space-1h);color:var(--ink-2);font-size:var(--fs-sm)}
+.nav .row .kc{opacity:0}
+.nav .row:hover .kc,.nav .row.hover .kc,.nav .row:focus-visible .kc{opacity:1}
+.count{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:var(--fs-sm)}
+.glabel{margin:0;padding:var(--space-5) var(--space-2) var(--space-1h);font-size:var(--fs-xs);line-height:var(--lh-xs);font-weight:600;
+  letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--ink-2)}
+.folder .name{font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.task{display:flex;align-items:center;gap:var(--space-2);min-height:calc(var(--hit) - var(--space-1));padding:0 var(--space-2) 0 calc(var(--space-2) + var(--chip) + var(--space-2));
+  border-radius:var(--radius-sm);font-size:var(--fs-sm);line-height:var(--lh-sm);color:var(--ink-2);white-space:nowrap}
+.task:hover{background:var(--surface-2)}
+.task .t{overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.task .age{margin-left:auto;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.task.more{color:var(--ink-2)}
+.sb-scroll{flex:1;min-height:0;overflow:auto}
+.sb-foot{border-top:1px solid var(--line);padding-top:var(--space-2);margin-top:var(--space-2)}
+
+/* ===== Small parts ===== */
+.kc{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-0);min-width:var(--keycap);height:var(--keycap);padding:0 var(--space-1);
+  border:1px solid var(--line);border-radius:var(--space-1);background:var(--surface-2);color:var(--ink-2);
+  font:500 var(--fs-xs)/1 var(--font-mono);flex:none}
+.chip{display:inline-block;width:var(--chip);height:var(--chip);border-radius:var(--space-0);flex:none}
+.c1{background:var(--cat-1)}.c2{background:var(--cat-2)}.c3{background:var(--cat-3)}.c4{background:var(--cat-4)}.c5{background:var(--cat-5)}.c6{background:var(--cat-6)}
+.dot{display:inline-block;width:var(--dot);height:var(--dot);border-radius:var(--radius-pill);background:var(--ink-2);flex:none}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.danger{background:var(--danger)}.dot.stale{background:var(--stale)}
+.dot.ring{background:transparent;box-shadow:inset 0 0 0 var(--dot-ring) var(--warn)}
+.tag{display:inline-flex;align-items:center;height:var(--lh-sm);padding:0 var(--space-1h);border:1px solid var(--line-strong);border-radius:var(--radius-sm);font-size:var(--fs-xs);color:var(--ink-2)}
+.badge{display:inline-flex;align-items:center;gap:var(--space-1h);height:calc(var(--lh-sm) + var(--space-1));padding:0 var(--space-2);border-radius:var(--radius-pill);
+  background:var(--surface-2);font-size:var(--fs-sm);color:var(--ink);white-space:nowrap}
+.badge .num{font-family:var(--font-mono)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.ink2{color:var(--ink-2)}
+.sep{color:var(--ink-3)}
+.btn{display:inline-flex;align-items:center;gap:var(--space-1h);height:var(--hit);padding:0 var(--space-3);border:1px solid var(--line-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--ink);font-size:var(--fs-md);font-weight:500;white-space:nowrap;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.text{border-color:transparent;background:transparent;color:var(--ink-2)}
+.btn .kc{height:calc(var(--keycap) - var(--space-1));min-width:calc(var(--keycap) - var(--space-1));background:transparent}
+.btn.primary .kc{border-color:var(--accent-ink);color:var(--accent-ink);opacity:.7}
+a.link{color:var(--accent);text-decoration:none;font-size:var(--fs-sm)}
+
+/* ===== A page ===== */
+.page{min-height:0;overflow:auto;padding:var(--space-6) var(--space-6) var(--space-7)}
+.page-in{max-width:var(--page-max)}
+.titlerow{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-5)}
+.titlerow h1{margin:0 auto 0 0;font-size:var(--fs-xl);line-height:var(--lh-xl);font-weight:600}
+.section{margin-bottom:var(--space-6)}
+.shead{display:flex;align-items:baseline;gap:var(--space-2);margin-bottom:var(--space-3)}
+.shead h2{margin:0;font-size:var(--fs-lg);line-height:var(--lh-lg);font-weight:600}
+.shead .cap{font-size:var(--fs-sm);color:var(--ink-2)}
+.shead .act{margin-left:auto}
+.card{border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface)}
+.empty{margin:0;color:var(--ink-2)}
+.empty .btn{margin-left:var(--space-3)}
+
+/* Gauges */
+.gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3)}
+.gauge{padding:var(--space-4)}
+.gauge .lbl{color:var(--ink-2)}
+.gauge .big{margin:var(--space-1) 0 var(--space-2);font:500 var(--fs-num)/var(--lh-num) var(--font-mono);font-variant-numeric:tabular-nums}
+.gauge .big .unit{font:400 var(--fs-md)/var(--lh-md) var(--font-ui);color:var(--ink-2);margin-left:var(--space-1)}
+.bar{height:var(--bar-h);border-radius:var(--radius-pill);background:var(--meter-track);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:var(--radius-pill);background:var(--meter)}
+.bar i.warn{background:var(--warn)}.bar i.danger{background:var(--danger)}.bar i.stale{background:var(--stale)}
+.gauge .foot{margin-top:var(--space-2);font-size:var(--fs-xs);line-height:var(--lh-xs);color:var(--ink-2)}
+
+/* Tables */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{height:var(--row-h);padding:0 var(--space-4);text-align:left;font-size:var(--fs-xs);font-weight:600;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--ink-2);border-bottom:1px solid var(--line)}
+.tbl td{height:var(--row-h);padding:0 var(--space-4);border-bottom:1px solid var(--line)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .n{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* ===== The status bar ===== */
+.statusbar{display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-3);border-top:1px solid var(--line);background:var(--bg);
+  font-size:var(--fs-sm);line-height:var(--lh-sm);color:var(--ink-2);white-space:nowrap}
+.sbi{display:inline-flex;align-items:center;gap:var(--space-1h);height:100%;padding:0 var(--space-1);border-radius:var(--radius-sm);cursor:pointer}
+.sbi:hover{color:var(--ink)}
+.sbi .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.sb-left{display:flex;align-items:center;gap:var(--space-3);height:100%}
+.sb-right{margin-left:auto;display:flex;align-items:center;gap:var(--space-4);height:100%}
+
+/* ===== The usage popover ===== */
+.popover{display:none;position:absolute;left:var(--space-2);bottom:calc(var(--hit) + var(--space-1));width:calc(var(--panel-w) + var(--space-6));
+  border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-float);z-index:5}
+:root:has(#pop:checked) .popover{display:block}
+.pop-head{display:flex;align-items:baseline;gap:var(--space-2);padding:var(--space-3) var(--space-4) var(--space-2)}
+.pop-head b{font-weight:600}
+.pop-prov{padding:var(--space-2) var(--space-4) var(--space-3);border-top:1px solid var(--line)}
+.pop-prov .ph{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);font-weight:500}
+.pop-prov .ph .cap{margin-left:auto;font-weight:400;font-size:var(--fs-xs);color:var(--ink-2)}
+.win-row{margin-top:var(--space-2)}
+.win-row .wl{display:flex;justify-content:space-between;margin-top:var(--space-1);font-size:var(--fs-sm);line-height:var(--lh-sm);color:var(--ink-2)}
+.win-row .wn{color:var(--ink)}
+.win-row .wn .n{font-family:var(--font-mono)}
+.pop-foot{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-top:1px solid var(--line);color:var(--ink)}
+.pop-foot .kc{margin-left:auto}
+
+/* ===== This screen (semantic tokens only) ===== */
+
+.plist .prow{display:grid;grid-template-columns:var(--chip) auto minmax(0,1fr) calc(var(--sidebar-w) * .75) auto var(--icon-sm);align-items:center;gap:var(--space-3);min-height:var(--row-h-progress);padding:0 var(--space-4);border-bottom:1px solid var(--line)}
+.plist .prow:last-child{border-bottom:0}
+.pname{font-weight:500}
+.pdet{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar{display:flex;gap:var(--space-0);height:var(--bar-h-inline)}
+.pbar i{height:100%;border-radius:var(--radius-pill);background:var(--meter)}
+.pbar i.ok{background:var(--ok)}.pbar i.warn{background:var(--warn)}.pbar i.danger{background:var(--danger)}.pbar i.work{background:var(--meter)}
+.pbadges{display:flex;gap:var(--space-1h)}
+.quiet{margin:var(--space-3) 0 0;color:var(--ink-2)}
+.qf{display:inline-flex;align-items:center;gap:var(--space-1h);color:var(--ink);font-weight:500;cursor:pointer;margin-left:var(--space-1)}
+.irow{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--line)}
+.irow:last-child{border-bottom:0}
+.itext{flex:1;min-width:0}
+.ititle{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idet{color:var(--ink-2);font-size:var(--fs-sm);line-height:var(--lh-sm)}
+.attn{margin-top:var(--space-3);padding:var(--space-3) var(--space-4)}
+.attn-h{color:var(--ink-2);font-size:var(--fs-sm);margin-bottom:var(--space-1)}
+.mrow{display:grid;grid-template-columns:minmax(0,1fr) calc(var(--sidebar-w) / 2) auto;align-items:center;gap:var(--space-4);min-height:var(--row-h)}
+.mbar{height:var(--bar-h-inline);background:var(--meter-track);border-radius:var(--radius-pill)}
+.mbar i{display:block;height:100%;border-radius:var(--radius-pill);background:var(--meter)}
+.mbar i.danger{background:var(--danger)}
+.scrim{position:absolute;inset:0;background:var(--scrim);display:flex;justify-content:center;align-items:flex-start;padding-top:calc(var(--space-7) * 2);z-index:10}
+.pal{width:calc(var(--panel-w) + var(--sidebar-w) + var(--space-7));max-height:calc(100% - var(--space-7) * 3);display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--shadow-float);overflow:hidden}
+.pal-in{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--line);font-size:var(--fs-lg);line-height:var(--lh-lg);color:var(--ink-3)}
+.pal-in .typed{color:var(--ink)}
+.pal-in .caret{display:inline-block;width:var(--space-0);height:var(--lh-lg);background:var(--accent);vertical-align:middle;margin-left:var(--space-0)}
+.pal-body{overflow:auto;padding:var(--space-1h) var(--space-2) var(--space-2)}
+.pg{margin:0;padding:var(--space-3) var(--space-2) var(--space-1);font-size:var(--fs-xs);line-height:var(--lh-xs);font-weight:600;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--ink-2)}
+.pr{display:flex;align-items:center;gap:var(--space-3);min-height:var(--row-h);padding:0 var(--space-2);border-radius:var(--radius-sm);white-space:nowrap}
+.pr[aria-selected="true"]{background:var(--accent-soft)}
+.pr .ico{color:var(--ink-2);display:inline-grid}
+.pr .nm{font-weight:500}
+.pr .nm b{font-weight:700}
+.pr .dt{min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2);font-size:var(--fs-sm)}
+.pr .dt.mono{font-size:var(--fs-xs)}
+.pr .rt{margin-left:auto;display:inline-flex;align-items:center;gap:var(--space-2);color:var(--ink-2);font-size:var(--fs-sm)}
+.pr .fchip{display:inline-flex;align-items:center;gap:var(--space-1h);color:var(--ink)}
+.pr .age{min-width:calc(var(--space-6) + var(--space-3));text-align:right;font-family:var(--font-mono);font-size:var(--fs-xs)}
+.pmore{padding:var(--space-1) var(--space-2);color:var(--ink-2);font-size:var(--fs-sm)}
+.pnote{padding:var(--space-1) var(--space-2) var(--space-2);color:var(--ink-2);font-size:var(--fs-sm)}
+.pal-foot{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-top:1px solid var(--line);color:var(--ink-2);font-size:var(--fs-sm)}
+.pal-foot .kc{margin-left:var(--space-2)}
+.q-typed{display:none}
+:root:has(#q-typed:checked) .q-typed{display:block}
+:root:has(#q-typed:checked) .q-empty{display:none}
+:root:has(#q-typed:checked) .pal-in .ph{display:none}
+:root:not(:has(#q-typed:checked)) .pal-in .typed{display:none}
+</style>
+</head>
+<body>
+<div class="controls"><b>Interface polish · palette.html — one search for everything</b>
+  <span>Theme</span>
+  <label><input type="radio" name="t" id="t-light" checked> Light</label>
+  <label><input type="radio" name="t" id="t-dark"> Dark, new</label>
+  <label><input type="radio" name="t" id="t-old"> Dark, today</label><span>Box</span><label><input type="radio" name="q" id="q-empty" checked> Empty</label><label><input type="radio" name="q" id="q-typed"> "inv" typed</label>
+</div>
+<div class="win"><div class="titlebar"><span class="lights"><i></i><i></i><i></i></span>
+  <span class="tb-ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span><span class="tb-ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg></span><span class="tb-ico" style="opacity:.5"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span></div><div class="cols"><nav class="sidebar" aria-label="Sidebar">
+  <div class="wordmark">kinas</div>
+  <div class="search"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search</span><span class="kc">⌘K</span></div>
+  <div class="nav">
+    <div class="row" aria-current="page"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg></span>Home<span class="end"><span class="kc">⌘1</span></span></div>
+    <div class="row" ><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></span>Work<span class="end"><span class="kc">⌘2</span></span></div>
+    <div class="row hover" ><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="13" rx="1"/></svg></span>Crew<span class="end"><span class="kc">⌘3</span></span></div>
+    <div class="row" ><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/></svg></span>Inbox<span class="end"><span class="count">3</span><span class="kc">⌘5</span></span></div>
+    <div class="row" ><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-5"/></svg></span>Usage<span class="end"><span class="kc">⌘4</span></span></div>
+  </div>
+  <div class="sb-scroll"><h3 class="glabel">Client folders</h3>
+    <div class="row folder"><span class="chip c1"></span><span class="name">acme</span><span class="end"><span class="dot ring"></span>1 needs you</span></div>
+    <div class="task"><span class="dot ring"></span><span class="t">Inventory sync rewrite</span><span class="age">12 min</span></div>
+    <div class="task"><span class="dot"></span><span class="t">Webhook retries with backoff</span><span class="age">41 min</span></div>
+    <div class="row folder"><span class="chip c2"></span><span class="name">globex</span><span class="end"><span class="dot"></span>1 working</span></div>
+    <div class="task"><span class="dot"></span><span class="t">Enrolment export to Drive</span><span class="age">1 h</span></div>
+    <div class="row folder"><span class="chip c3"></span><span class="name">initech</span><span class="end"><span class="dot danger"></span>1 failed</span></div>
+    <div class="task"><span class="dot danger"></span><span class="t">Site build on PR #31</span><span class="age">3 h</span></div>
+    <div class="row folder"><span class="chip c5"></span><span class="name">umbrella</span></div>
+    <div class="row folder"><span class="chip c4"></span><span class="name">kinas</span><span class="end"><span class="tag">internal</span></span></div></div>
+  <div class="sb-foot"><div class="row" ><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></span>Settings<span class="end"></span></div></div>
+</nav><main class="page"><div class="page-in">
+  <div class="titlerow"><h1>Home</h1><span class="btn">3 waiting</span><span class="btn primary">Launch task</span></div>
+
+  <section class="section"><div class="shead"><h2>Overnight</h2><span class="cap">since 23:10 yesterday</span></div>
+    <div class="card plist">
+      
+    <div class="prow"><span class="chip c1"></span><span class="pname">acme</span><span class="pdet">Plan ready for you: inventory sync rewrite, 05:12</span>
+      <span class="pbar"><i class="ok" style="width:70%"></i><i class="warn" style="width:20%"></i></span>
+      <span class="pbadges"><span class="badge"><span class="dot ring"></span><span class="num">1</span> needs decision</span><span class="badge"><span class="dot ok"></span><span class="num">4</span> done</span></span><span class="ink2"><svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span></div>
+      
+    <div class="prow"><span class="chip c2"></span><span class="pname">globex</span><span class="pdet">Working: enrolment export to Drive, started 04:10</span>
+      <span class="pbar"><i class="ok" style="width:60%"></i><i class="work" style="width:30%"></i></span>
+      <span class="pbadges"><span class="badge"><span class="dot"></span><span class="num">1</span> working</span><span class="badge"><span class="dot ok"></span><span class="num">2</span> done</span></span><span class="ink2"><svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span></div>
+      
+    <div class="prow"><span class="chip c3"></span><span class="pname">initech</span><span class="pdet">CI red on PR #31: build failed, 03:22</span>
+      <span class="pbar"><i class="ok" style="width:45%"></i><i class="danger" style="width:45%"></i></span>
+      <span class="pbadges"><span class="badge"><span class="dot danger"></span><span class="num">1</span> CI red</span><span class="badge"><span class="dot ok"></span><span class="num">1</span> done</span></span><span class="ink2"><svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span></div>
+    </div>
+    <p class="quiet">No work overnight in <a class="qf"><span class="chip c5"></span>umbrella</a> <span class="sep">·</span> <a class="qf"><span class="chip c4"></span>kinas</a></p>
+  </section>
+
+  <section class="section"><div class="shead"><h2>Waiting on you</h2><a class="link act">All 3 in Inbox</a></div>
+    <div class="card ilist">
+      <div class="irow"><span class="chip c1"></span><div class="itext"><div class="ititle">Store the supplier webhook secret in env or the keychain?</div>
+        <div class="idet">Decision <span class="sep">·</span> Inventory sync rewrite <span class="sep">·</span> 12 min ago</div></div>
+        <span class="btn text">Deny <span class="kc">D</span></span><span class="btn">Answer <span class="kc">R</span></span><span class="btn primary">Approve <span class="kc">A</span></span></div>
+      <div class="irow"><span class="chip c2"></span><div class="itext"><div class="ititle">Review PR #142: gauge stale state</div>
+        <div class="idet">Pull request <span class="sep">·</span> all checks pass <span class="sep">·</span> 1 h ago</div></div>
+        <span class="btn text">Deny <span class="kc">D</span></span><span class="btn">Answer <span class="kc">R</span></span><span class="btn primary">Approve PR <span class="kc">A</span></span></div>
+    </div>
+  </section>
+
+  <section class="section"><div class="shead"><h2>Usage</h2><span class="cap">as of 12:42</span><a class="link act">Open usage</a></div>
+    <div class="gauges">
+      <div class="card gauge"><div class="lbl">Claude · week</div><div class="big">24<span class="unit">% used</span></div><div class="bar"><i style="width:24%"></i></div><div class="foot">resets Thu 2 Oct, 12:43</div></div>
+      <div class="card gauge"><div class="lbl">Claude · session</div><div class="big">97<span class="unit">% used</span></div><div class="bar"><i class="danger" style="width:97%"></i></div><div class="foot">resets in 1 h 59 m</div></div>
+      <div class="card gauge"><div class="lbl">Ollama · session</div><div class="big">2.5<span class="unit">% used</span></div><div class="bar"><i style="width:2.5%"></i></div><div class="foot">resets not reported</div></div>
+    </div>
+    <div class="card attn"><div class="attn-h">Needs attention</div>
+      <div class="mrow"><span>This Mac <span class="sep">·</span> disk</span><span class="mbar"><i class="danger" style="width:97%"></i></span><span><span class="mono">97%</span> <span class="ink2">used</span></span></div>
+    </div>
+  </section>
+</div></main></div><footer class="statusbar" aria-label="Status">
+  <div class="sb-left">
+    <span class="sbi">Claude week <span class="n">24%</span></span>
+    <span class="sbi"><span class="dot danger"></span>Claude session <span class="n">97%</span></span>
+    <span class="sbi">Ollama session <span class="n">2.5%</span></span>
+  </div>
+  <div class="sb-right">
+    <span class="sbi"><span class="dot ring"></span>1 needs you <span class="sep">·</span> <span class="dot danger"></span>1 failed <span class="sep">·</span> <span class="dot"></span>2 working</span>
+    <span class="sbi"><svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/></svg>Hostinger VPS <span class="dot ok"></span>connected</span>
+  </div>
+</footer><div class="popover" role="dialog" aria-label="Usage">
+  <div class="pop-head"><b>Usage</b></div>
+  <div class="pop-prov"><div class="ph"><span class="chip c2"></span>Claude <span class="cap">as of 12:42</span></div>
+    <div class="win-row"><div style="display:flex;justify-content:space-between;margin-bottom:var(--space-1)"><span>Week</span></div>
+      <div class="bar"><i class="" style="width:24%"></i></div>
+      <div class="wl"><span class="wn"><span class="n">24%</span> used</span><span>resets Thu 2 Oct, 12:43</span></div></div>
+    <div class="win-row"><div style="display:flex;justify-content:space-between;margin-bottom:var(--space-1)"><span>Session</span></div>
+      <div class="bar"><i class="danger" style="width:97%"></i></div>
+      <div class="wl"><span class="wn"><span class="n">97%</span> used</span><span>resets in 1 h 59 m</span></div></div></div>
+  <div class="pop-prov"><div class="ph"><span class="chip c4"></span>Ollama <span class="cap">as of 12:40</span></div>
+    <div class="win-row"><div style="display:flex;justify-content:space-between;margin-bottom:var(--space-1)"><span>Session</span></div>
+      <div class="bar"><i class="" style="width:2.5%"></i></div>
+      <div class="wl"><span class="wn"><span class="n">2.5%</span> used</span><span>resets not reported</span></div></div>
+    <div class="win-row"><div style="display:flex;justify-content:space-between;margin-bottom:var(--space-1)"><span>Week</span></div>
+      <div class="bar"><i class="" style="width:11%"></i></div>
+      <div class="wl"><span class="wn"><span class="n">11%</span> used</span><span>resets Mon 6 Oct, 09:00</span></div></div></div>
+  <div class="pop-prov"><div class="ph"><span class="chip c1"></span>Convex <span class="cap">as of 12:30</span></div>
+    <div class="win-row"><div style="display:flex;justify-content:space-between;margin-bottom:var(--space-1)"><span>Function calls this month</span></div>
+      <div class="bar"><i class="" style="width:25%"></i></div>
+      <div class="wl"><span class="wn"><span class="n">25%</span> used</span><span>resets Sat 1 Nov</span></div></div></div>
+  <div class="pop-foot">Open Usage <span class="kc">⌘4</span></div>
+</div><div class="scrim"><div class="pal" role="dialog" aria-label="Search">
+  <div class="pal-in"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="ph">Search files, folders, tasks, workspaces, settings and commands</span><span class="typed">inv<span class="caret"></span></span></div>
+  <div class="pal-body">
+    <div class="q-empty">
+      <h4 class="pg">Recent</h4>
+      <div class="pr" role="option" aria-selected="true"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></span><span class="nm">prd.md</span><span class="dt mono">kinas/tasks/interface-polish/prd.md</span><span class="rt"><span class="fchip"><span class="chip c4"></span>kinas</span><span class="age">8 min</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg></span><span class="nm">Inventory sync rewrite</span><span class="dt"><span class="dot ring"></span> needs decision</span><span class="rt"><span class="fchip"><span class="chip c1"></span>acme</span><span class="age">2 h</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 13l2 2-2 2"/></svg></span><span class="nm">clients/globex</span><span class="dt">Herdr workspace</span><span class="rt"><span class="fchip"><span class="chip c2"></span>globex</span><span class="age">1 d</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span><span class="nm">API key</span><span class="dt">Settings · Ollama Cloud</span><span class="rt"><span class="age">3 d</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z"/></svg></span><span class="nm">initech</span><span class="dt">Client folder</span><span class="rt"><span class="fchip"><span class="chip c3"></span>initech</span><span class="age">3 d</span></span></div>
+      <h4 class="pg">Commands</h4>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span><span class="nm">Go to Home</span><span class="dt"></span><span class="rt"><span class="kc">⌘1</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span><span class="nm">Go to Work</span><span class="dt"></span><span class="rt"><span class="kc">⌘2</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span><span class="nm">Go to Crew</span><span class="dt"></span><span class="rt"><span class="kc">⌘3</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span><span class="nm">Go to Usage</span><span class="dt"></span><span class="rt"><span class="kc">⌘4</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span><span class="nm">Go to Inbox</span><span class="dt"></span><span class="rt"><span class="kc">⌘5</span></span></div>
+      <div class="pmore">6 more</div>
+    </div>
+    <div class="q-typed">
+      <h4 class="pg">Files</h4>
+      <div class="pr" role="option" aria-selected="true"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></span><span class="nm"><b>inv</b>entory.ts</span><span class="dt mono">clients/acme/src/sync/inventory.ts</span><span class="rt"><span class="fchip"><span class="chip c1"></span>acme</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></span><span class="nm"><b>inv</b>entory.test.ts</span><span class="dt mono">clients/acme/src/sync/inventory.test.ts</span><span class="rt"><span class="fchip"><span class="chip c1"></span>acme</span></span></div>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></span><span class="nm"><b>inv</b>oice-template.md</span><span class="dt mono">clients/globex/docs/invoice-template.md</span><span class="rt"><span class="fchip"><span class="chip c2"></span>globex</span></span></div>
+      <div class="pmore">2 more</div>
+      <h4 class="pg">Tasks</h4>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg></span><span class="nm"><b>Inv</b>entory sync rewrite</span><span class="dt"><span class="dot ring"></span> needs decision · ship</span><span class="rt"><span class="fchip"><span class="chip c1"></span>acme</span></span></div>
+      <h4 class="pg">Inbox</h4>
+      <div class="pr" role="option"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/></svg></span><span class="nm">Store the supplier webhook secret in env or the keychain?</span><span class="dt">Decision · <b>Inv</b>entory sync rewrite</span><span class="rt"><span class="fchip"><span class="chip c1"></span>acme</span></span></div>
+      <h4 class="pg">Workspaces</h4>
+      <div class="pnote">Herdr is not running, so no workspace can be searched.</div>
+    </div>
+  </div>
+  <div class="pal-foot"><span class="kc">↵</span> Open <span class="kc">Esc</span> Close <span class="kc">↑↓</span> Move</div>
+</div></div></div>
+<ul class="notes">
+  <li><b>Empty.</b> Recent — the last eight things opened anywhere in Kinas — then Commands with their chords (rules 14, 17). Group labels in capitals (rule 8).</li>
+  <li><b>"inv" typed.</b> Groups appear in their fixed order and only when they match (rule 13): no command matches, so Commands is gone. The matched letters are bold; a file's path is mono, under the projects folder; the folder's chip is on the right (rules 15, 17). A source that cannot answer says why in one line and the rest still work (rule 18).</li>
+  <li>The foot lists the palette's keys, which are today's: ↵, Esc, ↑↓ (rule 2).</li>
+</ul>
+</body>
+</html>

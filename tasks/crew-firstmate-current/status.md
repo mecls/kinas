@@ -8,7 +8,8 @@
 - Gate 2 · Architecture: APPROVED 2026-11-15 — `architecture.md` (private, main checkout,
   `tasks/crew-firstmate-current/architecture.md`), approved as written; read at `6923c35`, the review branch's tip, and
   re-checked against `main` once it lands; one PRD clarification marked in `prd.md` (AC-5: no URL in the log)
-- Gate 3 · Program design: in progress — `build-spec.md` §11 (private, main checkout)
+- Gate 3 · Program design: in progress — `build-spec.md` §11 written 2026-11-15 (private, main checkout,
+  `tasks/crew-firstmate-current/build-spec.md`); §0–§10 and §13–§18 drafted with it; awaiting approval
 - Gate 4 · Slice plan: pending
 
 ## Slices

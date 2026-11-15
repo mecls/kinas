@@ -309,7 +309,7 @@ export const STORIES: Story[] = [
       {
         name: "with-cards",
         node: (
-          <Lane name="ar-watches" cat={1} slots="Claude 1/1 · Codex 1/2">
+          <Lane name="northwind" cat={1} slots="Claude 1/1 · Codex 1/2">
             <Card title="Inventory sync rewrite" selected>
               <StatusBadge state="decision" />
             </Card>
@@ -350,7 +350,7 @@ export const STORIES: Story[] = [
         name: "list",
         node: (
           <ProgressList label="Client folders">
-            <ProgressRow cat={1} name="ar-watches" event="Plan ready for you: inventory sync rewrite, 05:48" seg={{ done: 4, working: 0, wait: 1, fail: 0 }} badges={[{ state: "decision", count: 1 }, { state: "done", count: 4 }]} selected onSelect={noop} />
+            <ProgressRow cat={1} name="northwind" event="Plan ready for you: inventory sync rewrite, 05:48" seg={{ done: 4, working: 0, wait: 1, fail: 0 }} badges={[{ state: "decision", count: 1 }, { state: "done", count: 4 }]} selected onSelect={noop} />
             <ProgressRow cat={2} name="arc-edu" event="Working: enrolment export to Drive, started 04:10" seg={{ done: 2, working: 1, wait: 0, fail: 0 }} badges={[{ state: "working", count: 1 }, { state: "done", count: 2 }]} onSelect={noop} />
             <ProgressRow cat={3} name="acme-9c2e-site" event="CI red on PR #31: build failed, 03:22" seg={{ done: 1, working: 0, wait: 0, fail: 1 }} badges={[{ state: "red", count: 1 }, { state: "done", count: 1 }]} onSelect={noop} />
             <ProgressRow cat={5} name="kinas" internal event="PR #142 open: gauge stale state, 06:12" seg={{ done: 5, working: 0, wait: 2, fail: 0 }} badges={[{ state: "pr", count: 2 }, { state: "done", count: 5 }]} onSelect={noop} />
@@ -492,9 +492,9 @@ export const STORIES: Story[] = [
         name: "working",
         node: (
           <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--line)" }}>
-            <TerminalChrome session="crew-3 · ar-watches" state="working" profile="codex" actions={[{ label: "Detach", onClick: noop }, { label: "Copy", onClick: noop }]} />
+            <TerminalChrome session="crew-3 · northwind" state="working" profile="codex" actions={[{ label: "Detach", onClick: noop }, { label: "Copy", onClick: noop }]} />
             <pre style={{ margin: 0, background: "var(--term-bg)", color: "var(--term-fg)", font: "var(--fs-sm)/1.6 var(--font-mono)", padding: "var(--space-4)" }}>
-              {"~/clients/ar-watches $ pnpm test\n ✓ inventory/webhook.verify (12)\n ✓ inventory/stock.write (26)\nTest files  2 passed · Tests  38 passed · 4.1 s"}
+              {"~/clients/northwind $ pnpm test\n ✓ inventory/webhook.verify (12)\n ✓ inventory/stock.write (26)\nTest files  2 passed · Tests  38 passed · 4.1 s"}
             </pre>
           </div>
         ),
@@ -512,7 +512,7 @@ export const STORIES: Story[] = [
         node: (
           <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", maxWidth: "var(--panel-w)" }}>
             {/* 1.4, the first mate: what Firstmate reports and nothing it does not — no plan, no recommendation. */}
-            <PanelHeader cat={1} folder="ar-watches" title="Inventory sync rewrite" state="decision" onClose={() => {}} />
+            <PanelHeader cat={1} folder="northwind" title="Inventory sync rewrite" state="decision" onClose={() => {}} />
             <PanelBody>
               <h4>State</h4>
               <p>
@@ -551,7 +551,7 @@ export const STORIES: Story[] = [
             <NavItem icon={<InboxIcon />} label="Inbox" count={3} />
             <NavItem icon={<GaugeIcon />} label="Usage" count={0} />
             <NavHeading>Client folders</NavHeading>
-            <NavItem chip={1} label="ar-watches" />
+            <NavItem chip={1} label="northwind" />
             <NavItem chip={5} label="kinas" tag="internal" />
             <ConnectionRow name="Hostinger VPS" state="connected" />
             <NavItem icon={<GearIcon />} label="Settings" />

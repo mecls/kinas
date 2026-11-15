@@ -471,7 +471,7 @@ table.t .r{text-align:right}
         <div class="sbar"><span>9:41</span><span class="isl"></span><span class="ic"><i></i><i></i></span></div>
         <div class="navbar"><button class="back"><svg class="i"><use href="#i-back"/></svg>Inbox</button><span class="side-t"><span class="num">1</span> of <span class="num">3</span></span></div>
         <div class="pbody">
-          <div class="mcap" style="display:flex;align-items:center;gap:8px"><span class="chip" style="background:var(--cat-1)"></span>ar-watches</div>
+          <div class="mcap" style="display:flex;align-items:center;gap:8px"><span class="chip" style="background:var(--cat-1)"></span>northwind</div>
           <div class="mtitle">Inventory sync rewrite</div>
           <span class="badge"><span class="dot ring" style="--c:var(--warn)"></span>needs decision</span>
           <div class="mh">Plan</div>
@@ -499,7 +499,7 @@ table.t .r{text-align:right}
         <div class="sheet-top"><button>Cancel</button><b>New task</b><span style="width:64px"></span></div>
         <div class="pbody">
           <div class="field" style="margin-top:8px"><label>Folder</label>
-            <div class="picker"><span class="chip" style="background:var(--cat-1)"></span>ar-watches<svg class="i chev"><use href="#i-chev"/></svg></div></div>
+            <div class="picker"><span class="chip" style="background:var(--cat-1)"></span>northwind<svg class="i chev"><use href="#i-chev"/></svg></div></div>
           <div class="field"><label>Brief</label>
             <div class="ta">Add a low-stock alert to the inventory page, with a threshold per watch model.</div></div>
           <div class="field"><label>Provider</label>
@@ -591,7 +591,7 @@ table.t .r{text-align:right}
         <h2>Lane and cards</h2>
         <p class="lead">One lane per client folder. Selected card: accent-soft and a 2 px accent edge.</p>
         <div class="lane">
-          <div class="lane-h"><span class="chip" style="background:var(--cat-1)"></span><b style="font-weight:500">ar-watches</b><span class="slots">Claude 1/1 · Codex 1/2</span></div>
+          <div class="lane-h"><span class="chip" style="background:var(--cat-1)"></span><b style="font-weight:500">northwind</b><span class="slots">Claude 1/1 · Codex 1/2</span></div>
           <div class="card sel"><div class="ct">Inventory sync rewrite</div><span class="badge"><span class="dot ring" style="--c:var(--warn)"></span>needs decision</span></div>
           <div class="card"><div class="ct">Client list CSV export</div><span class="badge"><span class="dot" style="--c:var(--ok)"></span>done</span></div>
         </div>
@@ -610,8 +610,8 @@ table.t .r{text-align:right}
       <h2>Terminal chrome</h2>
       <p class="lead">The only place the terminal palette appears.</p>
       <div class="term">
-        <div class="chrome"><b style="font-weight:500">crew-3 · ar-watches</b><span class="badge"><span class="dot" style="--c:var(--meter)"></span>working</span><span class="ink2">codex</span><span class="r"><button>Detach</button><button>Copy</button></span></div>
-<pre><span class="d">~/clients/ar-watches</span> $ pnpm test
+        <div class="chrome"><b style="font-weight:500">crew-3 · northwind</b><span class="badge"><span class="dot" style="--c:var(--meter)"></span>working</span><span class="ink2">codex</span><span class="r"><button>Detach</button><button>Copy</button></span></div>
+<pre><span class="d">~/clients/northwind</span> $ pnpm test
  ✓ inventory/webhook.verify (12)
  ✓ inventory/stock.write (26)
 <span class="d">Test files  2 passed · Tests  38 passed · 4.1 s</span></pre>
@@ -637,7 +637,7 @@ const dot=s=>`<span class="dot ${S[s].k==='ring'?'ring':S[s].k==='cross'?'cross'
 const badge=(s,n)=>`<span class="badge">${dot(s)}${n!=null?`<span class="n">${n}</span>`:''}${S[s].w}</span>`;
 
 const folders=[
- {id:'ar-watches',cat:1,ev:'Plan ready for you: inventory sync rewrite, 05:48',counts:{done:4,decision:1},seg:{done:4,working:0,wait:1,fail:0},
+ {id:'northwind',cat:1,ev:'Plan ready for you: inventory sync rewrite, 05:48',counts:{done:4,decision:1},seg:{done:4,working:0,wait:1,fail:0},
   task:{title:'Inventory sync rewrite',state:'decision',
    brief:'Replace the nightly CSV import with the supplier\'s webhook so stock changes land within a minute.',
    plan:['Replace the nightly CSV import with the supplier\'s webhook.','Verify each payload with a signed secret.','Write stock changes to Convex and log them per watch.','Keep the CSV import as a fallback for one release.'],

@@ -279,6 +279,8 @@ first mate's privacy check (its AC-10), extended to the new fields.
 
 ## 7. Open questions
 
+None open. Gate 1 was approved as written on 2026-11-15, so the two below stand as proposed.
+
 1. **The badge word for a parked lane.** Proposed **in review** (ring, `--meter`): it waits on a person, like PR open.
    "parked" was set aside because Kinas already reads Firstmate's backlog state "parked" as needs decision. The
    captain decides at this gate.

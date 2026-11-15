@@ -10,10 +10,10 @@
   re-checked against `main` once it lands; one PRD clarification marked in `prd.md` (AC-5: no URL in the log)
 - Gate 3 · Program design: APPROVED 2026-11-15 — `build-spec.md` §11 (private, main checkout), approved as written,
   with §11.5's eight least-confident decisions standing as written
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12 written 2026-11-15: eight slices (0–7), one ship point at
-  slice 7; awaiting approval
+- Gate 4 · Slice plan: APPROVED 2026-11-15 — `build-spec.md` §12, approved as written: eight slices (0–7), one ship
+  point at slice 7
 
-## Slices (build-spec.md §12, awaiting approval)
+## Slices (build-spec.md §12, approved 2026-11-15)
 - [ ] Slice 0 · ground, docs first, and the probe: wait for the review branch on `main`, rebase, baseline; Firstmate
   `427056c` in a throwaway Herdr session (AC-1), stop if it fails; ADR 0020, DESIGN.md 1.11, docs/external, README
 - [ ] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line)

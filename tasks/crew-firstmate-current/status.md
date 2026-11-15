@@ -15,7 +15,8 @@
 
 ## Slices (build-spec.md §12, approved 2026-11-15)
 - [ ] Slice 0 · *(waiting, 2026-11-15: `feat/review-session-code-bugs` is not on `origin/main` and has no remote
-  branch — local only, last commit 6923c35 on 2026-11-01; landing it is the captain's)* ground, docs first, and the probe: wait for the review branch on `main`, rebase, baseline; Firstmate
+  branch; verified green at `6923c35` the same day — check green, the full e2e alone 40/40 specs, 221 cases — and
+  waiting for the captain's word to push it)* ground, docs first, and the probe: wait for the review branch on `main`, rebase, baseline; Firstmate
   `427056c` in a throwaway Herdr session (AC-1), stop if it fails; ADR 0020, DESIGN.md 1.11, docs/external, README
 - [ ] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line)
 - [ ] Slice 2 · in review (the word in Rust, the CLI and the fixture; the badge; Overnight; the status JSON)

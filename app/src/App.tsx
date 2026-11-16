@@ -182,6 +182,12 @@ export function App() {
   const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
   const [inboxRequest, setInboxRequest] = useState<(InboxBox & { seq: number }) | null>(null);
+  /** An Inbox item the palette chose: the Inbox shows with it focused (interface polish, rule 16). */
+  const [inboxFocus, setInboxFocus] = useState<{ task: string; key: string; seq: number } | null>(null);
+  /** A setting the palette chose: Settings scrolls to it and focuses its control (rule 16; build-spec 3.2). */
+  const [settingsTarget, setSettingsTarget] = useState<{ id: string; seq: number } | null>(null);
+  /** The reader's tabs, as it last reported them, for the palette's Open group. */
+  const [readerTabs, setReaderTabs] = useState<readonly { path: string; displayPath: string }[]>([]);
   /** The launcher is on its way: Herdr can take seconds, and a second click would only queue behind it. */
   const openingFirstMate = useRef(false);
 
@@ -581,6 +587,20 @@ export function App() {
     },
     [goTo],
   );
+  const openInboxItem = useCallback(
+    (task: string, key: string) => {
+      setInboxFocus((r) => ({ task, key, seq: (r?.seq ?? 0) + 1 }));
+      goTo("inbox");
+    },
+    [goTo],
+  );
+  const openSetting = useCallback(
+    (id: string) => {
+      setSettingsTarget((t) => ({ id, seq: (t?.seq ?? 0) + 1 }));
+      goTo("settings");
+    },
+    [goTo],
+  );
 
   // Home's Launch task (build-spec §4 Home): tasks are launched by talking to the first mate in the pane — its own pane
   // while it runs, else the Work page with the terminal holding the keys, the way Open in terminal hands them over.
@@ -662,6 +682,7 @@ export function App() {
         waiting={crew?.waiting ?? 0}
         crew={{ installed: !!crew && crew.page !== "uninstalled", repos: crew?.crew_repos ?? [] }}
         onAddToCrew={(f) => void addFolderToCrew(f)}
+        onSearch={() => setPalette(true)}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">
@@ -698,7 +719,7 @@ export function App() {
             />
           </section>
           <section className="page" data-page="inbox" hidden={page !== "inbox"}>
-            <InboxPage crew={crew} error={crewError} folders={folders} request={inboxRequest} onAnswer={answer} />
+            <InboxPage crew={crew} error={crewError} folders={folders} request={inboxRequest} focus={inboxFocus} onAnswer={answer} />
           </section>
           <section className="page" data-page="usage" hidden={page !== "usage"}>
             <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} crewError={crewError} />
@@ -707,7 +728,14 @@ export function App() {
             <WorkPage active={page === "work"} shortcuts={shortcuts} />
           </section>
           <section className="page" data-page="settings" hidden={page !== "settings"}>
-            <SettingsPage active={page === "settings"} shortcuts={shortcuts} onShortcutsChange={changeShortcuts} projects={projects} onProjectsChange={loadProjects} />
+            <SettingsPage
+              active={page === "settings"}
+              shortcuts={shortcuts}
+              onShortcutsChange={changeShortcuts}
+              projects={projects}
+              onProjectsChange={loadProjects}
+              target={settingsTarget}
+            />
           </section>
         </main>
         <div className="stage-divider" hidden={!reader.open} {...split.divider} />
@@ -735,6 +763,7 @@ export function App() {
             notice={notice}
             side={side}
             onSide={changeSide}
+            onTabs={setReaderTabs}
           />
           <TaskDetail
             id={reader.task}
@@ -759,6 +788,11 @@ export function App() {
           onOpen={(path) => openFromSidebar(path)}
           shortcuts={shortcuts}
           folders={folders}
+          tabs={readerTabs}
+          crew={crew}
+          onTask={openTask}
+          onItem={openInboxItem}
+          onSetting={openSetting}
         />
       )}
     </div>

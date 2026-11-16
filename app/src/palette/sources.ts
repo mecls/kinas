@@ -1,14 +1,18 @@
 import { commandsFor, type Command } from "@kinas/commands";
-import type { FileSearch } from "../api.ts";
+import type { CrewDecision, CrewTask, FileSearch } from "../api.ts";
+import { BADGE_OF } from "../crew/board.ts";
+import { ageText, titleOf } from "../crew/inbox.ts";
+import { sectionOf, settingMatches } from "../settings/index.ts";
 import { chordLabel, SHORTCUT_ACTIONS, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
-import type { Category } from "../ui/Dot.tsx";
+import type { Category, DotKind } from "../ui/Dot.tsx";
+import { BADGE } from "../ui/StatusBadge.tsx";
 import { ranked, score } from "./match.ts";
 
 // What the palette searches, as groups of rows (tasks/interface-polish, PRD rules 13–17; build-spec §11.2). Each
 // source is a pure function of what the window already holds, so it answers as the query changes; the Files group
-// alone waits on Rust (`search.rs`). Slice 2: Commands and Files. Open, Client folders, Tasks, Inbox and Settings come
-// in slice 3; Workspaces and Recent in slice 4.
+// alone waits on Rust (`search.rs`). Slice 2: Commands and Files. Slice 3: Open, Client folders, Tasks, Inbox and
+// Settings, each searched only once something is typed (rule 14). Workspaces and Recent come in slice 4.
 
 export type PaletteKind = "command" | "open" | "file" | "folder" | "task" | "inbox" | "workspace" | "setting";
 
@@ -19,6 +23,7 @@ export interface PaletteItem {
   title: string;
   detail?: string;
   mono?: boolean;
+  dot?: { color: string; kind: DotKind };
   /** A folder found by name in Files: drawn with the folder icon rather than the file one. */
   dir?: boolean;
   folder?: { name: string; cat: Category };
@@ -100,6 +105,95 @@ export function fileItems(r: FileSearch, folders: readonly SeatedFolder[], open:
       act: () => open(m.path),
     };
   });
+}
+
+/** The last part of a path: what a tab or a folder is called. */
+const baseName = (path: string) => path.replace(/\/+$/, "").split("/").pop() || path;
+
+/** The reader's tabs this session, by name, then by where they lie (rule 13, Open). */
+export function openItems(q: string, tabs: readonly { path: string; displayPath: string }[], folders: readonly SeatedFolder[], open: (p: string) => void): PaletteItem[] {
+  return ranked(tabs, (t) => score(q, baseName(t.path), t.displayPath)).map((t) => {
+    const f = folderOf(t.path, folders);
+    return {
+      kind: "open",
+      key: `open:${t.path}`,
+      title: baseName(t.path),
+      detail: t.displayPath,
+      mono: true,
+      folder: f ? { name: f.name, cat: f.cat } : undefined,
+      act: () => open(t.path),
+    };
+  });
+}
+
+/** The client folders the sidebar lists, hidden ones included and marked so; removed ones are out of Kinas. */
+export function folderItems(q: string, folders: readonly SeatedFolder[], open: (p: string) => void): PaletteItem[] {
+  return ranked(
+    folders.filter((f) => !f.removed),
+    (f) => score(q, f.name, f.display),
+  ).map((f) => ({
+    kind: "folder",
+    key: `folder:${f.path}`,
+    title: f.name,
+    detail: f.hidden ? "Hidden from the sidebar" : f.display,
+    mono: !f.hidden,
+    folder: { name: f.name, cat: f.cat },
+    act: () => open(f.path),
+  }));
+}
+
+/** The client folder whose repository is the task's or the decision's, matched by repository as the board does. */
+const folderOfRepo = (repo: string | null, folders: readonly SeatedFolder[]) => (repo ? folders.find((f) => !f.removed && f.repo === repo) : undefined);
+
+/**
+ * The crew's tasks the board shows now: every task but a finished one the board has already shown (done work
+ * clears) — by title, then id and project. Each with its word and that word's dot.
+ */
+export function taskItems(q: string, tasks: readonly CrewTask[], folders: readonly SeatedFolder[], openTask: (id: string) => void): PaletteItem[] {
+  const shown = tasks.filter((t) => !(t.finished && t.board_seen_at !== null));
+  return ranked(shown, (t) => score(q, t.title ?? t.id, `${t.id} ${t.project_name ?? ""} ${t.repo ?? ""}`)).map((t) => {
+    const badge = BADGE[BADGE_OF[t.word]];
+    const f = folderOfRepo(t.repo, folders);
+    return {
+      kind: "task",
+      key: `task:${t.id}`,
+      title: t.title ?? t.id,
+      detail: badge.word,
+      dot: { color: badge.color, kind: badge.kind },
+      folder: f ? { name: f.name, cat: f.cat } : undefined,
+      act: () => openTask(t.id),
+    };
+  });
+}
+
+/** Opens the Inbox with an item selected (rule 16). */
+export type OpenItem = (task: string, key: string) => void;
+
+/** The decisions waiting on the captain, held ones included, by what they ask and the task they belong to. */
+export function inboxItems(q: string, decisions: readonly CrewDecision[], folders: readonly SeatedFolder[], now: number, openItem: OpenItem): PaletteItem[] {
+  return ranked(decisions, (d) => score(q, d.summary || titleOf(d), `${titleOf(d)} ${d.key}`)).map((d) => {
+    const f = folderOfRepo(d.repo, folders);
+    return {
+      kind: "inbox",
+      key: `inbox:${d.task_id}:${d.key}`,
+      title: d.summary || titleOf(d),
+      detail: `${d.verb === "captain-hold" ? "Held for you" : "Decision"} · ${titleOf(d)}`,
+      folder: f ? { name: f.name, cat: f.cat } : undefined,
+      age: ageText(d.opened_at, now),
+      act: () => openItem(d.task_id, d.key),
+    };
+  });
+}
+
+/** Every Settings row whose label or description matches (rules 13, 34), with its section beside it. */
+export function settingItems(q: string, openSetting: (id: string) => void): PaletteItem[] {
+  return settingMatches(q).map((s) => ({
+    kind: "setting",
+    key: `setting:${s.id}`,
+    title: s.label,
+    detail: sectionOf(s).title,
+    act: () => openSetting(s.id),
+  }));
 }
 
 /** A group from its rows: the first `GROUP_SHOWN`, or all when opened; `beyond` counts matches never sent (Files). */

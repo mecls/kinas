@@ -91,6 +91,7 @@ export function InboxPage({
   error = null,
   folders = [],
   request = null,
+  focus = null,
   onAnswer = async () => false,
 }: {
   crew: CrewSnapshot | null;
@@ -99,6 +100,8 @@ export function InboxPage({
   folders?: readonly SeatedFolder[];
   /** A box to open, from the task detail's Answer or Deny; `seq` makes a repeat distinct. */
   request?: (InboxBox & { seq: number }) | null;
+  /** An item the palette chose (interface polish, rule 16): scrolled to and focused, where its keys work. */
+  focus?: { task: string; key: string; seq: number } | null;
   /** Resolves true once the line is on the clipboard — a launcher refusal after that still counts as copied. */
   onAnswer?: (task: string, key: string, kind: AnswerKind, text: string) => Promise<boolean>;
 }) {
@@ -108,6 +111,15 @@ export function InboxPage({
   useEffect(() => {
     if (request) setBox({ task: request.task, key: request.key, kind: request.kind, text: "" });
   }, [request]);
+  const focused = useRef(0);
+  useEffect(() => {
+    if (!focus || focus.seq === focused.current || !crew) return;
+    const item = document.querySelector<HTMLElement>(`li.inbox-item[data-task="${CSS.escape(focus.task)}"][data-key="${CSS.escape(focus.key)}"] [tabindex="0"]`);
+    if (!item) return;
+    focused.current = focus.seq;
+    item.scrollIntoView({ block: "nearest" });
+    item.focus({ preventScroll: true });
+  }, [focus, crew]);
 
   const answer = (d: CrewDecision, kind: AnswerKind, text: string) => {
     if (busy.current) return;

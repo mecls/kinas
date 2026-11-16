@@ -20,6 +20,7 @@ import {
   NavHeading,
   NavItem,
   PinIcon,
+  SearchRow,
   PinOffIcon,
   TerminalIcon,
   Toast,
@@ -72,6 +73,7 @@ export function Sidebar({
   waiting = 0,
   crew = { installed: false, repos: [] },
   onAddToCrew = () => {},
+  onSearch = () => {},
 }: {
   hidden: boolean;
   page: Page;
@@ -105,6 +107,8 @@ export function Sidebar({
   /** What Add to crew needs: whether Firstmate is installed, and the repositories already in the crew. */
   crew?: CrewForMenu;
   onAddToCrew?: (folder: ProjectRow) => void;
+  /** The search row under the wordmark: opens the palette (interface polish, rule 19). */
+  onSearch?: () => void;
 }) {
   const isPinned = (path: string) => pins.some((p) => p.path === path);
   // Called, not mounted: a function made on every render is harmless as a function and would remount as a component.
@@ -117,6 +121,7 @@ export function Sidebar({
   return (
     <nav className="sidebar" aria-label="Sidebar" hidden={hidden}>
       <Wordmark />
+      <SearchRow chord={chord("palette")} onClick={onSearch} />
       <div className="sidebar-nav">
         <NavItem icon={<HomeIcon />} label="Home" current={current("home")} onClick={() => onGo("home")} title={`Home (${chord("go.home")})`} />
         <NavItem icon={<TerminalIcon />} label="Work" current={current("work")} onClick={() => onGo("work")} title={`Work (${chord("go.work")})`} />

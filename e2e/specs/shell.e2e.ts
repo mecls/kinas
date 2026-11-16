@@ -153,4 +153,17 @@ describe("the sidebar (DESIGN.md §3.1)", () => {
     }));
     expect(seen).toEqual({ reader: 0, panel: "closed" });
   });
+
+  // The interface polish, rule 19: under the wordmark, a search row with the palette's chord; a click opens the palette.
+  it("the search row under the wordmark opens the palette", async () => {
+    const seen = await browser.execute(() => {
+      const row = document.querySelector(".sidebar .ui-search");
+      return { after: row?.previousElementSibling?.className ?? null, label: row?.querySelector(".ui-nav-label")?.textContent ?? null, chord: row?.querySelector(".ui-kbd")?.textContent ?? null };
+    });
+    expect(seen).toEqual({ after: "ui-word", label: "Search", chord: "⌘K" });
+    await $(".sidebar .ui-search").click();
+    await expect($(".palette")).toBeDisplayed();
+    await browser.keys(["Escape"]);
+    await expect($(".palette")).not.toBeExisting();
+  });
 });

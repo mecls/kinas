@@ -33,6 +33,7 @@ export function ConvexSection({ settings, act, note }: Props) {
       </p>
 
       <form
+        data-setting="convex.key"
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
@@ -65,7 +66,7 @@ export function ConvexSection({ settings, act, note }: Props) {
         )}
       </form>
 
-      <div className="row">
+      <div className="row" data-setting="convex.url">
         {/* Saved on blur, like the other text settings. `defaultValue` rather than a controlled value, so a
             settings reload cannot fight what is being typed. Empty disconnects the deployment: no requests. */}
         <input
@@ -83,7 +84,7 @@ export function ConvexSection({ settings, act, note }: Props) {
         />
       </div>
 
-      <div className="row">
+      <div className="row" data-setting="convex.plan">
         <label className="settings-help" htmlFor="convex-plan">
           Plan
         </label>

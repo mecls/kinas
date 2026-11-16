@@ -38,6 +38,20 @@
 .ui-nav[aria-current="true"] .ui-icon {
   color: var(--accent);
 }
+/* The search row: a nav row drawn as a field, so it reads as the place to type. */
+.ui-search {
+  margin-bottom: var(--space-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.ui-search:hover {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.ui-search .ui-kbd {
+  margin-left: auto;
+}
 .ui-nav-label {
   flex: 1;
   min-width: 0;

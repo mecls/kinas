@@ -77,6 +77,9 @@ function linkText(link: LinkStatus): string {
   }
 }
 
+/** What a setting's focus lands on: its first control that can take it. */
+const CONTROL = "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])";
+
 /** What Change is listening for: an in-window shortcut, or the global hotkey. */
 type Recording = AppAction | "hotkey";
 
@@ -86,6 +89,7 @@ export function SettingsPage({
   onShortcutsChange,
   projects,
   onProjectsChange,
+  target = null,
 }: {
   active: boolean;
   shortcuts: Shortcuts;
@@ -93,6 +97,8 @@ export function SettingsPage({
   /** The client folders the sidebar lists (App.tsx), and the way to have them read again after a change here. */
   projects: readonly ProjectRow[];
   onProjectsChange: () => void;
+  /** A setting the palette chose (settings/index.ts): scrolled to, its control focused. `seq` makes a repeat new. */
+  target?: { id: string; seq: number } | null;
 }) {
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -129,6 +135,24 @@ export function SettingsPage({
     load();
     root.current?.focus({ preventScroll: true });
   }, [active, load]);
+
+  // The palette's setting (interface polish, rule 16): once the page shows and its settings are read, scroll the
+  // setting into view and focus its control — after the effect above has taken focus for the page. A setting with no
+  // control of its own (the hook's status, the CLI's link) takes focus itself.
+  const targeted = useRef(0);
+  useEffect(() => {
+    if (!active || !target || target.seq === targeted.current || !settings) return;
+    const el = root.current?.querySelector<HTMLElement>(`[data-setting="${CSS.escape(target.id)}"]`);
+    if (!el) return;
+    targeted.current = target.seq;
+    el.scrollIntoView({ block: "center" });
+    const control = el.matches(CONTROL) ? el : el.querySelector<HTMLElement>(CONTROL);
+    if (control) control.focus({ preventScroll: true });
+    else {
+      el.tabIndex = -1;
+      el.focus({ preventScroll: true });
+    }
+  }, [active, target, settings]);
 
   const act = async (section: string, what: () => Promise<void>, done?: string) => {
     setMessage(null);
@@ -184,7 +208,7 @@ export function SettingsPage({
             <SectionHeader title="Providers" />
             <Card className="settings-section" data-section="claude">
               <h2>Claude Code connection</h2>
-              <p className="settings-help" data-testid="hook-status">
+              <p className="settings-help" data-testid="hook-status" data-setting="claude.connection">
                 Status: {HOOK_STATE[settings.claude_hook.state]}
                 {settings.claude_hook.minutes_ago !== null && settings.claude_hook.state === "last_seen" && ` ${settings.claude_hook.minutes_ago} min ago`}
               </p>
@@ -192,7 +216,7 @@ export function SettingsPage({
                 Add these lines to <code>~/.claude/statusline-command.sh</code>, directly after <code>input=$(cat)</code>. Kinas never edits that file.
               </p>
               {CLAUDE_HOOK_LINES.map((line, i) => (
-                <div className="hook-line" key={i}>
+                <div className="hook-line" key={i} data-setting={i === 0 ? "claude.lines" : undefined}>
                   <code>{line}</code>
                   <Button
                     className="button"
@@ -215,6 +239,7 @@ export function SettingsPage({
               <h2>Ollama Cloud API key</h2>
               <form
                 className="row"
+                data-setting="ollama.key"
                 onSubmit={(e) => {
                   e.preventDefault();
                   setSaving(true);
@@ -263,6 +288,7 @@ export function SettingsPage({
               <input
                 className="ui-input field"
                 aria-label="Projects folder"
+                data-setting="projects.root"
                 defaultValue={settings.projects_root}
                 spellCheck={false}
                 disabled={settings.projects_root_from_env}
@@ -274,7 +300,7 @@ export function SettingsPage({
               {settings.projects_root_from_env && <p className="problem">KINAS_ROOT is set in the environment, so it wins over this field.</p>}
               {note("projects")}
             </Card>
-            <Card className="settings-section" data-section="folders">
+            <Card className="settings-section" data-section="folders" data-setting="folders.list">
               <h2>Client folders</h2>
               <p className="settings-help">
                 Every git repository up to three levels under the projects folder, and the folders you added. The chip is the folder&apos;s colour on every page; click it for the next of the six. A folder out of the sidebar is off Home too. An internal folder is listed last, with the tag. Remove takes a folder out of Kinas without touching it on disk.
@@ -305,7 +331,7 @@ export function SettingsPage({
               <p className="settings-help">Each one includes ⌘, so none of them takes a key from the terminal. Press Change, then the new chord; Esc cancels.</p>
               <ul className="shortcut-list">
                 {SHORTCUT_ACTIONS.map((action) => (
-                  <ShortcutRow key={action} id={action} title={SHORTCUT_TITLES[action]} chord={shortcuts[action]} {...recorder(action)} />
+                  <ShortcutRow key={action} id={action} setting={`shortcuts.${action}`} title={SHORTCUT_TITLES[action]} chord={shortcuts[action]} {...recorder(action)} />
                 ))}
               </ul>
               {note("shortcuts")}
@@ -321,7 +347,7 @@ export function SettingsPage({
               <h2>Global hotkey</h2>
               <p className="settings-help">Works from any app, even when Kinas is hidden.</p>
               <ul className="shortcut-list">
-                <ShortcutRow id="hotkey" title="Bring Kinas forward and open the palette" chord={settings.global_hotkey} {...recorder("hotkey")} />
+                <ShortcutRow id="hotkey" setting="hotkey.chord" title="Bring Kinas forward and open the palette" chord={settings.global_hotkey} {...recorder("hotkey")} />
               </ul>
               {settings.hotkey_error && <p className="problem">hotkey unavailable: {settings.hotkey_error}</p>}
               {note("hotkey")}
@@ -333,7 +359,7 @@ export function SettingsPage({
             <Card className="settings-section" data-section="appearance">
               <h2>Appearance</h2>
               <p className="settings-help">Warm white with royal blue, or the dark ground. The title bar follows.</p>
-              <select className="ui-input field" aria-label="Appearance" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
+              <select className="ui-input field" aria-label="Appearance" data-setting="appearance.theme" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
                 {APPEARANCE_CHOICES.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -341,7 +367,7 @@ export function SettingsPage({
                 ))}
               </select>
               <p className="settings-help">The accent: the selected nav row, primary buttons and a selected card's edge. A shade that would not read in either ground is not saved.</p>
-              <AccentField value={settings.accent} onChange={(hex) => void act("appearance", () => setAccent(hex))} />
+              <AccentField setting="appearance.accent" value={settings.accent} onChange={(hex) => void act("appearance", () => setAccent(hex))} />
               {note("appearance")}
             </Card>
           </Section>
@@ -350,7 +376,7 @@ export function SettingsPage({
             <SectionHeader title="Advanced" />
             <Card className="settings-section" data-section="menu-bar">
               <h2>Menu bar</h2>
-              <select className="ui-input field" aria-label="Menu bar quota" value={settings.menu_bar_quota} onChange={(e) => void act("menu-bar", () => setMenuBarQuota(e.currentTarget.value))}>
+              <select className="ui-input field" aria-label="Menu bar quota" data-setting="menu-bar.quota" value={settings.menu_bar_quota} onChange={(e) => void act("menu-bar", () => setMenuBarQuota(e.currentTarget.value))}>
                 {MENU_BAR_CHOICES.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -361,7 +387,7 @@ export function SettingsPage({
             </Card>
             <Card className="settings-section" data-section="login">
               <h2>Launch at login</h2>
-              <label className="row">
+              <label className="row" data-setting="login.launch">
                 <input type="checkbox" checked={settings.launch_at_login} onChange={(e) => void act("login", () => setLaunchAtLogin(e.currentTarget.checked))} />
                 Open Kinas when I log in
               </label>
@@ -373,6 +399,7 @@ export function SettingsPage({
               <input
                 className="ui-input field"
                 aria-label="Organisation name"
+                data-setting="org.name"
                 defaultValue={settings.org_name}
                 onBlur={(e) => {
                   const name = e.currentTarget.value.trim();
@@ -387,6 +414,7 @@ export function SettingsPage({
               <input
                 className="ui-input field"
                 aria-label="Editor for Open in editor"
+                data-setting="reader.editor"
                 defaultValue={settings.reader_editor}
                 spellCheck={false}
                 onBlur={(e) => {
@@ -398,7 +426,7 @@ export function SettingsPage({
             </Card>
             <Card className="settings-section" data-section="cli">
               <h2>kinas CLI</h2>
-              <p className={settings.cli_link.state === "conflict" ? "problem" : "settings-help"} data-testid="cli-link">
+              <p className={settings.cli_link.state === "conflict" ? "problem" : "settings-help"} data-testid="cli-link" data-setting="cli.link">
                 {linkText(settings.cli_link)}
               </p>
             </Card>
@@ -411,19 +439,22 @@ export function SettingsPage({
 
 function ShortcutRow({
   id,
+  setting,
   title,
   chord,
   recording,
   onRecording,
 }: {
   id: string;
+  /** Its id in settings/index.ts, which the palette opens. */
+  setting: string;
   title: string;
   chord: string;
   recording: boolean;
   onRecording: (on: boolean) => void;
 }) {
   return (
-    <li className="shortcut" data-shortcut={id} data-recording={recording ? "true" : undefined}>
+    <li className="shortcut" data-shortcut={id} data-setting={setting} data-recording={recording ? "true" : undefined}>
       <span className="shortcut-title">{title}</span>
       <kbd className="shortcut-chord">{recording ? "Press a chord…" : chordLabel(chord)}</kbd>
       <Button

@@ -290,23 +290,26 @@ const LATIN: [(&str, &str); 28] = [
 
 /// Higher is better; `None` is no match. A name match beats any path match, and a match at the start of a word
 /// beats one inside a word (rule 15): the whole name, then the name's start, a word in the name, inside the name,
-/// a word in the path, inside the path.
+/// a word in the path, inside the path — then, below every whole match, a query of several words each found in the
+/// name or the path ("acme inventory"). `app/src/palette/match.ts` ranks the same tiers.
 fn score(folded_query: &str, e: &Entry) -> Option<u32> {
     let q = folded_query;
     if q.is_empty() {
         return None;
     }
     let tier = if e.folded_name == q {
-        6
+        7
     } else if e.folded_name.starts_with(q) {
-        5
+        6
     } else if at_word_start(&e.folded_name, q) {
-        4
+        5
     } else if e.folded_name.contains(q) {
-        3
+        4
     } else if at_word_start(&e.folded_path, q) {
-        2
+        3
     } else if e.folded_path.contains(q) {
+        2
+    } else if q.contains(char::is_whitespace) && q.split_whitespace().all(|w| e.folded_name.contains(w) || e.folded_path.contains(w)) {
         1
     } else {
         return None;
@@ -444,7 +447,10 @@ mod tests {
         assert!(s("invoices", "invoices/notes.md") > s("voices", "invoices/notes.md"));
         assert_eq!(s("zzz", "inventory.ts"), None);
         assert_eq!(s("", "inventory.ts"), None);
-        assert_eq!(s("reuniao", "atas/Reunião de março.md"), Some(5));
+        assert_eq!(s("reuniao", "atas/Reunião de março.md"), Some(6));
+        assert_eq!(s("atas marco", "atas/Reunião de março.md"), Some(1), "each word in the name or the path");
+        assert!(s("reuniao", "atas/Reunião de março.md") > s("atas marco", "atas/Reunião de março.md"));
+        assert_eq!(s("atas abril", "atas/Reunião de março.md"), None);
     }
 
     #[test]

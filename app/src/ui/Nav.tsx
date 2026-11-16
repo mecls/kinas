@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Kbd } from "./Button.tsx";
 import { Chip, Dot, Tag, type Category } from "./Dot.tsx";
-import { ServerIcon } from "./icons.tsx";
+import { SearchIcon, ServerIcon } from "./icons.tsx";
 import "./Nav.css";
 
 // DESIGN.md §3.1: the sidebar's wordmark, its navigation rows, the client folders with their chips and the VPS row
@@ -33,6 +34,20 @@ export function NavItem({
       <span className="ui-nav-label">{label}</span>
       {count !== undefined && count > 0 && <span className="ui-nav-count">{count}</span>}
       {tag && <Tag>{tag}</Tag>}
+    </button>
+  );
+}
+
+/**
+ * The sidebar's search row (1.11, the interface polish, rule 19): under the wordmark, a magnifier, "Search" and the
+ * palette's chord as a Kbd. A click opens the palette, the same one ⌘K opens.
+ */
+export function SearchRow({ chord, onClick }: { chord: string; onClick: () => void }) {
+  return (
+    <button type="button" className="ui-nav ui-search" onClick={onClick} title={`Search (${chord})`}>
+      <SearchIcon />
+      <span className="ui-nav-label">Search</span>
+      <Kbd>{chord}</Kbd>
     </button>
   );
 }

@@ -68,6 +68,10 @@
   line-height: var(--lh-sm);
 }
 
+.ui-palette-detail > .ui-dot {
+  margin-right: var(--space-1h);
+}
+
 .ui-palette-detail[data-mono] {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);

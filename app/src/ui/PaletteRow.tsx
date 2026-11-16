@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Kbd } from "./Button.tsx";
-import { Chip, type Category } from "./Dot.tsx";
+import { Chip, Dot, type Category, type DotKind } from "./Dot.tsx";
 import { ChevronRightIcon, CrewIcon, FileIcon, FolderIcon, GearIcon, InboxIcon, TerminalIcon } from "./icons.tsx";
 import "./PaletteRow.css";
 
@@ -19,6 +19,8 @@ export interface PaletteRowItem {
   title: string;
   detail?: string;
   mono?: boolean;
+  /** A status word's dot, before the detail: a task's word (DESIGN.md §4 Palette row). */
+  dot?: { color: string; kind: DotKind };
   dir?: boolean;
   folder?: { name: string; cat: Category };
   chord?: string;
@@ -69,6 +71,7 @@ export function PaletteRow({ item, name, selected, onHover, onPick }: { item: Pa
       aria-selected={selected}
       className="ui-palette-row"
       data-kind={item.kind}
+      data-key={item.key}
       data-command={item.kind === "command" ? ownId(item.key) : undefined}
       data-file={item.kind === "file" ? ownId(item.key) : undefined}
       onMouseMove={onHover}
@@ -78,6 +81,7 @@ export function PaletteRow({ item, name, selected, onHover, onPick }: { item: Pa
       <span className="ui-palette-name">{name.map((r, i) => (r.hit ? <b key={i}>{r.text}</b> : r.text))}</span>
       {item.detail && (
         <span className="ui-palette-detail" data-mono={item.mono || undefined}>
+          {item.dot && <Dot color={item.dot.color} kind={item.dot.kind} />}
           {item.detail}
         </span>
       )}

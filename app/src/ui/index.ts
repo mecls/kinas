@@ -20,7 +20,7 @@ export { Timeline, type TimelineItem } from "./Timeline.tsx";
 export { Toast, EmptyState } from "./Toast.tsx";
 export { TerminalChrome } from "./TerminalChrome.tsx";
 export { PanelHeader, PanelBody, PanelFooter, QuestionCard, ChecksList, type Check } from "./Panel.tsx";
-export { Wordmark, NavItem, NavHeading, ConnectionRow, type ConnectionState } from "./Nav.tsx";
+export { Wordmark, NavItem, NavHeading, SearchRow, ConnectionRow, type ConnectionState } from "./Nav.tsx";
 export { Field, Input, Switch } from "./Field.tsx";
 export { AccentField } from "./AccentField.tsx";
 export { Menu, type MenuItem, type MenuDivider, type MenuEntry } from "./Menu.tsx";

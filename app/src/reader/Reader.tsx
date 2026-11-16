@@ -326,6 +326,7 @@ export function Reader({
   notice,
   side,
   onSide,
+  onTabs,
 }: {
   request: ReaderRequest | null;
   onClose: () => void;
@@ -362,6 +363,8 @@ export function Reader({
    */
   side: ReaderSide;
   onSide: (side: ReaderSide) => void;
+  /** Told the tabs, in strip order, whenever one opens, closes or is renamed: the palette's Open group. */
+  onTabs?: (tabs: readonly { path: string; displayPath: string }[]) => void;
 }) {
   const [doc, setDoc] = useState<Doc | null>(null);
   const [problem, setProblem] = useState<{ displayPath: string; message: string } | null>(null);
@@ -381,6 +384,11 @@ export function Reader({
   const leftAt = useRef<{ path: string; scrollTop: number } | null>(null);
   /** Every file shown this session, one tab each (reader/tabs.ts). In memory only: never stored, gone on quit. */
   const [tabs, setTabs] = useState<Tabs>(NO_TABS);
+  // A tab's scroll position changes its object, not the list the palette shows: report only a change of what is open.
+  const tabList = tabs.list.map((t) => `${t.path}\u0000${t.displayPath}`).join("\n");
+  useEffect(() => {
+    onTabs?.(tabList === "" ? [] : tabList.split("\n").map((line) => ({ path: line.split("\u0000")[0]!, displayPath: line.split("\u0000")[1]! })));
+  }, [tabList, onTabs]);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const [tall, setTall] = useState(false);

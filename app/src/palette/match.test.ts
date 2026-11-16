@@ -31,8 +31,16 @@ describe("score", () => {
   });
 
   test("accents and case never stop a match", () => {
-    expect(score("REUNIAO", `${DECOMPOSED} de março.md`)).toBe(5);
-    expect(score(COMPOSED, "Reuniao.md")).toBe(5);
+    expect(score("REUNIAO", `${DECOMPOSED} de março.md`)).toBe(6);
+    expect(score(COMPOSED, "Reuniao.md")).toBe(6);
+  });
+
+  test("several words match when each is in the name or the path, below every whole match", () => {
+    expect(score("ollama key", "API key", "Ollama Cloud Used only to read your usage.")).toBe(1);
+    expect(score("key ollama", "API key", "Ollama Cloud")).toBe(1);
+    expect(score("ollama key", "Deploy key", "Convex")).toBeNull();
+    expect(score("api key", "API key", "Ollama Cloud")!).toBeGreaterThan(score("ollama key", "API key", "Ollama Cloud")!);
+    expect(score("acme inventory", "inventory.ts", "clients/acme/src/inventory.ts")).toBe(1);
   });
 
   test("no match, or nothing typed, is null", () => {
@@ -73,6 +81,18 @@ describe("highlight", () => {
     expect(highlight("strasse", "Straße.md")).toEqual([
       { text: "Straße", hit: true },
       { text: ".md", hit: false },
+    ]);
+  });
+
+  test("marks each word the name holds when the whole query is not in it", () => {
+    expect(highlight("ollama key", "API key")).toEqual([
+      { text: "API ", hit: false },
+      { text: "key", hit: true },
+    ]);
+    expect(highlight("go usage", "Go to Usage")).toEqual([
+      { text: "Go", hit: true },
+      { text: " to ", hit: false },
+      { text: "Usage", hit: true },
     ]);
   });
 

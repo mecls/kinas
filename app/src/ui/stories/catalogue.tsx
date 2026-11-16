@@ -35,6 +35,7 @@ import {
   MetricRow,
   NavHeading,
   NavItem,
+  SearchRow,
   PanelBody,
   PanelFooter,
   PanelHeader,
@@ -566,6 +567,7 @@ export const STORIES: Story[] = [
         node: (
           <div style={{ width: "var(--sidebar-w)", display: "flex", flexDirection: "column", gap: "var(--space-0)", padding: "var(--space-3) var(--space-2)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", minHeight: "320px" }}>
             <Wordmark />
+            <SearchRow chord="⌘K" onClick={noop} />
             <NavItem icon={<HomeIcon />} label="Home" current />
             <NavItem icon={<TerminalIcon />} label="Work" />
             <NavItem icon={<CrewIcon />} label="Crew" />

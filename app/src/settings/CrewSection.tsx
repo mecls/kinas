@@ -113,7 +113,7 @@ export function CrewSection({ active }: { active: boolean }) {
   const missingPrereqs = settings?.prereqs.filter((p) => p.state !== "installed").map((p) => p.name) ?? [];
 
   return (
-    <Card className="settings-section" data-section="crew">
+    <Card className="settings-section" data-section="crew" data-setting="crew.firstmate">
       <h2>Firstmate</h2>
       {error && <p className="crew-problem">Could not read Firstmate's config: {error}</p>}
       {!settings ? (

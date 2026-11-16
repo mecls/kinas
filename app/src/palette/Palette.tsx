@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { statusFromStore, statusLines, type Command } from "@kinas/commands";
 import { dispatchAppAction } from "../actions.ts";
-import { filesIndexWarm, filesSearch, getUsageSnapshot, refreshReadings, type FileSearch } from "../api.ts";
+import { filesIndexWarm, filesSearch, getUsageSnapshot, refreshReadings, type CrewSnapshot, type FileSearch } from "../api.ts";
 import { refreshRoot, waitingCount } from "../reader/changes.ts";
 import type { Shortcuts } from "../settings/shortcuts.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
@@ -9,13 +9,28 @@ import { SearchIcon } from "../ui/icons.tsx";
 import { moreKey, PaletteFoot, PaletteGroupView } from "../ui/PaletteRow.tsx";
 import { highlight } from "./match.ts";
 import { snapshotAdapter } from "./snapshotAdapter.ts";
-import { commandItems, fileItems, FILES_ASKED, GROUP_LABEL, toGroup, type PaletteGroup, type PaletteItem } from "./sources.ts";
+import {
+  commandItems,
+  fileItems,
+  FILES_ASKED,
+  folderItems,
+  GROUP_LABEL,
+  inboxItems,
+  openItems,
+  settingItems,
+  taskItems,
+  toGroup,
+  type OpenItem,
+  type PaletteGroup,
+  type PaletteItem,
+} from "./sources.ts";
 
 // The ⌘K palette (R36, §3.7): the registry's palette door. Esc closes it and hands focus back to whatever had
 // it — the terminal included — so the next keystroke reaches the shell without a click (R31).
 //
 // The interface polish (tasks/interface-polish, PRD rules 12–18): one search, in groups of Palette rows (ui/PaletteRow),
-// each showing five then "N more". Commands answer as the query changes; Files asks search.rs 60 ms after the last
+// each showing five then "N more", in rule 13's order. The in-window groups — Open, Client folders, Tasks, Inbox,
+// Settings — are searched only once something is typed (rule 14). Commands answer as the query changes; Files asks search.rs 60 ms after the last
 // keystroke, each question numbered so only the latest answer is drawn. The keys stay these four — typing, ↑ ↓,
 // Enter, Esc (build-spec invariant 8); "N more" is a row the arrows reach, and Enter on it opens its group.
 
@@ -27,7 +42,8 @@ const INDEXING_RETRY_MS = 250;
 /** `filesFolder`: the folder the sidebar's Files shows, for "Refresh files" (tree changes rule 16). `onFirstMate`: the
  * Crew page's First mate, for "Go to the first mate". `onOpen`: a file or folder found by name, opened as a sidebar
  * click opens it. `shortcuts`: the chords bound now, shown on their commands (rule 9). `folders`: the client folders,
- * whose chip a file under one carries. */
+ * whose chip a file under one carries. `tabs`: the reader's tabs. `crew`: App's one crew reading, for Tasks and Inbox.
+ * `onTask`, `onItem`, `onSetting`: rule 16's Enter for a task, an inbox item and a setting. */
 export function Palette({
   onClose,
   filesFolder,
@@ -35,6 +51,11 @@ export function Palette({
   onOpen,
   shortcuts,
   folders,
+  tabs,
+  crew,
+  onTask,
+  onItem,
+  onSetting,
 }: {
   onClose: () => void;
   filesFolder: string | null;
@@ -42,6 +63,11 @@ export function Palette({
   onOpen: (path: string) => void;
   shortcuts: Shortcuts;
   folders: readonly SeatedFolder[];
+  tabs: readonly { path: string; displayPath: string }[];
+  crew: CrewSnapshot | null;
+  onTask: (id: string) => void;
+  onItem: OpenItem;
+  onSetting: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -133,9 +159,9 @@ export function Palette({
 
   // The callbacks change with every render of App; the rows reach them through this, so the groups are rebuilt only
   // when what they show changes.
-  const acts = useRef({ run, onOpen, onClose });
+  const acts = useRef({ run, onOpen, onClose, onTask, onItem, onSetting });
   useEffect(() => {
-    acts.current = { run, onOpen, onClose };
+    acts.current = { run, onOpen, onClose, onTask, onItem, onSetting };
   });
 
   /** Each group with every row it matched (`all`), and as shown (`group`). */
@@ -144,17 +170,33 @@ export function Palette({
       acts.current.onOpen(path);
       acts.current.onClose();
     };
+    // Each act closes the palette first, so the focus it hands back is where the target then takes it from.
+    const then =
+      <A extends unknown[]>(f: (...a: A) => void) =>
+      (...a: A) => {
+        acts.current.onClose();
+        f(...a);
+      };
     const out: { all: PaletteItem[]; group: PaletteGroup }[] = [];
-    const commands = commandItems(query, shortcuts, (c) => void acts.current.run(c));
-    out.push({ all: commands, group: toGroup("command", commands, opened.has("command")) });
+    const add = (id: PaletteGroup["id"], all: PaletteItem[], beyond = 0) => out.push({ all, group: toGroup(id, all, opened.has(id), beyond) });
+    add(
+      "command",
+      commandItems(query, shortcuts, (c) => void acts.current.run(c)),
+    );
+    if (query.trim() !== "") add("open", openItems(query, tabs, folders, open));
     if (files?.indexing) {
       out.push({ all: [], group: { id: "file", label: GROUP_LABEL.file, items: [], more: 0, state: "loading", note: "Indexing files…" } });
     } else if (files) {
-      const found = fileItems(files, folders, open);
-      out.push({ all: found, group: toGroup("file", found, opened.has("file"), files.more) });
+      add("file", fileItems(files, folders, open), files.more);
+    }
+    if (query.trim() !== "") {
+      add("folder", folderItems(query, folders, open));
+      add("task", taskItems(query, crew?.tasks ?? [], folders, then((id: string) => acts.current.onTask(id))));
+      add("inbox", inboxItems(query, crew?.decisions ?? [], folders, crew?.now ?? Date.now(), then((task: string, key: string) => acts.current.onItem(task, key))));
+      add("setting", settingItems(query, then((id: string) => acts.current.onSetting(id))));
     }
     return out.filter(({ group: g }) => g.items.length > 0 || g.state !== "ready");
-  }, [query, shortcuts, files, folders, opened]);
+  }, [query, shortcuts, files, folders, opened, tabs, crew]);
   const groups = useMemo(() => built.map((b) => b.group), [built]);
 
   /** Every row the arrows reach, in order: each group's items, then its "N more". */
@@ -208,7 +250,7 @@ export function Palette({
             ref={input}
             className="palette-input"
             value={query}
-            placeholder="Search files and commands"
+            placeholder="Search files, folders, tasks, settings and commands"
             aria-label="Search"
             onChange={(e) => setQuery(e.currentTarget.value)}
           />

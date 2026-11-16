@@ -10,7 +10,8 @@ import "./Field.css";
 // where it matters; `onChange` stores it. Plain markup in slice 1 of the design-system build; its sheet lands with
 // the Settings cards.
 
-export function AccentField({ value, onChange }: { value: string | null; onChange: (hex: string | null) => void }) {
+/** `setting`: the id Settings' search and the palette open it by (settings/index.ts), on the field's outer element. */
+export function AccentField({ value, onChange, setting }: { value: string | null; onChange: (hex: string | null) => void; setting?: string }) {
   const current = value ?? BRAND_ACCENT;
   const [tried, setTried] = useState<string | null>(null);
   const shown = tried ?? current;
@@ -28,7 +29,7 @@ export function AccentField({ value, onChange }: { value: string | null; onChang
   };
 
   return (
-    <div className="ui-accent" data-accent={current}>
+    <div className="ui-accent" data-accent={current} data-setting={setting}>
       <div className="ui-accent-swatches" role="group" aria-label="Accent">
         {SWATCHES.map((s) => (
           <button

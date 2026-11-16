@@ -28,6 +28,7 @@ export function HostingerSection({ settings, act, note }: Props) {
       </p>
 
       <form
+        data-setting="hostinger.token"
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
@@ -58,7 +59,7 @@ export function HostingerSection({ settings, act, note }: Props) {
         )}
       </form>
 
-      <div className="row">
+      <div className="row" data-setting="hostinger.machine">
         {/* The list is fetched on demand and stored nowhere: only the chosen id is written. */}
         <Button
           className="button"

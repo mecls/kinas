@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_LOG, fakeHome } from "../helpers.ts";
-import { setCapacity, setSnapshot, writeConfig, writeSnapshot } from "../fake-firstmate/make.ts";
+import { setCapacity, setSnapshot, writeConfig, writeLedger, writeSnapshot } from "../fake-firstmate/make.ts";
 
 // Firstmate, current (build spec §11.4, §12): the branch, in review, a held question's PR, free lanes and the fleet
 // ledger, as Firstmate 427056c publishes them, read from the fake home. Each step puts a fleet in the fake home and runs
@@ -289,6 +289,64 @@ describe("Firstmate, current", () => {
     await browser.waitUntil(async () => (await options()).includes('"cap 4"'), { timeout: 30000, interval: 250, timeoutMsg: "Settings never read cap 4" });
     // Back to none for the cases after this one; Kinas wrote none of these files — the spec did, as the captain would.
     for (const name of ["park-on-review", "fleet-ledger", "lane-capacity"] as const) writeConfig(home, name, null);
+  });
+
+  it("the fleet ledger: real times, its four events once, a newer record refused, an emptied file read again", async () => {
+    const home = fakeHome();
+    const sec = Math.floor(Date.now() / 1000);
+    const rec = (ts: number, event: string, extra: Record<string, unknown> = {}) => `${JSON.stringify({ v: 1, ts, event, task: PARKED, ...extra })}\n`;
+    const pr = "https://github.com/acme-9c2e/harbor-api-9c2e/pull/90";
+    const timeline = () =>
+      browser.execute(() => [...document.querySelectorAll(".crew-detail .ui-timeline-text")].map((t) => t.textContent ?? "").filter((t) => /^(dispatched|PR #90 ready|merged|landed|cleaned up)/.test(t)));
+    const notes = () => browser.execute(() => [...document.querySelectorAll('[data-testid="crew-note"]')].map((p) => p.textContent ?? ""));
+    const meta = () => browser.execute((t: string) => document.querySelector(`section[data-page="crew"] article.crew-card[data-task="${t}"] .crew-meta`)?.textContent ?? "", PARKED);
+
+    await go("Crew");
+    setSnapshot(home, CURRENT);
+    writeLedger(home, [
+      rec(sec - 150 * 60, "task.dispatched", { kind: "ship", project: "harbor-api-9c2e", harness: "claude", model: null }),
+      rec(sec - 140 * 60, "task.status", { state: "working", key: null, text: " a status line 9c2e never kept" }),
+      rec(sec - 140 * 60, "task.pr_ready", { pr }),
+      rec(sec - 140 * 60, "task.pr_ready", { pr }),
+    ]);
+    await refresh();
+    await waitWord(PARKED, "in review");
+    await browser.waitUntil(async () => (await meta()).endsWith("working 2 h 30 min"), { timeout: 30000, interval: 250, timeoutMsg: `the card never counted from the dispatch: ${await meta()}` });
+
+    // Merged and cleaned up while the snapshot drops it: done, not gone, from dispatch to merge.
+    writeLedger(home, [rec(sec - 30 * 60, "task.merged", { via: "pr", pr }), rec(sec - 29 * 60, "task.cleaned_up")]);
+    writeSnapshot(home, current((snap) => {
+      snap.tasks = snap.tasks.filter((t) => t.id !== PARKED);
+      snap.backlog.records = snap.backlog.records.filter((r) => r.id !== PARKED);
+    }));
+    await refresh();
+    await waitWord(PARKED, "done");
+    expect(await meta()).toMatch(/done in 2 h 00 min$/);
+    await openTask(PARKED);
+    await browser.waitUntil(async () => (await timeline()).length === 4, { timeout: 30000, interval: 250, timeoutMsg: `the timeline never held the four events: ${JSON.stringify(await timeline())}` });
+    expect(await timeline()).toEqual(["dispatched · claude", "PR #90 ready", "merged · PR #90", "cleaned up"]);
+
+    // A record of another version: one line under the board, and nothing after it is read.
+    writeLedger(home, [`${JSON.stringify({ v: 2, ts: sec, event: "task.dispatched", task: "later-9c2e" })}\n`, rec(sec, "task.cleaned_up")]);
+    await refresh();
+    await browser.waitUntil(async () => (await notes()).includes("Fleet ledger: unsupported record version 2 · times from Kinas's own readings"), {
+      timeout: 30000,
+      interval: 250,
+      timeoutMsg: "the newer record was never said under the board",
+    });
+    await refresh();
+    expect(await timeline()).toEqual(["dispatched · claude", "PR #90 ready", "merged · PR #90", "cleaned up"]);
+
+    // Emptied, as the ledger's own doc says to truncate it: read from 0, the line clears, and nothing is kept twice.
+    writeLedger(home, [], { append: false });
+    await refresh();
+    await browser.waitUntil(async () => (await notes()).every((n) => !n.startsWith("Fleet ledger")), { timeout: 30000, interval: 250, timeoutMsg: "the ledger's line never cleared" });
+    writeLedger(home, [rec(sec - 140 * 60, "task.pr_ready", { pr })]);
+    await refresh();
+    await refresh();
+    expect(await timeline()).toEqual(["dispatched · claude", "PR #90 ready", "merged · PR #90", "cleaned up"]);
+    expect(runLog("crew: ledger ").length).toBeGreaterThan(0);
+    expect(runLog("never kept")).toEqual([]);
   });
 
   it("logs counts, never a task, a branch or a question", async () => {

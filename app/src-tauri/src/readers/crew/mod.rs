@@ -6,6 +6,7 @@
 pub mod capacity;
 pub mod gh;
 mod guard;
+pub mod ledger;
 pub mod mirror;
 pub mod schedule;
 pub mod snapshot;
@@ -303,6 +304,7 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
                 repos: repos_of(fleet, home, memo),
                 prs: prs_of(app, fleet, memo, visible, &open),
                 lanes: lanes_due(home, memo, now_ms()),
+                ledger: ledger_read(app, home),
             }
         }
         Err(_) => Found::default(),
@@ -428,6 +430,23 @@ fn lanes_due(home: &Path, memo: &mut Memo, now: i64) -> Option<Result<capacity::
         Err(_) => log::info!("crew: capacity failed in {ms} ms"),
     }
     Some(lanes)
+}
+
+/// The fleet ledger since the stored cursor (Firstmate, current): None while the file is absent. A file that cannot be
+/// read says so under the board, and the cursor stays.
+fn ledger_read(app: &AppHandle, home: &Path) -> Option<ledger::LedgerRead> {
+    let cursor = {
+        let store = app.state::<Store>();
+        let conn = store.conn();
+        crate::system::get_setting(&conn, store.org_id(), mirror::LEDGER_CURSOR_SETTING).and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default()
+    };
+    let started = Instant::now();
+    let read = match ledger::read_ledger(&home.join(ledger::LEDGER_FILE), cursor) {
+        Ok(read) => read?,
+        Err(_) => return Some(ledger::LedgerRead { events: Vec::new(), cursor, error: Some("could not be read".into()) }),
+    };
+    log::info!("crew: ledger {} events in {} ms", read.events.len(), started.elapsed().as_millis());
+    Some(read)
 }
 
 /// The capacity script's answer: exit 0, or 1 for an invalid `config/lane-capacity` — still a document, whose cap reads

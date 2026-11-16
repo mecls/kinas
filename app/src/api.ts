@@ -156,6 +156,10 @@ export interface CrewTask {
   /** When the Crew page's board, and Home's Overnight, first showed it finished; null until then. */
   board_seen_at: number | null;
   overnight_seen_at: number | null;
+  /** The fleet ledger's times (Firstmate, current): its first dispatch, its first merge and how it landed; null without. */
+  dispatched_at: number | null;
+  merged_at: number | null;
+  merged_via: "pr" | "local" | null;
 }
 export interface CrewDecision {
   task_id: string;

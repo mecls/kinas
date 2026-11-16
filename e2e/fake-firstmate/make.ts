@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, cpSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -64,6 +64,17 @@ export function setSnapshot(home: string, snapshot: string, exit = 0): void {
 export function writeConfig(home: string, name: "park-on-review" | "fleet-ledger" | "lane-capacity", text: string | null): void {
   const path = join(home, "config", name);
   if (text === null) rmSync(path, { force: true });
+  else writeFileSync(path, text);
+}
+
+/**
+ * Firstmate's fleet ledger, `state/fleet-ledger.jsonl` (Firstmate, current): `lines` appended as written — a record per
+ * line, or a half line — or the file emptied with `[]` and `append: false`, as `: > state/fleet-ledger.jsonl` does.
+ */
+export function writeLedger(home: string, lines: string[], opts: { append?: boolean } = {}): void {
+  const path = join(home, "state", "fleet-ledger.jsonl");
+  const text = lines.join("");
+  if (opts.append ?? true) appendFileSync(path, text);
   else writeFileSync(path, text);
 }
 

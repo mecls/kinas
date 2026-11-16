@@ -31,6 +31,9 @@ const task = (id: string, word: CrewWord, extra: Partial<CrewTask> = {}): CrewTa
   finished: false,
   board_seen_at: null,
   overnight_seen_at: null,
+  dispatched_at: null,
+  merged_at: null,
+  merged_via: null,
   ...extra,
 });
 
@@ -106,6 +109,11 @@ test("elapsed: working since first seen working, done in, or nothing", () => {
   expect(elapsedText(task("a", "done", { first_working_at: NOW - 60 * MIN, done_at: NOW - 19 * MIN }), NOW)).toBe("done in 41 min");
   expect(elapsedText(task("a", "queued"), NOW)).toBe("");
   expect(elapsedText(task("a", "done", { done_at: NOW }), NOW)).toBe("", "done, never seen working");
+  // Firstmate, current: the ledger's dispatch and merge, where Kinas kept them.
+  expect(elapsedText(task("a", "working", { dispatched_at: NOW - 30 * MIN, first_working_at: NOW - 12 * MIN }), NOW)).toBe("working 30 min");
+  expect(elapsedText(task("a", "done", { dispatched_at: NOW - 150 * MIN, merged_at: NOW - 0 * MIN, done_at: NOW + 5 * MIN }), NOW)).toBe("done in 2 h 30 min");
+  expect(elapsedText(task("a", "done", { dispatched_at: NOW - 90 * MIN, done_at: NOW - 30 * MIN }), NOW)).toBe("done in 1 h 00 min", "no merge: to done");
+  expect(elapsedText(task("a", "done", { first_working_at: NOW - 60 * MIN, merged_at: NOW - 20 * MIN }), NOW)).toBe("done in 40 min", "merged while listed");
   expect(duration(125 * MIN)).toBe("2 h 05 min");
   expect(metaLine(task("a", "queued"), NOW)).toBe("ship · claude");
   expect(metaLine(task("a", "working", { kind: "scout", harness: null, first_working_at: NOW - 3 * MIN }), NOW)).toBe("scout · working 3 min");

@@ -193,12 +193,18 @@ export function duration(ms: number): string {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
 }
 
-/** "working 12 min" from when Kinas first saw it working, "done in 41 min", or "" when it was never seen working. */
-export function elapsedText(t: CrewTask, now: number): string {
-  if (t.first_working_at === null) return "";
-  if (t.done_at !== null) return `done in ${duration(t.done_at - t.first_working_at)}`;
-  if (!inFlight(t)) return "";
-  return `working ${duration(now - t.first_working_at)}`;
+/**
+ * "working 12 min", "done in 41 min", or "" when there is no start. It counts from the fleet ledger's dispatch when Kinas
+ * kept one (DESIGN.md 1.12), else from when Kinas first saw the task working; "done in" runs to the ledger's merge, else
+ * to when Kinas first saw it done.
+ */
+export function elapsedText(t: Pick<CrewTask, "word" | "first_working_at" | "dispatched_at" | "done_at" | "merged_at">, now: number): string {
+  const start = t.dispatched_at ?? t.first_working_at;
+  if (start === null) return "";
+  const end = t.merged_at ?? t.done_at;
+  if (end !== null && (t.word === "done" || t.word === "gone" || t.done_at !== null)) return `done in ${duration(Math.max(0, end - start))}`;
+  if (!inFlight(t as CrewTask)) return "";
+  return `working ${duration(Math.max(0, now - start))}`;
 }
 
 /**

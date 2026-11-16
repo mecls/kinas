@@ -184,7 +184,7 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
       .query(
         `SELECT state, state_source, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_number, pr_state,
                 pr_draft, pr_mergeable, pr_checks_total, pr_checks_failed, first_working_at, done_at, gone_at,
-                ${this.hasCrewCurrent ? "merged_at" : "NULL AS merged_at"}
+                ${this.hasCrewCurrent ? "merged_at, dispatched_at" : "NULL AS merged_at, NULL AS dispatched_at"}
          FROM crew_tasks
          WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3)
          ORDER BY first_seen_at DESC, id`,

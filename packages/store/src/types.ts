@@ -79,6 +79,8 @@ export interface CrewTaskRow {
   gone_at: number | null;
   /** When the fleet ledger's `task.merged` was kept (0007, Firstmate, current); null on an older store. */
   merged_at: number | null;
+  /** The fleet ledger's first `task.dispatched` (0007); null on an older store or without the ledger. */
+  dispatched_at: number | null;
 }
 
 /** One task as the mirror holds it, for the context packet's Crew section (the first mate, slice 9). */

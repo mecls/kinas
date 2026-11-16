@@ -102,6 +102,15 @@ function stateOf(kind: string, text: string): BadgeState | "order" {
       return "gone";
     case "returned":
       return "working";
+    // 1.12, Firstmate, current: the fleet ledger's events.
+    case "dispatched":
+      return "working";
+    case "pr_ready":
+      return "ready";
+    case "merged":
+      return "done";
+    case "cleaned_up":
+      return "gone";
     default:
       return "stale";
   }

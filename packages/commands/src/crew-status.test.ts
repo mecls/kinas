@@ -24,6 +24,7 @@ const row = (over: Partial<CrewTaskRow>): CrewTaskRow => ({
   gone_at: null,
   state_source: null,
   merged_at: null,
+  dispatched_at: null,
   ...over,
 });
 
@@ -75,6 +76,17 @@ describe("kinas crew status", () => {
     for (const k of FORBIDDEN) expect(keys.has(k), k).toBe(false);
     expect(JSON.stringify(json)).not.toContain("9c2e");
     expect(Object.keys(json)).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "lanes", "tasks"]);
+  });
+
+  test("elapsed from the ledger's dispatch to its merge, where the app kept them (Firstmate, current)", () => {
+    const ledgered = crewStatusFromStore(
+      store([row({ backlog_state: "done", dispatched_at: NOW - 150 * MIN, first_working_at: NOW - 100 * MIN, merged_at: NOW - 10 * MIN, done_at: NOW - 5 * MIN })]),
+      NOW,
+      true,
+    );
+    expect(ledgered.tasks).toEqual([{ word: "done", elapsed_s: 140 * 60, pr: null }]);
+    const merged = crewStatusFromStore(store([row({ state: "working", merged_at: NOW - MIN, dispatched_at: NOW - 11 * MIN })]), NOW, true);
+    expect(merged.tasks[0]).toEqual({ word: "done", elapsed_s: 600, pr: null });
   });
 
   test("free lanes: the two numbers while a lane cap is set, and nothing of the reading's reasons (Firstmate, current)", () => {

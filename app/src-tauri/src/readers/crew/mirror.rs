@@ -14,6 +14,54 @@ use std::collections::{HashMap, HashSet};
 
 /// The last good lane reading (`capacity::Lanes`), in `settings`.
 pub(crate) const CAPACITY_SETTING: &str = "crew_capacity";
+/// Where the fleet ledger's last read stopped (`ledger::Cursor`), in `settings`.
+pub(crate) const LEDGER_CURSOR_SETTING: &str = "crew_ledger_cursor";
+
+/// The fleet ledger's kept events (Firstmate, current): each once (`UNIQUE` with `pr_url` '' for none, and `INSERT OR
+/// IGNORE`), then the task's stamps — the earliest dispatch, the first merge — where they are still empty. An event for a
+/// task the mirror does not hold is kept and attaches if the task appears (build spec §11.5 decision 3). Returns how many
+/// rows were new.
+pub(crate) fn ledger(tx: &Transaction, org: &str, events: &[super::ledger::LedgerEvent]) -> rusqlite::Result<usize> {
+    use super::ledger::LedgerKind;
+    let mut added = 0;
+    for e in events {
+        let (pr, via, harness): (&str, Option<&str>, Option<&str>) = match &e.kind {
+            LedgerKind::Dispatched { harness } => ("", None, harness.as_deref()),
+            LedgerKind::PrReady { pr } => (pr, None, None),
+            LedgerKind::Merged { via, pr } => (pr.as_deref().unwrap_or(""), Some(via.word()), None),
+            LedgerKind::CleanedUp => ("", None, None),
+        };
+        added += tx.execute(
+            "INSERT OR IGNORE INTO crew_ledger (org_id, task_id, event, at, pr_url, via, harness) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![org, e.task, e.kind.event(), e.at, pr, via, harness],
+        )?;
+    }
+    stamp(tx, org)?;
+    Ok(added)
+}
+
+/// Each task's ledger stamps where they are still empty: the earliest dispatch, and the first merge with how it landed.
+fn stamp(tx: &Transaction, org: &str) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE crew_tasks SET dispatched_at = (SELECT min(l.at) FROM crew_ledger l WHERE l.org_id = crew_tasks.org_id
+           AND l.task_id = crew_tasks.id AND l.event = 'dispatched')
+         WHERE org_id = ?1 AND dispatched_at IS NULL",
+        params![org],
+    )?;
+    tx.execute(
+        "UPDATE crew_tasks SET (merged_at, merged_via) = (SELECT l.at, l.via FROM crew_ledger l WHERE l.org_id = crew_tasks.org_id
+           AND l.task_id = crew_tasks.id AND l.event = 'merged' ORDER BY l.at, l.rowid LIMIT 1)
+         WHERE org_id = ?1 AND merged_at IS NULL",
+        params![org],
+    )?;
+    Ok(())
+}
+
+/// A merged task that left the snapshot is done, not gone (PRD rule 17): its `done_at` is the merge's time when it has
+/// none, so it clears as done work does.
+fn gone_merged(tx: &Transaction, org: &str) -> rusqlite::Result<usize> {
+    tx.execute("UPDATE crew_tasks SET done_at = merged_at WHERE org_id = ?1 AND done_at IS NULL AND merged_at IS NOT NULL AND gone_at IS NOT NULL", params![org])
+}
 
 /// The `age_seconds` bucket a `last_event` is deduplicated on: Firstmate reports the same event every cycle with a
 /// growing age, and its emission time, `now − age`, jitters by a second or two between cycles.
@@ -38,12 +86,17 @@ pub(crate) struct Found {
     /// The lane reading (Firstmate, current): None when the gate is closed or it ran within 30 s; a failure keeps the
     /// last good reading and says why under the board.
     pub lanes: Option<Result<super::capacity::Lanes, String>>,
+    /// The fleet ledger since the cursor (Firstmate, current): None while the file is absent.
+    pub ledger: Option<super::ledger::LedgerRead>,
 }
 
 /// What the cycle has to say beside a good snapshot (Firstmate, current): one line per source that failed, for the
 /// Crew page to show under the board. Fixed words and a schema or version number only — never a task or a path.
 pub(crate) fn notes(found: &Found) -> Vec<String> {
     let mut notes = Vec::new();
+    if let Some(why) = found.ledger.as_ref().and_then(|l| l.error.as_deref()) {
+        notes.push(format!("Fleet ledger: {why} · times from Kinas's own readings"));
+    }
     if let Some(Err(why)) = &found.lanes {
         notes.push(format!("Lane capacity: {why} · showing the last reading"));
     }
@@ -56,8 +109,19 @@ pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, S
     let tx = conn.transaction()?;
     let applied = match outcome {
         Ok(fleet) => {
+            // The ledger's events first, so this cycle's words know a merge; stamped again after the upserts for a task
+            // new this cycle. The events and the cursor past them are in this one transaction: a failure keeps both.
+            if let Some(read) = &found.ledger {
+                ledger(&tx, org, &read.events)?;
+            }
             let applied = apply(&tx, org, fleet, found, now)?;
             write_workers(&tx, org, &found.workers, now)?;
+            if let Some(read) = &found.ledger {
+                stamp(&tx, org)?;
+                gone_merged(&tx, org)?;
+                let cursor = serde_json::to_value(read.cursor).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                crate::system::put_setting(&tx, org, LEDGER_CURSOR_SETTING, &cursor)?;
+            }
             if let Some(Ok(lanes)) = &found.lanes {
                 let value = serde_json::to_value(lanes).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 crate::system::put_setting(&tx, org, CAPACITY_SETTING, &value)?;
@@ -561,6 +625,122 @@ mod tests {
 
     fn branch(store: &Store, id: &str) -> Option<String> {
         store.conn().query_row("SELECT branch FROM crew_tasks WHERE id = ?1", params![id], |r| r.get(0)).unwrap()
+    }
+
+    fn ledger_read(events: Vec<super::super::ledger::LedgerEvent>, offset: u64) -> super::super::ledger::LedgerRead {
+        super::super::ledger::LedgerRead { events, cursor: super::super::ledger::Cursor { dev: 1, ino: 2, offset }, error: None }
+    }
+
+    fn fixture_events() -> Vec<super::super::ledger::LedgerEvent> {
+        let bytes = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/crew-ledger.synthetic.jsonl")).unwrap();
+        super::super::ledger::parse_lines(&bytes).0
+    }
+
+    fn ledger_rows(store: &Store) -> Vec<(String, String, i64, String)> {
+        let conn = store.conn();
+        let mut stmt = conn.prepare("SELECT task_id, event, at, coalesce(pr_url, '') FROM crew_ledger ORDER BY at, task_id, event").unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+        rows.collect::<Result<_, _>>().unwrap()
+    }
+
+    /// Firstmate, current (build spec §6.7, §11.4): every kept event once, however often it is read; the earliest dispatch
+    /// and the first merge stamp the task, and stay.
+    #[test]
+    fn mirror_ledger_kept_once_and_stamps_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let found = Found { ledger: Some(ledger_read(fixture_events(), 10)), ..Found::default() };
+        record(&mut store.conn(), store.org_id(), &Ok(current()), &found, T0).unwrap();
+        let once = ledger_rows(&store);
+        assert_eq!(once.len(), 5, "seven events, two of them repeats: {once:?}");
+        record(&mut store.conn(), store.org_id(), &Ok(current()), &found, T0 + MIN).unwrap();
+        assert_eq!(ledger_rows(&store), once, "read again: nothing twice");
+        let stamps = |id: &str| -> (Option<i64>, Option<i64>, Option<String>) {
+            store.conn().query_row("SELECT dispatched_at, merged_at, merged_via FROM crew_tasks WHERE id = ?1", params![id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap()
+        };
+        assert_eq!(stamps("harbor-review-9c2e"), (Some(1_794_820_060_000), Some(1_794_829_000_000), Some("pr".into())));
+        assert_eq!(stamps("stock-webhook-9c2e"), (Some(1_794_820_000_000), None, None));
+        // A later dispatch and a second merge never move the first stamps.
+        use super::super::ledger::{LedgerEvent, LedgerKind, Via};
+        let later = vec![
+            LedgerEvent { task: "harbor-review-9c2e".into(), at: 1_794_830_000_000, kind: LedgerKind::Dispatched { harness: None } },
+            LedgerEvent { task: "harbor-review-9c2e".into(), at: 1_794_830_100_000, kind: LedgerKind::Merged { via: Via::Local, pr: None } },
+        ];
+        record(&mut store.conn(), store.org_id(), &Ok(current()), &Found { ledger: Some(ledger_read(later, 20)), ..Found::default() }, T0 + 2 * MIN).unwrap();
+        assert_eq!(stamps("harbor-review-9c2e"), (Some(1_794_820_060_000), Some(1_794_829_000_000), Some("pr".into())));
+        // The merged task reads done while the snapshot still lists it in review.
+        let conn = store.conn();
+        let p = priors_one(&conn, store.org_id(), "harbor-review-9c2e").unwrap().unwrap();
+        assert_eq!(word_of(&p.input()), "done");
+    }
+
+    /// A task that left the snapshot with a merge in the ledger is done, with the merge's time — not gone (PRD rule 17).
+    #[test]
+    fn mirror_gone_with_merge_is_done() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let found = Found { ledger: Some(ledger_read(fixture_events(), 10)), ..Found::default() };
+        record(&mut store.conn(), store.org_id(), &Ok(current()), &found, T0).unwrap();
+        let mut fleet = current();
+        fleet.tasks.retain(|t| t.id != "harbor-review-9c2e");
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &Found { ledger: Some(ledger_read(vec![], 10)), ..Found::default() }, T0 + MIN).unwrap();
+        let conn = store.conn();
+        let p = priors_one(&conn, store.org_id(), "harbor-review-9c2e").unwrap().unwrap();
+        assert_eq!((p.gone_at, p.done_at), (Some(T0 + MIN), Some(1_794_829_000_000)));
+        assert_eq!(word_of(&p.input()), "done");
+        assert!(super::super::word::finished(&p.input()), "finished, so it clears as done work does");
+    }
+
+    /// The ledger's rows and the cursor past them are one transaction (build spec §6.6): a failure after the rows were
+    /// written leaves both as they were.
+    #[test]
+    fn mirror_cursor_and_rows_in_one_transaction() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        store
+            .conn()
+            .execute_batch(
+                "CREATE TRIGGER no_cursor BEFORE INSERT ON settings WHEN NEW.key = 'crew_ledger_cursor'
+                 BEGIN SELECT RAISE(ABORT, 'refused for the test'); END;",
+            )
+            .unwrap();
+        let found = Found { ledger: Some(ledger_read(fixture_events(), 10)), ..Found::default() };
+        assert!(record(&mut store.conn(), store.org_id(), &Ok(current()), &found, T0).is_err());
+        assert_eq!(ledger_rows(&store), vec![], "no row kept");
+        assert_eq!(crate::system::get_setting(&store.conn(), store.org_id(), LEDGER_CURSOR_SETTING), None, "the cursor never moved");
+        assert_eq!(store.conn().query_row("SELECT count(*) FROM crew_tasks", [], |r| r.get::<_, i64>(0)).unwrap(), 0, "nothing of the cycle");
+        store.conn().execute_batch("DROP TRIGGER no_cursor").unwrap();
+        record(&mut store.conn(), store.org_id(), &Ok(current()), &found, T0 + MIN).unwrap();
+        assert_eq!(ledger_rows(&store).len(), 5);
+        let cursor: super::super::ledger::Cursor = serde_json::from_value(crate::system::get_setting(&store.conn(), store.org_id(), LEDGER_CURSOR_SETTING).unwrap()).unwrap();
+        assert_eq!(cursor.offset, 10);
+    }
+
+    /// No status text, question or URL fragment the ledger carried beyond what Kinas keeps: the fixture's `task.status`
+    /// line, marked, is in no column of any crew table.
+    #[test]
+    fn mirror_no_status_text_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let found = Found { ledger: Some(ledger_read(fixture_events(), 10)), ..Found::default() };
+        let mut fleet = current();
+        fleet.tasks.iter_mut().for_each(|t| {
+            t.title = t.title.as_ref().map(|s| s.replace("9c2e", ""));
+            t.hold_reason = None;
+        });
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &found, T0).unwrap();
+        let conn = store.conn();
+        let rows: i64 = conn
+            .query_row("SELECT count(*) FROM crew_ledger WHERE task_id LIKE '%never kept%' OR pr_url LIKE '%never kept%' OR coalesce(harness, '') LIKE '%never kept%'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
+        for table in ["crew_ledger", "crew_events", "crew_decisions", "crew_tasks"] {
+            let cols: Vec<String> = conn.prepare(&format!("SELECT name FROM pragma_table_info('{table}')")).unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
+            for col in cols {
+                let hits: i64 = conn.query_row(&format!("SELECT count(*) FROM {table} WHERE CAST({col} AS TEXT) LIKE '%never kept%'"), [], |r| r.get(0)).unwrap();
+                assert_eq!(hits, 0, "{table}.{col}");
+            }
+        }
     }
 
     /// Firstmate, current (build spec §7): the branch is the snapshot's, rewritten every cycle, NULL when it names none.

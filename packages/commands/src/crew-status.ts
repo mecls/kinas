@@ -2,7 +2,7 @@
 // app open or closed. Counts, words, durations and PR numbers — never a task's id, title, repository, path, URL, key,
 // summary or text. The JSON is built field by field, so a column added to the mirror can never leak into it.
 
-import type { CrewStore } from "@kinas/store/types";
+import type { CrewStore, CrewTaskRow } from "@kinas/store/types";
 import { FIRSTMATE_PIN, TOOLS } from "./crew-tools.ts";
 import { inFlight, wordOf, type CrewWord } from "./crew-words.ts";
 
@@ -69,12 +69,18 @@ export function crewStatusFromStore(store: CrewStatusStore, now: number, install
     },
     waiting: store.getCrewWaiting(),
     lanes: installed && laneCap ? lanesOf(store.getCrewCapacity()) : null,
-    tasks: words.map(({ row, word }) => ({
-      word,
-      elapsed_s: row.first_working_at === null ? null : Math.max(0, Math.round(((row.done_at ?? now) - row.first_working_at) / 1000)),
-      pr: row.pr_number,
-    })),
+    tasks: words.map(({ row, word }) => ({ word, elapsed_s: elapsedSeconds(row, now), pr: row.pr_number })),
   };
+}
+
+/**
+ * A task's elapsed seconds, as the board says it (Firstmate, current): from the ledger's dispatch, else from when the app
+ * first saw it working; to the ledger's merge, else to done, else now. Null with no start.
+ */
+function elapsedSeconds(row: CrewTaskRow, now: number): number | null {
+  const start = row.dispatched_at ?? row.first_working_at;
+  if (start === null) return null;
+  return Math.max(0, Math.round(((row.merged_at ?? row.done_at ?? now) - start) / 1000));
 }
 
 /** Field by field (the `statusJson` model): nothing here can carry a task's name. */

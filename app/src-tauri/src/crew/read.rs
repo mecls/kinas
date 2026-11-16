@@ -82,6 +82,11 @@ pub struct TaskRow {
     /// When the Crew page's board, and Home's Overnight, first showed it finished.
     pub board_seen_at: Option<i64>,
     pub overnight_seen_at: Option<i64>,
+    /// The fleet ledger's times (Firstmate, current): its first `task.dispatched`, its first `task.merged` and how it
+    /// landed (`pr` or `local`). None without the ledger; the elapsed time then counts from `first_working_at`.
+    pub dispatched_at: Option<i64>,
+    pub merged_at: Option<i64>,
+    pub merged_via: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -172,7 +177,8 @@ fn task_select() -> String {
            AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1), (SELECT e.text FROM crew_events e
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
            {STORED_COLUMNS},
-           EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4 AND w.observed_at <= ?5)
+           EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4 AND w.observed_at <= ?5),
+           dispatched_at, merged_via
          FROM crew_tasks t"
     )
 }
@@ -208,6 +214,9 @@ fn task_row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
         finished: finished(&input),
         board_seen_at: stored.board_seen_at,
         overnight_seen_at: stored.overnight_seen_at,
+        dispatched_at: r.get(10 + STORED_LEN)?,
+        merged_at: stored.merged_at,
+        merged_via: r.get(11 + STORED_LEN)?,
     })
 }
 
@@ -300,7 +309,12 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
     )?;
     let mut stmt = conn.prepare("SELECT at, kind, text FROM crew_events WHERE org_id = ?1 AND task_id = ?2 ORDER BY at, id")?;
-    let events = stmt.query_map(params![org, id], |r| Ok(EventRow { at: r.get(0)?, kind: r.get(1)?, text: r.get(2)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut events = stmt.query_map(params![org, id], |r| Ok(EventRow { at: r.get(0)?, kind: r.get(1)?, text: r.get(2)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(stmt);
+    // The fleet ledger's events at their own times (Firstmate, current), merged in, oldest first; a sort that keeps
+    // Kinas's own events' order where the times tie.
+    events.extend(ledger_events(conn, org, id)?);
+    events.sort_by_key(|e| e.at);
     Ok(Some(CrewTaskDetail {
         task,
         state_line: state.map(|s| state_line(&s, source.as_deref(), detail.as_deref())),
@@ -322,6 +336,25 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         decisions: decisions(conn, org, Some(id))?,
         paths: DetailPaths { report, worktree, pr_url },
     }))
+}
+
+/// A task's kept ledger events as timeline rows: `dispatched · claude`, `PR #12 ready`, `merged · PR #12` or `landed
+/// locally`, `cleaned up`. The PR's number only — its URL stays in the store.
+fn ledger_events(conn: &Connection, org: &str, id: &str) -> rusqlite::Result<Vec<EventRow>> {
+    let mut stmt = conn.prepare("SELECT at, event, pr_url, via, harness FROM crew_ledger WHERE org_id = ?1 AND task_id = ?2 ORDER BY at, rowid")?;
+    let rows = stmt.query_map(params![org, id], |r| {
+        let (at, event, pr, via, harness): (i64, String, String, Option<String>, Option<String>) = (r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default(), r.get(3)?, r.get(4)?);
+        let number = held_pr_number(&pr).map(|n| format!("PR #{n}"));
+        let text = match event.as_str() {
+            "dispatched" => harness.map_or_else(|| "dispatched".to_string(), |h| format!("dispatched · {h}")),
+            "pr_ready" => number.map_or_else(|| "PR ready".to_string(), |n| format!("{n} ready")),
+            "merged" if via.as_deref() == Some("local") => "landed locally".to_string(),
+            "merged" => number.map_or_else(|| "merged".to_string(), |n| format!("merged · {n}")),
+            _ => "cleaned up".to_string(),
+        };
+        Ok(EventRow { at, kind: event, text })
+    })?;
+    rows.collect()
 }
 
 /// `state: working · source: pane · harness busy (fm-spawn)`, the shape Firstmate prints as `current_state.raw`.

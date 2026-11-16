@@ -1,0 +1,11 @@
+{"v":1,"ts":1794820000,"event":"task.dispatched","task":"stock-webhook-9c2e","kind":"ship","project":"shop-9c2e","harness":"claude","model":null}
+{"v":1,"ts":1794820060,"event":"task.dispatched","task":"harbor-review-9c2e","kind":"ship","project":"harbor-api-9c2e","harness":"claude","model":"sonnet"}
+{"v":1,"ts":1794820100,"event":"task.status","task":"stock-webhook-9c2e","state":"working","key":null,"text":" a status line 9c2e that is never kept"}
+{"v":1,"ts":1794821000,"event":"task.pr_ready","task":"stock-webhook-9c2e","pr":"https://github.com/acme-9c2e/shop-9c2e/pull/91"}
+{"v":1,"ts":1794821000,"event":"task.pr_ready","task":"stock-webhook-9c2e","pr":"https://github.com/acme-9c2e/shop-9c2e/pull/91"}
+{"v":1,"ts":1794829000,"event":"task.merged","task":"harbor-review-9c2e","via":"pr","pr":"https://github.com/acme-9c2e/harbor-api-9c2e/pull/90"}
+{"v":1,"ts":1794829060,"event":"task.cleaned_up","task":"harbor-review-9c2e"}
+{"v":1,"ts":1794829060,"event":"task.cleaned_up","task":"harbor-review-9c2e"}
+{"v":2,"ts":1794829100,"event":"task.dispatched","task":"later-9c2e","shape":"a future one"}
+{"v":1,"ts":1794829200,"event":"task.cleaned_up","task":"stock-webhook-9c2e"}
+{"v":1,"ts":1794829300,"event":"task.disp

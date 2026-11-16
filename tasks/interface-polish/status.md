@@ -15,7 +15,7 @@
 
 ## Slices
 - [x] Slice 0 · ground: the worktree, `scripts/private-names` restored by the captain, the Gate 1 files committed, the docs first (DESIGN.md 1.11, keymap.md, README, the Herdr entry, the smoke test) — 2026-11-16: `ad1c936`, `0fed5e0`, local; baseline `bun run check` green (738 bun, 391 Rust, 269 s). Before slice 1: rebase onto `origin/main` (`c6246ee`)
-- [ ] Slice 1 · tracer bullet: ⌘K finds a stubbed file and opens it; the status bar row stands; `ptyPid` unchanged
+- [x] Slice 1 · tracer bullet: ⌘K finds a stubbed file and opens it; the status bar row stands; `ptyPid` unchanged — 2026-11-16, `1cc8106`, local: palette 7/7, statusbar 3/3, layout specs 28/28, cargo 458, clippy clean; `bun test` timed out in untouched tests under heavy load (build-spec §17)
 - [ ] Slice 2 · the real file index (`search.rs`) and the palette's rows, commands with their chords
 - [ ] Slice 3 · the palette's in-window sources: open tabs, folders, tasks, inbox, settings; the sidebar's Search row
 - [ ] Slice 4 · Workspaces, Recent, the failure lines → ship point 1

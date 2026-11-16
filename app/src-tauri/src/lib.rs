@@ -13,6 +13,7 @@ mod reader;
 mod readers;
 mod readings;
 mod redact;
+mod search;
 mod staleness;
 mod store;
 mod system;
@@ -177,6 +178,8 @@ pub fn run() {
             reader::pins::reader_pins,
             reader::pins::reader_pin,
             reader::pins::reader_unpin,
+            search::files_index_warm,
+            search::files_search,
             reader::changes::tree_changes_watch,
             reader::changes::tree_changes_refresh,
             reader::changes::tree_changes_diff,

@@ -60,6 +60,16 @@
   color: var(--ink-2);
 }
 
+/* The interface polish, slice 1: a group's label above its rows (DESIGN.md 1.11 §2.5 makes it the group-label style in
+   slice 5). */
+.palette-group {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+}
+
 .palette-item[aria-selected="true"] {
   background: var(--accent-soft);
 }

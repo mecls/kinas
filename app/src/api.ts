@@ -575,6 +575,27 @@ export const readerPins = () => invoke<PinView[]>("reader_pins");
 export const readerPin = (path: string) => invoke<PinView[]>("reader_pin", { path });
 export const readerUnpin = (path: string) => invoke<PinView[]>("reader_unpin", { path });
 
+/** One file or folder the palette found by name (tasks/interface-polish rule 13, search.rs). */
+export interface FileMatch {
+  path: string;
+  display_path: string;
+  name: string;
+  kind: ReaderKind;
+}
+
+/** The palette's Files group: `indexing` before the first index is in, `capped` past its limit, `more` beyond `limit`. */
+export interface FileSearch {
+  indexing: boolean;
+  capped: boolean;
+  matches: FileMatch[];
+  more: number;
+}
+
+/** Starts the file index, or rebuilds it in the background when it is old; the palette calls it as it opens. */
+export const filesIndexWarm = () => invoke<void>("files_index_warm");
+/** Names under the projects folder only; nothing is written or logged (build-spec invariant 5). */
+export const filesSearch = (query: string, limit: number) => invoke<FileSearch>("files_search", { query, limit });
+
 /** A download's answer. The file's **name** only: where Miguel put the copy never comes back across this line. */
 export type ReaderExported = { status: "saved"; name: string; bytes: number } | { status: "cancelled" };
 /**

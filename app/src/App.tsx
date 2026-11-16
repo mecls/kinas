@@ -54,6 +54,9 @@ import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
 import { useSplit } from "./shell/useSplit.ts";
 import { TitleBar } from "./ui/index.ts";
+import { StatusBar, type StatusReading } from "./ui/StatusBar.tsx";
+import { heroSlots } from "./pages/home.ts";
+import { PROVIDER_LABEL, usedPct, WINDOW_LABEL } from "./usage/format.ts";
 
 /** The pages, always mounted (below). Home is the first screen since 2026-09-22 (keymap.md: ⌘1 Home, ⌘2 Work, ⌘4 Usage). */
 export type Page = "home" | "work" | "crew" | "inbox" | "usage" | "settings";
@@ -164,6 +167,17 @@ export function App() {
   // sidebar's VPS row reads the same snapshot, so it never disagrees with the Usage page's Hostinger section.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
   const connection = useMemo(() => (usage.snapshot ? connectionOf(usage.snapshot, usage.error) : null), [usage.snapshot, usage.error]);
+  // The status bar's readings (the interface polish, slice 1): Home's three gauges, from the same snapshot. A gauge with no
+  // reading says nothing here. Slice 6 moves this into shell/statusBar.ts with the tones, the crew and the VPS.
+  const statusReadings = useMemo<StatusReading[]>(
+    () =>
+      usage.snapshot
+        ? heroSlots(usage.snapshot).flatMap((s) =>
+            s.quota ? [{ key: `${s.subscription}/${s.window}`, label: `${PROVIDER_LABEL[s.subscription]} ${WINDOW_LABEL[s.window]}`, pct: `${usedPct(s.quota.used_pct)}%` }] : [],
+          )
+        : [],
+    [usage.snapshot],
+  );
   // One crew reading for every page that shows the crew (crew/useCrew.ts): Crew, Inbox, and Home's night.
   const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
@@ -735,7 +749,9 @@ export function App() {
           />
         </aside>
       </div>
-      {palette && <Palette onClose={() => setPalette(false)} filesFolder={nav.folder} onFirstMate={() => void firstMate()} />}
+      {/* The window's foot (DESIGN.md 1.11 §3.1): a static sibling after the stage, never conditional (ADR 0002). */}
+      <StatusBar readings={statusReadings} />
+      {palette && <Palette onClose={() => setPalette(false)} filesFolder={nav.folder} onFirstMate={() => void firstMate()} onOpen={(path) => openFromSidebar(path)} />}
     </div>
   );
 }

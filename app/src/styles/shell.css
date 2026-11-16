@@ -25,12 +25,15 @@
 .shell {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  grid-template-rows: var(--chrome-h) minmax(0, 1fr);
+  grid-template-rows: var(--chrome-h) minmax(0, 1fr) var(--hit);
   height: 100%;
 }
 
-/* The title bar spans the window, whichever columns are showing; the sidebar and the stage fill the row below it. */
-.shell > .ui-titlebar {
+/* The title bar spans the window, whichever columns are showing; the sidebar and the stage fill the row below it. The
+   status bar (DESIGN.md 1.11, §3.1) spans it too, in the row below them: always there, so nothing above the terminal
+   moves. */
+.shell > .ui-titlebar,
+.shell > .ui-statusbar {
   grid-column: 1 / -1;
 }
 

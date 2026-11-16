@@ -61,4 +61,25 @@ describe("the command palette", () => {
     await expect($(".palette")).not.toBeExisting();
     await expect($('section[data-page="usage"]')).toBeDisplayed();
   });
+
+  // The interface polish (tasks/interface-polish), slice 1, AC-1's first half: a file found by name opens in the reader
+  // from the keyboard alone, and the terminal's process is the one it was.
+  it("finds a file by name and Enter opens it in the reader", async () => {
+    const pid = await hook<number>("ptyPid");
+    await browser.keys(["Meta", "k"]);
+    await expect($(".palette")).toBeDisplayed();
+    await browser.keys([..."readme"]);
+    const row = $('.palette-item[data-file$="/README.md"]');
+    await row.waitForDisplayed({ timeout: 10000, timeoutMsg: "the Files group never listed README.md" });
+    // No command is called "readme", so the file is the first row and Enter acts on it.
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    await browser.keys(["Enter"]);
+    await expect($(".palette")).not.toBeExisting();
+    await browser.waitUntil(
+      async () => (await browser.execute(() => document.querySelector('aside.reader .ui-tab[aria-selected="true"] .ui-tab-name')?.textContent ?? null)) === "README.md",
+      { timeout: 10000, timeoutMsg: "the reader never showed README.md" },
+    );
+    if (process.env.KINAS_E2E_SHOTS) await browser.saveScreenshot(`${process.env.KINAS_E2E_SHOTS}/palette-opened-a-file.png`);
+    expect(await hook<number>("ptyPid")).toBe(pid);
+  });
 });

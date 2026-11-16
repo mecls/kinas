@@ -14,7 +14,7 @@
   `feat/interface-polish` in `.claude/worktrees/interface-polish`
 
 ## Slices
-- [ ] Slice 0 · ground: the worktree, `scripts/private-names` restored by the captain, the Gate 1 files committed, the docs first (DESIGN.md 1.11, keymap.md, README, the Herdr entry, the smoke test) — in progress 2026-11-15: worktree made, docs written and `bun test` green (738); waiting on `scripts/private-names` to commit and on another session's e2e run to take the cargo baseline
+- [x] Slice 0 · ground: the worktree, `scripts/private-names` restored by the captain, the Gate 1 files committed, the docs first (DESIGN.md 1.11, keymap.md, README, the Herdr entry, the smoke test) — 2026-11-16: `ad1c936`, `0fed5e0`, local; baseline `bun run check` green (738 bun, 391 Rust, 269 s). Before slice 1: rebase onto `origin/main` (`c6246ee`)
 - [ ] Slice 1 · tracer bullet: ⌘K finds a stubbed file and opens it; the status bar row stands; `ptyPid` unchanged
 - [ ] Slice 2 · the real file index (`search.rs`) and the palette's rows, commands with their chords
 - [ ] Slice 3 · the palette's in-window sources: open tabs, folders, tasks, inbox, settings; the sidebar's Search row

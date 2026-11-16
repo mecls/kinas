@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { highlight } from "../../palette/match.ts";
+import { PaletteFoot, PaletteGroupView, type PaletteRowGroup } from "../PaletteRow.tsx";
 import {
   AccentField,
   Badges,
@@ -848,4 +850,48 @@ export const STORIES: Story[] = [
       },
     ],
   },
+  {
+    component: "PaletteRow",
+    states: [
+      {
+        name: "files",
+        node: paletteGroup("inv", {
+          id: "file",
+          label: "Files",
+          more: 2,
+          state: "ready",
+          items: [
+            { kind: "file", key: "file:/p/clients/acme/src/sync/inventory.ts", title: "inventory.ts", detail: "clients/acme/src/sync/inventory.ts", mono: true, folder: { name: "acme", cat: 2 } },
+            { kind: "file", key: "file:/p/clients/acme/src/sync/inventory.test.ts", title: "inventory.test.ts", detail: "clients/acme/src/sync/inventory.test.ts", mono: true, folder: { name: "acme", cat: 2 } },
+            { kind: "file", key: "file:/p/clients/globex/invoices", title: "invoices", detail: "clients/globex/invoices", mono: true, dir: true, folder: { name: "globex", cat: 4 } },
+          ],
+        }, "file:/p/clients/acme/src/sync/inventory.ts"),
+      },
+      {
+        name: "commands",
+        node: paletteGroup("", {
+          id: "command",
+          label: "Commands",
+          more: 6,
+          state: "ready",
+          items: [
+            { kind: "command", key: "command:status", title: "Status" },
+            { kind: "command", key: "command:go.home", title: "Go to Home", chord: "⌘1" },
+            { kind: "command", key: "command:sidebar", title: "Hide or show the sidebar", chord: "⌘S" },
+          ],
+        }, "more:command"),
+      },
+      { name: "indexing", node: paletteGroup("inv", { id: "file", label: "Files", more: 0, state: "loading", note: "Indexing files…", items: [] }, null) },
+      { name: "foot", node: <PaletteFoot /> },
+    ],
+  },
 ];
+
+/** A palette group as the palette draws it: in its listbox, the name cut at `query`'s letters. */
+function paletteGroup(query: string, group: PaletteRowGroup, selectedKey: string | null) {
+  return (
+    <ul role="listbox" aria-label="Results" className="palette-list">
+      <PaletteGroupView group={group} selectedKey={selectedKey} runs={(item) => highlight(query, item.title)} onMore={noop} onHover={noop} onPick={noop} />
+    </ul>
+  );
+}

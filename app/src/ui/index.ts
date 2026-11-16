@@ -26,4 +26,5 @@ export { AccentField } from "./AccentField.tsx";
 export { Menu, type MenuItem, type MenuDivider, type MenuEntry } from "./Menu.tsx";
 export { TabStrip, type TabStripTab } from "./TabStrip.tsx";
 export { TitleBar } from "./TitleBar.tsx";
+export { PaletteRow, PaletteGroupView, PaletteFoot, moreKey, type PaletteRowItem, type PaletteRowGroup, type PaletteRowKind, type Runs } from "./PaletteRow.tsx";
 export * from "./icons.tsx";

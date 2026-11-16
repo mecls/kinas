@@ -6,6 +6,7 @@ import "./styles/usage.css";
 import "./styles/home.css";
 import "./styles/settings.css";
 import "./styles/overlay.css";
+import "./styles/palette.css";
 import "./styles/reader.css";
 import "./styles/crew.css";
 import "./styles/inbox.css";

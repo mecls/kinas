@@ -1,5 +1,5 @@
-/* The ⌘K palette floats over every page (DESIGN.md §2 float, §4): a --surface sheet on --shadow-float over the scrim.
-   Tokens only. */
+/* What floats over every page (DESIGN.md §2 float): the scrim and its placement. The ⌘K palette's own sheet is
+   styles/palette.css (the interface polish, slice 2). Tokens only. */
 
 .overlay {
   position: fixed;
@@ -10,87 +10,4 @@
   justify-content: center;
   padding-top: 12vh;
   background: var(--scrim);
-}
-
-.palette {
-  width: min(calc(var(--panel-w) + var(--sidebar-w)), calc(100vw - var(--space-7)));
-  max-height: 70vh;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-float);
-}
-
-.palette-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: var(--space-3) var(--space-4);
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  outline: none;
-}
-
-.palette-input::placeholder {
-  color: var(--ink-3);
-}
-
-.palette-list {
-  margin: 0;
-  padding: var(--space-1h);
-  list-style: none;
-}
-
-.palette-item,
-.palette-empty {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  cursor: default;
-}
-
-.palette-empty {
-  color: var(--ink-2);
-}
-
-/* The interface polish, slice 1: a group's label above its rows (DESIGN.md 1.11 §2.5 makes it the group-label style in
-   slice 5). */
-.palette-group {
-  padding: var(--space-2) var(--space-3) var(--space-1);
-  color: var(--ink-2);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-}
-
-.palette-item[aria-selected="true"] {
-  background: var(--accent-soft);
-}
-
-/* A command's output (kinas status, and the like): monospace, as the CLI prints it. */
-.palette-output {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--line);
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre;
-  overflow-x: auto;
-}
-
-.palette-error {
-  margin: var(--space-1h) 0;
-  padding: 0 var(--space-4);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
 }

@@ -45,7 +45,6 @@ const NOT_YET: Record<string, string> = {
   // 1.11, the interface polish (tasks/interface-polish): each leaves this list in the slice that builds it.
   "Status bar": "the interface polish, slice 1 (static) and 6",
   "Usage popover": "the interface polish, slice 6",
-  "Palette row": "the interface polish, slice 2",
   "Line counts": "the interface polish, slice 10",
   "Settings row": "the interface polish, slice 9",
 };

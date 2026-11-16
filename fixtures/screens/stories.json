@@ -88,6 +88,21 @@
       "font-family": "\"Bricolage Grotesque\", Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "20px"
     },
+    "[data-story=\"PaletteRow/files\"] .ui-palette-detail": {
+      "color": "rgb(91, 97, 112)",
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "11px"
+    },
+    "[data-story=\"PaletteRow/files\"] .ui-palette-name b": {
+      "color": "rgb(27, 31, 39)",
+      "font-weight": "600"
+    },
+    "[data-story=\"PaletteRow/files\"] .ui-palette-row[aria-selected=\"true\"]": {
+      "background-color": "oklab(0.939156 -0.004411 -0.014591)",
+      "border-radius": "6px",
+      "font-size": "13px",
+      "height": "36px"
+    },
     "[data-story=\"ProgressRow/list\"] .ui-progress-row[aria-selected=\"true\"]": {
       "background-color": "oklab(0.939156 -0.004411 -0.014591)",
       "min-height": "56px"
@@ -256,6 +271,21 @@
     "[data-story=\"Nav/sidebar\"] .ui-word": {
       "font-family": "\"Bricolage Grotesque\", Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "20px"
+    },
+    "[data-story=\"PaletteRow/files\"] .ui-palette-detail": {
+      "color": "rgb(161, 167, 180)",
+      "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
+      "font-size": "11px"
+    },
+    "[data-story=\"PaletteRow/files\"] .ui-palette-name b": {
+      "color": "rgb(237, 238, 242)",
+      "font-weight": "600"
+    },
+    "[data-story=\"PaletteRow/files\"] .ui-palette-row[aria-selected=\"true\"]": {
+      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "border-radius": "6px",
+      "font-size": "13px",
+      "height": "36px"
     },
     "[data-story=\"ProgressRow/list\"] .ui-progress-row[aria-selected=\"true\"]": {
       "background-color": "oklab(0.308114 -0.006278 -0.029705)",

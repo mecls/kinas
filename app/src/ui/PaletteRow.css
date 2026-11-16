@@ -1,0 +1,130 @@
+/* DESIGN.md §4 Palette row (1.11): one line, --row-h tall, never wrapping. The name leads in --ink 500 and keeps its
+   room; the detail gives way first, ending in an ellipsis; the end (a folder, an age, a chord) never shrinks. */
+.ui-palette-group > ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-palette-group + .ui-palette-group {
+  margin-top: var(--space-2);
+}
+
+/* The group's label. DESIGN.md 1.11 §2.5 sets it in capitals with the group-label style in slice 5. */
+.ui-palette-label {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+}
+
+.ui-palette-row,
+.ui-palette-more {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: var(--row-h);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.ui-palette-row[aria-selected="true"],
+.ui-palette-more[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.ui-palette-row > .ui-icon {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.ui-palette-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.ui-palette-name b {
+  font-weight: 600;
+}
+
+.ui-palette-detail {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.ui-palette-detail[data-mono] {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+
+.ui-palette-end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.ui-palette-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1h);
+  color: var(--ink);
+}
+
+.ui-palette-age {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+
+.ui-palette-more {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* A group still being read, or one whose source failed, or what an opened group could not show: one line. */
+.ui-palette-note {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* The palette's keys, at its foot, to the right. */
+.ui-palette-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.ui-palette-foot .ui-kbd {
+  margin-right: var(--space-1);
+}

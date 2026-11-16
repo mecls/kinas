@@ -103,6 +103,7 @@ pub fn run() {
         .manage(projects::ProjectsCache::default())
         .manage(reader::ReaderState::default())
         .manage(reader::changes::ChangesState::default())
+        .manage(search::Index::default())
         .invoke_handler(tauri::generate_handler![
             commands::store_info,
             commands::pty_start,

@@ -58,6 +58,11 @@ const CONTRACT: [selector: string, props: string[]][] = [
   ['[data-story="Table/today"] th', ["color", "font-size", "height"]],
   ['[data-story="Card/selected"] .ui-card', ["background-color", "box-shadow"]],
   ['[data-story="ProgressRow/list"] .ui-progress-row[aria-selected="true"]', ["background-color", "min-height"]],
+  // 1.11, the interface polish, slice 2: the palette's row — selected on --accent-soft, --row-h, the matched letters at
+  // 600, a path in mono --text-xs.
+  ['[data-story="PaletteRow/files"] .ui-palette-row[aria-selected="true"]', ["background-color", "height", "border-radius", "font-size"]],
+  ['[data-story="PaletteRow/files"] .ui-palette-name b', ["font-weight", "color"]],
+  ['[data-story="PaletteRow/files"] .ui-palette-detail', ["font-family", "font-size", "color"]],
   ['[data-story="InboxItem/plan"] .ui-inbox-item', ["background-color", "border-radius"]],
   ['[data-story="Toast/success"] .ui-toast', ["box-shadow", "background-color"]],
   ['[data-story="EmptyState/plain"] .ui-empty', ["color", "border-top-style", "border-top-color"]],

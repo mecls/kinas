@@ -751,7 +751,16 @@ export function App() {
       </div>
       {/* The window's foot (DESIGN.md 1.11 §3.1): a static sibling after the stage, never conditional (ADR 0002). */}
       <StatusBar readings={statusReadings} />
-      {palette && <Palette onClose={() => setPalette(false)} filesFolder={nav.folder} onFirstMate={() => void firstMate()} onOpen={(path) => openFromSidebar(path)} />}
+      {palette && (
+        <Palette
+          onClose={() => setPalette(false)}
+          filesFolder={nav.folder}
+          onFirstMate={() => void firstMate()}
+          onOpen={(path) => openFromSidebar(path)}
+          shortcuts={shortcuts}
+          folders={folders}
+        />
+      )}
     </div>
   );
 }

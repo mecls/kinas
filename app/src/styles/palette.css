@@ -1,0 +1,82 @@
+/* The ⌘K palette (DESIGN.md §4 Palette, 1.11): a --surface sheet on --shadow-float over the scrim (overlay.css). The
+   input stays at the top and the keys at the foot; the groups and a command's output scroll between them. Its rows
+   are ui/PaletteRow. Tokens only. */
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(calc(var(--panel-w) + var(--sidebar-w)), calc(100vw - var(--space-7)));
+  max-height: 70vh;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.palette-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-3);
+}
+
+.palette-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  outline: none;
+}
+
+.palette-input::placeholder {
+  color: var(--ink-3);
+}
+
+.palette-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.palette-list {
+  margin: 0;
+  padding: var(--space-1h);
+  list-style: none;
+}
+
+.palette-empty {
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
+/* A command's output (kinas status, and the like): monospace, as the CLI prints it. */
+.palette-output {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.palette-error {
+  margin: var(--space-1h) 0;
+  padding: 0 var(--space-4);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}

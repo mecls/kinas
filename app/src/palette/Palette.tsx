@@ -1,50 +1,59 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { paletteMatches, statusFromStore, statusLines, type Command } from "@kinas/commands";
+import { statusFromStore, statusLines, type Command } from "@kinas/commands";
 import { dispatchAppAction } from "../actions.ts";
-import { filesIndexWarm, filesSearch, getUsageSnapshot, refreshReadings, type FileMatch } from "../api.ts";
+import { filesIndexWarm, filesSearch, getUsageSnapshot, refreshReadings, type FileSearch } from "../api.ts";
 import { refreshRoot, waitingCount } from "../reader/changes.ts";
+import type { Shortcuts } from "../settings/shortcuts.ts";
+import type { SeatedFolder } from "../shell/folders.ts";
+import { SearchIcon } from "../ui/icons.tsx";
+import { moreKey, PaletteFoot, PaletteGroupView } from "../ui/PaletteRow.tsx";
+import { highlight } from "./match.ts";
 import { snapshotAdapter } from "./snapshotAdapter.ts";
+import { commandItems, fileItems, FILES_ASKED, GROUP_LABEL, toGroup, type PaletteGroup, type PaletteItem } from "./sources.ts";
 
 // The ⌘K palette (R36, §3.7): the registry's palette door. Esc closes it and hands focus back to whatever had
 // it — the terminal included — so the next keystroke reaches the shell without a click (R31).
 //
-// The interface polish (tasks/interface-polish), slice 1: a Files group under the commands, answered by search.rs, so
-// a file found by name opens in the reader. Commands and files are one list for ↑ ↓ and Enter. Slice 2 brings the
-// groups, the rows and the scoring; the keys stay these four (build-spec invariant 8).
+// The interface polish (tasks/interface-polish, PRD rules 12–18): one search, in groups of Palette rows (ui/PaletteRow),
+// each showing five then "N more". Commands answer as the query changes; Files asks search.rs 60 ms after the last
+// keystroke, each question numbered so only the latest answer is drawn. The keys stay these four — typing, ↑ ↓,
+// Enter, Esc (build-spec invariant 8); "N more" is a row the arrows reach, and Enter on it opens its group.
 
-/** How many files the Files group shows. */
-const FILES_SHOWN = 5;
-
-type Row = { kind: "command"; command: Command } | { kind: "file"; file: FileMatch };
+/** How long typing must pause before Files asks Rust. */
+const FILES_DEBOUNCE_MS = 60;
+/** While the index is still being built, how soon Files asks again. */
+const INDEXING_RETRY_MS = 250;
 
 /** `filesFolder`: the folder the sidebar's Files shows, for "Refresh files" (tree changes rule 16). `onFirstMate`: the
  * Crew page's First mate, for "Go to the first mate". `onOpen`: a file or folder found by name, opened as a sidebar
- * click opens it. */
+ * click opens it. `shortcuts`: the chords bound now, shown on their commands (rule 9). `folders`: the client folders,
+ * whose chip a file under one carries. */
 export function Palette({
   onClose,
   filesFolder,
   onFirstMate,
   onOpen,
+  shortcuts,
+  folders,
 }: {
   onClose: () => void;
   filesFolder: string | null;
   onFirstMate: () => void;
   onOpen: (path: string) => void;
+  shortcuts: Shortcuts;
+  folders: readonly SeatedFolder[];
 }) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(0);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [output, setOutput] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [files, setFiles] = useState<FileMatch[]>([]);
+  /** Rust's latest answer, and the query it answered: the last one stays drawn while the next is asked. */
+  const [answer, setAnswer] = useState<{ query: string; files: FileSearch | null } | null>(null);
+  const files = answer?.files ?? null;
   const input = useRef<HTMLInputElement>(null);
   const returnFocus = useRef<Element | null>(document.activeElement);
   const searchSeq = useRef(0);
-
-  const matches = useMemo(() => paletteMatches(query), [query]);
-  const rows = useMemo<Row[]>(
-    () => [...matches.map((command) => ({ kind: "command" as const, command })), ...files.map((file) => ({ kind: "file" as const, file }))],
-    [matches, files],
-  );
 
   useEffect(() => {
     input.current?.focus();
@@ -55,23 +64,35 @@ export function Palette({
     };
   }, []);
 
-  useEffect(() => setSelected(0), [query]);
+  useEffect(() => {
+    setSelectedKey(null);
+    setOpened(new Set());
+  }, [query]);
 
-  // Each answer carries its question's number, and only the latest question's answer is drawn.
+  // Each question carries its number, and only the latest question's answer is drawn. Until the index is in, the
+  // question is asked again, so "Indexing files…" gives way to the files without another keystroke.
   useEffect(() => {
     const seq = ++searchSeq.current;
     if (query.trim() === "") {
-      setFiles([]);
+      setAnswer(null);
       return;
     }
-    filesSearch(query, FILES_SHOWN).then(
-      (found) => {
-        if (seq === searchSeq.current) setFiles(found.matches);
-      },
-      () => {
-        if (seq === searchSeq.current) setFiles([]);
-      },
-    );
+    let timer = 0;
+    const ask = () => {
+      filesSearch(query, FILES_ASKED).then(
+        (found) => {
+          if (seq !== searchSeq.current) return;
+          setAnswer({ query, files: found });
+          if (found.indexing) timer = window.setTimeout(ask, INDEXING_RETRY_MS);
+        },
+        // A search that fails leaves Files out, as a group with no match is left out.
+        () => {
+          if (seq === searchSeq.current) setAnswer({ query, files: null });
+        },
+      );
+    };
+    timer = window.setTimeout(ask, FILES_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
   }, [query]);
 
   const run = async (command: Command) => {
@@ -110,13 +131,55 @@ export function Palette({
     }
   };
 
-  const act = (row: Row) => {
-    if (row.kind === "command") {
-      void run(row.command);
+  // The callbacks change with every render of App; the rows reach them through this, so the groups are rebuilt only
+  // when what they show changes.
+  const acts = useRef({ run, onOpen, onClose });
+  useEffect(() => {
+    acts.current = { run, onOpen, onClose };
+  });
+
+  /** Each group with every row it matched (`all`), and as shown (`group`). */
+  const built = useMemo(() => {
+    const open = (path: string) => {
+      acts.current.onOpen(path);
+      acts.current.onClose();
+    };
+    const out: { all: PaletteItem[]; group: PaletteGroup }[] = [];
+    const commands = commandItems(query, shortcuts, (c) => void acts.current.run(c));
+    out.push({ all: commands, group: toGroup("command", commands, opened.has("command")) });
+    if (files?.indexing) {
+      out.push({ all: [], group: { id: "file", label: GROUP_LABEL.file, items: [], more: 0, state: "loading", note: "Indexing files…" } });
+    } else if (files) {
+      const found = fileItems(files, folders, open);
+      out.push({ all: found, group: toGroup("file", found, opened.has("file"), files.more) });
+    }
+    return out.filter(({ group: g }) => g.items.length > 0 || g.state !== "ready");
+  }, [query, shortcuts, files, folders, opened]);
+  const groups = useMemo(() => built.map((b) => b.group), [built]);
+
+  /** Every row the arrows reach, in order: each group's items, then its "N more". */
+  const keys = useMemo(() => groups.flatMap((g) => [...g.items.map((i) => i.key), ...(g.more > 0 ? [moreKey(g.id)] : [])]), [groups]);
+  const current = selectedKey !== null && keys.includes(selectedKey) ? selectedKey : (keys[0] ?? null);
+
+  /** "N more" opens its group in place, and the first row it brings takes the selection where "N more" stood. */
+  const openGroup = (id: string) => {
+    const b = built.find((x) => x.group.id === id);
+    setOpened((was) => new Set(was).add(id));
+    const next = b?.all[b.group.items.length];
+    if (next) setSelectedKey(next.key);
+  };
+
+  const pick = (item: PaletteItem) => item.act();
+
+  const enter = () => {
+    if (current === null) return;
+    const group = groups.find((g) => moreKey(g.id) === current);
+    if (group) {
+      openGroup(group.id);
       return;
     }
-    onOpen(row.file.path);
-    onClose();
+    const item = groups.flatMap((g) => g.items).find((i) => i.key === current);
+    if (item) pick(item);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -124,70 +187,51 @@ export function Palette({
       e.preventDefault();
       e.stopPropagation();
       onClose();
-    } else if (e.key === "ArrowDown") {
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      setSelected((i) => Math.min(i + 1, Math.max(0, rows.length - 1)));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelected((i) => Math.max(i - 1, 0));
+      if (keys.length === 0) return;
+      const at = current === null ? 0 : keys.indexOf(current);
+      setSelectedKey(keys[Math.max(0, Math.min(keys.length - 1, at + (e.key === "ArrowDown" ? 1 : -1)))]!);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const row = rows[selected];
-      if (row) act(row);
+      enter();
     }
   };
 
+  const blank = query.trim() === "";
   return (
     <div className="overlay" onMouseDown={onClose}>
       <div className="palette" role="dialog" aria-label="Command palette" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKeyDown}>
-        <input
-          ref={input}
-          className="palette-input"
-          value={query}
-          placeholder="Type a command"
-          aria-label="Command"
-          onChange={(e) => setQuery(e.currentTarget.value)}
-        />
-        <ul className="palette-list" role="listbox">
-          {rows.length === 0 && <li className="palette-empty">No command matches "{query}"</li>}
-          {matches.map((c, i) => (
-            <li
-              key={c.id}
-              role="option"
-              aria-selected={i === selected}
-              className="palette-item"
-              data-command={c.id}
-              onMouseEnter={() => setSelected(i)}
-              onClick={() => void run(c)}
-            >
-              {c.title}
-            </li>
-          ))}
-          {files.length > 0 && (
-            <li className="palette-group" role="presentation">
-              Files
-            </li>
-          )}
-          {files.map((f, j) => {
-            const i = matches.length + j;
-            return (
-              <li
-                key={f.path}
-                role="option"
-                aria-selected={i === selected}
-                className="palette-item"
-                data-file={f.path}
-                title={f.display_path}
-                onMouseEnter={() => setSelected(i)}
-                onClick={() => act({ kind: "file", file: f })}
-              >
-                {f.name}
-              </li>
-            );
-          })}
-        </ul>
-        {error && <p className="palette-error">{error}</p>}
-        {output && <pre className="palette-output" data-testid="palette-output">{output.join("\n")}</pre>}
+        <div className="palette-head">
+          <SearchIcon />
+          <input
+            ref={input}
+            className="palette-input"
+            value={query}
+            placeholder="Search files and commands"
+            aria-label="Search"
+            onChange={(e) => setQuery(e.currentTarget.value)}
+          />
+        </div>
+        <div className="palette-body">
+          <ul className="palette-list" role="listbox" aria-label="Results">
+            {groups.length === 0 && !blank && answer?.query === query && <li className="palette-empty">Nothing matches "{query.trim()}"</li>}
+            {groups.map((g) => (
+              <PaletteGroupView
+                key={g.id}
+                group={g}
+                selectedKey={current}
+                runs={(item) => highlight(query, item.title)}
+                onMore={() => openGroup(g.id)}
+                onHover={setSelectedKey}
+                onPick={pick}
+              />
+            ))}
+          </ul>
+          {error && <p className="palette-error">{error}</p>}
+          {output && <pre className="palette-output" data-testid="palette-output">{output.join("\n")}</pre>}
+        </div>
+        <PaletteFoot />
       </div>
     </div>
   );

@@ -459,6 +459,32 @@ The side column and the text, the reader's tabs, and the window's title bar (202
       the table and exit 0 — `outstanding — needs Miguel` for the prompts in the pane
 - [ ] Settings → Crew shows Firstmate at `f9f74a1 (pinned)`, backend `herdr`, every tool `installed`, `gh` signed in —
       `automated (crew-settings.e2e.ts)` over stub tools; on the real install — `outstanding — needs Miguel`
+      (Amended 2026-11-16: the pin reads `427056c (pinned)` from Firstmate, current; see that section.)
+
+## Firstmate, current
+
+The pin moves to Firstmate `427056c`, and the crew pages show what it now publishes (2026-11-16,
+`tasks/crew-firstmate-current/prd.md`, ADR 0020). The steps named are `crew-current.e2e.ts`'s, as they are built.
+
+- [x] Firstmate `427056c` runs on Herdr 0.9.0 with a real first mate and two `claude` workers in a throwaway session;
+      every snapshot parses with today's code; the snapshot latches `local_done_head` for a `local-only` task; the
+      ledger keeps its events; `fm-capacity.sh --json` answers with and without a cap — `passed by agent, 2026-11-16
+      (the probe, build spec §19)`
+- [ ] A task with a branch shows `branch fm/…` in its detail — `outstanding — crew-current`
+- [ ] A task parked on review reads **in review**, counts in flight in its lane and as waiting in Overnight, and the
+      waiting count does not move — `outstanding — crew-current`
+- [ ] A held question's three lines show as three lines, its quiet line names `PR #N`, and Open the PR opens it —
+      `outstanding — crew-current`
+- [ ] Free lanes: none without a cap; `2 of 4 lanes free` with one; `dispatch held · …` while held; no capacity run
+      with a `quota-provider` — `outstanding — crew-current`
+- [ ] The ledger: `done in` from dispatch to merge, its four timeline entries once each, a `v:2` line refused with one
+      line, an emptied file read again — `outstanding — crew-current`
+- [ ] Settings → Crew shows Firstmate at `427056c (pinned)`, `perl` among the prerequisites and the Firstmate options
+      table — `outstanding — crew-settings`
+- [ ] On the real install: `kinas crew setup` moves a home at `f9f74a1` to `427056c` after a y/N, and refuses while
+      the first mate runs — `outstanding — needs the captain`
+- [ ] On the real install, the captain asks the first mate to turn on park on review, the ledger and a lane cap, and
+      Settings → Crew says so within a minute — `outstanding — needs the captain`
 
 ## The crew: launch
 

@@ -2,19 +2,25 @@
 
 ## What it is
 
-The command-line tools Firstmate's scripts run, installed on the captain's Mac by `kinas crew setup` at exact versions (Firstmate's floors at its pin, `f9f74a1`). They are the captain's programs, run as the captain; Kinas only installs them on a yes, and checks they are there. The one list is `app/src-tauri/src/crew/pin.rs` (`TOOLS`, `PREREQS`), held equal to `packages/commands/src/crew-tools.ts` through `fixtures/crew-tools.json`.
+The command-line tools Firstmate's scripts run, installed on the captain's Mac by `kinas crew setup` at exact versions (Firstmate's floors at its pin, `427056c` since 2026-11-16; `f9f74a1` before). They are the captain's programs, run as the captain; Kinas only installs them on a yes, and checks they are there. The one list is `app/src-tauri/src/crew/pin.rs` (`TOOLS`, `PREREQS`), held equal to `packages/commands/src/crew-tools.ts` through `fixtures/crew-tools.json`.
 
 | Tool | Version | Floor | From | Goes to | Prints a `setup hooks` line |
 |---|---|---|---|---|---|
 | `treehouse` | 2.3.0 | `--lease` in `treehouse get --help` | GitHub release `kunchenguid/treehouse`, `treehouse-v2.3.0-darwin-arm64.tar.gz`, checked against its pinned SHA-256 | `~/.local/bin` | no |
 | `no-mistakes` | 1.79.0 | 1.46.0 | GitHub release `kunchenguid/no-mistakes`, `no-mistakes-v1.79.0-darwin-arm64.tar.gz`, checked against its pinned SHA-256 | `~/.local/bin` | no |
 | `gh-axi` | 0.1.35 | 0.1.29 | npm, `npm install -g gh-axi@0.1.35` | npm's global prefix | yes |
-| `tasks-axi` | 0.2.5 | 0.2.4 | npm | npm's global prefix | no |
-| `quota-axi` | 0.1.49 | 0.1.29 | npm | npm's global prefix | no |
+| `tasks-axi` | 0.2.6 | 0.2.6 | npm | npm's global prefix | no |
+| `quota-axi` | 0.1.51 | 0.1.51 | npm | npm's global prefix | no |
 | `chrome-devtools-axi` | 0.1.35 | — | npm | npm's global prefix | yes |
-| `lavish-axi` (optional) | 0.1.76 | 0.1.46 | npm | npm's global prefix | yes |
+| `lavish-axi` (optional) | 0.1.80 | 0.1.80 | npm | npm's global prefix | yes |
 
-Prerequisites, checked and never installed: `git`, `gh`, `node`, `npm`, `jq`, `python3`, `herdr`, `claude`.
+Prerequisites, checked and never installed: `git`, `gh`, `node`, `npm`, `jq`, `python3`, `perl`, `herdr`, `claude`.
+
+Amended 2026-11-16 (Firstmate, current; `tasks/crew-firstmate-current/prd.md`, ADR 0020): the pin moved to `427056c`,
+and with it three floors — `tasks-axi` 0.2.6 (`bin/fm-tasks-axi-lib.sh`; below it the first mate's hold record refuses
+to start, as the probe of 2026-11-16 saw on 0.2.5), `quota-axi` 0.1.51 (`bin/fm-quota-axi-lib.sh`) and `lavish-axi`
+0.1.80 (`bin/fm-bootstrap.sh`) — each pinned at its floor. `perl` joins the prerequisites: the snapshot needs it at
+the new pin (macOS ships `/usr/bin/perl`).
 
 ## Where
 

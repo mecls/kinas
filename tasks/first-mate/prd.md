@@ -511,3 +511,10 @@ in progress sits after the counts in the plain `kinas context`. Each is marked w
    small read under the home, added to rule 8 (rule 18).
 3. The Reconcile line for an invalid home summary? **A — dropped.** The summary goes invalid during normal running;
    its modification time stays a trigger, and its contents are not read (rule 8).
+
+*2026-11-16, Firstmate, current* (`tasks/crew-firstmate-current/prd.md`, ADR 0020, which supersedes 0019): the pin
+moves to `427056c4181c41074ad24f051f79919330df0fa5` (2026-11-12) and the crew pages show what Firstmate now publishes
+— a task's branch, **in review**, a held question's PR, free lanes and the fleet ledger's times. Rule 8's "no branch
+in the contracts" no longer holds; Kinas runs a fourth read-only script, `fm-capacity.sh --json`, behind a gate that
+keeps `quota-axi` unrun; and the snapshot's own `local_done_head` latch for a `local-only` task is Firstmate's write,
+accepted. Every other rule here stands. The rules that change are written in that PRD, not here.

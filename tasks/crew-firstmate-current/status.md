@@ -14,11 +14,12 @@
   point at slice 7
 
 ## Slices (build-spec.md §12, approved 2026-11-15)
-- [ ] Slice 0 · *(waiting, 2026-11-15: `feat/review-session-code-bugs` is not on `origin/main` and has no remote
-  branch; verified green at `6923c35` the same day — check green, the full e2e alone 40/40 specs, 221 cases — and
-  pushed on the captain's word as PR #48, merged by fast-forward and deployed to `/Applications` at 21:42Z —
-  `origin/main` is `6923c35`; slice 0 may start)* ground, docs first, and the probe: wait for the review branch on `main`, rebase, baseline; Firstmate
-  `427056c` in a throwaway Herdr session (AC-1), stop if it fails; ADR 0020, DESIGN.md 1.11, docs/external, README
+- [x] Slice 0 · ground, docs first, and the probe — done 2026-11-16: rebased onto `main`; baseline green (bun's two
+  load timeouts pass alone); the probe passed — Firstmate `427056c` on Herdr 0.9.0 in the throwaway session
+  `kinas-probe-0007`, two `claude` workers landed locally, 45 snapshots parsed by today's code, the snapshot's
+  `local_done_head` latch seen, the ledger's events kept, capacity read with and without a cap, all torn down; it found
+  two more tool floors that move with the pin (`tasks-axi` 0.2.6, `quota-axi` 0.1.51; build spec §17); ADR 0020
+  (supersedes 0019), DESIGN.md 1.12, `docs/external/`, README, the smoke test and the first mate PRD's note written
 - [ ] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line)
 - [ ] Slice 2 · in review (the word in Rust, the CLI and the fixture; the badge; Overnight; the status JSON)
 - [ ] Slice 3 · a held question's PR, in its own lines (`crew_open_pr`, Inbox, Home, the detail)
@@ -46,9 +47,11 @@
   day (by the interface polish's session); this branch's diff and messages, and the review branch's, have 0 hits. The new documents use only made-up folders (`shop`, `harbor-api`).
 - This Mac had no Kinas install until 2026-11-15 21:47, when `6923c35` was installed (schema 6, no Firstmate home yet); Herdr 0.9.0, Claude Code
   2.1.325, every crew tool at Kinas's pinned version.
-- Worktree `.claude/worktrees/crew-firstmate-current`, branch `feat/crew-firstmate-current`, from `origin/main` at
-  `0f63948`, made with `--no-track`. It holds only the gate documents until the review branch lands; then it is
-  rebased onto `main` before slice 0. Nothing is pushed without the captain's word.
+- Worktree `.claude/worktrees/crew-firstmate-current`, branch `feat/crew-firstmate-current`, made with `--no-track`,
+  rebased onto `main` on 2026-11-16 (then `c6246ee`, after the synthetic names fix landed). Nothing is pushed without
+  the captain's word.
+- **DESIGN.md is 1.12 here** (the interface polish wrote 1.11 on its branch); whichever lands second renumbers in order.
+- Every cargo run of this build sets `CARGO_PROFILE_DEV_DEBUG=0` and `CARGO_PROFILE_TEST_DEBUG=0` (disk; build spec §17).
 - **Another session is building the interface polish** (`.claude/worktrees/interface-polish`, branch
   `feat/interface-polish`, Gates 1–4 approved 2026-11-15, twelve slices). Its slice 0 already wrote **DESIGN.md 1.11**,
   so this feature's DESIGN.md amendment becomes **1.12** if that lands first; its slices 5 and 8 touch the dark theme,

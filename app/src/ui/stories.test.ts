@@ -63,9 +63,10 @@ describe("the law, the library and the stories agree (DESIGN.md §4, §9)", () =
     });
   }
 
-  test("the badge stories are the fourteen states of DESIGN.md's table, plus the counted form", () => {
+  test("the badge stories are the fifteen states of DESIGN.md's table, plus the counted form", () => {
     // 1.4, the first mate: failed, paused, unknown and gone joined the ten (build spec slice 4).
-    expect(stories.get("StatusBadge")).toEqual(["queued", "working", "blocked", "red", "done", "stale", "dead", "decision", "pr", "ready", "failed", "paused", "unknown", "gone", "counted"]);
+    // 1.12, Firstmate, current: in review joined after the PR it waits on.
+    expect(stories.get("StatusBadge")).toEqual(["queued", "working", "blocked", "red", "done", "stale", "dead", "decision", "pr", "review", "ready", "failed", "paused", "unknown", "gone", "counted"]);
     expect(stories.get("Gauge")).toEqual(["fine", "warn", "danger", "stale", "dead"]);
   });
 

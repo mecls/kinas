@@ -3,7 +3,7 @@
 
 import type { CrewTaskRow } from "@kinas/store/types";
 
-export type CrewWord = "queued" | "working" | "needs decision" | "blocked" | "CI red" | "PR open" | "ready" | "done" | "failed" | "paused" | "unknown" | "gone";
+export type CrewWord = "queued" | "working" | "needs decision" | "blocked" | "in review" | "CI red" | "PR open" | "ready" | "done" | "failed" | "paused" | "unknown" | "gone";
 
 export interface PrWordInput {
   state: string | null;
@@ -17,20 +17,25 @@ export interface WordInput {
   gone: boolean;
   done: boolean;
   state: string | null;
+  /** Firstmate's `current_state.source`: `review-park` marks a pause by park on review (Firstmate, current). */
+  state_source: string | null;
   backlog_state: string | null;
   pending_decision: boolean;
   captain_actionable: boolean;
   blocked_event: boolean;
+  /** The fleet ledger recorded the task's `task.merged` (Firstmate, current). */
+  merged: boolean;
   pr: PrWordInput | null;
 }
 
 export function wordOfInput(w: WordInput): CrewWord {
   const state = w.state ?? "";
-  if (w.gone) return "gone";
-  if (w.done) return "done";
+  if (w.gone && !w.merged) return "gone";
+  if (w.done || w.merged) return "done";
   if (state === "failed") return "failed";
   if (w.pending_decision || state === "parked" || w.captain_actionable) return "needs decision";
   if (w.blocked_event || state === "blocked") return "blocked";
+  if (state === "paused" && w.state_source === "review-park") return "in review";
   if (state === "paused") return "paused";
   if (w.pr) {
     const failed = w.pr.checks_failed ?? 0;
@@ -45,7 +50,7 @@ export function wordOfInput(w: WordInput): CrewWord {
 /** Home's overnight buckets: the word without the gone rule, then done · working · wait · fail. */
 export function overnightBucket(wordWithoutGone: CrewWord): "done" | "working" | "wait" | "fail" {
   if (wordWithoutGone === "done") return "done";
-  if (wordWithoutGone === "needs decision" || wordWithoutGone === "ready") return "wait";
+  if (wordWithoutGone === "needs decision" || wordWithoutGone === "in review" || wordWithoutGone === "ready") return "wait";
   if (wordWithoutGone === "failed" || wordWithoutGone === "blocked" || wordWithoutGone === "CI red") return "fail";
   return "working";
 }
@@ -58,10 +63,12 @@ export function inputOfRow(row: CrewTaskRow): WordInput {
     gone: row.gone_at !== null,
     done: row.done_at !== null,
     state: row.state,
+    state_source: row.state_source,
     backlog_state: row.backlog_state,
     pending_decision: row.pending_decision === 1,
     captain_actionable: row.captain_actionable === 1,
     blocked_event: row.blocked_event === 1,
+    merged: row.merged_at !== null,
     pr: row.pr_url
       ? { state: row.pr_state, draft: row.pr_draft === 1, mergeable: row.pr_mergeable, checks_total: row.pr_checks_total, checks_failed: row.pr_checks_failed }
       : null,

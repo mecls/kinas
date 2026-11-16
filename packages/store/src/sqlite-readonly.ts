@@ -168,6 +168,11 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
       .all(this.orgId(), date) as UsageRow[];
   }
 
+  /** Migration 7 added the fleet ledger's stamps (Firstmate, current); a store the app has not migrated yet lacks them. */
+  private get hasCrewCurrent(): boolean {
+    return this.schemaVersion() >= 7;
+  }
+
   /** Migration 5 added the crew's mirror; a store the app has not migrated yet has no crew. */
   private get hasCrew(): boolean {
     return this.schemaVersion() >= 5;
@@ -177,8 +182,9 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
     if (!this.hasCrew) return [];
     return this.db
       .query(
-        `SELECT state, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_number, pr_state, pr_draft,
-                pr_mergeable, pr_checks_total, pr_checks_failed, first_working_at, done_at, gone_at
+        `SELECT state, state_source, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_number, pr_state,
+                pr_draft, pr_mergeable, pr_checks_total, pr_checks_failed, first_working_at, done_at, gone_at,
+                ${this.hasCrewCurrent ? "merged_at" : "NULL AS merged_at"}
          FROM crew_tasks
          WHERE org_id = ?1 AND (gone_at IS NULL OR gone_at > ?2) AND (done_at IS NULL OR done_at > ?3)
          ORDER BY first_seen_at DESC, id`,

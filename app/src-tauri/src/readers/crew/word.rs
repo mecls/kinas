@@ -18,6 +18,10 @@ pub(crate) struct WordInput<'a> {
     pub done: bool,
     /// Firstmate's `current_state.state` (`fm-crew-state.sh`'s word).
     pub state: Option<&'a str>,
+    /// Firstmate's `current_state.source`: `review-park` marks a pause by park on review (Firstmate, current).
+    pub state_source: Option<&'a str>,
+    /// The fleet ledger recorded the task's `task.merged` (Firstmate, current).
+    pub merged: bool,
     /// The backlog record's section: `in_flight`, `queued` or `done`.
     pub backlog_state: Option<&'a str>,
     pub pending_decision: bool,
@@ -28,9 +32,9 @@ pub(crate) struct WordInput<'a> {
 
 pub(crate) fn word_of(w: &WordInput) -> &'static str {
     let state = w.state.unwrap_or("");
-    if w.gone {
+    if w.gone && !w.merged {
         "gone"
-    } else if w.done {
+    } else if w.done || w.merged {
         "done"
     } else if state == "failed" {
         "failed"
@@ -38,6 +42,8 @@ pub(crate) fn word_of(w: &WordInput) -> &'static str {
         "needs decision"
     } else if w.blocked_event || state == "blocked" {
         "blocked"
+    } else if state == "paused" && w.state_source == Some("review-park") {
+        "in review"
     } else if state == "paused" {
         "paused"
     } else if let Some(pr) = w.pr {
@@ -85,7 +91,7 @@ mod tests {
     fn overnight_bucket(word_without_gone: &str) -> &'static str {
         match word_without_gone {
             "done" => "done",
-            "needs decision" | "ready" => "wait",
+            "needs decision" | "in review" | "ready" => "wait",
             "failed" | "blocked" | "CI red" => "fail",
             _ => "working",
         }
@@ -127,6 +133,8 @@ mod tests {
                 pending_decision: flag(i, "pending_decision"),
                 captain_actionable: flag(i, "captain_actionable"),
                 blocked_event: flag(i, "blocked_event"),
+                state_source: text(i, "state_source"),
+                merged: flag(i, "merged"),
                 pr,
             };
             assert_eq!(word_of(&input), case["word"].as_str().unwrap(), "{name}");
@@ -134,7 +142,7 @@ mod tests {
         }
         // Every word the table names is reached by some case.
         let words: std::collections::HashSet<&str> = cases.iter().map(|c| c["word"].as_str().unwrap()).collect();
-        for word in ["gone", "done", "failed", "needs decision", "blocked", "paused", "ready", "CI red", "PR open", "working", "queued", "unknown"] {
+        for word in ["gone", "done", "failed", "needs decision", "blocked", "in review", "paused", "ready", "CI red", "PR open", "working", "queued", "unknown"] {
             assert!(words.contains(word), "no case says {word}");
         }
     }

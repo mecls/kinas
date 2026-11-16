@@ -28,6 +28,7 @@ export const BADGE_OF: Record<CrewWord, BadgeState> = {
   blocked: "blocked",
   "CI red": "red",
   "PR open": "pr",
+  "in review": "review",
   ready: "ready",
   done: "done",
   failed: "failed",

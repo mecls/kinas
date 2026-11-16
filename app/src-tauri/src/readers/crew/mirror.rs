@@ -113,6 +113,10 @@ pub(crate) struct Stored {
     /// When the Crew page's board, and Home's Overnight, first showed the task finished (done work clears).
     pub(crate) board_seen_at: Option<i64>,
     pub(crate) overnight_seen_at: Option<i64>,
+    /// Firstmate's `current_state.source` (Firstmate, current): `review-park` makes a pause read in review.
+    pub(crate) state_source: Option<String>,
+    /// When the fleet ledger's `task.merged` was kept (Firstmate, current): a merged task reads done.
+    pub(crate) merged_at: Option<i64>,
 }
 
 impl Stored {
@@ -125,6 +129,8 @@ impl Stored {
             pending_decision: self.pending_decision,
             captain_actionable: self.captain_actionable,
             blocked_event: self.blocked_event,
+            state_source: self.state_source.as_deref(),
+            merged: self.merged_at.is_some(),
             pr: self.pr_url.as_ref().map(|_| PrWordInput {
                 state: self.pr_state.as_deref(),
                 draft: self.pr_draft,
@@ -447,9 +453,10 @@ pub(crate) fn open_pr_urls(conn: &Connection, org: &str) -> rusqlite::Result<Has
 }
 
 pub(crate) const STORED_COLUMNS: &str = "state, backlog_state, pending_decision, captain_actionable, blocked_event, pr_url, pr_state, pr_draft,
-    pr_mergeable, pr_checks_total, pr_checks_failed, first_seen_at, first_working_at, done_at, gone_at, board_seen_at, overnight_seen_at";
+    pr_mergeable, pr_checks_total, pr_checks_failed, first_seen_at, first_working_at, done_at, gone_at, board_seen_at, overnight_seen_at,
+    state_source, merged_at";
 /// How many columns `STORED_COLUMNS` names: a query's next column after them is at `at + STORED_LEN`.
-pub(crate) const STORED_LEN: usize = 17;
+pub(crate) const STORED_LEN: usize = 19;
 
 pub(crate) fn stored_of(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Stored> {
     Ok(Stored {
@@ -470,6 +477,8 @@ pub(crate) fn stored_of(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Stored
         gone_at: r.get(at + 14)?,
         board_seen_at: r.get(at + 15)?,
         overnight_seen_at: r.get(at + 16)?,
+        state_source: r.get(at + 17)?,
+        merged_at: r.get(at + 18)?,
     })
 }
 

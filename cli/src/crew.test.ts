@@ -48,6 +48,9 @@ describe("kinas crew", () => {
       db.run(TASK, ["task-a-9c2e", "Title 9c2e", "o/r-9c2e", "/x/projects/r-9c2e", "queued", null, null, null, null, null, now, null, now]);
       db.run(TASK, ["task-b-9c2e", "Other 9c2e", "o/r-9c2e", "/x/projects/r-9c2e", "in_flight", "working", "https://github.com/o/r-9c2e/pull/7", 7, 3, 1, now, now - 60_000, now]);
       db.run("INSERT INTO crew_decisions (org_id, task_id, key, verb, summary, opened_at) VALUES ('org-1', 'task-b-9c2e', 'k-9c2e', 'needs-decision', 'Which 9c2e?', ?)", [now]);
+      // Firstmate, current: a task parked on review reads in review, and counts in flight.
+      db.run(TASK, ["task-c-9c2e", "Parked 9c2e", "o/r-9c2e", "/x/projects/r-9c2e", "in_flight", "paused", null, null, null, null, now, now - 60_000, now]);
+      db.run("UPDATE crew_tasks SET state_source = 'review-park' WHERE id = 'task-c-9c2e'");
     });
     const { code, stdout } = run(["crew", "status", "--json"], { KINAS_DATA_DIR: dir });
     expect(code).toBe(0);
@@ -55,8 +58,9 @@ describe("kinas crew", () => {
     expect(json.installed).toBe(false);
     expect(json.counts.queued).toBe(1);
     expect(json.counts.ci_red).toBe(1);
+    expect(json.counts.in_review).toBe(1);
     expect(json.waiting).toBe(1);
-    expect(json.tasks.map((t) => [t.word, t.pr])).toEqual([["queued", null], ["CI red", 7]]);
+    expect(json.tasks.map((t) => [t.word, t.pr])).toEqual([["queued", null], ["CI red", 7], ["in review", null]]);
     expect(stdout).not.toContain("9c2e");
     for (const key of ["id", "title", "repo", "path", "url", "worktree", "home", "key", "summary", "text"]) expect(stdout).not.toContain(`"${key}"`);
   });

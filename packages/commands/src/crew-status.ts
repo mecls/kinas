@@ -18,7 +18,7 @@ export interface CrewStatus {
   /** Whether the app has looked at the install at all (the `crew_health` setting exists). */
   checked: boolean;
   tools: { name: string; version: string | null; ok: boolean }[];
-  counts: { queued: number; in_flight: number; needs_decision: number; ci_red: number; ready: number; done_7d: number };
+  counts: { queued: number; in_flight: number; needs_decision: number; in_review: number; ci_red: number; ready: number; done_7d: number };
   waiting: number;
   tasks: { word: CrewWord; elapsed_s: number | null; pr: number | null }[];
 }
@@ -51,6 +51,7 @@ export function crewStatusFromStore(store: CrewStatusStore, now: number, install
       queued: count("queued"),
       in_flight: words.filter((x) => inFlight(x.word)).length,
       needs_decision: count("needs decision"),
+      in_review: count("in review"),
       ci_red: count("CI red"),
       ready: count("ready"),
       done_7d: count("done"),
@@ -75,6 +76,7 @@ export function crewStatusJson(s: CrewStatus): Record<string, unknown> {
       queued: s.counts.queued,
       in_flight: s.counts.in_flight,
       needs_decision: s.counts.needs_decision,
+      in_review: s.counts.in_review,
       ci_red: s.counts.ci_red,
       ready: s.counts.ready,
       done_7d: s.counts.done_7d,

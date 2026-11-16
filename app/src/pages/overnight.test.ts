@@ -43,6 +43,10 @@ test("buckets per §7", () => {
   expect((["failed", "blocked", "CI red"] as CrewWord[]).map(bucketOf)).toEqual(["fail", "fail", "fail"]);
 });
 
+test("in review waits on a person, beside needs decision and ready (Firstmate, current)", () => {
+  expect(bucketOf("in review")).toBe("wait");
+});
+
 test("only in-window tasks count; the waiting one is the target; a quiet folder has nothing", () => {
   const decisions: CrewDecision[] = [{ task_id: "a", key: "api", verb: "needs-decision", summary: "REST or GraphQL?", task_title: "a title", repo: "o/harbor-9c2e", opened_at: NOW - H, copied_at: null }];
   const tasks = [

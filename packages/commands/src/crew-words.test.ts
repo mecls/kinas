@@ -11,8 +11,12 @@ describe("the crew's word rule (build spec §7), over the fixture the app reads 
     });
   }
 
+  test("in review waits on a person in Overnight (Firstmate, current)", () => {
+    expect(overnightBucket("in review")).toBe("wait");
+  });
+
   test("in flight is every word but queued, done and gone", () => {
-    expect((["working", "needs decision", "blocked", "CI red", "PR open", "ready", "failed", "paused", "unknown"] as CrewWord[]).every(inFlight)).toBe(true);
+    expect((["working", "needs decision", "blocked", "in review", "CI red", "PR open", "ready", "failed", "paused", "unknown"] as CrewWord[]).every(inFlight)).toBe(true);
     expect((["queued", "done", "gone"] as CrewWord[]).some(inFlight)).toBe(false);
   });
 });

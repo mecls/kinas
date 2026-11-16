@@ -22,6 +22,8 @@ const row = (over: Partial<CrewTaskRow>): CrewTaskRow => ({
   first_working_at: null,
   done_at: null,
   gone_at: null,
+  state_source: null,
+  merged_at: null,
   ...over,
 });
 
@@ -52,7 +54,7 @@ describe("kinas crew status", () => {
   const status = crewStatusFromStore(store(rows, health, 2), NOW, true);
 
   test("counts by word, the waiting count, and each task's word, elapsed and PR number", () => {
-    expect(status.counts).toEqual({ queued: 1, in_flight: 3, needs_decision: 1, ci_red: 1, ready: 0, done_7d: 1 });
+    expect(status.counts).toEqual({ queued: 1, in_flight: 3, needs_decision: 1, in_review: 0, ci_red: 1, ready: 0, done_7d: 1 });
     expect(status.waiting).toBe(2);
     expect(status.tasks).toEqual([
       { word: "queued", elapsed_s: null, pr: null },

@@ -125,7 +125,7 @@ export interface UsageSnapshot {
 
 // The crew (build spec §11.2): Kinas's read-only mirror of Firstmate's fleet. Words are Rust's, derived at read time.
 export type CrewPage = "uninstalled" | "installed" | "running";
-export type CrewWord = "queued" | "working" | "needs decision" | "blocked" | "CI red" | "PR open" | "ready" | "done" | "failed" | "paused" | "unknown" | "gone";
+export type CrewWord = "queued" | "working" | "needs decision" | "blocked" | "in review" | "CI red" | "PR open" | "ready" | "done" | "failed" | "paused" | "unknown" | "gone";
 export interface CrewPr {
   number: number;
   state: string | null;

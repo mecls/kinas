@@ -61,6 +61,8 @@ export interface UsageRow {
 /** A crew task as the app's mirror holds it (migration 5), with the columns the word rule reads. */
 export interface CrewTaskRow {
   state: string | null;
+  /** Firstmate's `current_state.source` (0005). */
+  state_source: string | null;
   backlog_state: string | null;
   pending_decision: number;
   captain_actionable: number;
@@ -75,6 +77,8 @@ export interface CrewTaskRow {
   first_working_at: number | null;
   done_at: number | null;
   gone_at: number | null;
+  /** When the fleet ledger's `task.merged` was kept (0007, Firstmate, current); null on an older store. */
+  merged_at: number | null;
 }
 
 /** One task as the mirror holds it, for the context packet's Crew section (the first mate, slice 9). */

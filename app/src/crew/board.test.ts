@@ -122,7 +122,7 @@ test("the PR line once gh has answered", () => {
 
 test("every word has a badge DESIGN.md draws", () => {
   for (const state of Object.values(BADGE_OF)) expect(BADGE[state]).toBeDefined();
-  expect(Object.keys(BADGE_OF)).toHaveLength(12);
+  expect(Object.keys(BADGE_OF)).toHaveLength(13);
 });
 
 test("the fleet caption: as of the snapshot's time, stale past 60 s or stamped in what is now the future", () => {

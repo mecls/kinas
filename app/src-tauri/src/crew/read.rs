@@ -218,6 +218,8 @@ pub struct CrewTaskDetail {
     pub mode: Option<String>,
     pub yolo: bool,
     pub backend: Option<String>,
+    /// The task's branch as Firstmate names it (Firstmate, current); None when the snapshot names none.
+    pub branch: Option<String>,
     pub excerpt: Option<String>,
     /// `<home>/data/<id>/brief.md` when it exists, filled by the command after the guard.
     pub brief_path: Option<String>,
@@ -258,10 +260,10 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         params![org, id],
         |r| Ok((text(r, 0)?, text(r, 1)?, text(r, 2)?, text(r, 3)?, text(r, 4)?, text(r, 5)?, text(r, 6)?, text(r, 7)?, text(r, 8)?, text(r, 9)?, text(r, 10)?)),
     )?;
-    let (yolo, report_present, worktree_present): (bool, bool, Option<bool>) = conn.query_row(
-        "SELECT yolo, report_present, worktree_present FROM crew_tasks WHERE org_id = ?1 AND id = ?2",
+    let (yolo, report_present, worktree_present, branch): (bool, bool, Option<bool>, Option<String>) = conn.query_row(
+        "SELECT yolo, report_present, worktree_present, branch FROM crew_tasks WHERE org_id = ?1 AND id = ?2",
         params![org, id],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
     )?;
     let mut stmt = conn.prepare("SELECT at, kind, text FROM crew_events WHERE org_id = ?1 AND task_id = ?2 ORDER BY at, id")?;
     let events = stmt.query_map(params![org, id], |r| Ok(EventRow { at: r.get(0)?, kind: r.get(1)?, text: r.get(2)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -272,6 +274,7 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         mode,
         yolo,
         backend,
+        branch,
         excerpt,
         brief_path: None,
         report_path: None,

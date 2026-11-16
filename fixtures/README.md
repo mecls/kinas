@@ -37,6 +37,12 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
     number,state,isDraft,mergeable,reviewDecision,statusCheckRollup` in the shape `gh` prints it: PR #123 with four
     checks, three check runs and one commit status, first with `test` failing, then all green and approved. The
     e2e stub `gh` prints one of them.
+  - `firstmate-fleet-snapshot.current.synthetic.json` (added 2026-11-16, Firstmate, current) — the shape of
+    `fm-fleet-snapshot.sh --json` at Firstmate `427056c`, built from its header and the slice-0 probe's captures of
+    2026-11-16 (which were not kept: their paths are scratch paths): `tasks[].branch`, `contributions.captain[]` (two
+    rows for the held task and one for a task no longer listed, its `hold` null), a three-line `hold_reason`, a task
+    paused by park on review (`current_state.source` `review-park`) and one blocked after its relaunch failed. Made-up
+    folders `shop-9c2e` and `harbor-api-9c2e`; every id and title carries the `9c2e` marker.
 - Files ending in `.captured.json` **are** captured, from the first mate's slice-0 probe (2026-09-23): Firstmate at
   `f9f74a1` on Herdr 0.9.0, in a throwaway session with a scratch repository, never `default`. Every local path is
   rewritten — `__FM_HOME__` (Firstmate's home), `__ROOT__` (the probe's folders and `~/.treehouse`), `__HOME__` —

@@ -313,9 +313,10 @@ fn upsert(
         "INSERT INTO crew_tasks (org_id, id, title, excerpt, project, project_name, kind, backlog_state, state, state_source,
            state_detail, state_observed_at, mode, yolo, harness, backend, endpoint_target, endpoint_exists, endpoint_status,
            worktree_path, worktree_present, report_path, report_present, pr_url, pr_number, pending_decision, blocked_event,
-           captain_actionable, hold_reason, snapshot_generated, first_seen_at, first_working_at, last_seen_at, done_at, gone_at)
+           captain_actionable, hold_reason, snapshot_generated, first_seen_at, first_working_at, last_seen_at, done_at, gone_at,
+           branch)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-           ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, NULL)
+           ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, NULL, ?35)
          ON CONFLICT (org_id, id) DO UPDATE SET
            title = excluded.title, excerpt = excluded.excerpt, project = excluded.project,
            project_name = excluded.project_name, kind = excluded.kind, backlog_state = excluded.backlog_state,
@@ -329,7 +330,7 @@ fn upsert(
            blocked_event = excluded.blocked_event, captain_actionable = excluded.captain_actionable,
            hold_reason = excluded.hold_reason, snapshot_generated = excluded.snapshot_generated,
            first_working_at = excluded.first_working_at, last_seen_at = excluded.last_seen_at,
-           done_at = excluded.done_at, gone_at = NULL",
+           done_at = excluded.done_at, gone_at = NULL, branch = excluded.branch",
         params![
             org,
             f.id,
@@ -365,6 +366,7 @@ fn upsert(
             first_working_at,
             now,
             done_at,
+            f.branch,
         ],
     )?;
     Ok(())
@@ -519,6 +521,29 @@ mod tests {
 
     fn ev(at: i64, kind: &str, text: &str) -> (i64, String, String) {
         (at, kind.into(), text.into())
+    }
+
+    fn current() -> Fleet {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/firstmate-fleet-snapshot.current.synthetic.json");
+        parse_fleet(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    fn branch(store: &Store, id: &str) -> Option<String> {
+        store.conn().query_row("SELECT branch FROM crew_tasks WHERE id = ?1", params![id], |r| r.get(0)).unwrap()
+    }
+
+    /// Firstmate, current (build spec §7): the branch is the snapshot's, rewritten every cycle, NULL when it names none.
+    #[test]
+    fn the_branch_is_the_snapshots_every_cycle() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut fleet = current();
+        record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &Found::default(), T0).unwrap();
+        assert_eq!(branch(&store, "stock-webhook-9c2e").as_deref(), Some("fm/stock-webhook"));
+        assert_eq!(branch(&store, "shop-receipts-9c2e"), None);
+        fleet.tasks.iter_mut().for_each(|t| t.branch = None);
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &Found::default(), T0 + MIN).unwrap();
+        assert_eq!(branch(&store, "stock-webhook-9c2e"), None, "no longer named, no longer shown");
     }
 
     #[test]

@@ -20,7 +20,7 @@
   `local_done_head` latch seen, the ledger's events kept, capacity read with and without a cap, all torn down; it found
   two more tool floors that move with the pin (`tasks-axi` 0.2.6, `quota-axi` 0.1.51; build spec §17); ADR 0020
   (supersedes 0019), DESIGN.md 1.12, `docs/external/`, README, the smoke test and the first mate PRD's note written
-- [ ] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line)
+- [x] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line) — done 2026-11-16: the pin `427056c`, `perl`, `lavish-axi` 0.1.80, `tasks-axi` 0.2.6, `quota-axi` 0.1.51; migration 0007 whole (schema 7); the branch from parse to the detail; `crew-current` 2/2 and `crew-settings` 6/6, each alone
 - [ ] Slice 2 · in review (the word in Rust, the CLI and the fixture; the badge; Overnight; the status JSON)
 - [ ] Slice 3 · a held question's PR, in its own lines (`crew_open_pr`, Inbox, Home, the detail)
 - [ ] Slice 4 · free lanes and the Firstmate options table (the gate, the fourth script, caption, Usage, Settings)

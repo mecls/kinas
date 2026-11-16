@@ -13,6 +13,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (4, include_str!("../../../migrations/0004_hostinger.sql")),
     (5, include_str!("../../../migrations/0005_crew.sql")),
     (6, include_str!("../../../migrations/0006_crew_seen.sql")),
+    (7, include_str!("../../../migrations/0007_crew_current.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -379,5 +380,89 @@ mod tests {
         assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), MIGRATIONS.last().unwrap().0);
         assert_eq!(count(&store, "SELECT count(*) FROM crew_tasks WHERE done_at = 5"), 1, "the row kept");
         assert_eq!(count(&store, "SELECT count(*) FROM crew_tasks WHERE board_seen_at IS NULL AND overnight_seen_at IS NULL"), 1, "seen by no page yet");
+    }
+
+    /// Firstmate, current (build spec §6.9, §11.4): 0007 only adds — no word in it drops, renames, deletes or
+    /// rewrites — and a store at v6 with rows in every crew table migrates to v7 with every row of every table kept.
+    #[test]
+    fn migration_0007_only_adds() {
+        let sql = MIGRATIONS.iter().find(|(v, _)| *v == 7).expect("0007 listed").1;
+        let words: Vec<String> = sql
+            .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+            .map(|w| w.to_ascii_uppercase())
+            .collect();
+        for forbidden in ["DROP", "RENAME", "DELETE", "UPDATE", "REPLACE"] {
+            assert!(!words.iter().any(|w| w == forbidden), "0007 contains {forbidden}");
+        }
+        for line in sql.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("--")) {
+            let statement_start = line.starts_with("ALTER TABLE crew_tasks ADD COLUMN ")
+                || line.starts_with("CREATE TABLE crew_ledger (")
+                || line.starts_with("CREATE INDEX crew_ledger_task ");
+            let inside_create = !line.contains(';') || line == ");";
+            assert!(statement_start || inside_create, "0007 has a statement that is not an ADD COLUMN or a CREATE: {line}");
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_FILE);
+        let tables = |conn: &Connection| -> Vec<(String, i64)> {
+            let names: Vec<String> = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect();
+            names
+                .into_iter()
+                .map(|n| {
+                    let c = conn.query_row(&format!("SELECT count(*) FROM \"{n}\""), [], |r| r.get(0)).unwrap();
+                    (n, c)
+                })
+                .collect()
+        };
+        let before = {
+            let mut conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)")
+                .unwrap();
+            for (version, sql) in MIGRATIONS.iter().filter(|(v, _)| *v <= 6) {
+                let tx = conn.transaction().unwrap();
+                tx.execute_batch(sql).unwrap();
+                tx.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)", params![version]).unwrap();
+                tx.commit().unwrap();
+            }
+            conn.execute_batch(
+                "INSERT INTO orgs (id, name, created_at) VALUES ('org-1', 'test', 0);
+                 INSERT INTO settings (org_id, key, value) VALUES ('org-1', 'appearance', '\"dark\"');
+                 INSERT INTO reader_status (org_id, reader, state, stale_after_ms, dead_after_ms) VALUES ('org-1', 'crew', 'ok', 60000, 43200000);
+                 INSERT INTO crew_tasks (org_id, id, kind, backlog_state, snapshot_generated, first_seen_at, last_seen_at, done_at, board_seen_at)
+                   VALUES ('org-1', 'done-9c2e', 'ship', 'done', 'g', 1, 1, 5, 6);
+                 INSERT INTO crew_tasks (org_id, id, kind, snapshot_generated, first_seen_at, last_seen_at) VALUES ('org-1', 'live-9c2e', 'scout', 'g', 2, 3);
+                 INSERT INTO crew_workers (org_id, task_id, session, pane_id, alive, observed_at) VALUES ('org-1', 'live-9c2e', 's', 'w1:p1', 1, 3);
+                 INSERT INTO crew_events (org_id, task_id, at, kind, text) VALUES ('org-1', 'live-9c2e', 2, 'word', 'working');
+                 INSERT INTO crew_decisions (org_id, task_id, key, verb, summary, opened_at) VALUES ('org-1', 'live-9c2e', 'k', 'needs-decision', 'q', 2);",
+            )
+            .unwrap();
+            tables(&conn)
+        };
+        assert!(before.iter().filter(|(_, c)| *c > 0).count() >= 7, "the v6 store has rows in the tables it must keep: {before:?}");
+
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), 7);
+        let after = tables(&store.conn());
+        for (name, rows) in &before {
+            let kept = after.iter().find(|(n, _)| n == name).map(|(_, c)| *c);
+            let expected = if name == "schema_migrations" { rows + 1 } else { *rows };
+            assert_eq!(kept, Some(expected), "{name}: rows before {rows}, after {kept:?}");
+        }
+        assert_eq!(after.iter().find(|(n, _)| n == "crew_ledger").map(|(_, c)| *c), Some(0), "crew_ledger is new and empty");
+        let row: (i64, Option<i64>, Option<String>, Option<String>) = store
+            .conn()
+            .query_row("SELECT done_at, board_seen_at, branch, merged_via FROM crew_tasks WHERE id = 'done-9c2e'", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert_eq!(row, (5, Some(6), None, None), "the row kept, its new columns empty");
+        let bad = store.conn().execute("INSERT INTO crew_ledger (org_id, task_id, event, at) VALUES ('org-1', 'x', 'status', 1)", []);
+        assert!(bad.is_err(), "crew_ledger keeps only the four events");
     }
 }

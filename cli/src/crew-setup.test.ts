@@ -68,7 +68,7 @@ ln -sf "$d/dist/bin/$name.js" "$PREFIX/bin/$name"`,
   script(join(stub, "curl"), `echo "curl $*" >> "$CALLS"\nurl=$6; cp "$ASSETS/\${url##*/}" "$5"`);
   script(join(stub, "shasum"), `echo "shasum $*" >> "$CALLS"\necho "$(cat "$3.sha" 2>/dev/null || cat "$ASSETS/\${3##*/}.sha")  $3"`);
   script(join(stub, "gh"), `echo "gh $*" >> "$CALLS"\n${opts.signedOut ? "exit 1" : "exit 0"}`);
-  for (const name of ["node", "jq", "python3", "herdr", "claude"]) script(join(stub, name), "exit 0");
+  for (const name of ["node", "jq", "python3", "perl", "herdr", "claude"]) script(join(stub, name), "exit 0");
 
   // The two releases: a tarball each, holding the tool's stub binary, and the SHA-256 the stub shasum reports for it.
   for (const tool of TOOLS) {
@@ -123,7 +123,7 @@ describe("kinas crew setup", () => {
     const starts = [
       "would: check the prerequisites",
       "would: check that gh is signed in",
-      "would: clone Firstmate at f9f74a1",
+      "would: clone Firstmate at 427056c",
       "would: set Firstmate's backend to herdr",
       "would: install the tools at their pinned versions",
       "would: print the setup hooks lines",
@@ -166,7 +166,7 @@ describe("kinas crew setup", () => {
     expect(again.filter((c) => /^(npm install|curl|git clone|git -C \S+ checkout)/.test(c))).toEqual([]);
     expect(out).toContain(`already at ${FIRSTMATE_PIN.slice(0, 7)}`);
     expect(out).toContain("already herdr");
-    expect(out).toContain("tasks-axi: already 0.2.5");
+    expect(out).toContain("tasks-axi: already 0.2.6");
   });
 
   test("a home with local changes is refused and left alone", async () => {
@@ -343,7 +343,7 @@ describe("kinas crew setup", () => {
     writeFileSync(join(w.home, ".git", "STUB_BRANCH"), "main\n");
     const { code, out } = await run(w, { yes: true });
     expect(code).toBe(0);
-    expect(out).toContain("at 9296f9b, moved from the pin f9f74a1 — setup leaves it");
+    expect(out).toContain("at 9296f9b, moved from the pin 427056c — setup leaves it");
     expect(w.calls().filter((c) => c.includes("checkout"))).toEqual([]);
   });
 
@@ -361,8 +361,8 @@ describe("kinas crew setup", () => {
     const w = world();
     // clone, backend, then the seven tools in order: all yes but treehouse.
     const { code, out } = await run(w, { answers: ["y", "yes", "n", "y", "y", "y", "y", "y", "Y"] });
-    expect(out).toContain(`Clone Firstmate at f9f74a1 into ${w.home}? [y/N] `);
-    expect(out).toContain("Install tasks-axi 0.2.5 with npm install -g tasks-axi@0.2.5? [y/N] ");
+    expect(out).toContain(`Clone Firstmate at 427056c into ${w.home}? [y/N] `);
+    expect(out).toContain("Install tasks-axi 0.2.6 with npm install -g tasks-axi@0.2.6? [y/N] ");
     expect(out).toContain("treehouse: skipped");
     expect(code).toBe(1);
   });

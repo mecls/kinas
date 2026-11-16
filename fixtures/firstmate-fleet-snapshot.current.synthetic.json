@@ -1,0 +1,375 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-11-16T08:02:11Z",
+  "fm_home": "__FM_HOME__",
+  "roots": {
+    "fm_root": "__FM_HOME__",
+    "state": "__FM_HOME__/state",
+    "data": "__FM_HOME__/data"
+  },
+  "backlog": {
+    "path": "__FM_HOME__/data/backlog.md",
+    "present": true,
+    "records": [
+      {
+        "order": 1,
+        "state": "in_flight",
+        "structured": true,
+        "id": "stock-webhook-9c2e",
+        "checked": false,
+        "title": "Stock webhook 9c2e",
+        "repo": "shop-9c2e",
+        "kind": "ship",
+        "hold_reason": "Land the stock webhook 9c2e?\nPR #91 adds the webhook and its retry.\nOptions: yes, land it / no, leave it unlanded.",
+        "hold_kind": "captain",
+        "hold_until": null,
+        "captain_actionable": true,
+        "hold_bucket": "live",
+        "since": "2026-11-15",
+        "hold_set": "2026-11-16",
+        "hold_age_days": 0
+      },
+      {
+        "order": 2,
+        "state": "in_flight",
+        "structured": true,
+        "id": "harbor-review-9c2e",
+        "checked": false,
+        "title": "Harbor rate limits 9c2e",
+        "repo": "harbor-api-9c2e",
+        "kind": "ship",
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "captain_actionable": false,
+        "hold_bucket": null,
+        "since": "2026-11-15"
+      },
+      {
+        "order": 3,
+        "state": "in_flight",
+        "structured": true,
+        "id": "harbor-relaunch-9c2e",
+        "checked": false,
+        "title": "Harbor retry budget 9c2e",
+        "repo": "harbor-api-9c2e",
+        "kind": "ship",
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "captain_actionable": false,
+        "hold_bucket": null,
+        "since": "2026-11-15"
+      },
+      {
+        "order": 4,
+        "state": "queued",
+        "structured": true,
+        "id": "shop-receipts-9c2e",
+        "checked": false,
+        "title": "Shop receipts 9c2e",
+        "repo": "shop-9c2e",
+        "kind": "ship",
+        "hold_reason": null,
+        "hold_kind": null,
+        "hold_until": null,
+        "captain_actionable": false,
+        "hold_bucket": null,
+        "since": "2026-11-15"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "stock-webhook-9c2e",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "direct-PR",
+      "yolo": "off",
+      "branch": "fm/stock-webhook",
+      "project": "__FM_HOME__/projects/shop-9c2e",
+      "spawn_gen": "s1",
+      "backend": "herdr",
+      "remote": null,
+      "paths": {
+        "meta": {
+          "path": "__FM_HOME__/state/stock-webhook-9c2e.meta",
+          "present": true
+        },
+        "status_log": {
+          "path": "__FM_HOME__/state/stock-webhook-9c2e.status",
+          "present": true,
+          "kind": "event_history",
+          "last_event": {
+            "state": "done",
+            "note": "ready in branch fm/stock-webhook 9c2e",
+            "raw": "done: ready in branch fm/stock-webhook 9c2e",
+            "age_seconds": 60
+          }
+        },
+        "worktree": {
+          "path": "__FM_HOME__/../treehouse/shop-9c2e/1",
+          "present": true
+        },
+        "home": {
+          "path": null,
+          "present": false
+        },
+        "report": {
+          "path": "__FM_HOME__/data/stock-webhook-9c2e/report.md",
+          "present": false
+        }
+      },
+      "secondmate_projects": [],
+      "current_state": {
+        "state": "done",
+        "source": "status-log",
+        "detail": "ready in branch fm/stock-webhook 9c2e",
+        "raw": "state: done · source: status-log · ready in branch fm/stock-webhook 9c2e",
+        "observed_at": "2026-11-16T08:02:11Z",
+        "freshness": "fresh"
+      },
+      "endpoint": {
+        "target": null,
+        "exists": false,
+        "agent_alive": "not_checked",
+        "status": "unknown",
+        "observed_at": "2026-11-16T08:02:11Z",
+        "freshness": "fresh"
+      },
+      "pr": {
+        "url": "https://github.com/acme-9c2e/shop-9c2e/pull/91",
+        "source": "meta",
+        "head": null
+      },
+      "hints": {
+        "pending_decision": false,
+        "blocked_event": false,
+        "open_decisions": [],
+        "scout_report_present": false,
+        "last_event_text": "done: ready in branch fm/stock-webhook 9c2e"
+      },
+      "actions": {
+        "watch": "bin/fm-peek.sh fm-stock-webhook-9c2e",
+        "steer": "bin/fm-send.sh fm-stock-webhook-9c2e '<instruction>'",
+        "return_channel_note": null
+      },
+      "backlog": null
+    },
+    {
+      "id": "harbor-review-9c2e",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "direct-PR",
+      "yolo": "off",
+      "branch": "fm/harbor-review",
+      "project": "__FM_HOME__/projects/harbor-api-9c2e",
+      "spawn_gen": "s1",
+      "backend": "herdr",
+      "remote": null,
+      "paths": {
+        "meta": {
+          "path": "__FM_HOME__/state/harbor-review-9c2e.meta",
+          "present": true
+        },
+        "status_log": {
+          "path": "__FM_HOME__/state/harbor-review-9c2e.status",
+          "present": true,
+          "kind": "event_history",
+          "last_event": {
+            "state": "paused",
+            "note": "parked on review: PR https://github.com/acme-9c2e/harbor-api-9c2e/pull/90 at 4f2a9c1e8b3d since 2026-11-15T14:02Z; agent stopped, relaunches on review activity",
+            "raw": "paused: parked on review: PR https://github.com/acme-9c2e/harbor-api-9c2e/pull/90 at 4f2a9c1e8b3d since 2026-11-15T14:02Z; agent stopped, relaunches on review activity",
+            "age_seconds": 60
+          }
+        },
+        "worktree": {
+          "path": "__FM_HOME__/../treehouse/harbor-api-9c2e/1",
+          "present": true
+        },
+        "home": {
+          "path": null,
+          "present": false
+        },
+        "report": {
+          "path": "__FM_HOME__/data/harbor-review-9c2e/report.md",
+          "present": false
+        }
+      },
+      "secondmate_projects": [],
+      "current_state": {
+        "state": "paused",
+        "source": "review-park",
+        "detail": "parked on review: PR https://github.com/acme-9c2e/harbor-api-9c2e/pull/90 at 4f2a9c1e8b3d since 2026-11-15T14:02Z; agent stopped, relaunches on review activity",
+        "raw": "state: paused · source: review-park · parked on review: PR https://github.com/acme-9c2e/harbor-api-9c2e/pull/90 at 4f2a9c1e8b3d since 2026-11-15T14:02Z; agent stopped, relaunches on review activity",
+        "observed_at": "2026-11-16T08:02:11Z",
+        "freshness": "fresh"
+      },
+      "endpoint": {
+        "target": null,
+        "exists": false,
+        "agent_alive": "not_checked",
+        "status": "unknown",
+        "observed_at": "2026-11-16T08:02:11Z",
+        "freshness": "fresh"
+      },
+      "pr": {
+        "url": "https://github.com/acme-9c2e/harbor-api-9c2e/pull/90",
+        "source": "meta",
+        "head": null
+      },
+      "hints": {
+        "pending_decision": false,
+        "blocked_event": false,
+        "open_decisions": [],
+        "scout_report_present": false,
+        "last_event_text": "paused: parked on review: PR https://github.com/acme-9c2e/harbor-api-9c2e/pull/90 at 4f2a9c1e8b3d since 2026-11-15T14:02Z; agent stopped, relaunches on review activity"
+      },
+      "actions": {
+        "watch": "bin/fm-peek.sh fm-harbor-review-9c2e",
+        "steer": "bin/fm-send.sh fm-harbor-review-9c2e '<instruction>'",
+        "return_channel_note": null
+      },
+      "backlog": null
+    },
+    {
+      "id": "harbor-relaunch-9c2e",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "direct-PR",
+      "yolo": "off",
+      "branch": "fm/harbor-relaunch",
+      "project": "__FM_HOME__/projects/harbor-api-9c2e",
+      "spawn_gen": "s1",
+      "backend": "herdr",
+      "remote": null,
+      "paths": {
+        "meta": {
+          "path": "__FM_HOME__/state/harbor-relaunch-9c2e.meta",
+          "present": true
+        },
+        "status_log": {
+          "path": "__FM_HOME__/state/harbor-relaunch-9c2e.status",
+          "present": true,
+          "kind": "event_history",
+          "last_event": {
+            "state": "blocked",
+            "note": "review-park relaunch failed: the worker did not start 9c2e",
+            "raw": "blocked: review-park relaunch failed: the worker did not start 9c2e",
+            "age_seconds": 60
+          }
+        },
+        "worktree": {
+          "path": "__FM_HOME__/../treehouse/harbor-api-9c2e/1",
+          "present": true
+        },
+        "home": {
+          "path": null,
+          "present": false
+        },
+        "report": {
+          "path": "__FM_HOME__/data/harbor-relaunch-9c2e/report.md",
+          "present": false
+        }
+      },
+      "secondmate_projects": [],
+      "current_state": {
+        "state": "blocked",
+        "source": "review-park",
+        "detail": "review-park relaunch failed: the worker did not start 9c2e",
+        "raw": "state: blocked · source: review-park · review-park relaunch failed: the worker did not start 9c2e",
+        "observed_at": "2026-11-16T08:02:11Z",
+        "freshness": "fresh"
+      },
+      "endpoint": {
+        "target": null,
+        "exists": false,
+        "agent_alive": "not_checked",
+        "status": "unknown",
+        "observed_at": "2026-11-16T08:02:11Z",
+        "freshness": "fresh"
+      },
+      "pr": {
+        "url": null,
+        "source": "absent",
+        "head": null
+      },
+      "hints": {
+        "pending_decision": false,
+        "blocked_event": false,
+        "open_decisions": [],
+        "scout_report_present": false,
+        "last_event_text": "blocked: review-park relaunch failed: the worker did not start 9c2e"
+      },
+      "actions": {
+        "watch": "bin/fm-peek.sh fm-harbor-relaunch-9c2e",
+        "steer": "bin/fm-send.sh fm-harbor-relaunch-9c2e '<instruction>'",
+        "return_channel_note": null
+      },
+      "backlog": null
+    }
+  ],
+  "contributions": {
+    "known": 3,
+    "checked": 3,
+    "counts": {
+      "captain": 2,
+      "fleet": 1,
+      "maintainer": 0,
+      "nobody": 0
+    },
+    "unmeasured": 0,
+    "complete": true,
+    "proven_clear": false,
+    "stale_verdicts": 0,
+    "missing_verdicts": 0,
+    "unreadable_records": 0,
+    "valid_until": 900,
+    "captain": [
+      {
+        "task": "stock-webhook-9c2e",
+        "url": "https://github.com/acme-9c2e/shop-9c2e/pull/91",
+        "kind": "pr",
+        "head": "9a8b7c6d5e4f",
+        "reason": "Land the stock webhook 9c2e?\nPR #91 adds the webhook and its retry.\nOptions: yes, land it / no, leave it unlanded.",
+        "hold": "stock-webhook-9c2e",
+        "verdict_freshness": null,
+        "verdict_head": null,
+        "verdict_source": null,
+        "checked_at": "2026-11-16T08:00:00Z"
+      },
+      {
+        "task": "stock-webhook-9c2e",
+        "url": "https://github.com/acme-9c2e/shop-9c2e/pull/92",
+        "kind": "pr",
+        "head": "1a2b3c4d5e6f",
+        "reason": "a second PR 9c2e",
+        "hold": "stock-webhook-9c2e",
+        "verdict_freshness": null,
+        "verdict_head": null,
+        "verdict_source": null,
+        "checked_at": "2026-11-16T08:00:00Z"
+      },
+      {
+        "task": "left-the-fleet-9c2e",
+        "url": "https://github.com/acme-9c2e/shop-9c2e/pull/77",
+        "kind": "pr",
+        "head": "0f0e0d0c0b0a",
+        "reason": "checks green; merge approval needed",
+        "hold": null,
+        "verdict_freshness": null,
+        "verdict_head": null,
+        "verdict_source": null,
+        "checked_at": "2026-11-16T08:00:00Z"
+      }
+    ],
+    "captain_omitted": 0
+  },
+  "main_inventory": {
+    "orphan_in_flight": []
+  },
+  "scout_reports": [],
+  "secondmate_current": [],
+  "secondmate_landed": [],
+  "secondmate_guidance": []
+}

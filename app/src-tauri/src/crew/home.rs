@@ -84,9 +84,9 @@ mod tests {
 
     #[test]
     fn the_pin_is_pinned_moved_or_a_tangle() {
-        assert_eq!(classify(FIRSTMATE_PIN, Some("main")), PinState::Pinned { short: "f9f74a1".into() });
-        assert_eq!(classify(FIRSTMATE_PIN, None), PinState::Pinned { short: "f9f74a1".into() }, "detached at the pin");
-        assert_eq!(classify("9296f9b000", Some("main")), PinState::Moved { short: "9296f9b".into(), from: "f9f74a1".into() });
+        assert_eq!(classify(FIRSTMATE_PIN, Some("main")), PinState::Pinned { short: "427056c".into() });
+        assert_eq!(classify(FIRSTMATE_PIN, None), PinState::Pinned { short: "427056c".into() }, "detached at the pin");
+        assert_eq!(classify("9296f9b000", Some("main")), PinState::Moved { short: "9296f9b".into(), from: "427056c".into() });
         assert_eq!(classify(FIRSTMATE_PIN, Some("fix-9c2e")), PinState::Tangle { branch: "fix-9c2e".into() });
         assert_eq!(pin_state(Path::new("/nonexistent/kinas-home")), PinState::Missing);
     }
@@ -110,7 +110,7 @@ mod tests {
         git(&["init", "-q", "-b", "main"]);
         git(&["commit", "-q", "--allow-empty", "-m", "x"]);
         match pin_state(home) {
-            PinState::Moved { short, from } => assert_eq!((short.len(), from.as_str()), (7, "f9f74a1")),
+            PinState::Moved { short, from } => assert_eq!((short.len(), from.as_str()), (7, "427056c")),
             other => panic!("{other:?}"),
         }
         git(&["checkout", "-q", "-b", "side-9c2e"]);

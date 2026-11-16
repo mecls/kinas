@@ -48,7 +48,7 @@ describe("kinas crew status", () => {
     row({ state: "parked", captain_actionable: 1 }),
     row({ backlog_state: "done", first_working_at: NOW - 60 * MIN, done_at: NOW - 19 * MIN }),
   ];
-  const health = { at: "f9f74a1d91cc7e105ec3df2249eda4e07f9ba540", tools: [{ name: "tasks-axi", version: "0.2.5", ok: true }, { name: "treehouse", version: null, ok: false }] };
+  const health = { at: "427056c4181c41074ad24f051f79919330df0fa5", tools: [{ name: "tasks-axi", version: "0.2.5", ok: true }, { name: "treehouse", version: null, ok: false }] };
   const status = crewStatusFromStore(store(rows, health, 2), NOW, true);
 
   test("counts by word, the waiting count, and each task's word, elapsed and PR number", () => {
@@ -61,7 +61,7 @@ describe("kinas crew status", () => {
       { word: "needs decision", elapsed_s: null, pr: null },
       { word: "done", elapsed_s: 2460, pr: null },
     ]);
-    expect(status.at).toBe("f9f74a1");
+    expect(status.at).toBe("427056c");
     expect(status.tools.find((t) => t.name === "tasks-axi")).toEqual({ name: "tasks-axi", version: "0.2.5", ok: true });
     expect(status.tools.find((t) => t.name === "lavish-axi")).toEqual({ name: "lavish-axi", version: null, ok: false });
   });
@@ -76,7 +76,7 @@ describe("kinas crew status", () => {
 
   test("the lines say the pin, the missing tools and the counts", () => {
     const lines = crewStatusLines(status);
-    expect(lines[0]).toBe("Firstmate   f9f74a1 (pinned)");
+    expect(lines[0]).toBe("Firstmate   427056c (pinned)");
     expect(lines[1]).toContain("missing: treehouse");
     expect(lines[2]).toBe("Crew        3 in flight · 1 queued · 1 needs decision · 1 CI red · 0 ready · 1 done this week");
     expect(lines[3]).toBe("Waiting     2 on you");
@@ -85,19 +85,19 @@ describe("kinas crew status", () => {
 
   test("a moved pin says so", () => {
     const moved = crewStatusFromStore(store([], { at: "9296f9b0000", tools: [] }), NOW, true);
-    expect(crewStatusLines(moved)[0]).toBe("Firstmate   9296f9b — moved from f9f74a1");
+    expect(crewStatusLines(moved)[0]).toBe("Firstmate   9296f9b — moved from 427056c");
   });
 
   test("a home the app saw at no commit — on another branch, or not a clone — is not called pinned", () => {
     // crew/mod.rs `health_json` writes `at: null` for a tangle and for a missing clone, not only before it has looked.
     const tangle = crewStatusFromStore(store([], { installed: true, at: null, tools: [] }), NOW, true);
     expect(tangle.at).toBeNull();
-    expect(crewStatusLines(tangle)[0]).toBe("Firstmate   not at the pin f9f74a1 — Settings → Crew says where the clone stands");
+    expect(crewStatusLines(tangle)[0]).toBe("Firstmate   not at the pin 427056c — Settings → Crew says where the clone stands");
     expect(crewStatusJson(tangle).at).toBeNull();
     // Before the app has looked at all there is no health row: the pin is named without a claim about the clone, and the
     // tools — every one installed a minute ago by `kinas crew setup` — are not called missing.
     const unseen = crewStatusFromStore(store([], null), NOW, true);
-    expect(crewStatusLines(unseen)[0]).toBe("Firstmate   f9f74a1 (pin) — the app has not checked the clone yet");
+    expect(crewStatusLines(unseen)[0]).toBe("Firstmate   427056c (pin) — the app has not checked the clone yet");
     expect(crewStatusLines(unseen)[1]).toBe("Tools       not checked by the app yet — open Settings → Crew");
     expect(Object.keys(crewStatusJson(unseen))).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "tasks"]);
   });

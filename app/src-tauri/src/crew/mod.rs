@@ -503,12 +503,12 @@ mod tests {
             tools: vec![ToolState { name: "tasks-axi", pinned: "0.2.5", installed: Some("0.2.5".into()), state: "installed", required: true }],
             prereqs: vec![],
             gh_signed_in: Some(true),
-            pin: PinState::Pinned { short: "f9f74a1".into() },
+            pin: PinState::Pinned { short: "427056c".into() },
             checked_at: 7,
         };
         assert_eq!(
             health_json(&h, true),
-            serde_json::json!({ "installed": true, "at": "f9f74a1", "tools": [{ "name": "tasks-axi", "version": "0.2.5", "ok": true }], "checked_at": 7 })
+            serde_json::json!({ "installed": true, "at": "427056c", "tools": [{ "name": "tasks-axi", "version": "0.2.5", "ok": true }], "checked_at": 7 })
         );
         assert_eq!(blocked_line(&h), None);
         let missing = Health { tools: vec![ToolState { state: "missing", installed: None, ..h.tools[0].clone() }], ..h };

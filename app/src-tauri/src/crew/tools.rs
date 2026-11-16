@@ -215,7 +215,7 @@ mod tests {
         std::fs::create_dir_all(&bin).unwrap();
         script(&bin.join("treehouse"), r#"if [ "$1" = get ]; then echo "  --lease"; else echo v2.3.0; fi"#);
         script(&bin.join("no-mistakes"), "echo no-mistakes version v1.40.0");
-        for (name, version) in [("gh-axi", "0.1.35"), ("quota-axi", "0.1.49"), ("chrome-devtools-axi", "0.1.35"), ("lavish-axi", "0.1.76")] {
+        for (name, version) in [("gh-axi", "0.1.35"), ("quota-axi", "0.1.51"), ("chrome-devtools-axi", "0.1.35"), ("lavish-axi", "0.1.80")] {
             let pkg = dir.path().join("lib/node_modules").join(name);
             std::fs::create_dir_all(pkg.join("dist/bin")).unwrap();
             std::fs::write(pkg.join("package.json"), format!(r#"{{"name":"{name}","version":"{version}"}}"#)).unwrap();
@@ -231,9 +231,9 @@ mod tests {
                 ("no-mistakes", Some("1.40.0".into()), "below_floor"),
                 ("gh-axi", Some("0.1.35".into()), "installed"),
                 ("tasks-axi", None, "missing"),
-                ("quota-axi", Some("0.1.49".into()), "installed"),
+                ("quota-axi", Some("0.1.51".into()), "installed"),
                 ("chrome-devtools-axi", Some("0.1.35".into()), "installed"),
-                ("lavish-axi", Some("0.1.76".into()), "installed"),
+                ("lavish-axi", Some("0.1.80".into()), "installed"),
             ]
         );
         let h = Health { tools: TOOLS.iter().map(|t| tool_state(t, &path)).collect(), prereqs: vec![], gh_signed_in: None, pin: PinState::Missing, checked_at: 0 };

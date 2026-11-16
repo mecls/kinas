@@ -41,6 +41,8 @@ pub(crate) struct TaskFacts {
     pub blocked_event: bool,
     pub captain_actionable: bool,
     pub hold_reason: Option<String>,
+    /// `tasks[].branch` (Firstmate, current): the task's branch, `fm/<id>` unless its project registers another prefix.
+    pub branch: Option<String>,
     /// `hints.open_decisions[]`: (key, verb, summary).
     pub open_decisions: Vec<(String, String, String)>,
     /// `paths.status_log.last_event`: (raw, `<state>: <note>`, age in seconds when Firstmate knows it).
@@ -141,6 +143,7 @@ fn apply_row(f: &mut TaskFacts, t: &Value) {
     }
     f.project = text(t, &["project"]);
     f.harness = text(t, &["harness"]);
+    f.branch = text(t, &["branch"]);
     f.mode = text(t, &["mode"]);
     f.yolo = matches!(text(t, &["yolo"]).as_deref(), Some("on" | "yes" | "true" | "1"));
     f.backend = text(t, &["backend"]);
@@ -282,6 +285,23 @@ mod tests {
             let fleet = parse_fleet(&fixture(&format!("crew-snapshot.{name}.synthetic.json"))).unwrap();
             assert!(fleet.tasks.iter().all(|t| t.id.contains("9c2e") && t.title.as_deref().is_some_and(|x| x.contains("9c2e"))), "{name}");
         }
+    }
+
+    /// Firstmate, current (build spec §11.4): the `427056c` shape — `branch`, `contributions.captain[]`, a three-line
+    /// hold, a task parked on review — parses under the same schema check.
+    #[test]
+    fn parses_the_current_shape() {
+        let fleet = parse_fleet(&fixture("firstmate-fleet-snapshot.current.synthetic.json")).unwrap();
+        assert_eq!(fleet.tasks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["stock-webhook-9c2e", "harbor-review-9c2e", "harbor-relaunch-9c2e", "shop-receipts-9c2e"]);
+        let held = task(&fleet, "stock-webhook-9c2e");
+        assert_eq!(held.branch.as_deref(), Some("fm/stock-webhook"));
+        assert!(held.captain_actionable);
+        assert_eq!(held.hold_reason.as_deref().map(|r| r.lines().count()), Some(3), "the hold's three lines are kept");
+        let parked = task(&fleet, "harbor-review-9c2e");
+        assert_eq!((parked.state.as_deref(), parked.state_source.as_deref()), (Some("paused"), Some("review-park")));
+        assert_eq!(parked.branch.as_deref(), Some("fm/harbor-review"));
+        assert_eq!(task(&fleet, "shop-receipts-9c2e").branch, None, "a queued record has no row, so no branch");
+        assert!(fleet.tasks.iter().all(|t| t.id.contains("9c2e") && t.title.as_deref().is_some_and(|x| x.contains("9c2e"))));
     }
 
     #[test]

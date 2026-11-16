@@ -221,6 +221,8 @@ export interface CrewTaskDetail {
   mode: string | null;
   yolo: boolean;
   backend: string | null;
+  /** The task's branch as Firstmate names it (Firstmate, current); null when it names none. */
+  branch: string | null;
   excerpt: string | null;
   /** `<home>/data/<id>/brief.md` when it exists. */
   brief_path: string | null;

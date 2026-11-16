@@ -112,6 +112,11 @@ export function TaskDetail({
               <span className="ui-mono">{shown.state_line}</span>
             </p>
           )}
+          {shown.branch && (
+            <p className="ui-ink2 ui-mono" data-testid="task-branch">
+              branch {shown.branch}
+            </p>
+          )}
           <p className="ui-ink2">{settingsLine(shown)}</p>
           {shown.task.has_pane && (
             <Button className="crew-detail-action" aria-label={`Open ${shown.task.title ?? shown.task.id}'s pane`} onClick={() => onOpenPane(shown.task.id)}>

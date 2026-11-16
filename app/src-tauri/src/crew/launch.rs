@@ -223,11 +223,11 @@ mod tests {
         assert_eq!((err.code, err.message.as_str()), ("not_installed", "Firstmate isn't installed — run kinas crew setup in the Work pane"));
         std::fs::create_dir_all(dir.path().join("bin")).unwrap();
         std::fs::write(dir.path().join("bin/fm-fleet-snapshot.sh"), "").unwrap();
-        let err = preflight(dir.path(), &health(vec![tasks("missing")], PinState::Moved { short: "9296f9b".into(), from: "f9f74a1".into() })).unwrap_err();
+        let err = preflight(dir.path(), &health(vec![tasks("missing")], PinState::Moved { short: "9296f9b".into(), from: "427056c".into() })).unwrap_err();
         assert_eq!((err.code, err.message.as_str()), ("missing_tool", "tasks-axi isn't installed — run kinas crew setup"));
         let err = preflight(dir.path(), &health(vec![], PinState::Tangle { branch: "fix".into() })).unwrap_err();
         assert_eq!(err.code, "tangle");
-        assert!(preflight(dir.path(), &health(vec![tasks("installed")], PinState::Pinned { short: "f9f74a1".into() })).is_ok());
+        assert!(preflight(dir.path(), &health(vec![tasks("installed")], PinState::Pinned { short: "427056c".into() })).is_ok());
     }
 
     #[test]

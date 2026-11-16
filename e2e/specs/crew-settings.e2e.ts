@@ -121,10 +121,10 @@ describe("Settings grouped, and the crew's install", () => {
     expect(await invoke("refresh_readings")).toBeNull();
     await reshowSettings();
     const card = await waitInPage(crewCard, (c) => "Commit" in c.kv && c.projects.length === 1, "the Crew card never showed the install");
-    expect(card.kv.Commit).toMatch(/^[0-9a-f]{7} — moved from f9f74a1 \(\/updatefirstmate\); Kinas reads it at its snapshot contract$/);
+    expect(card.kv.Commit).toMatch(/^[0-9a-f]{7} — moved from 427056c \(\/updatefirstmate\); Kinas reads it at its snapshot contract$/);
     expect(card.kv.Home.endsWith("/firstmate")).toBe(true);
     expect(card.kv.Backend).toBe("herdr");
-    expect(card.kv.Prerequisites).toBe("git, gh, node, npm, jq, python3, herdr, claude — all found");
+    expect(card.kv.Prerequisites).toBe("git, gh, node, npm, jq, python3, perl, herdr, claude — all found");
     expect(card.kv.Away).toMatch(/^since \d\d:\d\d · back \d\d:\d\d$/);
     expect(card.projects).toEqual(["shop-9c2e · direct-PR · yolo on"]);
     expect(card.text).toContain("Modes, the project list and away mode are the first mate's: ask in its pane.");

@@ -49,8 +49,15 @@ async function refresh() {
   expect(answer).toBe("ok");
 }
 
+/** A sidebar page by its label; the Inbox's button carries its count beside the label. */
 const go = (label: string) =>
-  browser.execute((l: string) => [...document.querySelectorAll<HTMLButtonElement>(".sidebar button")].find((b) => b.textContent?.trim() === l)!.click(), label);
+  browser.execute(
+    (l: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>(".sidebar button")]
+        .find((b) => (b.querySelector(".ui-nav-label")?.textContent ?? b.textContent?.trim()) === l)!
+        .click(),
+    label,
+  );
 
 /** Opens a card's task in the right panel. */
 async function openTask(id: string) {
@@ -125,6 +132,62 @@ describe("Firstmate, current", () => {
     setSnapshot(fakeHome(), CURRENT);
     await refresh();
     await waitWord(RELAUNCH, "blocked");
+  });
+
+  it("a held question's PR: its quiet line, its three lines, Open the PR, and Approve's line unchanged", async () => {
+    const clipboardFile = join(dataDir, "clipboard.txt");
+    await go("Inbox");
+    const sel = `section[data-page="inbox"] li.inbox-item[data-task="${HELD}"][data-key="${HELD}"]`;
+    await browser.waitUntil(() => browser.execute((q: string) => document.querySelector(q) !== null, sel), { timeout: 30000, timeoutMsg: "the held item never reached the Inbox" });
+    const item = JSON.parse(
+      (await browser.execute((q: string) => {
+        const el = document.querySelector(q)!;
+        const span = el.querySelector(".ui-inbox-question > span") as HTMLElement;
+        const lineHeight = parseFloat(getComputedStyle(span).lineHeight);
+        return JSON.stringify({
+          verb: el.getAttribute("data-verb"),
+          context: el.querySelector(".ui-inbox-context")?.textContent,
+          buttons: [...el.querySelectorAll("button")].map((b) => b.textContent),
+          lines: span.textContent?.split("\n").length,
+          renderedLines: Math.round(span.getBoundingClientRect().height / lineHeight),
+        });
+      }, sel)) as string,
+    );
+    expect(item.verb).toBe("captain-hold");
+    expect(item.context).toMatch(/^Held for you · Stock webhook 9c2e · PR #91 · (just now|\d+ (min|h|d) ago)$/);
+    expect(item.buttons).toEqual(["Open the PR", "DenyD", "AnswerR", "ApproveA"]);
+    expect(item.lines).toBe(3);
+    expect(item.renderedLines).toBeGreaterThanOrEqual(3);
+
+    // Open the PR: Rust opens the URL it stored for this task — here the debug build's logged skip, with no URL in it.
+    const skipped = runLog("a link was not opened").length;
+    await browser.execute((q: string) => [...document.querySelector(q)!.querySelectorAll("button")].find((b) => b.textContent === "Open the PR")!.click(), sel);
+    await browser.waitUntil(async () => runLog("a link was not opened").length > skipped, { timeout: 15000, timeoutMsg: "Open the PR never reached the opener" });
+    expect(runLog("/pull/91")).toEqual([]);
+    // The PR adds nothing to the count.
+    const sidebar = await browser.execute(
+      () => [...document.querySelectorAll(".sidebar-nav button")].find((b) => b.querySelector(".ui-nav-label")?.textContent === "Inbox")?.querySelector(".ui-nav-count")?.textContent ?? "",
+    );
+    expect(sidebar).toBe("1");
+
+    // The detail: PR #91 and Open the PR in the held task's PR section.
+    await go("Crew");
+    await openTask(HELD);
+    await waitInPage(() => [...document.querySelectorAll(".crew-detail button")].some((b) => b.textContent === "Open the PR"), "the detail never offered Open the PR");
+    const before = runLog("a link was not opened").length;
+    await browser.execute(() => [...document.querySelectorAll(".crew-detail button")].find((b) => b.textContent === "Open the PR")!.click());
+    await browser.waitUntil(async () => runLog("a link was not opened").length > before, { timeout: 15000, timeoutMsg: "the detail's Open the PR never reached the opener" });
+    expect(await browser.execute(() => document.querySelector('[data-testid="crew-detail-error"]') === null)).toBe(true);
+
+    // Approve puts the same line it always did on the clipboard, and goes to the first mate.
+    await go("Inbox");
+    await browser.execute((q: string) => [...document.querySelector(q)!.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Approve"))!.click(), sel);
+    await browser.waitUntil(() => existsSync(clipboardFile) && readFileSync(clipboardFile, "utf8") === `On ${HELD}: Approved — go ahead.`, {
+      timeout: 15000,
+      timeoutMsg: "the approval never reached the clipboard",
+    });
+    await waitInPage(() => !document.querySelector('section[data-page="work"]')!.hasAttribute("hidden"), "the approval never ended on the Work page");
+    await browser.pause(500);
   });
 
   it("logs counts, never a task, a branch or a question", async () => {

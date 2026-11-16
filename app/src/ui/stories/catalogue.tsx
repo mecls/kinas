@@ -440,6 +440,25 @@ export const STORIES: Story[] = [
           </Inbox>
         ),
       },
+      // 1.12, Firstmate, current: a held question keeps its lines, its quiet line names its PR, and Open the PR comes
+      // before Deny, with no key.
+      {
+        name: "held-pr",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={1}
+              keys
+              question={"Land the stock webhook?\nPR #91 adds the webhook and its retry.\nOptions: yes, land it / no, leave it unlanded."}
+              context="Held for you · Stock webhook · PR #91 · 7 h ago"
+              extra={{ label: "Open the PR", onClick: noop }}
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
     ],
   },
   {

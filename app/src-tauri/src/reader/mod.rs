@@ -429,8 +429,24 @@ pub fn external_url_ok(url: &str) -> bool {
 
 #[tauri::command]
 pub fn open_external(url: String) -> Result<(), ReaderError> {
-    if !external_url_ok(&url) {
-        return Err(ReaderError::new("bad_url", "Kinas opens only http, https and mailto links"));
+    open_url(&url).map_err(|refused| match refused {
+        OpenRefused::BadUrl => ReaderError::new("bad_url", "Kinas opens only http, https and mailto links"),
+        OpenRefused::Failed(e) => ReaderError::new("open_failed", format!("Could not open the link: {e}")),
+    })
+}
+
+/// Why a link was not opened.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum OpenRefused {
+    BadUrl,
+    Failed(String),
+}
+
+/// The one spawn behind every link Kinas opens (the reader's, and the crew's Open the PR): `external_url_ok`, then
+/// `/usr/bin/open`. The URL is never logged.
+pub(crate) fn open_url(url: &str) -> Result<(), OpenRefused> {
+    if !external_url_ok(url) {
+        return Err(OpenRefused::BadUrl);
     }
     // Debug builds only: e2e clicks a link without opening a browser on Miguel's screen.
     #[cfg(debug_assertions)]
@@ -438,10 +454,7 @@ pub fn open_external(url: String) -> Result<(), ReaderError> {
         log::info!("open_external: a link was not opened because KINAS_E2E_NO_OPEN is set");
         return Ok(());
     }
-    let mut child = std::process::Command::new("/usr/bin/open")
-        .arg(&url)
-        .spawn()
-        .map_err(|e| ReaderError::new("open_failed", format!("Could not open the link: {e}")))?;
+    let mut child = std::process::Command::new("/usr/bin/open").arg(url).spawn().map_err(|e| OpenRefused::Failed(e.to_string()))?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });

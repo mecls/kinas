@@ -39,6 +39,10 @@ export function ageText(openedAt: number, now: number): string {
 /** The task's title as filed, else its id. */
 export const titleOf = (d: CrewDecision) => d.task_title ?? d.task_id;
 
+/** A held item's quiet line (1.12): `Held for you · <title> · PR #12 · <age>`, the PR only when Firstmate names one. */
+export const heldLine = (d: CrewDecision, now: number): string =>
+  `Held for you · ${titleOf(d)}${d.pr_number !== null ? ` · PR #${d.pr_number}` : ""} · ${ageText(d.opened_at, now)}`;
+
 /**
  * The Reconcile group's rows, in Rust's order, each with a key of its own. Rust prefixes a line with the task's title,
  * so two tasks of one title with the same trouble read the same; keyed by the line alone, React would draw one on top

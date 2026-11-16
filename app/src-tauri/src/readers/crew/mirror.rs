@@ -320,9 +320,9 @@ fn upsert(
            state_detail, state_observed_at, mode, yolo, harness, backend, endpoint_target, endpoint_exists, endpoint_status,
            worktree_path, worktree_present, report_path, report_present, pr_url, pr_number, pending_decision, blocked_event,
            captain_actionable, hold_reason, snapshot_generated, first_seen_at, first_working_at, last_seen_at, done_at, gone_at,
-           branch)
+           branch, held_pr_url)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-           ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, NULL, ?35)
+           ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, NULL, ?35, ?36)
          ON CONFLICT (org_id, id) DO UPDATE SET
            title = excluded.title, excerpt = excluded.excerpt, project = excluded.project,
            project_name = excluded.project_name, kind = excluded.kind, backlog_state = excluded.backlog_state,
@@ -336,7 +336,7 @@ fn upsert(
            blocked_event = excluded.blocked_event, captain_actionable = excluded.captain_actionable,
            hold_reason = excluded.hold_reason, snapshot_generated = excluded.snapshot_generated,
            first_working_at = excluded.first_working_at, last_seen_at = excluded.last_seen_at,
-           done_at = excluded.done_at, gone_at = NULL, branch = excluded.branch",
+           done_at = excluded.done_at, gone_at = NULL, branch = excluded.branch, held_pr_url = excluded.held_pr_url",
         params![
             org,
             f.id,
@@ -373,6 +373,7 @@ fn upsert(
             now,
             done_at,
             f.branch,
+            f.held_pr_url,
         ],
     )?;
     Ok(())

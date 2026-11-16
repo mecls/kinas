@@ -260,7 +260,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | Card | plain, selected |
 | Lane | with-cards, empty, no-chip, internal |
 | ProgressRow | list, quiet |
-| InboxItem | plan, decision, answering, copied, compact |
+| InboxItem | plan, decision, answering, copied, compact, held-pr |
 | Timeline | task |
 | Diff | modified, deleted, no-copy, too-many, crew |
 | Toast | success, error |

@@ -24,6 +24,7 @@ export function InboxItem({
   copyDisabled = false,
   copied,
   compact = false,
+  extra,
   onAnswerChange,
   onApprove,
   onAnswer,
@@ -49,6 +50,8 @@ export function InboxItem({
   /** `Copied 15:02 — paste it into the first mate's pane`, under the item. */
   copied?: string;
   compact?: boolean;
+  /** One more action, before Deny (1.12: Open the PR on a held item): a text button with no key, click and Tab only. */
+  extra?: { label: string; onClick: () => void };
   onAnswerChange?: (text: string) => void;
   onApprove: () => void;
   onAnswer: () => void;
@@ -111,6 +114,11 @@ export function InboxItem({
       </div>
       {!answering && (
         <div className="ui-inbox-acts">
+          {extra && (
+            <Button kind="text" className="ui-inbox-extra" onClick={extra.onClick}>
+              {extra.label}
+            </Button>
+          )}
           <Button kind="text" hint={keys ? "D" : undefined} onClick={onDeny}>
             Deny
           </Button>

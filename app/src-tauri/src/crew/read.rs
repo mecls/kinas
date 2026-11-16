@@ -77,6 +77,9 @@ pub struct DecisionRow {
     pub repo: Option<String>,
     pub opened_at: i64,
     pub copied_at: Option<i64>,
+    /// The PR a held task names (Firstmate, current; PRD rule 8): its number, only for a `captain-hold` item and only
+    /// from an https URL. The URL itself never reaches the webview: `crew_open_pr` reads it by task id.
+    pub pr_number: Option<u32>,
 }
 
 /// A worker row this old no longer shows its pane's button (§7 Worker: stale after 15 s).
@@ -220,6 +223,8 @@ pub struct CrewTaskDetail {
     pub backend: Option<String>,
     /// The task's branch as Firstmate names it (Firstmate, current); None when the snapshot names none.
     pub branch: Option<String>,
+    /// A held task's PR number (Firstmate, current): only while the task is held, only from an https URL.
+    pub held_pr_number: Option<u32>,
     pub excerpt: Option<String>,
     /// `<home>/data/<id>/brief.md` when it exists, filled by the command after the guard.
     pub brief_path: Option<String>,
@@ -260,10 +265,11 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         params![org, id],
         |r| Ok((text(r, 0)?, text(r, 1)?, text(r, 2)?, text(r, 3)?, text(r, 4)?, text(r, 5)?, text(r, 6)?, text(r, 7)?, text(r, 8)?, text(r, 9)?, text(r, 10)?)),
     )?;
-    let (yolo, report_present, worktree_present, branch): (bool, bool, Option<bool>, Option<String>) = conn.query_row(
-        "SELECT yolo, report_present, worktree_present, branch FROM crew_tasks WHERE org_id = ?1 AND id = ?2",
+    #[allow(clippy::type_complexity)]
+    let (yolo, report_present, worktree_present, branch, held, held_pr_url): (bool, bool, Option<bool>, Option<String>, bool, Option<String>) = conn.query_row(
+        "SELECT yolo, report_present, worktree_present, branch, captain_actionable, held_pr_url FROM crew_tasks WHERE org_id = ?1 AND id = ?2",
         params![org, id],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
     )?;
     let mut stmt = conn.prepare("SELECT at, kind, text FROM crew_events WHERE org_id = ?1 AND task_id = ?2 ORDER BY at, id")?;
     let events = stmt.query_map(params![org, id], |r| Ok(EventRow { at: r.get(0)?, kind: r.get(1)?, text: r.get(2)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -275,6 +281,7 @@ pub(crate) fn task_view(conn: &Connection, org: &str, id: &str, now: i64) -> rus
         yolo,
         backend,
         branch,
+        held_pr_number: held_pr_url.as_deref().filter(|_| held).and_then(held_pr_number),
         excerpt,
         brief_path: None,
         report_path: None,
@@ -310,7 +317,8 @@ pub(crate) fn waiting(conn: &Connection, org: &str) -> rusqlite::Result<u32> {
 /// The open decisions, newest first — every one, or one task's — with the task's title and repository.
 fn decisions(conn: &Connection, org: &str, task: Option<&str>) -> rusqlite::Result<Vec<DecisionRow>> {
     let mut stmt = conn.prepare(
-        "SELECT d.task_id, d.key, d.verb, d.summary, t.title, t.repo, d.opened_at, d.copied_at
+        "SELECT d.task_id, d.key, d.verb, d.summary, t.title, t.repo, d.opened_at, d.copied_at,
+           CASE WHEN d.verb = 'captain-hold' THEN t.held_pr_url END
          FROM crew_decisions d LEFT JOIN crew_tasks t ON t.org_id = d.org_id AND t.id = d.task_id
          WHERE d.org_id = ?1 AND d.closed_at IS NULL AND (?2 IS NULL OR d.task_id = ?2)
          ORDER BY d.opened_at DESC, d.task_id, d.key",
@@ -325,9 +333,26 @@ fn decisions(conn: &Connection, org: &str, task: Option<&str>) -> rusqlite::Resu
             repo: r.get(5)?,
             opened_at: r.get(6)?,
             copied_at: r.get(7)?,
+            pr_number: r.get::<_, Option<String>>(8)?.as_deref().and_then(held_pr_number),
         })
     })?;
     rows.collect()
+}
+
+/// A held PR's number (Firstmate, current): `https://<host>/…/pull/<n>` only — any forge's https PR, never http.
+pub(crate) fn held_pr_number(url: &str) -> Option<u32> {
+    let rest = url.strip_prefix("https://")?;
+    let mut parts = rest.rsplit('/');
+    let number = parts.next()?;
+    (parts.next()? == "pull" && !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())).then(|| number.parse().ok()).flatten()
+}
+
+/// The PR URL a task's held item names, as the mirror stored it; `crew_open_pr` opens it, the webview never sees it.
+pub(crate) fn held_pr_url(conn: &Connection, org: &str, id: &str) -> rusqlite::Result<Option<String>> {
+    Ok(conn
+        .query_row("SELECT held_pr_url FROM crew_tasks WHERE org_id = ?1 AND id = ?2", params![org, id], |r| r.get::<_, Option<String>>(0))
+        .optional()?
+        .flatten())
 }
 
 /// What a reconcile line is made of, for one task in flight (build spec §7 Reconcile rows): derived at read time, never
@@ -446,6 +471,36 @@ mod tests {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../fixtures/crew-snapshot.{name}.synthetic.json"));
         let fleet = parse_fleet(&std::fs::read_to_string(path).unwrap());
         record(&mut store.conn(), store.org_id(), &fleet, &Default::default(), now).unwrap();
+    }
+
+    #[test]
+    fn held_pr_number_only_for_https() {
+        assert_eq!(held_pr_number("https://github.com/o/r/pull/12"), Some(12));
+        assert_eq!(held_pr_number("https://git.example.org/o/r/pull/7"), Some(7), "any forge's https PR");
+        for bad in ["http://github.com/o/r/pull/12", "https://github.com/o/r/issues/12", "https://github.com/o/r/pull/", "https://github.com/o/r/pull/12a", "pull/12", ""] {
+            assert_eq!(held_pr_number(bad), None, "{bad}");
+        }
+    }
+
+    /// Firstmate, current: the held item's PR number reaches the Inbox and the detail, the URL never does, and a PR a
+    /// captain row names for a task that is not held is not shown (PRD rule 8).
+    #[test]
+    fn a_held_items_pr_is_a_number() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/firstmate-fleet-snapshot.current.synthetic.json");
+        let mut fleet = parse_fleet(&std::fs::read_to_string(path).unwrap()).unwrap();
+        fleet.tasks.iter_mut().find(|t| t.id == "harbor-review-9c2e").unwrap().held_pr_url = Some("https://github.com/o/r/pull/90".into());
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &Default::default(), T0).unwrap();
+        let view = snapshot_view(&store.conn(), store.org_id(), T0 + 1, true, true, None).unwrap();
+        let held: Vec<(&str, &str, Option<u32>)> = view.decisions.iter().map(|d| (d.task_id.as_str(), d.verb.as_str(), d.pr_number)).collect();
+        assert_eq!(held, [("stock-webhook-9c2e", "captain-hold", Some(91))]);
+        let detail = task_view(&store.conn(), store.org_id(), "stock-webhook-9c2e", T0 + 1).unwrap().unwrap();
+        assert_eq!((detail.branch.as_deref(), detail.held_pr_number), (Some("fm/stock-webhook"), Some(91)));
+        let parked = task_view(&store.conn(), store.org_id(), "harbor-review-9c2e", T0 + 1).unwrap().unwrap();
+        assert_eq!(parked.held_pr_number, None, "not held: its captain row's PR is not drawn");
+        let json = serde_json::to_string(&view).unwrap();
+        assert!(!json.contains("/pull/91"), "the URL never reaches the webview");
     }
 
     #[test]

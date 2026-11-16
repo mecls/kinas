@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { crewErrorOf, getCrewTask, type CrewTaskDetail } from "../api.ts";
+import { crewErrorOf, getCrewTask, openCrewPr, type CrewTaskDetail } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { KeyboardEvent } from "react";
 import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
@@ -40,6 +40,8 @@ export function TaskDetail({
   const [answer, setAnswer] = useState<{ id: string; detail: CrewTaskDetail | null } | null>(null);
   /** The last failed read, and the id it was for: another card selected meanwhile is not said to have failed. */
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  /** Open the PR's refusal (1.12), for the task it was asked for: shown in the panel's one error line. */
+  const [prError, setPrError] = useState<{ id: string; message: string } | null>(null);
 
   // The previous detail stays until `crew_task` answers (§4, Loading); a failure says why under the header.
   useEffect(() => {
@@ -62,10 +64,15 @@ export function TaskDetail({
   const view = detailFor(answer, id, error !== null && error.id === id);
   const shown = view.detail;
   const missing = view.current && shown === null;
-  const failure = detailFailure(error, id, shown !== null);
+  const failure = detailFailure(error, id, shown !== null) ?? (prError !== null && prError.id === id ? prError.message : null);
+  const openPr = (task: string) => {
+    setPrError(null);
+    openCrewPr(task).catch((e) => setPrError({ id: task, message: crewErrorOf(e) }));
+  };
   const head = bareHead(view, id);
   const lane = shown ? lanesOf([shown.task], folders)[0] : undefined;
   const gone = shown?.task.word === "gone";
+  const heldPr = shown && !gone ? shown.held_pr_number : null;
   const pr = shown ? prDetail(shown) : null;
   const worktree = shown ? worktreeWord(shown) : null;
   /** The footer acts on the newest open decision — of the task selected, never of the one shown before it. */
@@ -148,10 +155,21 @@ export function TaskDetail({
             </Button>
           )}
 
-          {(shown.task.kind !== "scout" || pr) && (
+          {(shown.task.kind !== "scout" || pr || heldPr !== null) && (
             <>
               <h4>PR</h4>
-              {pr ? <p className="crew-pr" data-testid="crew-detail-pr">{pr}</p> : <p className="ui-ink2">No PR yet</p>}
+              {pr ? <p className="crew-pr" data-testid="crew-detail-pr">{pr}</p> : heldPr === null && <p className="ui-ink2">No PR yet</p>}
+              {/* 1.12: the PR a held task names, opened by its task id — the URL stays in Rust. */}
+              {heldPr !== null && shown.task.pr?.number !== heldPr && (
+                <p className="crew-pr" data-testid="crew-detail-held-pr">
+                  PR #{heldPr}
+                </p>
+              )}
+              {heldPr !== null && (
+                <Button kind="text" className="crew-detail-action" onClick={() => openPr(shown.task.id)}>
+                  Open the PR
+                </Button>
+              )}
               {shown.checks.length > 0 && <ChecksList checks={checksOf(shown)} />}
             </>
           )}

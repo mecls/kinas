@@ -32,6 +32,7 @@ const detail = (extra: Partial<CrewTaskDetail> = {}, task: Partial<CrewTaskDetai
   yolo: false,
   backend: "herdr",
   branch: null,
+  held_pr_number: null,
   excerpt: null,
   brief_path: null,
   report_path: null,

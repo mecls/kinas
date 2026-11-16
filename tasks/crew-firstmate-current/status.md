@@ -22,7 +22,7 @@
   (supersedes 0019), DESIGN.md 1.12, `docs/external/`, README, the smoke test and the first mate PRD's note written
 - [x] Slice 1 · tracer bullet: Kinas at the new pin shows a task's branch (pin, `perl`, migration 0007, the branch line) — done 2026-11-16: the pin `427056c`, `perl`, `lavish-axi` 0.1.80, `tasks-axi` 0.2.6, `quota-axi` 0.1.51; migration 0007 whole (schema 7); the branch from parse to the detail; `crew-current` 2/2 and `crew-settings` 6/6, each alone
 - [x] Slice 2 · in review (the word in Rust, the CLI and the fixture; the badge; Overnight; the status JSON) — done 2026-11-16: a pause by park on review reads **in review** (ring, `--meter`) after blocked, waits in Overnight, counts in flight, and adds nothing to the waiting count; `counts.in_review` in the status JSON; `crew-current` 4/4, `crew-board`, `crew-home`, `stories` green alone
-- [ ] Slice 3 · a held question's PR, in its own lines (`crew_open_pr`, Inbox, Home, the detail)
+- [x] Slice 3 · a held question's PR, in its own lines (`crew_open_pr`, Inbox, Home, the detail) — done 2026-11-16: `contributions.captain[]` → `held_pr_url` → `PR #N` on a held item only; Open the PR by task id through `reader::open_url`, https only; a question keeps its line breaks; `crew-current` 5/5, `crew-inbox`, `crew-home` and the `reader*` specs green alone
 - [ ] Slice 4 · free lanes and the Firstmate options table (the gate, the fourth script, caption, Usage, Settings)
 - [ ] Slice 5 · the fleet ledger (reader, cursor, real times, timeline, gone + merged → done)
 - [ ] Slice 6 · setup moves an older home (proved on a scratch copy)

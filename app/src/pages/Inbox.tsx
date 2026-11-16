@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { CrewDecision, CrewSnapshot } from "../api.ts";
+import { openCrewPr, type CrewDecision, type CrewSnapshot } from "../api.ts";
 import { fleetAsOf } from "../crew/board.ts";
-import { ageText, copiedText, inboxGroups, reconcileRows, titleOf } from "../crew/inbox.ts";
+import { ageText, copiedText, heldLine, inboxGroups, reconcileRows, titleOf } from "../crew/inbox.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import { Dot, EmptyState, InboxItem, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
@@ -47,7 +47,7 @@ function Item({
 }) {
   const folder = d.repo ? folders.find((f) => !f.removed && f.repo === d.repo) : undefined;
   const context = held ? (
-    `Held for you · ${titleOf(d)} · ${ageText(d.opened_at, now)}`
+    heldLine(d, now)
   ) : (
     <>
       {titleOf(d)} · <span className="ui-mono">{d.key}</span> · {ageText(d.opened_at, now)}
@@ -74,6 +74,8 @@ function Item({
         onAnswerChange={onText}
         copyDisabled={box === "answer" && text.trim() === ""}
         copied={copiedText(d.copied_at) ?? undefined}
+        // 1.12: Open the PR on a held item that names one — a task id to Rust, never a URL; a refusal changes nothing here.
+        extra={held && d.pr_number !== null ? { label: "Open the PR", onClick: () => void openCrewPr(d.task_id).catch(() => {}) } : undefined}
         onApprove={() => onAnswer("approve", "")}
         onAnswer={() => onBox("answer")}
         onDeny={() => onBox("deny")}

@@ -43,6 +43,9 @@ pub(crate) struct TaskFacts {
     pub hold_reason: Option<String>,
     /// `tasks[].branch` (Firstmate, current): the task's branch, `fm/<id>` unless its project registers another prefix.
     pub branch: Option<String>,
+    /// The PR a `contributions.captain[]` row names for this task (Firstmate, current): the first row whose `task` is
+    /// this id and whose `kind` is not an issue. Shown only on a held item (PRD rule 8).
+    pub held_pr_url: Option<String>,
     /// `hints.open_decisions[]`: (key, verb, summary).
     pub open_decisions: Vec<(String, String, String)>,
     /// `paths.status_log.last_event`: (raw, `<state>: <note>`, age in seconds when Firstmate knows it).
@@ -115,6 +118,17 @@ pub(crate) fn parse_fleet(json: &str) -> Result<Fleet, String> {
             }
         }
         facts.project_name = facts.project.as_deref().and_then(last_component).or_else(|| facts.project_name.take());
+    }
+    // `contributions.captain[]` (Firstmate, current; `bin/fm-contributions.jq` `summary`): a row for a task the fleet
+    // does not list adds nothing, and the first row for a task wins.
+    for row in array(&root, &["contributions", "captain"]) {
+        let (Some(task), Some(url)) = (text(row, &["task"]), text(row, &["url"])) else { continue };
+        if text(row, &["kind"]).as_deref() == Some("issue") {
+            continue;
+        }
+        if let Some(facts) = tasks.iter_mut().find(|t| t.id == task && t.held_pr_url.is_none()) {
+            facts.held_pr_url = Some(url);
+        }
     }
     let orphans = array(&root, &["main_inventory", "orphan_in_flight"])
         .iter()
@@ -301,7 +315,21 @@ mod tests {
         assert_eq!((parked.state.as_deref(), parked.state_source.as_deref()), (Some("paused"), Some("review-park")));
         assert_eq!(parked.branch.as_deref(), Some("fm/harbor-review"));
         assert_eq!(task(&fleet, "shop-receipts-9c2e").branch, None, "a queued record has no row, so no branch");
+        assert_eq!(held.held_pr_url.as_deref(), Some("https://github.com/acme-9c2e/shop-9c2e/pull/91"), "the first captain row wins");
+        assert!(fleet.tasks.iter().filter(|t| t.id != held.id).all(|t| t.held_pr_url.is_none()), "only the held task names a PR");
         assert!(fleet.tasks.iter().all(|t| t.id.contains("9c2e") && t.title.as_deref().is_some_and(|x| x.contains("9c2e"))));
+    }
+
+    #[test]
+    fn captain_rows_for_unknown_tasks_are_dropped() {
+        let json = r#"{"schema":"fm-fleet-snapshot.v1","generated":"g","backlog":{"records":[{"structured":true,"id":"a-9c2e","state":"in_flight","title":"A 9c2e","captain_actionable":true}]},
+            "contributions":{"captain":[{"task":"gone-9c2e","url":"https://github.com/o/r/pull/1","kind":"pr"},
+              {"task":"a-9c2e","url":"https://github.com/o/r/issues/2","kind":"issue"},
+              {"task":"a-9c2e","url":null},
+              {"task":"a-9c2e","url":"https://github.com/o/r/pull/3","kind":"pr"}]}}"#;
+        let fleet = parse_fleet(json).unwrap();
+        assert_eq!(fleet.tasks.len(), 1, "a captain row adds no task");
+        assert_eq!(fleet.tasks[0].held_pr_url.as_deref(), Some("https://github.com/o/r/pull/3"), "an issue and a row with no URL are skipped");
     }
 
     #[test]

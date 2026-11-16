@@ -70,10 +70,13 @@ export function overnightRows(folders: readonly SeatedFolder[], tasks: readonly 
 }
 
 /** The row's line, from the task it opens: its open decision's question, else its word and title; then the time. */
+/** A question kept with its line breaks (1.12, a hold's text), joined on one line where a row has one. */
+const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " ").trim();
+
 function eventLine(t: CrewTask, decisions: readonly CrewDecision[]): string {
   const at = clock(activityAt(t));
   const decision = decisions.find((d) => d.task_id === t.id);
-  if (decision && t.overnight_word === "needs decision") return `Needs decision: ${decision.summary} ${at}`;
+  if (decision && t.overnight_word === "needs decision") return `Needs decision: ${oneLine(decision.summary)} ${at}`;
   const title = t.title ?? t.id;
   if (t.overnight_word === "ready") return `Ready to merge: ${title}, ${at}`;
   return `${capitalised(t.overnight_word)}: ${title} ${at}`;

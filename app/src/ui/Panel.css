@@ -61,6 +61,10 @@
   border-radius: var(--radius-md);
   padding: var(--space-3);
 }
+/* 1.12, Firstmate, current: the question keeps its line breaks, as the Inbox item's does. */
+.ui-qbox > p:first-child {
+  white-space: pre-line;
+}
 .ui-qbox-rec {
   margin: var(--space-1) 0 0;
   font-size: var(--fs-sm);

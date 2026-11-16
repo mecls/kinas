@@ -141,6 +141,35 @@ pub async fn crew_task(app: AppHandle, id: String) -> Result<Option<read::CrewTa
     .map_err(|e| CrewError::internal(format!("the task did not finish reading: {e}")))?
 }
 
+/// **Open the PR** on a held item (Firstmate, current; PRD rule 8; build spec §6.4): the webview passes a task id, never
+/// a URL. The URL is the one the mirror stored from Firstmate's `contributions.captain[]`, opened only when it is
+/// https, through the reader's one spawn. Nothing about it is logged.
+#[tauri::command]
+pub async fn crew_open_pr(app: AppHandle, task_id: String) -> Result<(), CrewError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let url = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            read::held_pr_url(&conn, store.org_id(), &task_id).map_err(|e| CrewError::internal(format!("could not read the task: {e}")))?
+        };
+        open_pr(url.as_deref(), crate::reader::open_url)
+    })
+    .await
+    .map_err(|e| CrewError::internal(format!("the PR did not open: {e}")))?
+}
+
+/// `crew_open_pr`'s refusals, with the opener a seam: none stored → `no_pr`; not https → `bad_url`.
+pub(crate) fn open_pr(url: Option<&str>, open: impl FnOnce(&str) -> Result<(), crate::reader::OpenRefused>) -> Result<(), CrewError> {
+    let Some(url) = url else { return Err(CrewError { code: "no_pr", message: "No PR recorded for this task".into() }) };
+    if !url.starts_with("https://") || !crate::reader::external_url_ok(url) {
+        return Err(CrewError { code: "bad_url", message: "Kinas opens only https links for a PR".into() });
+    }
+    open(url).map_err(|refused| match refused {
+        crate::reader::OpenRefused::BadUrl => CrewError { code: "bad_url", message: "Kinas opens only https links for a PR".into() },
+        crate::reader::OpenRefused::Failed(e) => CrewError { code: "open_failed", message: format!("Could not open the PR: {e}") },
+    })
+}
+
 /// A Firstmate task id, safe to name a folder under `<home>/data/`: letters, digits, `.`, `_` and `-`, not starting
 /// with a dot.
 fn safe_id(id: &str) -> bool {
@@ -449,6 +478,36 @@ mod tests {
             observed_at,
             worker_words: [("w2:p2".to_string(), ("working", Some("claude".to_string())))].into(),
         }
+    }
+
+    /// Firstmate, current (build spec §6.4, §11.4): Open the PR opens exactly the URL the mirror stored for that task,
+    /// through the opener seam, and refuses a task with none and a URL that is not https.
+    #[test]
+    fn crew_open_pr_opens_exactly_the_stored_url() {
+        use crate::readers::crew::mirror::record;
+        use crate::readers::crew::snapshot::parse_fleet;
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::store::Store::open(dir.path()).unwrap();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/firstmate-fleet-snapshot.current.synthetic.json");
+        let mut fleet = parse_fleet(&std::fs::read_to_string(path).unwrap()).unwrap();
+        fleet.tasks.iter_mut().find(|t| t.id == "harbor-relaunch-9c2e").unwrap().held_pr_url = Some("http://github.com/o/r/pull/5".into());
+        record(&mut store.conn(), store.org_id(), &Ok(fleet), &Default::default(), 1).unwrap();
+        let opened = std::cell::RefCell::new(Vec::<String>::new());
+        let open = |id: &str| {
+            let url = read::held_pr_url(&store.conn(), store.org_id(), id).unwrap();
+            open_pr(url.as_deref(), |u| {
+                opened.borrow_mut().push(u.to_string());
+                Ok(())
+            })
+        };
+        assert_eq!(open("stock-webhook-9c2e"), Ok(()));
+        assert_eq!(opened.borrow().as_slice(), ["https://github.com/acme-9c2e/shop-9c2e/pull/91"]);
+        assert_eq!(open("shop-receipts-9c2e").unwrap_err().code, "no_pr");
+        assert_eq!(open("no-such-task").unwrap_err().code, "no_pr");
+        assert_eq!(open("harbor-relaunch-9c2e").unwrap_err().code, "bad_url");
+        assert_eq!(opened.borrow().len(), 1, "a refusal opens nothing");
+        let failed = open_pr(Some("https://github.com/o/r/pull/1"), |_| Err(crate::reader::OpenRefused::Failed("no".into()))).unwrap_err();
+        assert_eq!(failed.code, "open_failed");
     }
 
     #[test]

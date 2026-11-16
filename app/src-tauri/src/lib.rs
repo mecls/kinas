@@ -120,6 +120,7 @@ pub fn run() {
             crew::crew_launch,
             crew::crew_task,
             crew::crew_focus_pane,
+            crew::crew_open_pr,
             crew::crew_answer,
             crew::crew_seen,
             crew::crew_record_order,

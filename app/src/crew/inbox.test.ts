@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { CrewDecision, CrewSnapshot } from "../api.ts";
-import { ageText, copiedText, inboxGroups, reconcileRows, titleOf } from "./inbox.ts";
+import { ageText, copiedText, heldLine, inboxGroups, reconcileRows, titleOf } from "./inbox.ts";
 
 // The Inbox's words (build spec §4 Inbox page): groups in Rust's order, held tasks apart, the Copied line, the age.
 
@@ -16,6 +16,7 @@ const decision = (key: string, verb: string, extra: Partial<CrewDecision> = {}):
   repo: "o/r",
   opened_at: NOW - 12 * MIN,
   copied_at: null,
+  pr_number: null,
   ...extra,
 });
 
@@ -32,6 +33,11 @@ test("the Copied line only after a copy, in local time", () => {
   expect(copiedText(null)).toBeNull();
   const at = new Date(2026, 8, 25, 15, 2).getTime();
   expect(copiedText(at)).toBe("Copied 15:02 — paste it into the first mate's pane");
+});
+
+test("a held item's quiet line names its PR when Firstmate does (Firstmate, current)", () => {
+  expect(heldLine(decision("t-9c2e", "captain-hold"), NOW)).toBe("Held for you · Export listing as CSV · 12 min ago");
+  expect(heldLine(decision("t-9c2e", "captain-hold", { pr_number: 91, opened_at: NOW - 7 * 60 * MIN }), NOW)).toBe("Held for you · Export listing as CSV · PR #91 · 7 h ago");
 });
 
 test("ages in minutes, hours and days", () => {

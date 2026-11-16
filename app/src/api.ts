@@ -166,6 +166,8 @@ export interface CrewDecision {
   repo: string | null;
   opened_at: number;
   copied_at: number | null;
+  /** A held item's PR number (Firstmate, current); the URL stays in Rust (`openCrewPr`). */
+  pr_number: number | null;
 }
 export interface CrewSnapshot {
   now: number;
@@ -223,6 +225,8 @@ export interface CrewTaskDetail {
   backend: string | null;
   /** The task's branch as Firstmate names it (Firstmate, current); null when it names none. */
   branch: string | null;
+  /** A held task's PR number (Firstmate, current); null when it is not held or names none. */
+  held_pr_number: number | null;
   excerpt: string | null;
   /** `<home>/data/<id>/brief.md` when it exists. */
   brief_path: string | null;
@@ -265,6 +269,8 @@ export const addToCrew = (path: string) => invoke<"launched" | "copied">("crew_a
 export const recordOrder = (text: string) => invoke<boolean>("crew_record_order", { text });
 /** **Open its pane**: the task's worker workspace, focused in the session Kinas attaches. */
 export const focusCrewPane = (task: string) => invoke<void>("crew_focus_pane", { task });
+/** Open the PR (Firstmate, current): a task id goes to Rust, which opens the https URL it stored; never a URL from here. */
+export const openCrewPr = (taskId: string) => invoke<void>("crew_open_pr", { taskId });
 export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");
 /** The launcher: "focused" (it was running), "run" (its workspace was there without it), "created". */
 export const launchFirstMate = () => invoke<"focused" | "run" | "created">("crew_launch");

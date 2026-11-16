@@ -43,12 +43,20 @@ test("buckets per §7", () => {
   expect((["failed", "blocked", "CI red"] as CrewWord[]).map(bucketOf)).toEqual(["fail", "fail", "fail"]);
 });
 
+test("a held question of several lines is one line in the row (Firstmate, current)", () => {
+  const held: CrewDecision[] = [
+    { task_id: "h", key: "h", verb: "captain-hold", summary: "Land the webhook?\n  PR #91 adds it.\nYes or no.", task_title: "h title", repo: "o/harbor-9c2e", opened_at: NOW - H, copied_at: null, pr_number: 91 },
+  ];
+  const [harbor] = overnightRows(folders, [task("h", "needs decision", NOW - H)], SINCE, held);
+  expect(harbor!.event).toMatch(/^Needs decision: Land the webhook\? PR #91 adds it\. Yes or no\. \d\d:\d\d$/);
+});
+
 test("in review waits on a person, beside needs decision and ready (Firstmate, current)", () => {
   expect(bucketOf("in review")).toBe("wait");
 });
 
 test("only in-window tasks count; the waiting one is the target; a quiet folder has nothing", () => {
-  const decisions: CrewDecision[] = [{ task_id: "a", key: "api", verb: "needs-decision", summary: "REST or GraphQL?", task_title: "a title", repo: "o/harbor-9c2e", opened_at: NOW - H, copied_at: null }];
+  const decisions: CrewDecision[] = [{ task_id: "a", key: "api", verb: "needs-decision", summary: "REST or GraphQL?", task_title: "a title", repo: "o/harbor-9c2e", opened_at: NOW - H, copied_at: null, pr_number: null }];
   const tasks = [
     task("a", "needs decision", NOW - 4 * H),
     task("b", "CI red", NOW - 2 * H),

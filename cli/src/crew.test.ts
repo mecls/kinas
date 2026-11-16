@@ -59,6 +59,7 @@ describe("kinas crew", () => {
     expect(json.counts.queued).toBe(1);
     expect(json.counts.ci_red).toBe(1);
     expect(json.counts.in_review).toBe(1);
+    expect((json as unknown as { lanes: unknown }).lanes).toBeNull();
     expect(json.waiting).toBe(1);
     expect(json.tasks.map((t) => [t.word, t.pr])).toEqual([["queued", null], ["CI red", 7], ["in review", null]]);
     expect(stdout).not.toContain("9c2e");

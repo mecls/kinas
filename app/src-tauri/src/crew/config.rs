@@ -77,6 +77,81 @@ fn project_names(home: &Path) -> Vec<String> {
     names
 }
 
+/// What `config/lane-capacity` asks for (Firstmate, current; ADR 0020): the gate in front of `fm-capacity.sh --json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LaneConfig {
+    /// No file, or not a regular file: no cap set.
+    Absent,
+    Cap(u32),
+    Auto,
+    /// A `quota-provider` line: the script would run `quota-axi`, which Kinas never runs.
+    Quota,
+    /// A first line that is neither a cap nor `auto`.
+    Invalid,
+}
+
+/// `config/lane-capacity`, read as Firstmate reads it (`bin/fm-capacity.sh` `parse_lane_config`): a regular file under
+/// 1 MiB, `#` comments stripped, tabs and carriage returns as spaces; the first non-empty line is a cap of at most nine
+/// digits or `auto`; any later line whose first word is `quota-provider` makes it Quota. Nothing else is read of it.
+pub(crate) fn lane_config(home: &Path) -> LaneConfig {
+    // Not there, not a regular file (a FIFO is never opened), or too large to be one: no cap set.
+    match crate::reader::access::read_regular(&home.join("config").join("lane-capacity"), crate::reader::access::SMALL_FILE_BYTES) {
+        Ok(text) => lane_config_of(&text),
+        Err(_) => LaneConfig::Absent,
+    }
+}
+
+fn lane_config_of(text: &str) -> LaneConfig {
+    let mut lines = text.lines().map(|l| l.split('#').next().unwrap_or("").replace(['\t', '\r'], " ").trim().to_string()).filter(|l| !l.is_empty());
+    let Some(first) = lines.next() else { return LaneConfig::Invalid };
+    let head = if first == "auto" {
+        LaneConfig::Auto
+    } else if first.len() <= 9 && first.bytes().all(|b| b.is_ascii_digit()) {
+        first.parse().map(LaneConfig::Cap).unwrap_or(LaneConfig::Invalid)
+    } else {
+        return LaneConfig::Invalid;
+    };
+    if lines.any(|l| l.split(' ').next() == Some("quota-provider")) {
+        LaneConfig::Quota
+    } else {
+        head
+    }
+}
+
+/// Lane capacity as Settings → Crew says it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum LaneOption {
+    Off,
+    Cap { cap: u32 },
+    Auto,
+    ChecksQuota,
+    Invalid,
+}
+
+/// Firstmate's options the captain turns on in the first mate's chat (PRD rule 5): Kinas only says which are on.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FirstmateOptions {
+    pub park_on_review: bool,
+    pub fleet_ledger: bool,
+    pub lane_capacity: LaneOption,
+}
+
+/// Whether each option's file exists (`config/park-on-review`, `config/fleet-ledger`: presence flags), and the lane
+/// gate; `invalid` too when the last lane reading said the cap is invalid.
+pub(crate) fn options(home: &Path, last_status: Option<&str>) -> FirstmateOptions {
+    let flag = |name: &str| home.join("config").join(name).is_file();
+    let lane_capacity = match lane_config(home) {
+        LaneConfig::Absent => LaneOption::Off,
+        LaneConfig::Quota => LaneOption::ChecksQuota,
+        LaneConfig::Invalid => LaneOption::Invalid,
+        _ if last_status == Some("invalid") => LaneOption::Invalid,
+        LaneConfig::Cap(cap) => LaneOption::Cap { cap },
+        LaneConfig::Auto => LaneOption::Auto,
+    };
+    FirstmateOptions { park_on_review: flag("park-on-review"), fleet_ledger: flag("fleet-ledger"), lane_capacity }
+}
+
 /// `fm-project-mode.sh`'s answer: `<mode> <yolo>`, yolo `on` or `off`.
 fn parse_mode(stdout: &str) -> Option<(String, bool)> {
     let mut words = stdout.split_whitespace();
@@ -108,6 +183,53 @@ mod tests {
         assert!(fresh(now - MODES_MS + 1, now));
         assert!(!fresh(now - MODES_MS, now));
         assert!(!fresh(now + 2 * 60 * 60_000, now), "after a step back");
+    }
+
+    /// Firstmate, current (build spec §11.4): the gate reads one key, as Firstmate's own parser would.
+    #[test]
+    fn lane_config_cases() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        std::fs::create_dir_all(home.join("config")).unwrap();
+        let file = home.join("config/lane-capacity");
+        assert_eq!(lane_config(home), LaneConfig::Absent);
+        for (text, want) in [
+            ("4\n", LaneConfig::Cap(4)),
+            ("auto\n", LaneConfig::Auto),
+            ("4\nquota-provider claude\n", LaneConfig::Quota),
+            ("4 # cap\n  quota-provider x # c\n", LaneConfig::Quota),
+            ("# a note first\n\n12\nmin-avail-gb 5\n", LaneConfig::Cap(12)),
+            ("4\n# quota-provider claude\n", LaneConfig::Cap(4)),
+            ("4\nquota-providers x\n", LaneConfig::Cap(4)),
+            ("abc\n", LaneConfig::Invalid),
+            ("1234567890\n", LaneConfig::Invalid),
+            ("", LaneConfig::Invalid),
+        ] {
+            std::fs::write(&file, text).unwrap();
+            assert_eq!(lane_config(home), want, "{text:?}");
+        }
+        std::fs::remove_file(&file).unwrap();
+        // A FIFO is never opened: no cap set.
+        let made = std::process::Command::new("/usr/bin/mkfifo").arg(&file).status().unwrap();
+        assert!(made.success());
+        assert_eq!(lane_config(home), LaneConfig::Absent);
+    }
+
+    #[test]
+    fn options_say_which_are_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        std::fs::create_dir_all(home.join("config")).unwrap();
+        assert_eq!(options(home, None), FirstmateOptions { park_on_review: false, fleet_ledger: false, lane_capacity: LaneOption::Off });
+        std::fs::write(home.join("config/park-on-review"), "").unwrap();
+        std::fs::write(home.join("config/fleet-ledger"), "").unwrap();
+        std::fs::write(home.join("config/lane-capacity"), "4\n").unwrap();
+        assert_eq!(options(home, None), FirstmateOptions { park_on_review: true, fleet_ledger: true, lane_capacity: LaneOption::Cap { cap: 4 } });
+        assert_eq!(options(home, Some("invalid")).lane_capacity, LaneOption::Invalid, "the script said the file is invalid");
+        std::fs::write(home.join("config/lane-capacity"), "auto\nquota-provider claude\n").unwrap();
+        assert_eq!(options(home, None).lane_capacity, LaneOption::ChecksQuota);
+        assert_eq!(serde_json::to_value(LaneOption::ChecksQuota).unwrap(), serde_json::json!({ "state": "checks-quota" }));
+        assert_eq!(serde_json::to_value(LaneOption::Cap { cap: 4 }).unwrap(), serde_json::json!({ "state": "cap", "cap": 4 }));
     }
 
     #[test]

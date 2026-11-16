@@ -1,6 +1,7 @@
 //! The only file that builds a path under `<home>/bin/`, and the only runner of Firstmate's scripts (ADR 0016, build
 //! spec §6.3): `fm-fleet-snapshot.sh --json`, `fm-afk-contract.sh field <name>` and `fm-project-mode.sh <name>`, all
-//! three read-only. Nothing that changes anything — not `fm-send.sh`, not any hold, spawn or teardown script — is ever
+//! three read-only — and, since Firstmate, current (ADR 0020), `fm-capacity.sh --json`, run only behind
+//! `config::lane_config`'s gate, so never with a `quota-provider`. Nothing that changes anything — not `fm-send.sh`, not any hold, spawn or teardown script — is ever
 //! run from Kinas. Each runs through `proc::run`: `bash` from the login shell's `PATH`, `FM_HOME` set to the home, no
 //! inherited `HERDR*`, null stdin, its process group killed at the limit.
 
@@ -11,6 +12,7 @@ use std::time::Duration;
 
 const SNAPSHOT_LIMIT: Duration = Duration::from_secs(20);
 const SETTINGS_LIMIT: Duration = Duration::from_secs(3);
+const CAPACITY_LIMIT: Duration = Duration::from_secs(10);
 
 /// `<home>/bin/fm-fleet-snapshot.sh`: its presence is what "installed" means (`home::installed`).
 pub(crate) fn snapshot_script(home: &Path) -> std::path::PathBuf {
@@ -26,6 +28,12 @@ pub(crate) fn fleet_snapshot(home: &Path) -> Result<Ran, String> {
 /// `expected_return`). Never `--proposal`, never the record's words.
 pub(crate) fn afk_field(home: &Path, name: &str) -> Result<Ran, String> {
     script(home, "fm-afk-contract.sh", &["field", name], SETTINGS_LIMIT)
+}
+
+/// `bash <home>/bin/fm-capacity.sh --json`, 10 s: the lane-capacity document (`fm-lane-capacity.v1`). Its stderr — the
+/// full detail, by its own header — is dropped unread. Only behind the gate: the caller checks `config::lane_config`.
+pub(crate) fn capacity(home: &Path) -> Result<Ran, String> {
+    script(home, "fm-capacity.sh", &["--json"], CAPACITY_LIMIT)
 }
 
 /// `bash <home>/bin/fm-project-mode.sh <name>`, 3 s: `<mode> <yolo>` as the captain registered the project.

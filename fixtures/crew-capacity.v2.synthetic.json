@@ -1,0 +1,63 @@
+{
+  "schema": "fm-lane-capacity.v2",
+  "generated_epoch": 1794836531,
+  "home": "main",
+  "machine": "mac-9c2e",
+  "lanes": {
+    "count": 2,
+    "pr_ready": 0,
+    "ids": [
+      "stock-webhook-9c2e",
+      "harbor-review-9c2e"
+    ]
+  },
+  "cap": {
+    "target": 4,
+    "status": "ok"
+  },
+  "projects": [
+    "shop-9c2e",
+    "harbor-api-9c2e"
+  ],
+  "pressure": {
+    "level": "ok",
+    "why": [],
+    "basis": "probe",
+    "beat_age_s": null,
+    "avail_gb": 9.5,
+    "total_gb": 16,
+    "runq_per_core": 0.4,
+    "swap_rate_pps_1m": null,
+    "mem_stall_pct": null,
+    "load1": 3.2,
+    "on_battery": null,
+    "disks": [
+      {
+        "label": "home",
+        "free_gb": 120
+      }
+    ]
+  },
+  "uptime_s": 600000,
+  "boot_id": "1794211853",
+  "boots": [
+    1794211853
+  ],
+  "watcher_beat_age_s": 12,
+  "reserve": {
+    "flag": "not-configured",
+    "label": null
+  },
+  "captain": "not-configured",
+  "quota": null,
+  "limits": {
+    "min_avail_gb": null,
+    "min_disk_gb": null,
+    "max_load1": null
+  },
+  "verdict": {
+    "admit": true,
+    "free_lanes": 2,
+    "reasons": []
+  }
+}

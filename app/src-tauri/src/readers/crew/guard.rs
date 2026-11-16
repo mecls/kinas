@@ -1,10 +1,11 @@
-//! The crew's code-grep guards (build spec §6.1–§6.3, §11.4 `guard::no_typing_no_writes_three_scripts`; the precedent is
+//! The crew's code-grep guards (build spec §6.1–§6.3, §11.4 `guard::no_typing_no_writes_four_scripts`; the precedent is
 //! `readers/hostinger/mod.rs`'s GET-only guard). They read this crate's own source and fail when:
 //! - `crew/`, `readers/crew/` or `herdr.rs` could type into a pane — `send-text`, `send-keys`, a shell string, the PTY's
 //!   write (ADR 0003);
 //! - `crew/` or `readers/crew/` could write a file — under Firstmate's home above all (ADR 0016);
-//! - any code names a Firstmate script but the three read-only ones, or names one outside `crew/firstmate.rs`, the only
-//!   file that builds a path under `<home>/bin/` — `fm-send.sh` above all (slice 0's finding).
+//! - any code names a Firstmate script but the four Kinas runs (ADR 0020: the three read-only ones and
+//!   `fm-capacity.sh`), or names one outside `crew/firstmate.rs`, the only file that builds a path under `<home>/bin/` —
+//!   `fm-send.sh` above all (slice 0's finding), and `fm-park.sh`, which writes.
 //!
 //! Test modules and comments are not code here: a test may write a fixture, and a comment may say what is never run.
 //! The negative control plants each forbidden thing in a string and proves the guard finds it.
@@ -15,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 const TYPING: &[&str] = &["send-text", "send-keys", "\"sh\", \"-c\"", "sh -c", "\"zsh\", \"-c\"", "\"bash\", \"-c\"", "\"-lc\"", ".arg(\"-c\")", "pty_write", "Session::write", ".write_all("];
 const WRITES: &[&str] = &["File::create", "File::options", "OpenOptions", "fs::write", "fs::rename", "fs::copy", "remove_file", "remove_dir", "create_dir", "set_permissions", "::symlink(", "hard_link(", "write!("];
-const READ_ONLY_SCRIPTS: &[&str] = &["fm-fleet-snapshot.sh", "fm-afk-contract.sh", "fm-project-mode.sh"];
+const READ_ONLY_SCRIPTS: &[&str] = &["fm-fleet-snapshot.sh", "fm-afk-contract.sh", "fm-project-mode.sh", "fm-capacity.sh"];
 const SCRIPT_FILE: &str = "crew/firstmate.rs";
 
 /// A file's code: everything before its `#[cfg(test)]` module, without comment lines and trailing ` // ` comments.
@@ -96,7 +97,7 @@ fn crate_sources() -> Vec<(String, String)> {
 }
 
 #[test]
-fn no_typing_no_writes_three_scripts() {
+fn no_typing_no_writes_four_scripts() {
     let files = crate_sources();
     for scope in ["crew/launch.rs", "crew/firstmate.rs", "readers/crew/mirror.rs", "herdr.rs", "reader/changes/crew.rs"] {
         assert!(files.iter().any(|(p, t)| p == scope && t.len() > 500), "the guard is not reading {scope}");
@@ -118,11 +119,12 @@ fn the_guards_find_what_is_planted() {
         ("reader/changes/crew.rs", r#"std::fs::write(worktree.join("notes.md"), "");"#),
         ("crew/answer.rs", r#"script(home, "fm-send.sh", &[task, text]);"#),
         ("lib.rs", r#"let hold = "fm-captain-hold.sh";"#),
+        ("crew/firstmate.rs", r#"script(home, "fm-park.sh", &["tick"], LIMIT)"#),
         ("crew/launch.rs", r#"let s = home.join("bin/fm-fleet-snapshot.sh");"#),
     ] {
         assert_eq!(violations(&planted(path, line)).len(), 1, "{path}: {line}");
     }
-    // Comments and test modules are not code; the three scripts in their one file are allowed.
+    // Comments and test modules are not code; the four scripts in their one file are allowed.
     let fine = vec![
         ("crew/firstmate.rs".to_string(), "// not fm-send.sh, never\nfn a() { script(h, \"fm-project-mode.sh\", &[]) }\n#[cfg(test)]\nmod t { fn b() { std::fs::write(p, \"\"); } }\n".to_string()),
         ("crew/pin.rs".to_string(), "const A: u8 = 1; // COMMON_TOOLS, fm-bootstrap.sh:909\n".to_string()),

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { getCrewSettings, type CrewSettings, type PinState } from "../api.ts";
+import { getCrewSettings, type CrewSettings, type FirstmateOptions, type LaneOption, type PinState } from "../api.ts";
 import { clock } from "../crew/detail.ts";
 import { ToolTable } from "../crew/ToolTable.tsx";
-import { Card } from "../ui/index.ts";
+import { Card, Dot, Table } from "../ui/index.ts";
 
 // Settings → Crew (build spec §4 Settings; mockup settings-crew.html): Firstmate's install as the app last probed it —
 // the commit against the pin, the home, the backend, the prerequisites, the away record, the tools and the projects'
@@ -34,6 +34,60 @@ function PinLine({ pin }: { pin: PinState }) {
     case "missing":
       return <span className="crew-problem-inline">not a clone — run kinas crew setup in the Work pane</span>;
   }
+}
+
+/** An option's state in the status badge's pill and words (DESIGN.md 1.12): the tool table's way, its own words. */
+function OptionBadge({ word, color }: { word: string; color: string }) {
+  return (
+    <span className="ui-badge" data-option={word}>
+      <Dot color={color} />
+      {word}
+    </span>
+  );
+}
+
+const onOff = (on: boolean) => (on ? <OptionBadge word="on" color="--ok" /> : <OptionBadge word="off" color="--stale" />);
+
+function laneBadge(lane: LaneOption) {
+  switch (lane.state) {
+    case "off":
+      return <OptionBadge word="off" color="--stale" />;
+    case "cap":
+      return <OptionBadge word={`cap ${lane.cap}`} color="--ok" />;
+    case "auto":
+      return <OptionBadge word="auto" color="--ok" />;
+    case "checks-quota":
+      return <OptionBadge word="checks quota — Kinas does not run it" color="--warn" />;
+    case "invalid":
+      return <OptionBadge word="invalid" color="--danger" />;
+  }
+}
+
+const OPTION_COLUMNS = [
+  { key: "option", label: "Option" },
+  { key: "state", label: "State" },
+];
+
+/** Firstmate options (Firstmate, current; PRD rule 5): which of the three are on. Kinas writes none of them. */
+function OptionsTable({ options }: { options: FirstmateOptions }) {
+  const rows = [
+    { option: "Park on review", state: onOff(options.park_on_review), name: "park-on-review" },
+    { option: "Fleet ledger", state: onOff(options.fleet_ledger), name: "fleet-ledger" },
+    { option: "Lane capacity", state: laneBadge(options.lane_capacity), name: "lane-capacity" },
+  ];
+  return (
+    <>
+      <Table
+        className="crew-options"
+        caption="Firstmate options"
+        columns={OPTION_COLUMNS}
+        rows={rows}
+        rowKey={(r) => String(r.name)}
+        rowProps={(r) => ({ "data-option-row": String(r.name) })}
+      />
+      <p className="settings-help" data-testid="crew-options-help">Turn these on or off by asking the first mate.</p>
+    </>
+  );
 }
 
 export function CrewSection({ active }: { active: boolean }) {
@@ -103,6 +157,7 @@ export function CrewSection({ active }: { active: boolean }) {
             )}
           </dl>
           <ToolTable settings={settings} />
+          {settings.options && <OptionsTable options={settings.options} />}
           <h3 className="crew-subhead">Projects</h3>
           {settings.projects.length === 0 ? (
             <p className="settings-help">No projects registered — ask the first mate</p>

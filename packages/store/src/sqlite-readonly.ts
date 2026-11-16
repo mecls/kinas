@@ -223,7 +223,16 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
   }
 
   getCrewHealth(): unknown {
-    const row = this.db.query("SELECT value FROM settings WHERE org_id = ?1 AND key = 'crew_health'").get(this.orgId()) as { value: string } | null;
+    return this.crewSetting("crew_health");
+  }
+
+  getCrewCapacity(): unknown {
+    return this.crewSetting("crew_capacity");
+  }
+
+  /** One of the crew's settings rows, parsed; null when absent or unreadable. */
+  private crewSetting(key: "crew_health" | "crew_capacity"): unknown {
+    const row = this.db.query("SELECT value FROM settings WHERE org_id = ?1 AND key = ?2").get(this.orgId(), key) as { value: string } | null;
     if (!row) return null;
     try {
       return JSON.parse(row.value);

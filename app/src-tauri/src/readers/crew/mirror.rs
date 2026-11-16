@@ -12,6 +12,9 @@ use crate::redact::{write_reader_status, Outcome, Reader};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::collections::{HashMap, HashSet};
 
+/// The last good lane reading (`capacity::Lanes`), in `settings`.
+pub(crate) const CAPACITY_SETTING: &str = "crew_capacity";
+
 /// The `age_seconds` bucket a `last_event` is deduplicated on: Firstmate reports the same event every cycle with a
 /// growing age, and its emission time, `now − age`, jitters by a second or two between cycles.
 const LAST_EVENT_BUCKET_S: i64 = 600;
@@ -32,6 +35,19 @@ pub(crate) struct Found {
     pub repos: HashMap<String, Option<String>>,
     /// The PRs `gh` answered for this cycle; a PR it did not answer keeps its last values.
     pub prs: Vec<PrFacts>,
+    /// The lane reading (Firstmate, current): None when the gate is closed or it ran within 30 s; a failure keeps the
+    /// last good reading and says why under the board.
+    pub lanes: Option<Result<super::capacity::Lanes, String>>,
+}
+
+/// What the cycle has to say beside a good snapshot (Firstmate, current): one line per source that failed, for the
+/// Crew page to show under the board. Fixed words and a schema or version number only — never a task or a path.
+pub(crate) fn notes(found: &Found) -> Vec<String> {
+    let mut notes = Vec::new();
+    if let Some(Err(why)) = &found.lanes {
+        notes.push(format!("Lane capacity: {why} · showing the last reading"));
+    }
+    notes
 }
 
 /// A cycle's outcome, written under the caller's one guard (§6.15): the fleet and a success, or an error and nothing
@@ -42,7 +58,12 @@ pub(crate) fn record(conn: &mut Connection, org: &str, outcome: &Result<Fleet, S
         Ok(fleet) => {
             let applied = apply(&tx, org, fleet, found, now)?;
             write_workers(&tx, org, &found.workers, now)?;
-            write_reader_status(&tx, org, Reader::Crew, Outcome::Success, now)?;
+            if let Some(Ok(lanes)) = &found.lanes {
+                let value = serde_json::to_value(lanes).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                crate::system::put_setting(&tx, org, CAPACITY_SETTING, &value)?;
+            }
+            let notes = notes(found).join("\n");
+            write_reader_status(&tx, org, Reader::Crew, if notes.is_empty() { Outcome::Success } else { Outcome::Partial(&notes) }, now)?;
             Some(applied)
         }
         Err(message) => {

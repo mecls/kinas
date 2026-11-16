@@ -116,6 +116,8 @@ export interface CrewStore {
   getCrewWaiting(): number;
   /** What the app last saw of the crew's install (the `crew_health` setting), or null. */
   getCrewHealth(): unknown;
+  /** The app's last good lane reading (the `crew_capacity` setting, Firstmate, current), or null. */
+  getCrewCapacity(): unknown;
   /** Every task inside the board's retention, with what the context packet shows of it. */
   getCrewMirror(now: number): CrewMirrorRow[];
   /** The open decisions, oldest first. */

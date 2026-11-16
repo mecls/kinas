@@ -30,6 +30,33 @@ pub struct CrewSnapshot {
     pub overnight_since: i64,
     /// Every GitHub repository already in the crew — a task's, or a clone Firstmate has — for Add to crew's reason.
     pub crew_repos: Vec<String>,
+    /// Free lanes (Firstmate, current): the last good lane reading, only while the captain's lane cap opens the gate;
+    /// filled by the command, which reads the gate outside the guard.
+    pub lanes: Option<LanesView>,
+}
+
+/// The last lane reading as the pages draw it: free and cap, auto, whether Firstmate holds dispatch and why.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct LanesView {
+    pub free: Option<u32>,
+    pub cap: Option<u32>,
+    pub auto: bool,
+    pub held: bool,
+    pub reasons: Vec<String>,
+    pub at: i64,
+}
+
+/// The last good lane reading, from `settings`; None when there is none or it cannot be read.
+pub(crate) fn lanes(conn: &Connection, org: &str) -> Option<LanesView> {
+    let stored = crate::system::get_setting(conn, org, crate::readers::crew::mirror::CAPACITY_SETTING)?;
+    let l: crate::readers::crew::capacity::Lanes = serde_json::from_value(stored).ok()?;
+    Some(LanesView { free: l.free, cap: l.cap, auto: l.auto, held: !l.admit, reasons: l.reasons, at: l.at })
+}
+
+/// The last lane reading's `cap.status`, for Settings' Lane capacity row.
+pub(crate) fn lanes_status(conn: &Connection, org: &str) -> Option<String> {
+    let stored = crate::system::get_setting(conn, org, crate::readers::crew::mirror::CAPACITY_SETTING)?;
+    stored.get("status").and_then(serde_json::Value::as_str).map(str::to_string)
 }
 
 #[derive(Debug, Serialize)]
@@ -104,6 +131,7 @@ pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: b
         waiting: waiting(conn, org)?,
         overnight_since: crate::crew::focus::overnight_since(&crate::crew::focus::stamps(conn, org), now),
         crew_repos: task_repos(conn, org)?,
+        lanes: None,
     })
 }
 

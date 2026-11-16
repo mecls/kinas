@@ -27,11 +27,12 @@ const row = (over: Partial<CrewTaskRow>): CrewTaskRow => ({
   ...over,
 });
 
-const store = (rows: CrewTaskRow[], health: unknown = null, waiting = 0): CrewStatusStore => ({
+const store = (rows: CrewTaskRow[], health: unknown = null, waiting = 0, capacity: unknown = null): CrewStatusStore => ({
   schemaVersion: () => 5,
   getCrewTasks: () => rows,
   getCrewWaiting: () => waiting,
   getCrewHealth: () => health,
+  getCrewCapacity: () => capacity,
 });
 
 const FORBIDDEN = ["id", "title", "repo", "path", "url", "worktree", "home", "key", "summary", "text"];
@@ -73,7 +74,17 @@ describe("kinas crew status", () => {
     const keys = keysOf(json);
     for (const k of FORBIDDEN) expect(keys.has(k), k).toBe(false);
     expect(JSON.stringify(json)).not.toContain("9c2e");
-    expect(Object.keys(json)).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "tasks"]);
+    expect(Object.keys(json)).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "lanes", "tasks"]);
+  });
+
+  test("free lanes: the two numbers while a lane cap is set, and nothing of the reading's reasons (Firstmate, current)", () => {
+    const reading = { status: "ok", cap: 4, auto: false, count: 2, free: 2, admit: false, reasons: ["memory: 8% free 9c2e"], at: NOW };
+    expect(crewStatusJson(crewStatusFromStore(store(rows, health, 2, reading), NOW, true, true)).lanes).toEqual({ free: 2, cap: 4 });
+    expect(crewStatusFromStore(store(rows, health, 2, reading), NOW, true, false).lanes).toBeNull();
+    expect(crewStatusFromStore(store(rows, health, 2, null), NOW, true, true).lanes).toEqual(null);
+    const json = JSON.stringify(crewStatusJson(crewStatusFromStore(store(rows, health, 2, reading), NOW, true, true)));
+    expect(json).not.toContain("9c2e");
+    expect(json).not.toContain("memory");
   });
 
   test("the lines say the pin, the missing tools and the counts", () => {
@@ -101,6 +112,6 @@ describe("kinas crew status", () => {
     const unseen = crewStatusFromStore(store([], null), NOW, true);
     expect(crewStatusLines(unseen)[0]).toBe("Firstmate   427056c (pin) — the app has not checked the clone yet");
     expect(crewStatusLines(unseen)[1]).toBe("Tools       not checked by the app yet — open Settings → Crew");
-    expect(Object.keys(crewStatusJson(unseen))).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "tasks"]);
+    expect(Object.keys(crewStatusJson(unseen))).toEqual(["installed", "pin", "at", "tools", "counts", "waiting", "lanes", "tasks"]);
   });
 });

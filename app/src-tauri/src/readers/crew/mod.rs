@@ -3,6 +3,7 @@
 //! across the script (§6.15). Kinas reads the fleet this way only: no file under the home is opened except to learn
 //! that one of the two trigger files changed.
 
+pub mod capacity;
 pub mod gh;
 mod guard;
 pub mod mirror;
@@ -12,6 +13,7 @@ pub mod word;
 
 use super::runtime::{watch_with, ReaderControl, CREW_CHANGED};
 use crate::crew::pin::WORKSPACE_LABEL;
+use crate::crew::config::{lane_config, LaneConfig};
 use crate::crew::{firstmate, home, repo};
 use crate::herdr::{self, View};
 use crate::proc::{Exit, Ran};
@@ -44,6 +46,8 @@ const START_FOCUS_MS: i64 = 10_000;
 /// A PR is asked of `gh` again once its last check is this old: 60 s while the Crew page shows, 300 s otherwise.
 const PR_FRESH_VISIBLE_MS: i64 = 60_000;
 const PR_FRESH_HIDDEN_MS: i64 = 300_000;
+/// The lane reading runs at most this often, Firstmate's own publish interval (build spec §11.5 decision 4).
+const CAPACITY_GAP_MS: i64 = 30_000;
 
 /// Herdr's last answer (build spec §11.2): the session's view and the focused pane's foreground programs, shared
 /// with the commands (the Crew page's running state, the chrome) behind a lock no one holds across a process.
@@ -156,6 +160,8 @@ struct Memo {
     /// remembered: it is asked again next cycle, so a clone that appears is read without a restart.
     repos: HashMap<String, String>,
     pr_checked: HashMap<String, i64>,
+    /// When `fm-capacity.sh` last ran.
+    capacity_at: Option<i64>,
 }
 
 pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx: Receiver<CrewWake>) {
@@ -194,6 +200,7 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
                         // Refresh readings means fresh everything: the backoff, and every PR asked of `gh` again.
                         schedule.reset();
                         memo.pr_checked.clear();
+                        memo.capacity_at = None;
                     }
                     let at = schedule.run_at(&wake, now);
                     due = Some(due.map_or(at, |d| d.min(at)));
@@ -295,6 +302,7 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
                 workers: mirror::workers_of(fleet, view.as_ref(), attached_session().as_deref()),
                 repos: repos_of(fleet, home, memo),
                 prs: prs_of(app, fleet, memo, visible, &open),
+                lanes: lanes_due(home, memo, now_ms()),
             }
         }
         Err(_) => Found::default(),
@@ -402,6 +410,37 @@ fn due_prs<'a>(fleet: &'a Fleet, open: &HashSet<String>, checked: &HashMap<Strin
     urls
 }
 
+/// The lane reading, when the gate is open — `config/lane-capacity` a cap or `auto`, never a `quota-provider` (ADR
+/// 0020) — and at most once every 30 s (a gap: a stamp in what is now the future has had its gap). None otherwise.
+fn lanes_due(home: &Path, memo: &mut Memo, now: i64) -> Option<Result<capacity::Lanes, String>> {
+    if !matches!(lane_config(home), LaneConfig::Cap(_) | LaneConfig::Auto) {
+        return None;
+    }
+    if memo.capacity_at.is_some_and(|at| (0..CAPACITY_GAP_MS).contains(&(now - at))) {
+        return None;
+    }
+    memo.capacity_at = Some(now);
+    let started = Instant::now();
+    let lanes = firstmate::capacity(home).and_then(|ran| read_capacity(&ran, now));
+    let ms = started.elapsed().as_millis();
+    match &lanes {
+        Ok(_) => log::info!("crew: capacity in {ms} ms"),
+        Err(_) => log::info!("crew: capacity failed in {ms} ms"),
+    }
+    Some(lanes)
+}
+
+/// The capacity script's answer: exit 0, or 1 for an invalid `config/lane-capacity` — still a document, whose cap reads
+/// invalid. Its stderr is never read.
+fn read_capacity(ran: &Ran, now: i64) -> Result<capacity::Lanes, String> {
+    match ran.exit {
+        Exit::Code(0 | 1) => capacity::parse_capacity(&ran.stdout, now),
+        Exit::Code(code) => Err(format!("the script exited {code}")),
+        Exit::Signal => Err("the script was stopped by a signal".into()),
+        Exit::TimedOut => Err("the script did not answer within 10 s".into()),
+    }
+}
+
 /// The script's answer as a fleet, or the reason it is not one — for `reader_status` and the Crew page's error line,
 /// never for the log (the last stderr line can name a task).
 fn read(ran: &Ran) -> Result<Fleet, String> {
@@ -443,6 +482,38 @@ mod tests {
 
     fn ran(exit: Exit, stdout: &str, last_err: Option<&str>) -> Ran {
         Ran { exit, stdout: stdout.into(), first_err: None, last_err: last_err.map(str::to_string) }
+    }
+
+    /// Firstmate, current (build spec §6.3, §11.4): with a `quota-provider` in `config/lane-capacity` the capacity script
+    /// never runs — it would run `quota-axi` — and the cycle has no lane reading; with a cap it runs, at most once in 30 s.
+    #[test]
+    fn cycle_never_runs_capacity_with_a_quota_provider() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        for sub in ["bin", "config", "state"] {
+            std::fs::create_dir_all(home.join(sub)).unwrap();
+        }
+        let stub = home.join("bin/fm-capacity.sh");
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/crew-capacity.cap4.synthetic.json");
+        std::fs::write(&stub, format!("#!/bin/sh\nprintf 'fm-capacity.sh %s\\n' \"$*\" >> \"$FM_HOME/state/calls.log\"\ncat '{}'\n", fixture.display())).unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let calls = || std::fs::read_to_string(home.join("state/calls.log")).unwrap_or_default();
+        let mut memo = Memo::default();
+        let now = 1_790_000_000_000;
+
+        assert!(lanes_due(home, &mut memo, now).is_none(), "no file, no reading");
+        std::fs::write(home.join("config/lane-capacity"), "4\nquota-provider claude\n").unwrap();
+        assert!(lanes_due(home, &mut memo, now).is_none(), "a quota provider closes the gate");
+        assert_eq!(calls(), "", "the script never ran");
+
+        std::fs::write(home.join("config/lane-capacity"), "4\n").unwrap();
+        let lanes = lanes_due(home, &mut memo, now).expect("a cap opens the gate").expect("the stub's document");
+        assert_eq!((lanes.cap, lanes.free, lanes.at), (Some(4), Some(2), now));
+        assert_eq!(calls(), "fm-capacity.sh --json\n");
+        assert!(lanes_due(home, &mut memo, now + 29_999).is_none(), "not again within 30 s");
+        assert!(lanes_due(home, &mut memo, now + 30_000).is_some(), "again after 30 s");
+        assert_eq!(calls().lines().count(), 2);
     }
 
     /// A clone that is not there yet — a task queued before the first mate clones its project — has no repository, and

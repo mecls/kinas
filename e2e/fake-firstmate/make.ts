@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +34,7 @@ export function makeFakeHome(dataDir: string, snapshot: string, opts: { clones?:
     const remote = origin ? `[remote "origin"]\n\turl = ${origin}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n` : "";
     writeFileSync(join(home, "projects", name, ".git", "config"), `[core]\n\trepositoryformatversion = 0\n${remote}`);
   }
-  for (const script of ["fm-fleet-snapshot.sh", "fm-project-mode.sh", "fm-afk-contract.sh"]) chmodSync(join(home, "bin", script), 0o755);
+  for (const script of ["fm-fleet-snapshot.sh", "fm-project-mode.sh", "fm-afk-contract.sh", "fm-capacity.sh"]) chmodSync(join(home, "bin", script), 0o755);
   writeFileSync(join(home, "config", "backend"), "herdr\n");
   writeFileSync(join(home, "data", "backlog.md"), "# Backlog\n\n## In flight\n\n## Queued\n\n## Done\n");
   setSnapshot(home, snapshot);
@@ -55,6 +55,23 @@ export function makeFakeHome(dataDir: string, snapshot: string, opts: { clones?:
  */
 export function setSnapshot(home: string, snapshot: string, exit = 0): void {
   writeSnapshot(home, readFileSync(join(fixtures, snapshot), "utf8"), exit);
+}
+
+/**
+ * One of Firstmate's option files under `config/` (Firstmate, current): `park-on-review`, `fleet-ledger`,
+ * `lane-capacity`. `null` removes it. These are the captain's files in a real home; Kinas never writes one.
+ */
+export function writeConfig(home: string, name: "park-on-review" | "fleet-ledger" | "lane-capacity", text: string | null): void {
+  const path = join(home, "config", name);
+  if (text === null) rmSync(path, { force: true });
+  else writeFileSync(path, text);
+}
+
+/** What the capacity stub prints next: a fixture in fixtures/, as `fm-capacity.sh --json` would. */
+export function setCapacity(home: string, fixture: string): void {
+  const target = join(home, "fixtures", "capacity.json");
+  writeFileSync(`${target}.tmp`, readFileSync(join(fixtures, fixture), "utf8"));
+  renameSync(`${target}.tmp`, target);
 }
 
 /** The same, for a snapshot a spec builds itself (crew-board's fleets). */

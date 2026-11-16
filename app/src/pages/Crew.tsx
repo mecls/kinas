@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getCrewSettings, type CrewSettings, type CrewSnapshot } from "../api.ts";
 import { fleetAsOf, fleetShown } from "../crew/board.ts";
+import { lanesCaption } from "../crew/lanes.ts";
 import { Board } from "../crew/Board.tsx";
 import { ToolTable } from "../crew/ToolTable.tsx";
 import { useCleared } from "../crew/useCleared.ts";
@@ -30,6 +31,24 @@ function StartFirstMate({ settings, blocked }: { settings: CrewSettings; blocked
       {blocked && <p className="crew-blocked">{blocked}</p>}
     </div>
   );
+}
+
+/**
+ * The Fleet caption (DESIGN.md 1.12): the snapshot's time, then free lanes while the captain has set a lane cap, then
+ * a held dispatch in --warn.
+ */
+function fleetCaption(crew: CrewSnapshot): ReactNode {
+  const asOf = fleetAsOf(crew.generated, crew.now);
+  const lanes = lanesCaption(crew.lanes, crew.now);
+  const parts: ReactNode[] = [asOf, lanes.count].filter((p): p is string => p !== null);
+  if (lanes.held) parts.push(<span key="held" className="crew-held">{lanes.held}</span>);
+  if (parts.length === 0) return undefined;
+  return parts.map((p, i) => (
+    <Fragment key={i}>
+      {i > 0 && " · "}
+      {p}
+    </Fragment>
+  ));
 }
 
 export function CrewPage({
@@ -127,12 +146,22 @@ export function CrewPage({
       {page === "installed" && settings && <StartFirstMate settings={settings} blocked={blocked} />}
       {crew && fleet && (
         <Section>
-          <SectionHeader title="Fleet" caption={fleetAsOf(crew.generated, crew.now) ?? undefined} source="Firstmate's fleet snapshot" />
+          <SectionHeader title="Fleet" caption={fleetCaption(crew)} source="Firstmate's fleet snapshot" />
           {crew.reader.state === "error" && crew.reader.last_error && (
             <p className="crew-error" data-testid="crew-error">
               Crew: {crew.reader.last_error} · showing the last reading
             </p>
           )}
+          {/* 1.12: a good snapshot can still say a lane reading or the ledger failed — one line each, in their words. */}
+          {crew.reader.state === "ok" &&
+            crew.reader.last_error
+              ?.split("\n")
+              .filter((line) => line.trim() !== "")
+              .map((line) => (
+                <p key={line} className="crew-error" data-testid="crew-note">
+                  {line}
+                </p>
+              ))}
           {tasks.length === 0 ? (
             <EmptyState>No tasks — ask in the first mate's pane</EmptyState>
           ) : (

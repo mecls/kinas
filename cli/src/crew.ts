@@ -82,7 +82,9 @@ async function crewStatus(args: string[]): Promise<number> {
   }
   try {
     const installed = existsSync(join(dir, HOME_DIR, "bin", "fm-fleet-snapshot.sh"));
-    const status = crewStatusFromStore(opened.store, Date.now(), installed);
+    // Firstmate, current: free lanes only while the captain has a lane cap set (whether the file exists, never its text).
+    const laneCap = existsSync(join(dir, HOME_DIR, "config", "lane-capacity"));
+    const status = crewStatusFromStore(opened.store, Date.now(), installed, laneCap);
     if (parsed.set.has("--json")) process.stdout.write(`${JSON.stringify(crewStatusJson(status), null, 2)}\n`);
     else process.stdout.write(`${crewStatusLines(status).join("\n")}\n`);
     return EXIT.ok;

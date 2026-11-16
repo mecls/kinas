@@ -183,6 +183,25 @@ export interface CrewSnapshot {
   overnight_since: number;
   /** Every GitHub repository already in the crew — a task's, or a clone Firstmate has — for Add to crew. */
   crew_repos: string[];
+  /** Free lanes (Firstmate, current): the last lane reading while the captain's lane cap is set; null otherwise. */
+  lanes: CrewLanes | null;
+}
+/** Firstmate's lane verdict as Kinas last read it (`fm-capacity.sh --json`). */
+export interface CrewLanes {
+  free: number | null;
+  cap: number | null;
+  auto: boolean;
+  /** Firstmate holds dispatch; `reasons` say why, in its own words. */
+  held: boolean;
+  reasons: string[];
+  at: number;
+}
+export type LaneOption = { state: "off" } | { state: "cap"; cap: number } | { state: "auto" } | { state: "checks-quota" } | { state: "invalid" };
+/** Firstmate's options, which the captain turns on in the first mate's chat; Kinas only says which are on. */
+export interface FirstmateOptions {
+  park_on_review: boolean;
+  fleet_ledger: boolean;
+  lane_capacity: LaneOption;
 }
 export interface CrewError {
   code: string;
@@ -212,6 +231,8 @@ export interface CrewSettings {
   projects: { name: string; mode: string; yolo: boolean }[];
   installed: boolean;
   blocked: string | null;
+  /** Firstmate's options (Firstmate, current); null before Firstmate is installed. */
+  options: FirstmateOptions | null;
 }
 /** The right panel's task (build spec §4 Task detail): the card's row plus what Firstmate says about it. */
 export interface CrewTaskDetail {

@@ -20,6 +20,8 @@ export interface CrewStatus {
   tools: { name: string; version: string | null; ok: boolean }[];
   counts: { queued: number; in_flight: number; needs_decision: number; in_review: number; ci_red: number; ready: number; done_7d: number };
   waiting: number;
+  /** Free lanes (Firstmate, current): the app's last lane reading while a lane cap is set; null otherwise. */
+  lanes: { free: number | null; cap: number | null } | null;
   tasks: { word: CrewWord; elapsed_s: number | null; pr: number | null }[];
 }
 
@@ -29,9 +31,18 @@ interface StoredHealth {
 }
 
 /** The reads `kinas crew status` makes — counts and words only, never a name (§6.13). */
-export type CrewStatusStore = Pick<CrewStore, "schemaVersion" | "getCrewTasks" | "getCrewWaiting" | "getCrewHealth">;
+export type CrewStatusStore = Pick<CrewStore, "schemaVersion" | "getCrewTasks" | "getCrewWaiting" | "getCrewHealth" | "getCrewCapacity">;
 
-export function crewStatusFromStore(store: CrewStatusStore, now: number, installed: boolean): CrewStatus {
+/** A stored lane reading's two numbers, or null when it has none to give. */
+function lanesOf(stored: unknown): { free: number | null; cap: number | null } | null {
+  if (!stored || typeof stored !== "object") return null;
+  const s = stored as { free?: unknown; cap?: unknown };
+  const num = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
+  return { free: num(s.free), cap: num(s.cap) };
+}
+
+/** `laneCap`: Firstmate's `config/lane-capacity` exists — the captain has set a lane cap, so the reading is shown. */
+export function crewStatusFromStore(store: CrewStatusStore, now: number, installed: boolean, laneCap = false): CrewStatus {
   const rows = store.getCrewTasks(now);
   const words = rows.map((r) => ({ row: r, word: wordOf(r) }));
   const count = (w: CrewWord) => words.filter((x) => x.word === w).length;
@@ -57,6 +68,7 @@ export function crewStatusFromStore(store: CrewStatusStore, now: number, install
       done_7d: count("done"),
     },
     waiting: store.getCrewWaiting(),
+    lanes: installed && laneCap ? lanesOf(store.getCrewCapacity()) : null,
     tasks: words.map(({ row, word }) => ({
       word,
       elapsed_s: row.first_working_at === null ? null : Math.max(0, Math.round(((row.done_at ?? now) - row.first_working_at) / 1000)),
@@ -82,6 +94,7 @@ export function crewStatusJson(s: CrewStatus): Record<string, unknown> {
       done_7d: s.counts.done_7d,
     },
     waiting: s.waiting,
+    lanes: s.lanes === null ? null : { free: s.lanes.free, cap: s.lanes.cap },
     tasks: s.tasks.map((t) => ({ word: t.word, elapsed_s: t.elapsed_s, pr: t.pr })),
   };
 }

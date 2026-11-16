@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { CrewTask, CrewWord } from "../api.ts";
+import type { CrewLanes, CrewTask, CrewWord } from "../api.ts";
 import { seatFolders } from "../shell/folders.ts";
+import { lanesCaption } from "./lanes.ts";
 import { BADGE } from "../ui/StatusBadge.tsx";
 import { BADGE_OF, cardOrder, duration, elapsedText, fleetAsOf, fleetShown, forgetComeBack, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
 
@@ -118,6 +119,23 @@ test("the PR line once gh has answered", () => {
   expect(prLine({ ...pr, checks_failed: 0 })).toBe("PR #123 · checks 4/4 · mergeable");
   expect(prLine({ ...pr, checks_total: 0, checks_failed: 0, draft: true })).toBe("PR #123 · draft");
   expect(prLine({ ...pr, checks_failed: 0, state: "MERGED" })).toBe("PR #123 · checks 4/4 · merged");
+});
+
+test("free lanes in the Fleet caption (Firstmate, current)", () => {
+  const lanes = (over: Partial<CrewLanes>): CrewLanes => ({ free: 2, cap: 4, auto: false, held: false, reasons: [], at: NOW - 10_000, ...over });
+  expect(lanesCaption(null, NOW)).toEqual({ count: null, held: null });
+  expect(lanesCaption(lanes({}), NOW)).toEqual({ count: "2 of 4 lanes free", held: null });
+  expect(lanesCaption(lanes({ auto: true, cap: null, free: 3 }), NOW)).toEqual({ count: "3 lanes free · auto", held: null });
+  expect(lanesCaption(lanes({ auto: true, cap: null, free: 1 }), NOW).count).toBe("1 lane free · auto");
+  expect(lanesCaption(lanes({ free: 0, held: true, reasons: ["memory: 8% free", "cpu: load 9.10 on 8 cores"] }), NOW)).toEqual({
+    count: "0 of 4 lanes free",
+    held: "dispatch held · memory: 8% free, cpu: load 9.10 on 8 cores",
+  });
+  expect(lanesCaption(lanes({ free: null }), NOW).count).toBeNull();
+  // Stale at 121 s, and when stamped in what is now the future: the time, not the count.
+  expect(lanesCaption(lanes({ at: NOW - 120_000 }), NOW).count).toBe("2 of 4 lanes free");
+  expect(lanesCaption(lanes({ at: NOW - 121_000 }), NOW).count).toMatch(/^lanes as of \d\d:\d\d$/);
+  expect(lanesCaption(lanes({ at: NOW + 60_000, held: true }), NOW)).toEqual({ count: expect.stringMatching(/^lanes as of /), held: null });
 });
 
 test("every word has a badge DESIGN.md draws", () => {

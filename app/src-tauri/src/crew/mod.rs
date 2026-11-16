@@ -56,6 +56,8 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let home = crew_home(&app);
         // The file check and the collector's memory, before the guard.
         let installed = home::installed(&home);
+        // The lane gate (Firstmate, current): only a cap or `auto`, never a `quota-provider`, shows free lanes.
+        let lanes_on = installed && matches!(config::lane_config(&home), config::LaneConfig::Cap(_) | config::LaneConfig::Auto);
         let live = app.state::<CrewLive>();
         let generated = live.generated();
         let running = live.live().first_mate_there();
@@ -64,6 +66,7 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let conn = store.conn();
         let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, running, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
         let facts = read::reconcile_facts(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
+        view.lanes = if lanes_on { read::lanes(&conn, store.org_id()) } else { None };
         drop(conn);
         view.blocked = blocked;
         // The reconcile lines (§7): from the mirror, Herdr's last view and the last snapshot's orphans; the worktree's
@@ -405,6 +408,8 @@ pub struct CrewSettings {
     pub installed: bool,
     /// The same line the Crew page's Launch carries when a required tool is missing.
     pub blocked: Option<String>,
+    /// Firstmate's options and which are on (Firstmate, current); None when Firstmate is not installed.
+    pub options: Option<config::FirstmateOptions>,
 }
 
 #[tauri::command]
@@ -415,6 +420,11 @@ pub async fn crew_settings(app: AppHandle) -> Result<CrewSettings, CrewError> {
         let installed = home::installed(&home);
         // The probes and Firstmate's scripts run with no guard held.
         let (health, fresh) = tools::health(&home, now);
+        let last_status = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            read::lanes_status(&conn, store.org_id())
+        };
         let settings = CrewSettings {
             pin: health.pin.clone(),
             home_display: crate::projects::display_of(&home, &user_home()),
@@ -426,6 +436,7 @@ pub async fn crew_settings(app: AppHandle) -> Result<CrewSettings, CrewError> {
             projects: if installed { config::project_modes(&home, now) } else { Vec::new() },
             installed,
             blocked: blocked_line(&health),
+            options: installed.then(|| config::options(&home, last_status.as_deref())),
         };
         if fresh {
             let store = app.state::<Store>();

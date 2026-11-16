@@ -151,3 +151,8 @@
   margin: 0 0 var(--space-2);
   font-weight: 500;
 }
+
+/* 1.12, Firstmate, current: the Fleet caption's held dispatch, in Firstmate's own words. */
+.crew-held {
+  color: var(--warn);
+}

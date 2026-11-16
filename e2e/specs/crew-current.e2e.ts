@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_LOG, fakeHome } from "../helpers.ts";
-import { setSnapshot, writeSnapshot } from "../fake-firstmate/make.ts";
+import { setCapacity, setSnapshot, writeConfig, writeSnapshot } from "../fake-firstmate/make.ts";
 
 // Firstmate, current (build spec §11.4, §12): the branch, in review, a held question's PR, free lanes and the fleet
 // ledger, as Firstmate 427056c publishes them, read from the fake home. Each step puts a fleet in the fake home and runs
@@ -188,6 +188,107 @@ describe("Firstmate, current", () => {
     });
     await waitInPage(() => !document.querySelector('section[data-page="work"]')!.hasAttribute("hidden"), "the approval never ended on the Work page");
     await browser.pause(500);
+  });
+
+  it("free lanes: none without a cap, the count with one, a held dispatch, and never a run with a quota provider", async () => {
+    const home = fakeHome();
+    const capacityCalls = () =>
+      (existsSync(join(home, "state", "calls.log")) ? readFileSync(join(home, "state", "calls.log"), "utf8") : "").split("\n").filter((l) => l.startsWith("fm-capacity.sh")).length;
+    const caption = () => browser.execute(() => document.querySelector('section[data-page="crew"] .ui-section-head .ui-caption')?.textContent ?? "");
+    const usageLanes = () =>
+      browser.execute(() => {
+        const row = document.querySelector('section[data-page="usage"] [data-section="crew"] [data-metric="crew-lanes"]');
+        return row ? `${row.querySelector(".ui-metric-label")?.textContent} · ${row.querySelector(".ui-metric-value")?.textContent?.replace(/\s+/g, " ").trim()}` : null;
+      });
+
+    // No config/lane-capacity: the script never runs, and nothing about lanes is drawn.
+    await go("Crew");
+    setSnapshot(home, CURRENT);
+    await refresh();
+    await waitWord(PARKED, "in review");
+    expect(capacityCalls()).toBe(0);
+    expect(await caption()).not.toContain("lanes");
+
+    // A cap of 4: the count in the caption, and Usage's Lanes row.
+    writeConfig(home, "lane-capacity", "4\n");
+    setCapacity(home, "crew-capacity.cap4.synthetic.json");
+    await refresh();
+    await browser.waitUntil(async () => (await caption()).includes(" · 2 of 4 lanes free"), { timeout: 30000, interval: 250, timeoutMsg: "the caption never said 2 of 4 lanes free" });
+    expect(capacityCalls()).toBe(1);
+    await go("Usage");
+    await browser.waitUntil(async () => (await usageLanes()) === "Lanes · 2 of 4 in use", { timeout: 30000, interval: 250, timeoutMsg: "Usage never said 2 of 4 in use" });
+
+    // Held: Firstmate's reasons, in its words, after the count.
+    await go("Crew");
+    setCapacity(home, "crew-capacity.held.synthetic.json");
+    await refresh();
+    await browser.waitUntil(async () => (await caption()).includes("0 of 4 lanes free · dispatch held · memory: 8% free, cpu: load 9.10 on 8 cores"), {
+      timeout: 30000,
+      interval: 250,
+      timeoutMsg: "the caption never said the dispatch is held",
+    });
+    const held = await browser.execute(() => document.querySelector('section[data-page="crew"] .ui-section-head .crew-held')?.textContent ?? null);
+    expect(held?.startsWith("dispatch held · memory: 8% free")).toBe(true);
+
+    // Another contract: one line under the board, and the last good reading stays.
+    setCapacity(home, "crew-capacity.v2.synthetic.json");
+    await refresh();
+    await waitInPage(
+      () => [...document.querySelectorAll('[data-testid="crew-note"]')].some((p) => p.textContent === "Lane capacity: unsupported contract fm-lane-capacity.v2 · showing the last reading"),
+      "the unsupported contract was never said under the board",
+    );
+    expect(await caption()).toContain("0 of 4 lanes free");
+
+    // A quota provider: the script would run quota-axi, so it is never run, and nothing about lanes is drawn.
+    const ran = capacityCalls();
+    writeConfig(home, "lane-capacity", "4\nquota-provider claude\n");
+    setCapacity(home, "crew-capacity.cap4.synthetic.json");
+    await refresh();
+    await refresh();
+    await browser.waitUntil(async () => !(await caption()).includes("lanes"), { timeout: 30000, interval: 250, timeoutMsg: "the lanes stayed with a quota provider" });
+    expect(capacityCalls()).toBe(ran);
+  });
+
+  it("Settings says which of Firstmate's options are on, and that the first mate turns them on", async () => {
+    const home = fakeHome();
+    const options = () =>
+      browser.execute(() =>
+        JSON.stringify(
+          [...document.querySelectorAll('section[data-page="settings"] [data-section="crew"] table.crew-options tbody tr')].map((tr) => [
+            tr.getAttribute("data-option-row"),
+            tr.querySelector(".ui-badge")?.textContent,
+          ]),
+        ),
+      );
+    // The quota provider from the last case is still set.
+    await go("Home");
+    await go("Settings");
+    await browser.waitUntil(async () => (await options()).includes("checks quota"), { timeout: 30000, interval: 250, timeoutMsg: "Settings never showed the options" });
+    expect(JSON.parse(await options())).toEqual([
+      ["park-on-review", "off"],
+      ["fleet-ledger", "off"],
+      ["lane-capacity", "checks quota — Kinas does not run it"],
+    ]);
+    const help = await browser.execute(() => document.querySelector('[data-testid="crew-options-help"]')?.textContent ?? "");
+    expect(help).toBe("Turn these on or off by asking the first mate.");
+
+    writeConfig(home, "park-on-review", "");
+    writeConfig(home, "fleet-ledger", "");
+    writeConfig(home, "lane-capacity", "auto\n");
+    await go("Home");
+    await go("Settings");
+    await browser.waitUntil(async () => (await options()).includes('"auto"'), { timeout: 30000, interval: 250, timeoutMsg: "Settings never read the new options" });
+    expect(JSON.parse(await options())).toEqual([
+      ["park-on-review", "on"],
+      ["fleet-ledger", "on"],
+      ["lane-capacity", "auto"],
+    ]);
+    writeConfig(home, "lane-capacity", "4\n");
+    await go("Home");
+    await go("Settings");
+    await browser.waitUntil(async () => (await options()).includes('"cap 4"'), { timeout: 30000, interval: 250, timeoutMsg: "Settings never read cap 4" });
+    // Back to none for the cases after this one; Kinas wrote none of these files — the spec did, as the captain would.
+    for (const name of ["park-on-review", "fleet-ledger", "lane-capacity"] as const) writeConfig(home, name, null);
   });
 
   it("logs counts, never a task, a branch or a question", async () => {

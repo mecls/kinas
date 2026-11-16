@@ -446,7 +446,8 @@ describe("kinas crew setup", () => {
     expect(f.code).toBe(1);
     expect(f.out).toContain("could not fetch the pin — check the network, then run kinas crew setup again");
     expect(offline.calls().some((c) => c.includes("merge-base") || c.includes(" merge "))).toBe(false);
-  });
+    // Two whole setups over stub processes: seconds on a loaded Mac.
+  }, 30_000);
 
   test("--dry-run with a home behind the pin says the move it would offer, and only reads HEAD", async () => {
     const w = world();

@@ -223,6 +223,24 @@ mod tests {
         assert_eq!(read_ledger(&fifo, Cursor::default()).unwrap(), None);
     }
 
+    /// AC-7: a half-written last line waits; once Firstmate finishes it, the next read keeps its event — once.
+    #[test]
+    fn a_half_line_is_kept_once_completed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fleet-ledger.jsonl");
+        let line = "{\"v\":1,\"ts\":3,\"event\":\"task.cleaned_up\",\"task\":\"half-9c2e\"}\n";
+        let (head, tail) = line.split_at(20);
+        std::fs::write(&path, head).unwrap();
+        let first = read_ledger(&path, Cursor::default()).unwrap().unwrap();
+        assert_eq!((first.events.len(), first.cursor.offset), (0, 0), "a half line is not read");
+        let mut f = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        std::io::Write::write_all(&mut f, tail.as_bytes()).unwrap();
+        let second = read_ledger(&path, first.cursor).unwrap().unwrap();
+        assert_eq!(second.events.iter().map(|e| e.task.as_str()).collect::<Vec<_>>(), ["half-9c2e"]);
+        let third = read_ledger(&path, second.cursor).unwrap().unwrap();
+        assert!(third.events.is_empty(), "kept once");
+    }
+
     #[test]
     fn reads_at_most_four_mib() {
         let dir = tempfile::tempdir().unwrap();

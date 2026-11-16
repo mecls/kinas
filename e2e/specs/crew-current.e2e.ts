@@ -1,8 +1,8 @@
 import { $, browser, expect } from "@wdio/globals";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { APP_LOG, fakeHome } from "../helpers.ts";
+import { APP_LOG, fakeHome, kinasCli } from "../helpers.ts";
 import { setCapacity, setSnapshot, writeConfig, writeLedger, writeSnapshot } from "../fake-firstmate/make.ts";
 
 // Firstmate, current (build spec §11.4, §12): the branch, in review, a held question's PR, free lanes and the fleet
@@ -347,6 +347,52 @@ describe("Firstmate, current", () => {
     expect(await timeline()).toEqual(["dispatched · claude", "PR #90 ready", "merged · PR #90", "cleaned up"]);
     expect(runLog("crew: ledger ").length).toBeGreaterThan(0);
     expect(runLog("never kept")).toEqual([]);
+  });
+
+  it("a refresh with the lane script writes nothing in the home, and `kinas crew status --json` names no task", async () => {
+    const home = fakeHome();
+    const capacityRuns = () => readFileSync(join(home, "state", "calls.log"), "utf8").split("\n").filter((l) => l.startsWith("fm-capacity.sh")).length;
+    const caption = () => browser.execute(() => document.querySelector('section[data-page="crew"] .ui-section-head .ui-caption')?.textContent ?? "");
+    /** Every file under the home but the calls log, with its size and modification time (crew-inbox's AC-5 inventory). */
+    const inventory = (): string[] => {
+      const out: string[] = [];
+      const walk = (dir: string) => {
+        for (const name of readdirSync(dir)) {
+          const path = join(dir, name);
+          const s = statSync(path);
+          if (s.isDirectory()) walk(path);
+          else if (relative(home, path) !== join("state", "calls.log")) out.push(`${relative(home, path)} ${s.size} ${s.mtimeMs}`);
+        }
+      };
+      walk(home);
+      return out.sort();
+    };
+    // The captain's lane cap and a held reading with Firstmate's reasons, as the lanes case left them; then only Kinas.
+    writeConfig(home, "lane-capacity", "4\n");
+    setCapacity(home, "crew-capacity.held.synthetic.json");
+    const before = inventory();
+    const ran = capacityRuns();
+    for (const n of [1, 2]) {
+      await refresh();
+      await browser.waitUntil(() => capacityRuns() >= ran + n, { timeout: 30000, interval: 250, timeoutMsg: `refresh ${n} never ran the lane script` });
+    }
+    await browser.waitUntil(async () => (await caption()).includes("0 of 4 lanes free · dispatch held"), { timeout: 30000, interval: 250, timeoutMsg: "the held reading never reached the caption" });
+    expect(inventory()).toEqual(before);
+
+    // The CLI's JSON, from this run's store: counts and the two lane numbers, never a task's name, a path or a reason.
+    const { code, stdout } = kinasCli("crew", "status", "--json");
+    expect(code).toBe(0);
+    const keys = new Set<string>();
+    const keysOf = (v: unknown): void => {
+      if (Array.isArray(v)) v.forEach(keysOf);
+      else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) (keys.add(k), keysOf(x));
+    };
+    const json = JSON.parse(stdout) as { lanes: unknown };
+    keysOf(json);
+    expect(["id", "title", "repo", "path", "url", "worktree", "home", "key", "summary", "text"].filter((k) => keys.has(k))).toEqual([]);
+    expect(json.lanes).toEqual({ free: 0, cap: 4 });
+    for (const needle of ["9c2e", "stock-webhook", "memory", "github.com"]) expect(stdout).not.toContain(needle);
+    writeConfig(home, "lane-capacity", null);
   });
 
   it("logs counts, never a task, a branch or a question", async () => {

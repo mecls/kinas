@@ -50,6 +50,9 @@ if [ "$1" = -C ]; then
     rev-parse) cat "$dir/.git/STUB_HEAD" 2>/dev/null || exit 128 ;;
     symbolic-ref) cat "$dir/.git/STUB_BRANCH" 2>/dev/null || exit 1 ;;
     status) echo "git-env GIT_OPTIONAL_LOCKS=\${GIT_OPTIONAL_LOCKS:-unset}" >> "$CALLS"; cat "$dir/.git/STUB_DIRTY" 2>/dev/null ;;
+    fetch) if [ -f "$CALLS.no-fetch" ]; then echo "fatal: unable to access the remote" >&2; exit 128; fi ;;
+    merge-base) where=$(cat "$dir/.git/STUB_PLACE" 2>/dev/null); if [ "$3" = HEAD ] && [ "$where" = behind ]; then exit 0; fi; if [ "$4" = HEAD ] && [ "$where" = ahead ]; then exit 0; fi; exit 1 ;;
+    merge) if [ -f "$CALLS.no-merge" ]; then exit 128; fi; echo "$4" > "$dir/.git/STUB_HEAD" ;;
   esac
 fi
 exit 0`,
@@ -109,10 +112,32 @@ function io(answers: (string | null)[] = []): Io & { text: () => string } {
   };
 }
 
-const run = (w: World, opts: { yes?: boolean; dryRun?: boolean; answers?: (string | null)[] } = {}) => {
+const run = (w: World, opts: { yes?: boolean; dryRun?: boolean; answers?: (string | null)[]; herdrSocket?: string } = {}) => {
   const out = io(opts.answers);
-  return setup({ dryRun: opts.dryRun ?? false, yes: opts.yes ?? false, home: w.home, io: out, env: w.env, tmp: w.root }).then((code) => ({ code, out: out.text() }));
+  return setup({ dryRun: opts.dryRun ?? false, yes: opts.yes ?? false, home: w.home, io: out, env: w.env, tmp: w.root, herdrSocket: opts.herdrSocket }).then((code) => ({
+    code,
+    out: out.text(),
+  }));
 };
+
+/** A home at `head`, clean, on `branch` (main by default), placed against the pin as the stub git says. */
+function homeAt(w: World, head: string, place: "behind" | "ahead" | "diverged" | null, branch = "main") {
+  mkdirSync(join(w.home, ".git"), { recursive: true });
+  writeFileSync(join(w.home, ".git", "STUB_HEAD"), `${head}\n`);
+  writeFileSync(join(w.home, ".git", "STUB_BRANCH"), `${branch}\n`);
+  if (place) writeFileSync(join(w.home, ".git", "STUB_PLACE"), place);
+}
+
+/** A stub Herdr socket answering `session.snapshot` with `snapshot`; closed with the returned function. */
+async function herdrStub(w: World, snapshot: unknown): Promise<{ path: string; close: () => void }> {
+  const { createServer } = await import("node:net");
+  const path = join(w.root, "herdr.sock");
+  const server = createServer((socket) => socket.on("data", () => socket.end(`${JSON.stringify({ id: "x", result: { snapshot } })}\n`)));
+  await new Promise<void>((resolve) => server.listen(path, resolve));
+  return { path, close: () => server.close() };
+}
+
+const OLD = "f9f74a1d91cc7e105ec3df2249eda4e07f9ba540";
 
 describe("kinas crew setup", () => {
   test("the seven steps in order; --dry-run prints would: for each and runs nothing", async () => {
@@ -336,15 +361,101 @@ describe("kinas crew setup", () => {
     expect(existsSync(join(w.home, ".git"))).toBe(false);
   }, 30_000);
 
-  test("a clean clone that moved on by itself is reported, not reset", async () => {
+  // §13.10: the case of a home that moved splits in two — past the pin (Firstmate's own update) and behind it.
+  test("a clean clone past the pin is reported, not reset", async () => {
     const w = world();
-    mkdirSync(join(w.home, ".git"), { recursive: true });
-    writeFileSync(join(w.home, ".git", "STUB_HEAD"), "9296f9b0000000000000000000000000000000ff\n");
-    writeFileSync(join(w.home, ".git", "STUB_BRANCH"), "main\n");
+    homeAt(w, "9296f9b0000000000000000000000000000000ff", "ahead");
     const { code, out } = await run(w, { yes: true });
     expect(code).toBe(0);
-    expect(out).toContain("at 9296f9b, moved from the pin 427056c — setup leaves it");
-    expect(w.calls().filter((c) => c.includes("checkout"))).toEqual([]);
+    expect(out).toContain("at 9296f9b, past the pin 427056c — setup leaves it");
+    expect(w.calls().filter((c) => c.includes("checkout") || c.includes(" merge "))).toEqual([]);
+  });
+
+  test("a clean clone behind the pin is moved by a fast-forward, after a yes, and nothing else", async () => {
+    const w = world();
+    homeAt(w, OLD, "behind");
+    const { code, out } = await run(w, { yes: true });
+    expect(code).toBe(0);
+    expect(out).toContain("  at 427056c\n");
+    const moves = w.calls().filter((c) => /^git -C \S+ (fetch|merge|merge-base|checkout|reset)/.test(c));
+    expect(moves).toEqual([
+      `git -C ${w.home} fetch --quiet origin ${FIRSTMATE_PIN}`,
+      `git -C ${w.home} merge-base --is-ancestor HEAD ${FIRSTMATE_PIN}`,
+      `git -C ${w.home} merge --ff-only --quiet ${FIRSTMATE_PIN}`,
+    ]);
+    expect(readFileSync(join(w.home, ".git", "STUB_HEAD"), "utf8").trim()).toBe(FIRSTMATE_PIN);
+  });
+
+  test("behind the pin and answered no: left where it is, exit 1", async () => {
+    const w = world();
+    homeAt(w, OLD, "behind");
+    const { code, out } = await run(w, { answers: ["n"] });
+    expect(code).toBe(1);
+    expect(out).toContain("Move Firstmate from f9f74a1 to 427056c? [y/N] ");
+    expect(out).toContain("left at f9f74a1, behind the pin 427056c");
+    expect(w.calls().some((c) => c.includes(" merge --ff-only"))).toBe(false);
+    expect(readFileSync(join(w.home, ".git", "STUB_HEAD"), "utf8").trim()).toBe(OLD);
+  });
+
+  test("behind the pin with a first mate running in Herdr: refused with one line, the home unchanged", async () => {
+    const w = world();
+    homeAt(w, OLD, "behind");
+    const herdr = await herdrStub(w, { workspaces: [{ workspace_id: "w1", label: "firstmate" }], agents: [{ workspace_id: "w1", agent: "claude" }] });
+    try {
+      const { code, out } = await run(w, { yes: true, herdrSocket: herdr.path });
+      expect(code).toBe(1);
+      expect(out).toContain("Firstmate's home is behind the pin (f9f74a1) and the first mate is running — close it, then run setup again");
+    } finally {
+      herdr.close();
+    }
+    expect(w.calls().some((c) => c.includes(" merge --ff-only"))).toBe(false);
+    expect(readFileSync(join(w.home, ".git", "STUB_HEAD"), "utf8").trim()).toBe(OLD);
+  });
+
+  test("a first mate is running only when an agent sits in the firstmate workspace; no Herdr is no first mate", async () => {
+    const { firstMateRunning } = await import("./crew-setup.ts");
+    const w = world();
+    expect(await firstMateRunning(undefined)).toBe(false);
+    expect(await firstMateRunning(join(w.root, "no-such.sock"))).toBe(false);
+    const elsewhere = await herdrStub(w, { workspaces: [{ workspace_id: "w1", label: "firstmate" }, { workspace_id: "w2", label: "shop" }], agents: [{ workspace_id: "w2" }] });
+    try {
+      expect(await firstMateRunning(elsewhere.path)).toBe(false);
+    } finally {
+      elsewhere.close();
+    }
+    const odd = await herdrStub(w, { something: "else" });
+    try {
+      expect(await firstMateRunning(odd.path)).toBe(true);
+    } finally {
+      odd.close();
+    }
+  });
+
+  test("diverged from the pin, or the pin not fetched: refused with one line, never merged", async () => {
+    const diverged = world();
+    homeAt(diverged, OLD, "diverged");
+    const d = await run(diverged, { yes: true });
+    expect(d.code).toBe(1);
+    expect(d.out).toContain("Firstmate's home at f9f74a1 has diverged from the pin 427056c — setup leaves it; ask the first mate");
+    expect(diverged.calls().some((c) => c.includes(" merge --ff-only"))).toBe(false);
+
+    const offline = world();
+    homeAt(offline, OLD, "behind");
+    writeFileSync(`${join(offline.root, "calls.log")}.no-fetch`, "");
+    const f = await run(offline, { yes: true });
+    expect(f.code).toBe(1);
+    expect(f.out).toContain("could not fetch the pin — check the network, then run kinas crew setup again");
+    expect(offline.calls().some((c) => c.includes("merge-base") || c.includes(" merge "))).toBe(false);
+  });
+
+  test("--dry-run with a home behind the pin says the move it would offer, and only reads HEAD", async () => {
+    const w = world();
+    homeAt(w, OLD, "behind");
+    const { code, out } = await run(w, { dryRun: true });
+    expect(code).toBe(0);
+    expect(out).toContain(`would: fast-forward ${w.home} from f9f74a1 to 427056c, if it is clean, on main and behind the pin`);
+    expect(w.calls()).toEqual([`git -C ${w.home} rev-parse HEAD`]);
+    expect(readFileSync(join(w.home, ".git", "STUB_HEAD"), "utf8").trim()).toBe(OLD);
   });
 
   test("a checksum mismatch refuses the release", async () => {

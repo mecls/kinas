@@ -9,3 +9,4 @@ export { AGENT_HEADINGS, flat, renderAgentPacket, shown } from "./render-agent.t
 export { renderOperator } from "./render-operator.ts";
 export { age, ago, lisbonStamp, STALE_AFTER_MS, until, within } from "./time.ts";
 export { KINAS_VERSION } from "./version.ts";
+export { herdrSnapshot } from "./sources/herdr.ts";

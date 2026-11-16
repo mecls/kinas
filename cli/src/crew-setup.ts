@@ -1,7 +1,9 @@
 // `kinas crew setup` (build spec §4 The CLI, §9, §10; AC-1): installs the crew on this Mac — Firstmate at its pin in
 // Kinas's data directory, its backend, and the tools at their pinned versions — asking y/N before each thing it
 // changes. It is the CLI's one exception to "read, never written" (main.ts's header), and it writes only the clone
-// under the data directory, the clone's config/backend, `~/.local/bin` and npm's global prefix.
+// under the data directory, the clone's config/backend, `~/.local/bin` and npm's global prefix. Amended 2026-11-16
+// (Firstmate, current; ADR 0020): and the fast-forward of a clean clone on `main` that is behind the pin, by `git merge
+// --ff-only`, after a y/N and only while no first mate runs in Herdr — refused, with one line, in every other case.
 //
 // Every step runs with the login shell's PATH and no HERDR*. It never pipes a download into a shell, never installs a
 // release whose SHA-256 is not the pinned one, never runs a tool's `setup hooks` (they write under ~/.claude), and
@@ -11,7 +13,8 @@ import { spawn } from "node:child_process";
 import { chmodSync, closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { atLeast, FIRSTMATE_PIN, FIRSTMATE_REPO, PREREQS, SETUP_HOOKS, TOOLS, versionOf, type Tool } from "@kinas/commands/crew-tools";
+import { atLeast, FIRSTMATE_PIN, FIRSTMATE_REPO, PREREQS, SETUP_HOOKS, TOOLS, versionOf, WORKSPACE_LABEL, type Tool } from "@kinas/commands/crew-tools";
+import { herdrSnapshot } from "@kinas/context";
 import { confirm, type Io } from "./confirm.ts";
 import { forTerminal } from "./open.ts";
 
@@ -35,6 +38,8 @@ export interface SetupOptions {
   env: Record<string, string>;
   /** Where temporary downloads go (the system's temporary folder by default). */
   tmp?: string;
+  /** Herdr's default session socket, asked whether a first mate runs before the home is moved; none means no Herdr. */
+  herdrSocket?: string;
 }
 
 interface ToolResult {
@@ -81,7 +86,7 @@ export function steps(): Step[] {
       describe: (ctx) => `clone Firstmate at ${SHORT_PIN} from ${FIRSTMATE_REPO} into ${ctx.home}`,
       async perform(ctx) {
         if (existsSync(ctx.home)) {
-          ctx.homeProblem = await checkHome(ctx);
+          ctx.homeProblem = await settleHome(ctx);
           return;
         }
         if (!(await ask(ctx, `Clone Firstmate at ${SHORT_PIN} into ${ctx.home}?`))) {
@@ -190,6 +195,10 @@ export async function setup(opts: SetupOptions): Promise<number> {
   for (const step of steps()) {
     if (opts.dryRun) {
       io.write(`would: ${step.describe(ctx)}\n`);
+      if (step.id === "clone") {
+        const move = await wouldMove(ctx);
+        if (move) io.write(`would: ${move}\n`);
+      }
       continue;
     }
     io.write(`\n${step.describe(ctx)}\n`);
@@ -209,42 +218,110 @@ async function ask(ctx: Ctx, question: string): Promise<boolean> {
   return confirm(`  ${question}`, ctx.io);
 }
 
+/** Where an existing home stands against the pin (Firstmate, current; build spec §11.3 Setup). */
+export type HomeState =
+  | { kind: "absent" }
+  | { kind: "at-pin" }
+  | { kind: "behind"; head: string }
+  | { kind: "ahead"; head: string }
+  /** `line` is what setup says and why it is not installed at the pin; `said`, when the line it prints is shorter. */
+  | { kind: "problem"; line: string; said?: string };
+
 /**
- * An existing home is looked at, never changed: a clone with local changes, a stranger folder, a moved pin or a clone
- * on another branch stays. Where the clone stands is judged as the app judges it (`crew/home.rs`, `classify`): on a
- * branch that is not `main` it is a tangle for the first mate, whatever its commit; detached or on `main`, it is at the
- * pin or moved on from it.
+ * Where the home stands, looked at and never changed but for the pin's fetch into its object store. Judged as the app
+ * judges it (`crew/home.rs`, `classify`) for a tangle; then, for a clean clone on `main` (or detached) that is not at
+ * the pin, git says whether its commit is behind the pin, past it, or neither. Every git call keeps
+ * `GIT_OPTIONAL_LOCKS=0`, and no argument holds text from a file.
  */
-async function checkHome(ctx: Ctx): Promise<string | null> {
-  if (!existsSync(join(ctx.home, ".git"))) {
-    const problem = `${ctx.home} exists and is not a git clone — move it away, then run kinas crew setup again`;
-    say(ctx, problem);
-    return problem;
-  }
+export async function homeState(ctx: Ctx): Promise<HomeState> {
+  if (!existsSync(ctx.home)) return { kind: "absent" };
+  if (!existsSync(join(ctx.home, ".git"))) return { kind: "problem", line: `${ctx.home} exists and is not a git clone — move it away, then run kinas crew setup again` };
   const status = await group(["git", "-C", ctx.home, "status", "--porcelain"], ctx, PROBE_MS);
-  if (status.code !== 0 || status.stdout.trim() !== "") {
-    const problem = "Firstmate's home has local changes — setup leaves it alone; ask the first mate";
-    say(ctx, problem);
-    return problem;
-  }
+  if (status.code !== 0 || status.stdout.trim() !== "") return { kind: "problem", line: "Firstmate's home has local changes — setup leaves it alone; ask the first mate" };
   const at = await head(ctx);
-  if (at === null) {
-    say(ctx, "no commit checked out");
-    return "Firstmate's home has no commit checked out";
-  }
+  if (at === null) return { kind: "problem", line: "Firstmate's home has no commit checked out", said: "no commit checked out" };
   const branch = await currentBranch(ctx);
-  if (branch !== null && branch !== "main") {
-    const problem = `Firstmate's home is on branch ${branch}, not main — setup leaves it; ask the first mate`;
-    say(ctx, problem);
-    return problem;
+  if (branch !== null && branch !== "main") return { kind: "problem", line: `Firstmate's home is on branch ${branch}, not main — setup leaves it; ask the first mate` };
+  if (at === FIRSTMATE_PIN) return { kind: "at-pin" };
+  const fetched = await group(["git", "-C", ctx.home, "fetch", "--quiet", "origin", FIRSTMATE_PIN], ctx, GIT_MS);
+  if (fetched.code !== 0) return { kind: "problem", line: "could not fetch the pin — check the network, then run kinas crew setup again" };
+  if ((await group(["git", "-C", ctx.home, "merge-base", "--is-ancestor", "HEAD", FIRSTMATE_PIN], ctx, PROBE_MS)).code === 0) return { kind: "behind", head: at };
+  if ((await group(["git", "-C", ctx.home, "merge-base", "--is-ancestor", FIRSTMATE_PIN, "HEAD"], ctx, PROBE_MS)).code === 0) return { kind: "ahead", head: at };
+  return { kind: "problem", line: `Firstmate's home at ${at.slice(0, 7)} has diverged from the pin ${SHORT_PIN} — setup leaves it; ask the first mate` };
+}
+
+/**
+ * The clone step for a home that exists: said, and moved only when it is behind the pin, no first mate runs in Herdr,
+ * and the captain says yes. Returns why it is not at the pin, or null.
+ */
+async function settleHome(ctx: Ctx): Promise<string | null> {
+  const state = await homeState(ctx);
+  switch (state.kind) {
+    case "absent":
+      return null;
+    case "problem":
+      say(ctx, state.said ?? state.line);
+      return state.line;
+    case "at-pin":
+      say(ctx, `already at ${SHORT_PIN}`);
+      return null;
+    case "ahead":
+      // Firstmate updates itself (/updatefirstmate): a clean clone past the pin is Firstmate's doing, and Settings says so.
+      say(ctx, `at ${state.head.slice(0, 7)}, past the pin ${SHORT_PIN} — setup leaves it; Settings → Crew shows it`);
+      return null;
+    case "behind": {
+      const from = state.head.slice(0, 7);
+      if (await firstMateRunning(ctx.herdrSocket)) {
+        const line = `Firstmate's home is behind the pin (${from}) and the first mate is running — close it, then run setup again`;
+        say(ctx, line);
+        return line;
+      }
+      if (!(await ask(ctx, `Move Firstmate from ${from} to ${SHORT_PIN}?`))) {
+        const line = `left at ${from}, behind the pin ${SHORT_PIN}`;
+        say(ctx, line);
+        return line;
+      }
+      const moved = await fastForward(ctx);
+      say(ctx, moved ? `at ${SHORT_PIN}` : `the move from ${from} to ${SHORT_PIN} failed — setup leaves it; ask the first mate`);
+      return moved ? null : `Firstmate's home could not be moved from ${from} to ${SHORT_PIN}`;
+    }
   }
-  if (at === FIRSTMATE_PIN) {
-    say(ctx, `already at ${SHORT_PIN}`);
-    return null;
+}
+
+/** `git merge --ff-only` to the pin — never a reset, a checkout or a forced move — then HEAD is the pin. */
+async function fastForward(ctx: Ctx): Promise<boolean> {
+  const merged = await group(["git", "-C", ctx.home, "merge", "--ff-only", "--quiet", FIRSTMATE_PIN], ctx, GIT_MS);
+  return merged.code === 0 && (await head(ctx)) === FIRSTMATE_PIN;
+}
+
+/**
+ * Whether a first mate runs in Herdr's default session: an agent in a workspace labelled `firstmate`. A socket that does
+ * not answer is no Herdr server, so no first mate in Herdr. An answer that cannot be read counts as running: the home is
+ * not moved under a first mate setup could not rule out.
+ */
+export async function firstMateRunning(socket: string | undefined): Promise<boolean> {
+  if (!socket) return false;
+  let answer: unknown;
+  try {
+    answer = await herdrSnapshot(socket);
+  } catch {
+    return false;
   }
-  // Firstmate updates itself (/updatefirstmate): a clean clone that moved is Firstmate's doing, and Settings says so.
-  say(ctx, `at ${at.slice(0, 7)}, moved from the pin ${SHORT_PIN} — setup leaves it; Settings → Crew shows it`);
-  return null;
+  const snapshot = (answer as { result?: { snapshot?: { workspaces?: unknown; agents?: unknown } } } | null)?.result?.snapshot;
+  if (!snapshot || !Array.isArray(snapshot.workspaces) || !Array.isArray(snapshot.agents)) return true;
+  const ids = new Set((snapshot.workspaces as { workspace_id?: unknown; label?: unknown }[]).filter((w) => w.label === WORKSPACE_LABEL).map((w) => w.workspace_id));
+  return (snapshot.agents as { workspace_id?: unknown }[]).some((a) => ids.has(a.workspace_id));
+}
+
+/**
+ * `--dry-run`'s word on an existing home: HEAD read (and nothing else), and, when it is not the pin, the move setup would
+ * offer. Nothing is fetched, changed or asked.
+ */
+async function wouldMove(ctx: Ctx): Promise<string | null> {
+  if (!existsSync(join(ctx.home, ".git"))) return null;
+  const at = await head(ctx);
+  if (at === null || at === FIRSTMATE_PIN) return null;
+  return `fast-forward ${ctx.home} from ${at.slice(0, 7)} to ${SHORT_PIN}, if it is clean, on main and behind the pin`;
 }
 
 async function head(ctx: Ctx): Promise<string | null> {

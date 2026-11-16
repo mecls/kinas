@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { crewStatusFromStore, crewStatusJson, crewStatusLines } from "@kinas/commands";
 import { HOME_DIR } from "@kinas/commands/crew-tools";
+import { loadConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { terminalIo } from "./confirm.ts";
 import { loginPath, setup, withoutHerdr } from "./crew-setup.ts";
@@ -53,11 +54,13 @@ async function crewSetup(args: string[]): Promise<number> {
     printError("kinas crew setup asks before each step; run it in a terminal, or pass --yes");
     return EXIT.usage;
   }
+  // Herdr's default session socket, read before HERDR* leaves the environment: asked once, before a home is moved.
+  const herdrSocket = loadConfig(process.env).herdrSocket;
   const env = withoutHerdr(process.env);
   if (!dryRun) env.PATH = (await loginPath(process.env)) ?? env.PATH ?? "/usr/bin:/bin";
   const io = terminalIo();
   try {
-    return await setup({ dryRun, yes, home: join(dataDir(), HOME_DIR), io, env });
+    return await setup({ dryRun, yes, home: join(dataDir(), HOME_DIR), io, env, herdrSocket });
   } finally {
     io.close();
   }

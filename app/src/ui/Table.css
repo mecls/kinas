@@ -26,11 +26,8 @@ table.ui-table caption {
   line-height: var(--lh-sm);
   color: var(--ink-2);
 }
+/* A column header's type is .ui-group-label's (base.css, 1.13): capitals, letter-spaced. */
 table.ui-table th {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--ink-2);
   text-align: left;
   padding: 0 var(--space-4);
   height: var(--row-h);

@@ -53,3 +53,14 @@ svg.ui-icon[data-size="sm"] {
   width: var(--icon-sm);
   height: var(--icon-sm);
 }
+
+/* A label that heads a group of rows, and a table's column headers (DESIGN.md §2.5, 1.13): the one place capitals
+   are used, and the one place type is letter-spaced. A name never takes it. */
+.ui-group-label {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}

@@ -49,9 +49,12 @@
   padding: var(--space-0) var(--space-1);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
+  background: var(--surface-2);
   color: var(--ink-2);
 }
+/* On the accent the fill would not read: a primary button's key keeps the button's ground (1.13). */
 .ui-button[data-kind="primary"] .ui-kbd {
   border-color: color-mix(in oklab, var(--accent-ink) 40%, transparent);
+  background: transparent;
   color: var(--accent-ink);
 }

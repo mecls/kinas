@@ -34,10 +34,16 @@
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+/* 1.13, the name leads: the card's details stay on one line — kind, harness, the elapsed time — and never break inside
+   it; in a narrow lane the line goes under the badge whole, and is cut with an ellipsis only past the card's width. */
 .crew-meta {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--ink-2);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .crew-pr {
   font-family: var(--font-mono);

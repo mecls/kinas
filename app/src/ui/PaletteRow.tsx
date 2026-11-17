@@ -118,7 +118,7 @@ export function PaletteGroupView<T extends PaletteRowItem>({
   const more = moreKey(group.id);
   return (
     <li role="presentation" className="ui-palette-group" data-group={group.id} data-state={group.state}>
-      <div className="ui-palette-label" id={labelId}>
+      <div className="ui-palette-label ui-group-label" id={labelId}>
         {group.label}
       </div>
       <ul role="group" aria-labelledby={labelId}>

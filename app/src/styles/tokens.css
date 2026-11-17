@@ -47,6 +47,10 @@
   /* The Diff's added and removed lines (DESIGN.md 1.6): a faint tint, always beside the line's sign. */
   --ok-soft: color-mix(in oklab, var(--ok) 12%, var(--surface));
   --danger-soft: color-mix(in oklab, var(--danger) 12%, var(--surface));
+  /* Text tokens for a changed file's line counts (1.13): status colours dark enough to read as text, 4.5:1 on --bg and
+     --surface; in the dark theme --ok and --danger already are. */
+  --ok-ink: #1e7048;
+  --danger-ink: #b0222a;
 
   --cat-1: #3e7c8a;
   --cat-2: #7a62b0;
@@ -98,6 +102,9 @@
   --m-fs-title: 20px; --m-lh-title: 26px;
   --m-fs-large: 28px; --m-lh-large: 34px;
 
+  /* A group label's and a table header's capitals are letter-spaced by this, and nothing else is (§2.5, 1.13). */
+  --tracking-caps: 0.06em;
+
   /* ===== Space, radius, layout, geometry, motion (§2.6, §2.7) ===== */
   --space-0: 2px;
   --space-1: 4px;
@@ -145,22 +152,22 @@
 /* ===== Dark (§2.3): the same names, swapped values; screen only, so a print is what print.css says from either. ===== */
 @media screen and (prefers-color-scheme: dark) {
   :root {
-    --bg: #14171e;
-    --surface: #1b1f27;
-    --surface-2: #232833;
-    --line: #2b3140;
-    --line-strong: #3a4152;
+    --bg: #0f0f0f;
+    --surface: #171717;
+    --surface-2: #212121;
+    --line: #272727;
+    --line-strong: #363636;
 
-    --ink: #edeef2;
-    --ink-2: #a1a7b4;
-    --ink-3: #6e7482;
+    --ink: #ededed;
+    --ink-2: #a3a3a3;
+    --ink-3: #6e6e6e;
 
     --accent: color-mix(in oklab, var(--brand-accent), white 32%);
     --accent-ink: #0e1420;
     --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
 
-    --meter: #a1a7b4;
-    --meter-track: #2b3140;
+    --meter: #a3a3a3;
+    --meter-track: #272727;
 
     --ok: #4fb37a;
     --warn: #d9a03a;
@@ -168,6 +175,8 @@
     --stale: #7c818d;
     --ok-soft: color-mix(in oklab, var(--ok) 18%, var(--surface));
     --danger-soft: color-mix(in oklab, var(--danger) 18%, var(--surface));
+    --ok-ink: #4fb37a;
+    --danger-ink: #e5575e;
 
     --cat-1: #5fa3b2;
     --cat-2: #9d88d6;
@@ -177,12 +186,12 @@
     --cat-6: #7688b8;
 
     --shadow-float: 0 8px 24px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
-    --scrim: rgb(5 6 8 / 0.55);
+    --scrim: rgb(0 0 0 / 0.6);
 
-    --term-bg: #10192b;
-    --term-fg: #e7eef7;
+    --term-bg: #0f0f0f;
+    --term-fg: #ededed;
     --term-selection: #18406b;
-    --ansi-black: #2b3140;
+    --ansi-black: #272727;
     --ansi-red: #e5575e;
     --ansi-green: #4fb286;
     --ansi-yellow: #dfae3c;
@@ -190,14 +199,14 @@
     --ansi-magenta: #c27ab8;
     --ansi-cyan: #4ab3c2;
     --ansi-white: #c9c6bf;
-    --ansi-bright-black: #a1a7b4;
+    --ansi-bright-black: #a3a3a3;
     --ansi-bright-red: #f06a70;
     --ansi-bright-green: #7fd3a8;
     --ansi-bright-yellow: #f0c96a;
     --ansi-bright-blue: #72b0ea;
     --ansi-bright-magenta: #dca2d4;
     --ansi-bright-cyan: #7fd0db;
-    --ansi-bright-white: #e7eef7;
+    --ansi-bright-white: #ededed;
 
     color-scheme: dark;
   }

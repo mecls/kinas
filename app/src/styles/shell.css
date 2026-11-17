@@ -94,6 +94,12 @@
   white-space: nowrap;
 }
 
+/* A group's own heading — Pinned — in .ui-group-label's type (DESIGN.md §2.5, 1.13); the Files head is a folder's
+   name, which never takes capitals, and keeps .sidebar-label. */
+.sidebar-group-h {
+  margin: 0 0 var(--space-1) var(--space-2);
+}
+
 .sidebar-list {
   margin: 0;
   padding: 0;

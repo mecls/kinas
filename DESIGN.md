@@ -6,7 +6,7 @@ Version 1.13, 2026-11-17.
 
 ## Changes
 
-- **1.13, 2026-11-17 (the interface polish, `tasks/interface-polish/prd.md`; written 2026-11-15 as 1.11, renumbered when Firstmate, current landed first as 1.12).** Kinas takes a reference app's look and reach without changing a flow, a key or a command. The dark theme turns neutral gray (2.3; its values enter the code blocks with `tokens.css` in the build's slice 5, where `design.test.ts` holds the two together); the light theme does not change. Group labels and table headers are set in capitals, letter-spaced (2.5). Two text tokens, `--ok-ink` and `--danger-ink`, colour a changed file's line counts, the one other place a status colour is text (2.2). The window gains a **Status bar** along its foot, with the **Usage popover** (3.1, 4); the sidebar gains a search row, nav chords on point and each client folder's crew state with its tasks in flight, and gives its connection line to the status bar (3.1). The palette searches files, folders, tasks, inbox items, workspaces, settings and commands, in groups of **Palette rows** (4). Every list row leads with its name; an empty state is a line, not a box; `Kbd` takes a `--surface-2` fill (4). Home folds quiet folders into one line and stops repeating a gauge under Needs attention; Usage's chart spans its data; Settings gets a section list, a search and **Settings rows**; a changed file in a tree shows **Line counts** (4, 5). A reset reads relative within a day and absolute beyond (6).
+- **1.13, 2026-11-17 (the interface polish, `tasks/interface-polish/prd.md`; written 2026-11-15 as 1.11, renumbered when Firstmate, current landed first as 1.12).** Kinas takes a reference app's look and reach without changing a flow, a key or a command. The dark theme turns neutral gray (2.3); the light theme does not change. Group labels and table headers are set in capitals, letter-spaced (2.5). Two text tokens, `--ok-ink` and `--danger-ink`, colour a changed file's line counts, the one other place a status colour is text (2.2). The window gains a **Status bar** along its foot, with the **Usage popover** (3.1, 4); the sidebar gains a search row, nav chords on point and each client folder's crew state with its tasks in flight, and gives its connection line to the status bar (3.1). The palette searches files, folders, tasks, inbox items, workspaces, settings and commands, in groups of **Palette rows** (4). Every list row leads with its name; an empty state is a line, not a box; `Kbd` takes a `--surface-2` fill (4). Home folds quiet folders into one line and stops repeating a gauge under Needs attention; Usage's chart spans its data; Settings gets a section list, a search and **Settings rows**; a changed file in a tree shows **Line counts** (4, 5). A reset reads relative within a day and absolute beyond (6).
 - **1.12, 2026-11-16 (Firstmate, current, `tasks/crew-firstmate-current/prd.md`).** Kinas runs Firstmate `427056c` and shows what it publishes. A new crew word, **in review** — a ring in `--meter` — for a task Firstmate parked on review; it sits after blocked in the word order, counts in flight in its lane and as waiting on a person in Overnight, and adds nothing to the waiting count (4, Status badge; the catalogue's `review` story enters with the build's slice 2). The task detail gains a branch line, and a held task's PR and **Open the PR** (5, Crew). A held question keeps its line breaks wherever it is drawn as a question; a held Inbox item with a PR names it in its quiet line and has Open the PR before Deny (4, Inbox item). The Fleet caption gains free lanes and a held dispatch (5, Crew); Usage's Crew section gains a Lanes row (5, Usage); Settings → Crew gains `perl` among the prerequisites and a Firstmate options table (5, Settings). The ledger's four events join the timeline (4, Timeline). No token, key or component is added. (1.13 is the interface polish's, written on its own branch on 2026-11-15; whichever of the two reaches `main` second takes its number in order.)
 - **1.10, 2026-09-29 (done work clears, `tasks/crew-done-clears/prd.md`).** Finished crew work — done or gone — leaves the Crew page's board and Home's Overnight at that page's next load, once the page has shown it; a done task whose PR is still open stays until the PR is merged or closed (5). Nothing new is drawn: no component, token or word changes.
 - **1.9, 2026-09-28 (crew marks, `tasks/crew-marks/prd.md`).** A file tree also marks what the first mate's crew has changed in its own checkouts and not pushed: the **Change mark** gains a **crew** form, the same letter with a **hollow** dot (a ring of `--dot-ring`), drawn before the captain's own mark on a row that has both; folders gain a crew roll-up; a file the crew added that the captain's folder lacks gets a **crew row**, its name in `--ink-3`; the tree's head gains a second caption line (4). The **Diff** gains the crew's copy: a summary that says whose, read-only (4).
@@ -81,6 +81,8 @@ Status (state only)
 --stale         #7C818D
 --ok-soft       color-mix(in oklab, var(--ok) 12%, var(--surface))       the Diff's added line (1.6)
 --danger-soft   color-mix(in oklab, var(--danger) 12%, var(--surface))   the Diff's removed line (1.6)
+--ok-ink        #1E7048   a changed file's "+N", text (1.13)
+--danger-ink    #B0222A   a changed file's "−N", text (1.13)
 
 Category (identity only: folders, providers)
 --cat-1         #3E7C8A   teal
@@ -91,8 +93,8 @@ Category (identity only: folders, providers)
 --cat-6         #4E5F8C   slate
 
 Terminal (the pane's own palette, never used outside it)
---term-bg       #F4F2EC   light; #10192B dark (amended 1.2: the pane follows the theme)
---term-fg       #0A1420   light; #E7EEF7 dark
+--term-bg       #F4F2EC   light; #0F0F0F dark (amended 1.2: the pane follows the theme; 1.13: = the dark --bg)
+--term-fg       #0A1420   light; #EDEDED dark
 --term-selection #CCDDEC  light; #18406B dark
 --ansi-*        sixteen colours, a set per theme, every one ≥ 4.5:1 on its --term-bg; --ansi-black = --line,
                 --ansi-bright-black = --ink-2, --ansi-yellow = --warn, --ansi-bright-white = --term-fg
@@ -104,7 +106,7 @@ Floating layers only
 Rules:
 
 - **Accent** marks the interactive and the selected. It is never a bar fill, a status, or a category.
-- **Status colors** appear as dots, bars, and segments. They are never text, with one exception: `--danger` for an error message (5.7:1 on `--surface`). (1.6, tree changes: and, in the Diff only, a faint tint behind a whole line — `--ok` for an added line, `--danger` for a removed one, mixed into `--surface` — always with the line's + or − beside it, so the sign says in a word what the tint says in colour. They are `--ok-soft` and `--danger-soft`, 12 % light and 18 % dark, as `--accent-soft` is mixed; the line's text and its numbers on them are measured in 2.4.) (1.13, the interface polish: and a changed file's line counts in a tree, "+N" in `--ok-ink` and "−N" in `--danger-ink` — text tokens measured to 4.5:1 on `--bg` and `--surface` in both themes, light `#1E7048` (5.4:1 on `--bg`) and `#B0222A` (6.0:1), dark equal to `--ok` (7.4:1) and `--danger` (5.4:1) — the sign always written beside the number. They enter 2.2's block with `tokens.css` in the build's slice 5.)
+- **Status colors** appear as dots, bars, and segments. They are never text, with one exception: `--danger` for an error message (5.7:1 on `--surface`). (1.6, tree changes: and, in the Diff only, a faint tint behind a whole line — `--ok` for an added line, `--danger` for a removed one, mixed into `--surface` — always with the line's + or − beside it, so the sign says in a word what the tint says in colour. They are `--ok-soft` and `--danger-soft`, 12 % light and 18 % dark, as `--accent-soft` is mixed; the line's text and its numbers on them are measured in 2.4.) (1.13, the interface polish: and a changed file's line counts in a tree, "+N" in `--ok-ink` and "−N" in `--danger-ink` — text tokens measured to 4.5:1 on `--bg` and `--surface` in both themes, light `#1E7048` (5.4:1 on `--bg`) and `#B0222A` (6.0:1), dark equal to `--ok` (7.4:1) and `--danger` (5.3:1) — the sign always written beside the number. In 2.2's and 2.3's blocks.)
 - **Category colors** appear as a chip or a chart series, always next to the name they stand for. Each client folder and provider gets one in Settings, and it stays stable. Past six, colors repeat and the name disambiguates.
 - **Bars** fill with `--meter` when fine, `--warn` past 80 %, `--danger` past 95 %, and `--stale` when the reading is older than its window. (1.2: these replace the app's earlier ≤ 25 / ≤ 10 % *left* rule; a dead reading draws no bar.)
 - **The brand's gold and crimson** appear only as `--warn` and `--danger`.
@@ -114,37 +116,41 @@ Rules:
 Same token names, swapped values. Never a second stylesheet.
 
 ```
---bg #14171E   --surface #1B1F27   --surface-2 #232833   --line #2B3140   --line-strong #3A4152
---ink #EDEEF2  --ink-2 #A1A7B4     --ink-3 #6E7482
+--bg #0F0F0F   --surface #171717   --surface-2 #212121   --line #272727   --line-strong #363636
+--ink #EDEDED  --ink-2 #A3A3A3     --ink-3 #6E6E6E
 --accent       color-mix(in oklab, var(--brand-accent), white 32%)
 --accent-ink   #0E1420
 --accent-soft  color-mix(in oklab, var(--accent) 18%, var(--surface))
---meter #A1A7B4  --meter-track #2B3140
+--meter #A3A3A3  --meter-track #272727
 --ok #4FB37A   --warn #D9A03A   --danger #E5575E   --stale #7C818D
 --ok-soft      color-mix(in oklab, var(--ok) 18%, var(--surface))
 --danger-soft  color-mix(in oklab, var(--danger) 18%, var(--surface))
+--ok-ink #4FB37A   --danger-ink #E5575E   (equal to --ok and --danger, which read as text on the dark grounds)
 --cat-1 #5FA3B2  --cat-2 #9D88D6  --cat-3 #B08E70  --cat-4 #A3A85A  --cat-5 #CF7AA0  --cat-6 #7688B8
 --shadow-float 0 8px 24px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3)
 ```
 
 `--accent-ink` flips to dark because white on the lightened accent drops to about 3.4:1. Amended 1.2 (2026-09-22): the terminal palette *does* change — the pane draws on the window's ground in both themes with the ANSI set of that theme (decided with the light theme of PR #22); a program that paints its own 24-bit theme does not follow.
 
-1.13 (2026-11-15, the interface polish): the dark theme turns neutral — `--bg #0F0F0F`, `--surface #171717`, `--surface-2 #212121`, `--line #272727`, `--line-strong #363636`, `--ink #EDEDED`, `--ink-2 #A3A3A3`, `--ink-3 #6E6E6E`, `--meter #A3A3A3`, `--meter-track #272727`, `--scrim rgb(0 0 0 / .6)`; `--term-bg` and `--term-fg` follow `--bg` and `--ink`, and `--ansi-black` and `--ansi-bright-black` keep tracking `--line` and `--ink-2`. The accent, status and category values stay. Measured: `--ink` on `--bg` 16.4:1, `--ink-2` on `--bg` 7.6:1 and on `--surface-2` 6.4:1, `--danger` on `--surface` 5.0:1, `--stale` on `--bg` 4.9:1, `--ink-3` on `--bg` 3.8:1 (non-essential only). The block above and 2.4's table take these values with `tokens.css` in the build's slice 5; until then they hold what ships.
+1.13 (2026-11-15, the interface polish): the dark theme turns neutral, gray with no blue in it — the block above, in `tokens.css` since the build's slice 5 (2026-11-17), the scrim `rgb(0 0 0 / .6)`. `--term-bg` and `--term-fg` follow `--bg` and `--ink`; `--ansi-black`, `--ansi-bright-black` and `--ansi-bright-white` keep tracking `--line`, `--ink-2` and `--term-fg`. The accent, status and category values stay as they were. 2.4 holds the measurements.
 
 ### 2.4 Contrast (measured, WCAG 2.x)
 
-| Pair | Light | Needs |
-|---|---|---|
-| `--ink` on `--bg` | 14.7:1 | 4.5 |
-| `--ink-2` on `--bg` | 5.5:1 | 4.5 |
-| `--accent-ink` on `--accent` | 7.6:1 | 4.5 |
-| `--danger` text on `--surface` | 5.7:1 | 4.5 |
-| `--ok` dot on `--bg` | 3.8:1 | 3 |
-| `--warn` dot on `--bg` | 3.2:1 | 3 |
-| `--stale` bar on `--bg` | 3.5:1 | 3 |
-| `--ink-3` on `--bg` | 2.9:1 | non-essential only |
-| `--ink` on `--ok-soft` / `--danger-soft` (1.6) | 14.3:1 / 13.9:1 (dark 10.8:1 / 11.4:1) | 4.5 |
-| `--ink-2` on `--ok-soft` / `--danger-soft` (1.6) | 5.4:1 / 5.2:1 (dark 5.2:1 / 5.5:1) | 4.5 |
+| Pair | Light | Dark (1.13) | Needs |
+|---|---|---|---|
+| `--ink` on `--bg` | 14.7:1 | 16.4:1 | 4.5 |
+| `--ink-2` on `--bg` | 5.5:1 | 7.6:1 | 4.5 |
+| `--ink-2` on `--surface-2` | 5.2:1 | 6.4:1 | 4.5 |
+| `--accent-ink` on `--accent` | 7.6:1 | 5.1:1 | 4.5 |
+| `--danger` text on `--surface` | 5.7:1 | 5.0:1 | 4.5 |
+| `--ok` dot on `--bg` | 3.8:1 | 7.4:1 | 3 |
+| `--warn` dot on `--bg` | 3.2:1 | 8.3:1 | 3 |
+| `--stale` bar on `--bg` | 3.5:1 | 4.9:1 | 3 |
+| `--ink-3` on `--bg` | 2.9:1 | 3.8:1 | non-essential only |
+| `--ink` on `--ok-soft` / `--danger-soft` (1.6) | 14.3:1 / 13.9:1 | 11.9:1 / 12.4:1 | 4.5 |
+| `--ink-2` on `--ok-soft` / `--danger-soft` (1.6) | 5.4:1 / 5.2:1 | 5.5:1 / 5.8:1 | 4.5 |
+| `--ok-ink` on `--bg` / `--surface` (1.13) | 5.4:1 / 6.1:1 | 7.4:1 / 6.9:1 | 4.5 |
+| `--danger-ink` on `--bg` / `--surface` (1.13) | 6.0:1 / 6.8:1 | 5.3:1 / 5.0:1 | 4.5 |
 
 The contrast test (section 9) checks every pair in both themes and at the current brand accent.
 
@@ -162,6 +168,7 @@ Mac scale (px / line-height) — written in tokens.css as the pair --fs-<step> /
 --text-lg    15 / 22    section titles, card titles       (--fs-lg / --lh-lg)
 --text-xl    20 / 28    page titles                       (--fs-xl / --lh-xl)
 --text-num   28 / 32    the hero number in a gauge (mono, tabular)   (--fs-num / --lh-num)
+--tracking-caps  0.06em   a group label's and a table header's capitals, and nothing else (1.13)
 
 iPhone scale (px / line-height) — --m-fs-<step> / --m-lh-<step>
 --m-text-sm      13 / 18    captions, badges, tab labels
@@ -172,7 +179,7 @@ iPhone scale (px / line-height) — --m-fs-<step> / --m-lh-<step>
 Weights: 400 regular, 500 medium, 600 semibold. Nothing bolder.
 ```
 
-Rules: labels are sentence case, never all caps, never letter-spaced. Numbers are always mono with tabular figures, right-aligned in tables, and carry their unit in `--ink-2`. Mono is for numbers, code, paths, keys, and the terminal. It is never for labels or prose. (1.13, the interface polish: one exception. A label that heads a group of rows — the sidebar's Pinned and Client folders, the palette's groups, the Settings section list's groups — and a table's column headers are set in capitals: `--text-xs`, weight 600, letter-spaced by `--tracking-caps` (0.06em, entering this block with `tokens.css` in slice 5), `--ink-2`, as the class `.ui-group-label`. A name — a folder, a file, a task — is never put in capitals, so the Files head, a folder's name, stays as typed.)
+Rules: labels are sentence case, never all caps, never letter-spaced. Numbers are always mono with tabular figures, right-aligned in tables, and carry their unit in `--ink-2`. Mono is for numbers, code, paths, keys, and the terminal. It is never for labels or prose. (1.13, the interface polish: one exception. A label that heads a group of rows — the sidebar's Pinned and Client folders, the palette's groups, the Settings section list's groups — and a table's column headers are set in capitals: `--text-xs`, weight 600, letter-spaced by `--tracking-caps` (0.06em), `--ink-2`, as the class `.ui-group-label`. A name — a folder, a file, a task — is never put in capitals, so the Files head, a folder's name, stays as typed.)
 
 The display font must be redistributable, since it ships in an open-source repo. Amended 1.2 (2026-09-22): Clash Display's ITF Free Font License does not permit sharing the files, so the display face is **Bricolage Grotesque** (OFL) — `--brand-font-display: "Bricolage Grotesque"`. Inter and JetBrains Mono (OFL) are bundled with the app as woff2 files under `app/src/assets/fonts/`, each with its license beside it; nothing is fetched at runtime.
 

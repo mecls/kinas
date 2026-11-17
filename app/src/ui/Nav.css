@@ -66,12 +66,9 @@
   line-height: var(--lh-xs);
   color: var(--ink-2);
 }
+/* Its type is .ui-group-label's (base.css, 1.13). */
 .ui-nav-h {
   margin: var(--space-5) var(--space-2) var(--space-1);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--ink-2);
 }
 .ui-machine {
   margin-top: auto;

@@ -133,7 +133,7 @@ export function Sidebar({
       <div className="sidebar-scroll">
         {pins.length > 0 && (
           <section className="sidebar-section sidebar-pinned" aria-label="Pinned">
-            <h2 className="sidebar-label">Pinned</h2>
+            <h2 className="sidebar-group-h ui-group-label">Pinned</h2>
             <ul className="sidebar-list">
               {pins.map((pin) => (
                 <PinRow key={pin.path} pin={pin} selected={selected} onOpen={onOpen} onUnpin={onUnpin} onTerminal={onTerminal} folderActions={folderActions} />

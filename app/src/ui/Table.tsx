@@ -34,7 +34,7 @@ export function Table({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={c.align === "right" ? "ui-table-r" : undefined} scope="col">
+              <th key={c.key} className={c.align === "right" ? "ui-group-label ui-table-r" : "ui-group-label"} scope="col">
                 {c.label}
               </th>
             ))}

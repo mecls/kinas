@@ -10,13 +10,9 @@
   margin-top: var(--space-2);
 }
 
-/* The group's label. DESIGN.md 1.13 §2.5 sets it in capitals with the group-label style in slice 5. */
+/* The group's label: its type is .ui-group-label's (base.css, DESIGN.md §2.5, 1.13). */
 .ui-palette-label {
   padding: var(--space-2) var(--space-3) var(--space-1);
-  color: var(--ink-2);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
 }
 
 .ui-palette-row,

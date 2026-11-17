@@ -53,7 +53,7 @@ export function SearchRow({ chord, onClick }: { chord: string; onClick: () => vo
 }
 
 export function NavHeading({ children }: { children: ReactNode }) {
-  return <h4 className="ui-nav-h">{children}</h4>;
+  return <h4 className="ui-nav-h ui-group-label">{children}</h4>;
 }
 
 export type ConnectionState = "connected" | "stale" | "error";

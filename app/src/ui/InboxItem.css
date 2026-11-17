@@ -42,6 +42,12 @@
 .ui-inbox-context .ui-mono {
   font-size: inherit;
 }
+/* 1.13, the name leads: the question is the name; the line under it is one line, cut with an ellipsis. */
+.ui-inbox-context {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* 1.7: the reply box in place of the actions — a textarea, then the hint and Copy and go on one row. */
 .ui-inbox-item[data-state="answering"] {

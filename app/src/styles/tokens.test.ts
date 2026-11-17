@@ -48,6 +48,12 @@ const PAIRS: [text: string, ground: string, floor: number][] = [
   ["--ink", "--danger-soft", 4.5],
   ["--ink-2", "--ok-soft", 4.5],
   ["--ink-2", "--danger-soft", 4.5],
+  // A changed file's line counts (DESIGN.md 1.13): the two count tokens are text, on either ground.
+  ["--ok-ink", "--bg", 4.5],
+  ["--ok-ink", "--surface", 4.5],
+  ["--danger-ink", "--bg", 4.5],
+  ["--danger-ink", "--surface", 4.5],
+  ["--ink-2", "--surface-2", 4.5],
   ["--ok", "--bg", 3],
   ["--warn", "--bg", 3],
   ["--stale", "--bg", 3],
@@ -72,7 +78,8 @@ describe("the shape of tokens.css", () => {
     expect(clean).toContain(`@media ${DARK} {`);
     expect(light.size).toBeGreaterThan(80);
     expect(light.get("--bg")).toBe("#f4f2ec");
-    expect(darkOnly.get("--bg")).toBe("#14171e");
+    // 1.13 (the interface polish, slice 5): the dark ground is neutral; it was #14171e.
+    expect(darkOnly.get("--bg")).toBe("#0f0f0f");
     expect(ruleBlock(tokens, ":root")).toContain("color-scheme: light;");
     expect(ruleBlock(mediaBlock(tokens, DARK), ":root")).toContain("color-scheme: dark;");
     expect(clean).not.toContain("data-theme");
@@ -128,6 +135,39 @@ describe("the shape of tokens.css", () => {
     for (const family of ["Inter", "JetBrainsMono", "BricolageGrotesque"]) {
       expect(fonts, `${family}'s licence`).toContain(`${family}-OFL.txt`);
     }
+  });
+});
+
+describe("the dark theme is neutral (DESIGN.md 1.13, the interface polish)", () => {
+  /** "#a3a3a3" → [163, 163, 163]. */
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const NEUTRAL = ["--bg", "--surface", "--surface-2", "--line", "--line-strong", "--ink", "--ink-2", "--ink-3", "--meter", "--meter-track", "--term-bg", "--term-fg"];
+
+  test("dark is neutral: every dark surface and ink is a gray, R = G = B", () => {
+    for (const name of NEUTRAL) {
+      const value = darkOnly.get(name) ?? "missing";
+      const [r, g, b] = rgb(value);
+      expect(`${name} ${value} ${r === g && g === b ? "gray" : "tinted"}`).toBe(`${name} ${value} gray`);
+    }
+    expect(darkOnly.get("--scrim")).toBe("rgb(0 0 0 / 0.6)");
+  });
+
+  test("the terminal follows the neutral ground, and its three tracking slots follow their tokens", () => {
+    expect(darkOnly.get("--term-bg")).toBe(darkOnly.get("--bg"));
+    expect(darkOnly.get("--term-fg")).toBe(darkOnly.get("--ink"));
+    expect(darkOnly.get("--ansi-black")).toBe(darkOnly.get("--line"));
+    expect(darkOnly.get("--ansi-bright-black")).toBe(darkOnly.get("--ink-2"));
+    expect(darkOnly.get("--ansi-bright-white")).toBe(darkOnly.get("--term-fg"));
+  });
+
+  test("the accent, status and category colours keep their dark values", () => {
+    const KEPT: Record<string, string> = {
+      "--accent-ink": "#0e1420", "--ok": "#4fb37a", "--warn": "#d9a03a", "--danger": "#e5575e", "--stale": "#7c818d",
+      "--cat-1": "#5fa3b2", "--cat-2": "#9d88d6", "--cat-3": "#b08e70", "--cat-4": "#a3a85a", "--cat-5": "#cf7aa0", "--cat-6": "#7688b8",
+    };
+    for (const [name, value] of Object.entries(KEPT)) expect(`${name} ${darkOnly.get(name)}`).toBe(`${name} ${value}`);
+    expect(darkOnly.get("--ok-ink")).toBe(darkOnly.get("--ok"));
+    expect(darkOnly.get("--danger-ink")).toBe(darkOnly.get("--danger"));
   });
 });
 

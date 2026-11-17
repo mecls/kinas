@@ -97,9 +97,9 @@ describe("statusModel (rules 23–24)", () => {
 });
 
 describe("crew totals", () => {
-  test("needs you is the Inbox's count; failed counts CI red; finished work is left out", () => {
-    const c = crew([task("a", "working"), task("b", "working"), task("c", "failed"), task("d", "CI red"), task("e", "needs decision"), task("f", "failed", true), task("g", "done", true)], 1);
-    expect(crewTotals(c)).toEqual({ needsYou: 1, failed: 2, working: 2 });
+  test("the sidebar's three words over every task in flight; finished work is left out", () => {
+    const c = crew([task("a", "working"), task("b", "queued"), task("c", "failed"), task("d", "CI red"), task("e", "needs decision"), task("r", "ready"), task("f", "failed", true), task("g", "done", true)], 1);
+    expect(crewTotals(c)).toEqual({ needsYou: 2, failed: 2, working: 2 });
     expect(crewWords({ needsYou: 1, failed: 0, working: 2 }).map((w) => w.text)).toEqual(["1 needs you", "2 working"]);
     expect(crewWords({ needsYou: 0, failed: 0, working: 0 })).toEqual([]);
   });

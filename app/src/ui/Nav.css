@@ -59,6 +59,37 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* A row's chord (1.13, rule 9): out of the way until the row is pointed at or holds the focus. */
+.ui-nav > .ui-nav-chord {
+  display: none;
+  flex: none;
+  margin-left: auto;
+}
+.ui-nav > .ui-nav-chord::after {
+  content: attr(data-chord);
+}
+/* :focus, not :focus-visible: WebKit never focuses a clicked button, so focus here is the keyboard's (or a script's). */
+.ui-nav:hover > .ui-nav-chord,
+.ui-nav:focus > .ui-nav-chord {
+  display: inline-block;
+}
+/* After a count or a crew word, the chord sits beside it rather than pushing it. */
+.ui-nav-count + .ui-nav-chord,
+.ui-nav-end + .ui-nav-chord {
+  margin-left: var(--space-1h);
+}
+/* A client folder's crew word at its right (1.13, rule 20): the dot, then the words, never wrapped. */
+.ui-nav-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+}
 .ui-nav-count {
   margin-left: auto;
   font-family: var(--font-mono);

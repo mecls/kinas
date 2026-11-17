@@ -204,6 +204,56 @@
   min-width: 0;
 }
 
+/* The tasks in flight under a client folder (1.13, rule 21): one line each, indented under the folder's name — the dot,
+   the title cut with an ellipsis, the elapsed time in its largest unit, which keeps its room. "N more" opens Crew. */
+.sidebar-tasks {
+  margin: 0 0 var(--space-1);
+  padding: 0;
+  list-style: none;
+}
+
+.sidebar-task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  width: 100%;
+  height: var(--hit);
+  padding: 0 var(--space-2) 0 var(--space-6);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  text-align: left;
+  cursor: default;
+}
+
+.sidebar-task:hover {
+  background: var(--surface-2);
+}
+
+.sidebar-task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-task-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+}
+
+.sidebar-task-more {
+  color: var(--ink-2);
+}
+
 /* What can be done to a folder from its row (terminal, pin). Out of the layout — not merely unseen — until the row is
    pointed at or holds the focus, so a folder's name has the whole row the rest of the time; two reserved buttons
    would take 56 px of a 220 px sidebar from every folder. Tab reaches them: focus on the row brings them in. */

@@ -149,6 +149,26 @@ describe("the board, the PR and the task detail", () => {
       { name: "gamma-9c2e", chip: false, repo: "o/gamma-9c2e", counts: "1 in flight" },
     ]);
 
+    // The interface polish (rules 20–21): the sidebar says each client folder's crew word and lists its tasks in flight
+    // under it — alpha's working and queued tasks, matched by repository as the lanes are; a task line opens its detail.
+    const folders = JSON.parse(
+      (await browser.execute(() =>
+        JSON.stringify(
+          [...document.querySelectorAll(".sidebar-folders .sidebar-list > li")].map((li) => ({
+            name: li.querySelector(".ui-nav-label")?.textContent,
+            word: li.querySelector(".ui-nav-end")?.textContent ?? null,
+            tasks: [...li.querySelectorAll(".sidebar-task[data-task]")].map((t) => t.querySelector(".sidebar-task-title")?.textContent),
+          })),
+        ),
+      )) as string,
+    );
+    expect(folders).toEqual([
+      { name: "alpha-9c2e", word: "2 working", tasks: ["Alpha in flight 9c2e", "Alpha queued 9c2e"] },
+      { name: "beta-9c2e", word: "1 working", tasks: ["Beta in flight 9c2e"] },
+    ]);
+    await browser.execute(() => (document.querySelector('.sidebar-task[data-task="b1-9c2e"]') as HTMLElement).click());
+    await waitInPage(() => document.querySelector('aside.shell-panel[data-occupant="task"]:not([hidden]) .crew-detail[data-task="b1-9c2e"]') !== null, "a task line never opened its detail");
+
     await go("Usage");
     await waitInPage(() => document.querySelector('section[data-page="usage"] [data-section="crew"]') !== null, "Usage never showed the crew");
     const rows = JSON.parse(

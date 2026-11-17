@@ -18,6 +18,7 @@ import {
   Menu,
   NavHeading,
   NavItem,
+  Dot,
   PinIcon,
   SearchRow,
   PinOffIcon,
@@ -26,6 +27,7 @@ import {
   Wordmark,
 } from "../ui/index.ts";
 import { type Notice, NOTICE_MS } from "./notice.ts";
+import { FOLDER_WORD, type FolderState } from "./folderState.ts";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
@@ -71,6 +73,8 @@ export function Sidebar({
   crew = { installed: false, repos: [] },
   onAddToCrew = () => {},
   onSearch = () => {},
+  folderState = NO_STATES,
+  onTask = () => {},
 }: {
   hidden: boolean;
   page: Page;
@@ -104,6 +108,10 @@ export function Sidebar({
   onAddToCrew?: (folder: ProjectRow) => void;
   /** The search row under the wordmark: opens the palette (interface polish, rule 19). */
   onSearch?: () => void;
+  /** Each client folder's crew state, by its path (shell/folderState.ts, rules 20–21). */
+  folderState?: ReadonlyMap<string, FolderState>;
+  /** A task line under a folder: its detail in the right panel. "N more" opens the Crew page (`onGo`). */
+  onTask?: (id: string) => void;
 }) {
   const isPinned = (path: string) => pins.some((p) => p.path === path);
   // Called, not mounted: a function made on every render is harmless as a function and would remount as a component.
@@ -118,11 +126,11 @@ export function Sidebar({
       <Wordmark />
       <SearchRow chord={chord("palette")} onClick={onSearch} />
       <div className="sidebar-nav">
-        <NavItem icon={<HomeIcon />} label="Home" current={current("home")} onClick={() => onGo("home")} title={`Home (${chord("go.home")})`} />
-        <NavItem icon={<TerminalIcon />} label="Work" current={current("work")} onClick={() => onGo("work")} title={`Work (${chord("go.work")})`} />
-        <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} title={`Crew (${chord("go.crew")})`} />
-        <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={waiting} onClick={() => onGo("inbox")} title={`Inbox (${chord("go.inbox")})`} />
-        <NavItem icon={<GaugeIcon />} label="Usage" current={current("usage")} onClick={() => onGo("usage")} title={`Usage (${chord("go.usage")})`} />
+        <NavItem icon={<HomeIcon />} label="Home" current={current("home")} onClick={() => onGo("home")} title={`Home (${chord("go.home")})`} chord={chord("go.home")} />
+        <NavItem icon={<TerminalIcon />} label="Work" current={current("work")} onClick={() => onGo("work")} title={`Work (${chord("go.work")})`} chord={chord("go.work")} />
+        <NavItem icon={<CrewIcon />} label="Crew" current={current("crew")} onClick={() => onGo("crew")} title={`Crew (${chord("go.crew")})`} chord={chord("go.crew")} />
+        <NavItem icon={<InboxIcon />} label="Inbox" current={current("inbox")} count={waiting} onClick={() => onGo("inbox")} title={`Inbox (${chord("go.inbox")})`} chord={chord("go.inbox")} />
+        <NavItem icon={<GaugeIcon />} label="Usage" current={current("usage")} onClick={() => onGo("usage")} title={`Usage (${chord("go.usage")})`} chord={chord("go.usage")} />
       </div>
 
       <div className="sidebar-scroll">
@@ -173,6 +181,9 @@ export function Sidebar({
           onAdd={onAdd}
           crew={crew}
           onAddToCrew={onAddToCrew}
+          states={folderState}
+          onTask={onTask}
+          onCrew={() => onGo("crew")}
         />
       </div>
 
@@ -180,7 +191,7 @@ export function Sidebar({
       {/* The VPS line moved to the status bar (the interface polish, rule 22). */}
       {/* The last row, below the machine (folder views, 2026-09-23): out of the scrolling sections, always in view. */}
       <div className="sidebar-foot">
-        <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} />
+        <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} chord={chord("settings")} />
       </div>
     </nav>
   );
@@ -209,6 +220,9 @@ function ClientFolders({
   onAdd,
   crew,
   onAddToCrew,
+  states,
+  onTask,
+  onCrew,
 }: {
   projects: readonly ProjectRow[];
   folder: string | null;
@@ -219,6 +233,9 @@ function ClientFolders({
   onAdd: () => void;
   crew: CrewForMenu;
   onAddToCrew: (folder: ProjectRow) => void;
+  states: ReadonlyMap<string, FolderState>;
+  onTask: (id: string) => void;
+  onCrew: () => void;
 }) {
   const seated = seatFolders(projects);
   const shown = shownFolders(seated);
@@ -251,11 +268,20 @@ function ClientFolders({
       </div>
       <ul className="sidebar-list">
         {shown.map((p) => (
-          <li key={p.path} data-kind="dir" data-cat={p.cat} data-internal={p.internal ? "" : undefined} onContextMenu={(e) => open(e, p)}>
+          <li key={p.path} data-kind="dir" data-cat={p.cat} data-internal={p.internal ? "" : undefined} data-word={states.get(p.path)?.word} onContextMenu={(e) => open(e, p)}>
             <div className="sidebar-entry">
-              <NavItem chip={p.cat} label={p.name} tag={p.internal ? "internal" : undefined} current={p.path === folder} title={p.display} onClick={() => onOpen(p.path)} />
+              <NavItem
+                chip={p.cat}
+                label={p.name}
+                tag={p.internal ? "internal" : undefined}
+                current={p.path === folder}
+                title={p.display}
+                end={states.get(p.path) && <FolderWordView state={states.get(p.path)!} />}
+                onClick={() => onOpen(p.path)}
+              />
               {folderActions(p.path, p.name)}
             </div>
+            {states.get(p.path) && <FolderTasks state={states.get(p.path)!} onTask={onTask} onCrew={onCrew} />}
           </li>
         ))}
       </ul>
@@ -412,5 +438,45 @@ function SidebarNotice({ notice, panelOpen }: { notice: Notice | null; panelOpen
   if (!shown || panelOpen) return null;
   return (
     <Toast className="sidebar-notice">{shown.text}</Toast>
+  );
+}
+
+const NO_STATES: ReadonlyMap<string, FolderState> = new Map();
+
+/** A folder's most pressing word and its count, with its dot (rule 20): "1 needs you". */
+function FolderWordView({ state }: { state: FolderState }) {
+  const w = FOLDER_WORD[state.word];
+  return (
+    <>
+      <Dot color={w.color} kind={w.kind} />
+      {w.text(state.count)}
+    </>
+  );
+}
+
+/** Up to three tasks in flight under a folder, then "N more" (rule 21). A task opens its detail; "N more" the Crew. */
+function FolderTasks({ state, onTask, onCrew }: { state: FolderState; onTask: (id: string) => void; onCrew: () => void }) {
+  return (
+    <ul className="sidebar-tasks">
+      {state.tasks.map((t) => {
+        const w = FOLDER_WORD[t.word];
+        return (
+          <li key={t.id}>
+            <button type="button" className="sidebar-task" data-task={t.id} data-word={t.word} title={`${t.title} — ${t.elapsedTitle}`} onClick={() => onTask(t.id)}>
+              <Dot color={w.color} kind={w.kind} />
+              <span className="sidebar-task-title">{t.title}</span>
+              <span className="sidebar-task-time">{t.elapsed}</span>
+            </button>
+          </li>
+        );
+      })}
+      {state.more > 0 && (
+        <li>
+          <button type="button" className="sidebar-task sidebar-task-more" onClick={onCrew}>
+            {state.more} more
+          </button>
+        </li>
+      )}
+    </ul>
   );
 }

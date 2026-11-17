@@ -18,6 +18,8 @@ export function NavItem({
   count,
   tag,
   chip,
+  chord,
+  end,
   className,
   ...rest
 }: {
@@ -27,6 +29,10 @@ export function NavItem({
   count?: number;
   tag?: string;
   chip?: Category;
+  /** The row's chord, as bound now (1.13, rule 9): shown as a Kbd while the row is pointed at or focused. */
+  chord?: string;
+  /** What the row says at its right (1.13): a client folder's crew word. */
+  end?: ReactNode;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button type="button" className={className ? `ui-nav ${className}` : "ui-nav"} aria-current={current ? "page" : undefined} {...rest}>
@@ -34,6 +40,9 @@ export function NavItem({
       <span className="ui-nav-label">{label}</span>
       {count !== undefined && count > 0 && <span className="ui-nav-count">{count}</span>}
       {tag && <Tag>{tag}</Tag>}
+      {end && <span className="ui-nav-end">{end}</span>}
+      {/* Drawn from an attribute, so the row's text stays its name — the chord is in its title for a screen reader. */}
+      {chord && <kbd className="ui-kbd ui-nav-chord" data-chord={chord} aria-hidden="true" />}
     </button>
   );
 }

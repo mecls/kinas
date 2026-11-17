@@ -155,6 +155,38 @@ describe("the sidebar (DESIGN.md §3.1)", () => {
     expect(seen).toEqual({ reader: 0, panel: "closed" });
   });
 
+  // The interface polish, rule 9: each nav row and Settings carry the chord bound now, drawn while pointed at or focused,
+  // out of the row's text (its title says it), so a row's text stays its name.
+  it("every nav row carries its bound chord, shown on focus and hidden otherwise", async () => {
+    const seen = await browser.execute(() => {
+      const rows = [...document.querySelectorAll<HTMLButtonElement>(".sidebar-nav .ui-nav, .sidebar-foot .ui-nav")];
+      const shown = (b: HTMLElement) => getComputedStyle(b.querySelector(".ui-nav-chord")!).display;
+      const before = rows.map((b) => shown(b));
+      // The test window is not the Mac's active one (document.hasFocus() is false), and WebKit matches :focus only in an
+      // active window: the rule that shows the chord is read from the stylesheet instead of from a focused row.
+      const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]).filter((r): r is CSSStyleRule => r instanceof CSSStyleRule);
+      const showing = rules.find((r) => r.selectorText.includes(".ui-nav:focus > .ui-nav-chord") && r.selectorText.includes(".ui-nav:hover > .ui-nav-chord"));
+      const workFocused = showing?.style.display ?? "no rule";
+      return {
+        chords: rows.map((b) => [b.querySelector(".ui-nav-label")?.textContent, b.querySelector(".ui-nav-chord")?.getAttribute("data-chord")]),
+        texts: rows.map((b) => b.textContent),
+        before,
+        workFocused,
+      };
+    });
+    expect(seen.chords).toEqual([
+      ["Home", "⌘1"],
+      ["Work", "⌘2"],
+      ["Crew", "⌘3"],
+      ["Inbox", "⌘5"],
+      ["Usage", "⌘4"],
+      ["Settings", "⌘,"],
+    ]);
+    expect(seen.texts).toEqual(["Home", "Work", "Crew", "Inbox", "Usage", "Settings"]);
+    expect(seen.before.every((d) => d === "none")).toBe(true);
+    expect(seen.workFocused).toBe("inline-block");
+  });
+
   // The interface polish, rule 19: under the wordmark, a search row with the palette's chord; a click opens the palette.
   it("the search row under the wordmark opens the palette", async () => {
     const seen = await browser.execute(() => {

@@ -582,6 +582,19 @@ export const STORIES: Story[] = [
         ),
       },
       {
+        // 1.13 (the interface polish, rules 20–21): a client folder's most pressing crew word at its right; the task lines
+        // under it are the sidebar's own (shell/Sidebar.tsx), not a library piece.
+        name: "live-folders",
+        node: (
+          <div style={{ width: "var(--sidebar-w)", display: "flex", flexDirection: "column", gap: "var(--space-0)" }}>
+            <NavItem chip={1} label="northwind" end={<><Dot color="--warn" kind="ring" />1 needs you</>} />
+            <NavItem chip={4} label="globex" end={<><Dot color="--meter" />2 working</>} />
+            <NavItem chip={3} label="initech" end={<><Dot color="--danger" />1 failed</>} />
+            <NavItem chip={5} label="kinas" tag="internal" />
+          </div>
+        ),
+      },
+      {
         // The four drawn beyond the preview's sprite, for the sidebar's folder rows (icons.tsx): refresh since 1.6.
         name: "folder-icons",
         node: (

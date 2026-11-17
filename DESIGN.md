@@ -279,7 +279,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | EmptyState | with-action, plain |
 | TerminalChrome | working, shell, first-mate |
 | Panel | task-detail |
-| Nav | sidebar, folder-icons, reader-icons |
+| Nav | sidebar, live-folders, folder-icons, reader-icons |
 | Menu | plain, disabled, divider |
 | TabStrip | plain, many, dragging, same-name |
 | TitleBar | start, back-and-forward, sidebar-hidden, fullscreen |

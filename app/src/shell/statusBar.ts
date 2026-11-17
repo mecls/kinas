@@ -6,6 +6,7 @@ import type { Tone } from "../ui/Bar.tsx";
 import * as convex from "../usage/convex.ts";
 import { asOf, PROVIDER_LABEL, resetsCaption, tone, usedPct, WINDOW_LABEL } from "../usage/format.ts";
 import { connectionOf, type Connection } from "./connection.ts";
+import { crewCounts } from "./folderState.ts";
 
 // The status bar's words (tasks/interface-polish, PRD rules 23–25; DESIGN.md §4 Status bar and Usage popover, 1.13):
 // pure, from App's one usage snapshot and its one crew reading, so the bar never disagrees with Home, Usage or the
@@ -43,15 +44,12 @@ function barTone(q: QuotaView): BarReading["tone"] {
   return t === "meter" ? null : t;
 }
 
-/** The crew as the bar counts it: what waits on the captain (the Inbox's count), what failed, what is working. */
+/** The crew as the bar counts it, with the sidebar's three words (shell/folderState.ts, rule 20), over every task in
+ * flight — so the bar and the folders never disagree. */
 export function crewTotals(crew: CrewSnapshot | null): CrewTotals | null {
   if (!crew || crew.page === "uninstalled") return null;
-  const live = crew.tasks.filter((t) => !t.finished);
-  return {
-    needsYou: crew.waiting,
-    failed: live.filter((t) => t.word === "failed" || t.word === "CI red").length,
-    working: live.filter((t) => t.word === "working").length,
-  };
+  const counts = crewCounts(crew.tasks);
+  return { needsYou: counts["needs-you"], failed: counts.failed, working: counts.working };
 }
 
 /** "1 needs you · 1 failed · 2 working", nothing for a zero; "" when every count is zero. */

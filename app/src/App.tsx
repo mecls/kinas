@@ -43,6 +43,7 @@ import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Short
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { back, canBack, canForward, EMPTY_HISTORY, forward, type History, patchScroll, type Place, readerAtOf, record, samePlace } from "./shell/history.ts";
 import { addedLine, seatFolders } from "./shell/folders.ts";
+import { folderStates, type FolderState } from "./shell/folderState.ts";
 import { SETTINGS } from "./settings/index.ts";
 import type { Notice } from "./shell/notice.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
@@ -553,6 +554,8 @@ export function App() {
   );
 
   const folders = useMemo(() => seatFolders(projects), [projects]);
+  // Each client folder's crew state for the sidebar (rules 20–21), from the one crew reading the board shows.
+  const folderStateMap = useMemo(() => (crew ? folderStates(crew.tasks, folders, crew.now) : new Map<string, FolderState>()), [crew, folders]);
 
   // An Inbox answer (§11.3 Answering; ADR 0017): Rust puts the line on the clipboard, then runs the launcher; the Work
   // page shows with the terminal holding the keys, and the notice says what to paste. A refusal says why in the
@@ -721,6 +724,8 @@ export function App() {
         crew={{ installed: !!crew && crew.page !== "uninstalled", repos: crew?.crew_repos ?? [] }}
         onAddToCrew={(f) => void addFolderToCrew(f)}
         onSearch={() => setPalette(true)}
+        folderState={folderStateMap}
+        onTask={openTask}
       />
       <div className="stage" ref={split.row} data-dragging={split.isDragging ? "" : undefined}>
         <main className="content">

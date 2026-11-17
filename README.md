@@ -5,7 +5,7 @@ The operating system for a company that runs on AI agents. Local first, one pers
 
 Kinas is a Mac app with the kinas CLI inside it. It gives one developer a single place to work: a Home page that says what happened overnight and what needs you, a terminal pane with Herdr and the crew, a usage page that shows what every provider subscription and this machine are doing, and, as the agents move in, the run feed, the approvals that reach your phone, and the deployer that ships client changes with rollback.
 
-Everything runs on your Mac. No server, no SSH, no API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows locally.
+Everything runs on your Mac by default. No API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows. Amended 2026-11-17 (the factory in the cloud, ADR 0021): you may instead run every agent on one VPS you rent, which Kinas reaches over SSH with your own key, and a private page on your phone shows what waits on you and answers it — see **Agents on a VPS**. Kinas never buys or provisions a server and holds no key for it.
 
 Kinas is built as a castle: it decides the contracts, the doors, the gates, and the record. Everything inside is a seam you fill with your own tools: the harness, the store, the session runtime, the build conductor, the review loop, the channel, the providers. Defaults are shipped for every seam and none is required (`docs/adr/0013-v1-is-local-seams-swap.md`).
 
@@ -190,6 +190,31 @@ by asking the first mate, and Settings → Crew says which are on. Kinas now run
 `fm-capacity.sh --json`, only while the lane cap names no `quota-provider`; and at this pin the snapshot itself may
 note, for a `local-only` project, the commit that will land — Firstmate's own write, which ADR 0020 accepts.
 
+## Agents on a VPS
+
+Added 2026-11-17 (the factory in the cloud; ADRs 0021–0023; each part lands with its slice of
+`tasks/cloud-factory/`). Settings → **Where agents run** chooses this Mac (the default, everything as above) or a VPS:
+a Linux machine you rent and can already reach with `ssh` and your key. With a VPS, every agent session runs there —
+Herdr's `default` session with your own Claude Code and Pi sessions, and the crew — and the Mac runs Kinas only: the
+Work page attaches the VPS's Herdr session (`herdr --remote`), and the crew pages, the Inbox and Usage read the VPS
+through **`kinas companion`**, a small part of Kinas that runs there as your user, all the time, under systemd.
+
+- **One door.** The app reaches the VPS only with `ssh <target> kinas companion rpc`, the request on stdin. It holds no
+  key (OpenSSH and your agent do), never runs anything as root, and never creates, sizes or deletes a server.
+- **Setup.** Settings prints one command to run on the VPS that installs the companion (its SHA-256 shown); after that
+  each piece — Herdr, Firstmate at the pin, the crew's tools, the services, your client folders — is installed with
+  one yes. Claude Code and `gh` you sign in yourself, in the VPS's terminal, with your own subscription.
+  `ANTHROPIC_API_KEY` must not be set there; Settings says so in red if it is.
+- **Answers.** With a VPS, Approve, Answer and Deny deliver your words as a note in Firstmate's inbox (ADR 0022); the
+  first mate wakes and acts on them as on the same words typed in its chat. The item says when it was answered and
+  when the first mate read it.
+- **The phone.** A private page added to your phone's home screen, paired once with a code from Settings: Home, Inbox,
+  Crew and Factory, a notification when the first mate needs you, and answers from there. It reads a Convex store in
+  the EU that holds only summaries — titles, questions, words, counts, times — never code, paths or transcripts (ADR
+  0023).
+- **The Factory page** (⌘6) measures the week from what the crew recorded: tasks merged, dispatch-to-merge time, how
+  long things waited on you, how often they went red, and how much happened while you were away from the Mac.
+
 ## Appearance
 
 Kinas draws on one of two grounds: the dark one, or warm white with royal blue — the two fields of the palette
@@ -234,6 +259,10 @@ pane that paints its own 24-bit dark theme does not follow; Claude Code, for one
 | `KINAS_E2E_CREW_COMMAND=<path>` | debug | The launcher runs this program in the first mate's pane instead of `claude`, with the same arguments — a stand-in that records them (added 2026-09-24, the first mate) |
 | `KINAS_E2E_CLIPBOARD_FILE=<path>` | debug | Text Kinas puts on the clipboard — the pane's copies and the Inbox's answer lines — is written to this file instead, and the Mac's clipboard is left alone (added 2026-09-25, the first mate) |
 | `KINAS_E2E_TOOL_DIR=<path>` | debug | The crew's tools are looked for only there and in the system's own folders (`/usr/bin`, `/bin`, …), never on the login shell's `PATH` — stub tools for the crew specs (added 2026-09-24, the first mate) |
+| `KINAS_COMPANION_ROOT=<path>` | all (companion) | Where `kinas companion` keeps its state and finds Firstmate's home, instead of `~/.local/state/kinas` and `~/.local/share/kinas/firstmate` (added 2026-11-17, the factory in the cloud) |
+| `KINAS_COMPANION_CLOUD=file:<path>` | all (companion) | The companion writes its cloud calls to that file instead of Convex — a local fake (added 2026-11-17) |
+| `KINAS_E2E_SSH=<path>` | debug | The door runs this program instead of `/usr/bin/ssh`, with the same argv and stdin — a stub that runs the companion locally (added 2026-11-17) |
+| `KINAS_E2E_HERDR_REMOTE=local` | debug | With a VPS set, the Work page attaches the local throwaway session instead of `herdr --remote` (added 2026-11-17) |
 
 The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug builds with the `e2e` feature and
 `TAURI_ENV_DEBUG`; release builds contain neither.

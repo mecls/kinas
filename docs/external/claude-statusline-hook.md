@@ -22,3 +22,5 @@ Nothing beyond writing that one file with a `jq` projection of the status-line i
 - A `refreshInterval` in the status-line config: a timer re-run would stamp old numbers as fresh.
 - Kinas reading anything else under `~/.claude` — not the credential, not the settings — and never calling Anthropic. The same rule is why Kinas never runs `quota-axi` (see `firstmate-home.md`).
 - Kinas writing under `~/.claude`: the hook is installed by the captain, by hand.
+
+Amended 2026-11-17 (the factory in the cloud): with a VPS set, Claude Code runs there, so the hook is installed on the VPS by the captain, writing `~/.local/state/kinas/claude-rate-limits.json`; `kinas companion` passes the file's contents to the Mac verbatim, and the rules above hold on that machine.

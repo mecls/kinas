@@ -1,7 +1,7 @@
 # 0020 · The first mate is Firstmate at its current pin; Kinas runs only four of its scripts, accepts the snapshot's own latch, and reads under its home only what is listed here
 
 Date: 2026-11-16
-Status: accepted
+Status: superseded by 0022
 
 ## Context
 

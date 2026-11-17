@@ -1,0 +1,41 @@
+# Kinas's cloud: the summaries store and the phone page
+
+## What it is
+
+The two hosted pieces that let the phone see the factory and answer the first mate while the Mac is closed (ADR 0023):
+a Convex deployment that holds only summaries, and a static web page the captain adds to the phone's home screen,
+which notifies through Web Push.
+
+## Where
+
+- **Convex** — a project in Miraside's team, region `aws-eu-west-1` (Ireland); the code in `cloud/convex/`. A **dev**
+  deployment first; production only on the captain's word. Environment variable **names** in the deployment:
+  `COMPANION_SECRET_SHA256`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
+- **The phone page** — static files built from `cloud/phone/`, hosted on Vercel in Miraside's team; the build reads
+  `VITE_CONVEX_URL` and `VITE_VAPID_PUBLIC_KEY`.
+- **On the VPS** — `~/.config/kinas/companion.env` (0600): `CONVEX_URL`, `KINAS_COMPANION_SECRET` (`vps.md`).
+- **Deploying** — `npx convex deploy` from the Mac with `CONVEX_DEPLOY_KEY` in that command's environment only, never
+  saved by Kinas; this is a different key from the usage reader's (`convex-deploy-key.md`).
+- **Web Push** — Apple's push service (`*.push.apple.com`) for a home-screen web app on iOS 16.4 or later; standard
+  push services for other browsers.
+
+## Who reads it
+
+- `cli/src/companion/cloud.ts` — writes the reading summary, the heartbeat, the factory's events and pairings; takes
+  pending answers and settles them.
+- `cloud/convex/` — its own functions and crons: expire answers older than 60 s, watch the heartbeat, send pushes.
+- The phone page — reads the summary, the inbox and the weeks; submits answers; pairs; subscribes to pushes.
+- The Mac app — nothing: it reads the VPS through the companion, not the cloud.
+
+## What it can do
+
+Hold and serve the summaries of ADR 0023's list, and send a notification to a paired phone. The companion's secret can
+write every companion table; a device token can only answer, finish its own pairing and store its own subscription.
+
+## Never
+
+- Any field outside ADR 0023's list — code, diffs, briefs, reports, transcripts, paths, branch names, logs, keys.
+- A secret's or token's value stored in the deployment, the repository, a fixture, the Mac's store or a log: only
+  SHA-256 hashes are stored; the VAPID private key lives only in the deployment's environment.
+- A production deployment, a new region, or a public page without pairing, without the captain's word.
+- Deleting factory events.

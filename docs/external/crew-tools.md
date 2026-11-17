@@ -42,3 +42,5 @@ On the login shell's `PATH` (`~/.local/bin`, npm's global prefix — under nvm o
 - Run a tool's `setup hooks`: setup prints the line for the captain to run.
 - Run `quota-axi` from Kinas, even for its version (ADR 0018).
 - Move a version or a floor without moving the Firstmate pin, and the pin only with the captain.
+
+Amended 2026-11-17 (the factory in the cloud): on a VPS the same tools are installed by `kinas companion install`, one yes each from Settings, as the captain's user — the npm tools at their exact versions, `treehouse`, `no-mistakes` and Herdr from their releases for `linux-x64` or `linux-arm64` with their own pinned checksums, and the Kinas CLI for Linux from the installed Kinas's release.

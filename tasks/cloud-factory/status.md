@@ -8,7 +8,8 @@
     DESIGN.md gains that variant.
 - Gate 2 · Architecture: APPROVED 2026-11-17 — `architecture.md` (private, main checkout), approved as written, with
   its seven least-sure points standing; it records ADRs 0021–0023 to be written in slice 0, docs first
-- Gate 3 · Program design: in progress
+- Gate 3 · Program design: in progress — `build-spec.md` §0–§11 (private, main checkout), §11.5's nine least-sure
+  decisions
 - Gate 4 · Slice plan: pending
 
 ## Slices

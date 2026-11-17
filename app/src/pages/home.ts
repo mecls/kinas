@@ -37,7 +37,14 @@ export interface AttentionRow {
 /** Danger first, then what is dead or failing, then warn, then stale. */
 const RANK: Record<string, number> = { danger: 0, dead: 1, warn: 2, stale: 3 };
 
-export function attention(s: UsageSnapshot): AttentionRow[] {
+/**
+ * What Home lists under Needs attention. `hero`: the three gauges drawn above it — their readings are left out, a dead
+ * one included, so a gauge is never said twice (the interface polish, rule 28).
+ */
+export function attention(s: UsageSnapshot, hero: readonly HeroSlot[] = []): AttentionRow[] {
+  const shown = new Set(hero.filter((h) => h.quota).map((h) => `${h.subscription}/${h.window}`));
+  // A provider with no reading at all has its dead gauge above: its "no reading" row is that gauge's.
+  const unread = new Set<string>(hero.filter((h) => !h.quota).map((h) => h.subscription));
   const rows: (AttentionRow & { rank: number })[] = [];
   const reader = (id: ReaderId) => s.readers.find((r) => r.reader === id);
   const dead = (key: string, label: string, why: string) => rows.push({ key, label, used: null, value: "—", unit: why, tone: "meter", rank: RANK.dead! });
@@ -89,6 +96,7 @@ export function attention(s: UsageSnapshot): AttentionRow[] {
   }
 
   return rows
+    .filter((row) => !shown.has(row.key) && !unread.has(row.key))
     .map((row, i) => ({ row, i }))
     .sort((a, b) => a.row.rank - b.row.rank || a.i - b.i)
     .map(({ row: { rank: _rank, ...row } }) => row);

@@ -26,7 +26,8 @@ const claudeLine = (id: string, at: number, model: string, input: number, output
     message: { id, model, usage: { input_tokens: input, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: output } },
   });
 
-export function setup(dataDir: string): Record<string, string> {
+/** `ollamaWeekUsage`: the Ollama week's fraction used, in place of the fixture's (Home's specs raise it). */
+export function setup(dataDir: string, opts: { ollamaWeekUsage?: number } = {}): Record<string, string> {
   const now = Date.now();
   const claude = join(dataDir, "claude");
   const pi = join(dataDir, "pi");
@@ -61,7 +62,13 @@ export function setup(dataDir: string): Record<string, string> {
     }),
   );
 
-  const body = readFileSync(join(import.meta.dir, "../../fixtures/ollama-usage-legacy.synthetic.json"), "utf8");
+  const fixture = readFileSync(join(import.meta.dir, "../../fixtures/ollama-usage-legacy.synthetic.json"), "utf8");
+  const body =
+    opts.ollamaWeekUsage === undefined
+      ? fixture
+      : JSON.stringify(
+          ((v: { limits: { weekly: { usage: number } } }) => ((v.limits.weekly.usage = opts.ollamaWeekUsage!), v))(JSON.parse(fixture) as { limits: { weekly: { usage: number } } }),
+        );
   const convexBody = readFileSync(join(import.meta.dir, "../../fixtures/convex-usage.synthetic.json"), "utf8");
   const vpsBody = readFileSync(join(import.meta.dir, "../../fixtures/hostinger-vms.synthetic.json"), "utf8");
   const vpsMetricsBody = readFileSync(join(import.meta.dir, "../../fixtures/hostinger-metrics.synthetic.json"), "utf8");

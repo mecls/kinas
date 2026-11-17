@@ -129,3 +129,17 @@ describe("heroSlots", () => {
     ]);
   });
 });
+
+describe("attention leaves out the heroes (the interface polish, rule 28)", () => {
+  test("the Claude session at 97 % is not in attention when it is a hero gauge; the Ollama week, not a hero, still is", () => {
+    const s = snapshot({ quotas: [quota("claude-plan", "week", 24), quota("claude-plan", "session", 97), quota("ollama-cloud", "session", 2.5), quota("ollama-cloud", "week", 91)] });
+    expect(summary(s).map((r) => r[0])).toEqual(["Claude · session", "Ollama · week"]);
+    expect(attention(s, heroSlots(s)).map((r) => [r.label, r.tone])).toEqual([["Ollama · week", "warn"]]);
+  });
+
+  test("a hero with no reading is its dead gauge, not a row; a dead hero quota is not repeated either", () => {
+    const s = snapshot({ quotas: [quota("claude-plan", "week", 24, { state: "dead" }), quota("claude-plan", "session", 30)] });
+    expect(attention(s).map((r) => r.key)).toEqual(["claude-plan/week", "ollama-cloud"]);
+    expect(attention(s, heroSlots(s))).toEqual([]);
+  });
+});

@@ -22,9 +22,9 @@ const PAGES: { page: "home" | "usage" | "settings"; key: string; contract: [sele
     contract: [
       ['section[data-page="home"] .ui-titlerow h1', ["font-family", "font-size", "line-height", "font-weight", "color"]],
       ['section[data-page="home"] .ui-titlerow .ui-button[data-kind="primary"]', ["background-color", "color", "height", "border-radius"]],
-      ['section[data-page="home"] .ui-plist', ["background-color", "border-top-color", "border-radius"]],
-      ['section[data-page="home"] .ui-progress-row', ["min-height", "color"]],
-      ['section[data-page="home"] .ui-progress-event', ["color", "font-size"]],
+      // The interface polish (rule 27): with no work overnight, the folders are one line, each a link.
+      ['section[data-page="home"] .home-quiet', ["color", "font-size", "line-height"]],
+      ['section[data-page="home"] .home-quiet-folder', ["color", "font-weight"]],
       ['section[data-page="home"] [data-section="waiting"] .ui-empty', ["color", "border-top-style", "background-color"]],
       ['section[data-page="home"] [data-section="usage"] .ui-caption', ["color", "font-size"]],
       ['section[data-page="home"] .ui-gauge', ["background-color", "border-top-color", "border-radius"]],
@@ -132,7 +132,8 @@ describe("the screens (AC-9)", () => {
       async () =>
         browser.execute(
           () =>
-            document.querySelectorAll('section[data-page="home"] [data-attention][data-tone="danger"]').length > 0 &&
+            // The interface polish (rule 28): the 97 % is on its gauge, no longer repeated under Needs attention.
+            document.querySelector('section[data-page="home"] .ui-gauge[data-window="session"] .ui-bar[data-tone="danger"]') !== null &&
             document.querySelectorAll('section[data-page="home"] [data-folder]').length === 2 &&
             document.querySelector('section[data-page="usage"] [data-section="convex-month"] .ui-metric-row') !== null &&
             document.querySelector('section[data-page="usage"] [data-section="hostinger"] .ui-card-title') !== null &&

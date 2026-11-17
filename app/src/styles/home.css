@@ -25,3 +25,34 @@
 .home-read-error {
   margin-bottom: var(--space-3);
 }
+
+/* Overnight's quiet folders (1.13, rule 27): one line after the busy rows — the words, then each folder's chip and name,
+   a link that opens it in the reader. With no work anywhere it is the whole section. */
+.home-quiet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
+.home-quiet-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1h);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: default;
+}
+
+.home-quiet-folder:hover,
+.home-quiet-folder[aria-current="true"] {
+  color: var(--accent);
+}

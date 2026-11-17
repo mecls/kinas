@@ -60,7 +60,9 @@ describe("the Usage page", () => {
     // The legend lists providers only; the models are in the tooltip and the tables (DESIGN.md §5 Usage).
     const legend = await $$(".legend li").map((li) => li.getText());
     expect(legend).toEqual(["Anthropic", "Ollama"]);
-    expect((await $$("rect[data-nodata]")).length).toBe(26);
+    // The interface polish (rule 30): the chart spans its data. The first transcript is three days old, so it draws the
+    // 7-day floor with three days hatched (it drew 30 days, 26 of them hatched, before).
+    expect((await $$("rect[data-nodata]")).length).toBe(3);
     await expect($(".chart-note*=No data before")).toBeDisplayed();
   });
 

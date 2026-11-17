@@ -3,7 +3,7 @@ import type { CrewDecision, CrewSnapshot, ProjectRow, UsageSnapshot } from "../a
 import { ageText, copiedText, heldLine, titleOf } from "../crew/inbox.ts";
 import { useCleared } from "../crew/useCleared.ts";
 import { seatFolders, shownFolders } from "../shell/folders.ts";
-import { Button, EmptyState, Gauge, Gauges, InboxItem, MetricRow, ProgressList, ProgressRow, Rows, Section, SectionHeader, TitleRow } from "../ui/index.ts";
+import { Button, Chip, EmptyState, Gauge, Gauges, InboxItem, MetricRow, ProgressList, ProgressRow, Rows, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
 import { PROVIDER_LABEL, WINDOW_LABEL } from "../usage/format.ts";
 import { asOfOldest, QuotaGauge } from "../usage/QuotaGauge.tsx";
@@ -68,6 +68,12 @@ export function HomePage({
   const cleared = useCleared("overnight", active, onReloadCrew);
   const tasks = useMemo(() => (crew ? cleared.onScreen(crew.tasks) : []), [crew, cleared, active]);
   const night = withCrew ? overnightRows(folders, tasks, crew.overnight_since, crew.decisions) : [];
+  // Rule 27: a row for each folder with work in the night; the rest share one line after them.
+  const busy = folders.flatMap((f, i) => {
+    const r = night[i];
+    return r?.event ? [{ f, r: { ...r, event: r.event } }] : [];
+  });
+  const quiet = folders.filter((_, i) => !night[i]?.event);
   const counted = night.flatMap((r) => r.counted).join(" ");
   useEffect(() => {
     const ids = new Set(counted.split(" "));
@@ -104,29 +110,51 @@ export function HomePage({
         ) : folders.length === 0 ? (
           <EmptyState>No client folder is shown. Settings → Client folders shows them again.</EmptyState>
         ) : (
-          <ProgressList label="Client folders">
-            {folders.map((f, i) => {
-              const r = night[i];
-              return (
-                <ProgressRow
-                  key={f.path}
-                  cat={f.cat}
-                  name={f.name}
-                  internal={f.internal}
-                  event={r?.event ?? "No work overnight in this folder."}
-                  seg={r?.seg ?? undefined}
-                  badges={r?.badges}
-                  selected={f.path === folder}
-                  // A row with work overnight opens the task that matters; a quiet one opens the folder, as before.
-                  onSelect={() => (r?.target ? onSelectTask(r.target) : onOpen(f.path))}
-                  title={f.display}
-                  data-folder={f.name}
-                  data-cat={f.cat}
-                  data-target={r?.target ?? undefined}
-                />
-              );
-            })}
-          </ProgressList>
+          <>
+            {busy.length > 0 && (
+              <ProgressList label="Client folders">
+                {busy.map(({ f, r }) => (
+                  <ProgressRow
+                    key={f.path}
+                    cat={f.cat}
+                    name={f.name}
+                    internal={f.internal}
+                    event={r.event}
+                    seg={r.seg ?? undefined}
+                    badges={r.badges}
+                    selected={f.path === folder}
+                    // A row with work overnight opens the task that matters, else the folder.
+                    onSelect={() => (r.target ? onSelectTask(r.target) : onOpen(f.path))}
+                    title={f.display}
+                    data-folder={f.name}
+                    data-cat={f.cat}
+                    data-target={r.target ?? undefined}
+                  />
+                ))}
+              </ProgressList>
+            )}
+            {quiet.length > 0 && (
+              // The interface polish (rule 27): the folders with no work share one line, each a link to the folder.
+              <p className="home-quiet" data-testid="home-quiet">
+                <span>No work overnight in</span>
+                {quiet.map((f) => (
+                  <button
+                    key={f.path}
+                    type="button"
+                    className="home-quiet-folder"
+                    title={f.display}
+                    aria-current={f.path === folder ? "true" : undefined}
+                    data-folder={f.name}
+                    data-cat={f.cat}
+                    onClick={() => onOpen(f.path)}
+                  >
+                    <Chip cat={f.cat} />
+                    {f.name}
+                  </button>
+                ))}
+              </p>
+            )}
+          </>
         )}
       </Section>
 
@@ -207,7 +235,7 @@ function HomeUsage({ snapshot, error, onOpenUsage }: { snapshot: UsageSnapshot |
   const reader = (id: "claude-plan" | "ollama-cloud") => snapshot.readers.find((r) => r.reader === id);
   const slots = heroSlots(snapshot);
   const readings = slots.flatMap((s) => (s.quota ? [s.quota] : []));
-  const rows = attention(snapshot);
+  const rows = attention(snapshot, slots);
   // The snapshot could not be read again: these are the last good numbers, said as the Usage page says it (ADR 0004).
   const stale = failedRead("usage", error, true);
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { UsageDay } from "../api.ts";
-import { AXIS_LABEL_W, axisLabelDays, buildChart, niceTicks, periodRows, providerLabel, providerSlot } from "./chartModel.ts";
+import { AXIS_LABEL_W, axisLabelDays, buildChart, CHART_MIN_DAYS, chartDays, niceTicks, periodRows, providerLabel, providerSlot } from "./chartModel.ts";
 
 const row = (date: string, model: string, tokens_in: number, tokens_out: number, tokens_cache_read = 0, harness: UsageDay["harness"] = "claude-code"): UsageDay => ({
   date,
@@ -127,5 +127,30 @@ describe("a provider's name is the transcript's word", () => {
     expect(buildChart({ usage, days, first_usage_date: "2026-09-12" }, false).series.map((s) => s.label)).toEqual(["__proto__"]);
     // Positive control: a known provider still reads in its own words.
     expect(providerLabel("anthropic")).toBe("Anthropic");
+  });
+});
+
+describe("the chart spans the data (the interface polish, rule 30)", () => {
+  /** The 30 days of today, oldest first, ending on 2026-11-17. */
+  const thirty = Array.from({ length: 30 }, (_, i) => new Date(Date.UTC(2026, 10, 17 - 29 + i)).toISOString().slice(0, 10));
+
+  test("trims to the data: first data 3 days ago draws 7 days, 3 of them hatched", () => {
+    const first = thirty[26]!; // 2026-11-14, three days before today
+    const model = buildChart({ usage: [row(first, "opus", 1, 1)], days: thirty, first_usage_date: first }, false);
+    expect(model.days).toHaveLength(CHART_MIN_DAYS);
+    expect(model.days[0]!.date).toBe("2026-11-11");
+    expect(model.days.filter((d) => d.noData)).toHaveLength(3);
+  });
+
+  test("first data 20 days ago draws 21 days, none hatched; 40 days ago draws all 30", () => {
+    expect(chartDays(thirty, thirty[9]!)).toHaveLength(21);
+    expect(buildChart({ usage: [], days: thirty, first_usage_date: thirty[9]! }, false).days.some((d) => d.noData)).toBe(false);
+    expect(chartDays(thirty, "2026-10-08")).toEqual(thirty);
+  });
+
+  test("no data ever draws the last week, hatched; data from today alone is still a week", () => {
+    expect(chartDays(thirty, null)).toEqual(thirty.slice(-CHART_MIN_DAYS));
+    expect(chartDays(thirty, thirty[29]!)).toHaveLength(CHART_MIN_DAYS);
+    expect(chartDays(["2026-11-16", "2026-11-17"], null)).toEqual(["2026-11-16", "2026-11-17"]);
   });
 });

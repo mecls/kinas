@@ -74,7 +74,7 @@ export function UsageChart({ snapshot }: { snapshot: UsageSnapshot }) {
       )}
 
       <div className="chart-wrap" ref={wrap} onMouseLeave={() => setHover(null)}>
-        <svg className="chart-svg" width={width} height={HEIGHT} role="img" aria-label="Tokens per day for the last 30 days">
+        <svg className="chart-svg" width={width} height={HEIGHT} role="img" aria-label={`Tokens per day for the last ${model.days.length} days`}>
           <defs>
             <pattern id="kinas-no-data" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <line className="chart-hatch" x1="0" y1="0" x2="0" y2="6" />

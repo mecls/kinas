@@ -1,5 +1,14 @@
 {
   "light": {
+    "section[data-page=\"home\"] .home-quiet": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "13px",
+      "line-height": "20px"
+    },
+    "section[data-page=\"home\"] .home-quiet-folder": {
+      "color": "rgb(27, 31, 39)",
+      "font-weight": "500"
+    },
     "section[data-page=\"home\"] .ui-gauge": {
       "background-color": "rgb(255, 255, 255)",
       "border-radius": "10px",
@@ -9,19 +18,6 @@
       "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
       "font-size": "28px",
       "font-weight": "500"
-    },
-    "section[data-page=\"home\"] .ui-plist": {
-      "background-color": "rgb(255, 255, 255)",
-      "border-radius": "10px",
-      "border-top-color": "rgb(227, 223, 213)"
-    },
-    "section[data-page=\"home\"] .ui-progress-event": {
-      "color": "rgb(91, 97, 112)",
-      "font-size": "12px"
-    },
-    "section[data-page=\"home\"] .ui-progress-row": {
-      "color": "rgb(27, 31, 39)",
-      "min-height": "56px"
     },
     "section[data-page=\"home\"] .ui-rows-title": {
       "color": "rgb(91, 97, 112)",
@@ -55,6 +51,15 @@
     }
   },
   "dark": {
+    "section[data-page=\"home\"] .home-quiet": {
+      "color": "rgb(163, 163, 163)",
+      "font-size": "13px",
+      "line-height": "20px"
+    },
+    "section[data-page=\"home\"] .home-quiet-folder": {
+      "color": "rgb(237, 237, 237)",
+      "font-weight": "500"
+    },
     "section[data-page=\"home\"] .ui-gauge": {
       "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
@@ -64,19 +69,6 @@
       "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
       "font-size": "28px",
       "font-weight": "500"
-    },
-    "section[data-page=\"home\"] .ui-plist": {
-      "background-color": "rgb(23, 23, 23)",
-      "border-radius": "10px",
-      "border-top-color": "rgb(39, 39, 39)"
-    },
-    "section[data-page=\"home\"] .ui-progress-event": {
-      "color": "rgb(163, 163, 163)",
-      "font-size": "12px"
-    },
-    "section[data-page=\"home\"] .ui-progress-row": {
-      "color": "rgb(237, 237, 237)",
-      "min-height": "56px"
     },
     "section[data-page=\"home\"] .ui-rows-title": {
       "color": "rgb(163, 163, 163)",

@@ -89,7 +89,14 @@ describe("Home: the crew's night", () => {
     expect(rows[0].badges).toEqual(["2 needs decision", "1 done"]);
     expect(rows[0].event).toMatch(/^Needs decision: k\d\? 9c2e \d\d:\d\d$/);
     expect(["a1-9c2e", "a2-9c2e"]).toContain(rows[0].target);
-    expect(rows[1]).toEqual({ folder: "quiet-9c2e", event: "No work overnight in this folder.", badges: [], target: null });
+    // The interface polish (rule 27): a folder with no work overnight is no row of its own; it shares the one line after
+    // the busy rows, a link with its chip and name.
+    expect(rows).toHaveLength(1);
+    const quiet = await browser.execute(() => {
+      const line = document.querySelector('[data-section="overnight"] [data-testid="home-quiet"]');
+      return { text: line?.textContent ?? null, folders: [...(line?.querySelectorAll("[data-folder]") ?? [])].map((f) => f.getAttribute("data-folder")) };
+    });
+    expect(quiet).toEqual({ text: "No work overnight inquiet-9c2e", folders: ["quiet-9c2e"] });
 
     // Waiting on you: three of five, and the way to the rest.
     const waiting = JSON.parse(

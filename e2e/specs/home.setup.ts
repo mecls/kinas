@@ -8,7 +8,9 @@ export { teardown } from "./usage.setup.ts";
 // attention must hold — and a projects root holding two repositories, so Overnight lists two folders by name.
 
 export function setup(dataDir: string): Record<string, string> {
-  const env = usageSetup(dataDir);
+  // The interface polish (rule 28): Needs attention leaves out the three gauges, so Home needs a reading that is not one
+  // of them to list — the Ollama week at 91 %, a warn row, whatever this Mac's own disk says.
+  const env = usageSetup(dataDir, { ollamaWeekUsage: 0.91 });
 
   const handoff = join(dataDir, "inbox", "claude-rate-limits.json");
   const reading = JSON.parse(readFileSync(handoff, "utf8")) as { rate_limits: { five_hour: { used_percentage: number } } };

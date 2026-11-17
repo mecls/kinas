@@ -13,14 +13,19 @@ const home = () =>
     const section = (name: string) => document.querySelector(`section[data-page="home"] [data-section="${name}"]`);
     return {
       shown: !(document.querySelector('section[data-page="home"]') as HTMLElement | null)?.hidden,
-      folders: Array.from(section("overnight")?.querySelectorAll('[role="option"]') ?? []).map((row) => ({
+      // The interface polish (rule 27): quiet folders share one line; each is a link with its chip and name.
+      folders: Array.from(section("overnight")?.querySelectorAll("[data-folder]") ?? []).map((row) => ({
         name: row.getAttribute("data-folder"),
         cat: row.getAttribute("data-cat"),
         text: row.textContent ?? "",
       })),
+      quiet: section("overnight")?.querySelector('[data-testid="home-quiet"]')?.textContent ?? null,
+      rows: section("overnight")?.querySelectorAll('[role="option"]').length ?? 0,
       waiting: section("waiting")?.textContent ?? "",
       gauges: Array.from(section("usage")?.querySelectorAll(".ui-gauge") ?? []).map((g) => `${g.getAttribute("data-subscription")}/${g.getAttribute("data-window")}`),
       danger: Array.from(section("usage")?.querySelectorAll('[data-attention][data-tone="danger"]') ?? []).map((r) => r.textContent ?? ""),
+      attention: Array.from(section("usage")?.querySelectorAll("[data-attention]") ?? []).map((r) => r.getAttribute("data-attention")),
+      session: section("usage")?.querySelector('.ui-gauge[data-subscription="claude-plan"][data-window="session"] .ui-bar')?.getAttribute("data-tone") ?? null,
       counts: document.querySelectorAll(".sidebar-count").length,
     };
   });
@@ -45,22 +50,25 @@ describe("Home (AC-3)", () => {
     pid = await hook<number>("ptyPid");
   });
 
-  it("lands on Home: the two folders with their chips, nothing waiting, and the 97 % reading as the one danger row", async () => {
+  it("lands on Home: the two quiet folders in one line, nothing waiting, and the 97 % on its gauge, not repeated below", async () => {
     // The Claude reading arrives from the hand-off after launch; wait for it rather than for a fixed time.
-    await browser.waitUntil(async () => (await home()).danger.length > 0, { timeout: 60000, timeoutMsg: "Needs attention never held a danger row" });
+    await browser.waitUntil(async () => (await home()).session === "danger", { timeout: 60000, timeoutMsg: "Claude's session gauge never read danger" });
     const seen = await home();
     expect(seen.shown).toBe(true);
+    // Rule 27: no folder has work overnight, so the one line is the whole section, the two folders in it.
+    expect(seen.rows).toBe(0);
+    expect(seen.quiet).toBe("No work overnight inacmeglobex");
     expect(seen.folders.map((f) => f.name).sort()).toEqual(["acme", "globex"]);
-    for (const f of seen.folders) expect(f.text).toContain("No work overnight in this folder.");
     expect(new Set(seen.folders.map((f) => f.cat)).size).toBe(2);
     expect(seen.waiting).toContain("Nothing waiting on you.");
     expect(seen.gauges).toEqual(["claude-plan/week", "claude-plan/session", "ollama-cloud/session"]);
-    // This Mac's rows are the machine running the test (the host reader samples it, no fixture stands in): a full disk
-    // there is a real danger row, so the count is of the fixture's readings.
-    const fixtureDanger = seen.danger.filter((row) => !row.startsWith("This Mac"));
-    expect(fixtureDanger).toHaveLength(1);
-    expect(fixtureDanger[0]).toContain("Claude · session");
-    expect(fixtureDanger[0]).toContain("97% used");
+    // Rule 28: Needs attention never repeats a gauge. This Mac's rows are the machine running the test (the host reader
+    // samples it), so only the fixture's readings are counted: none of the three gauges is listed again.
+    const fixtureRows = seen.attention.filter((key) => !(key ?? "").startsWith("host/"));
+    expect(fixtureRows).not.toContain("claude-plan/session");
+    expect(fixtureRows).not.toContain("claude-plan/week");
+    expect(fixtureRows).not.toContain("ollama-cloud/session");
+    expect(fixtureRows).toContain("ollama-cloud/week");
     expect(seen.counts).toBe(0);
   });
 
@@ -77,7 +85,7 @@ describe("Home (AC-3)", () => {
         browser.execute(
           () =>
             document.querySelector(".shell")?.getAttribute("data-panel") !== "closed" &&
-            document.querySelector('section[data-page="home"] [data-folder="acme"]')?.getAttribute("aria-selected") === "true",
+            document.querySelector('section[data-page="home"] [data-folder="acme"]')?.getAttribute("aria-current") === "true",
         ),
       { timeout: 30000, timeoutMsg: "the folder never opened in the reader" },
     );

@@ -1,4 +1,5 @@
-// The model behind the 30-day usage chart (R26, R38), kept pure so it is tested without a DOM.
+// The model behind the usage chart (R26, R38), kept pure so it is tested without a DOM. It spans the 30 days of today at
+// most, and since the interface polish starts at the first day with data, a week at least (rule 30).
 //
 // Series are providers (DESIGN.md §5 Usage, 2026-09-22): the bars are coloured by the provider's category and the
 // legend lists providers only; the models behind each day are kept for the tooltip and the tables. Colour follows
@@ -97,6 +98,19 @@ const largestFirst = (map: Map<string, number> | undefined): Segment[] =>
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([key, value]) => ({ key, value }));
 
+/** The chart's shortest span (the interface polish, rule 30): a week, the first days hatched when data is newer. */
+export const CHART_MIN_DAYS = 7;
+
+/**
+ * The days the chart draws (rule 30): from the first day with data, at least `CHART_MIN_DAYS` and at most every day
+ * given (the 30 of today). With no data ever, the last week, all hatched.
+ */
+export function chartDays(days: readonly string[], first: string | null): string[] {
+  const from = first === null ? days.length : days.findIndex((d) => d >= first);
+  const start = Math.min(from === -1 ? days.length : from, Math.max(0, days.length - CHART_MIN_DAYS));
+  return days.slice(start);
+}
+
 export function buildChart(snapshot: Pick<UsageSnapshot, "usage" | "days" | "first_usage_date">, includeCache: boolean): ChartModel {
   // Membership and colours depend on names alone, not on the cache toggle, so toggling never repaints a series.
   const providers = [...new Set(snapshot.usage.map((r) => r.provider))].sort((a, b) => a.localeCompare(b));
@@ -118,7 +132,7 @@ export function buildChart(snapshot: Pick<UsageSnapshot, "usage" | "days" | "fir
 
   const series: Series[] = providers.map((key) => ({ key, label: providerLabel(key), slot: slots[key]!, total: shown.get(key) ?? 0 }));
   const first = snapshot.first_usage_date;
-  const days: DayStack[] = snapshot.days.map((date) => {
+  const days: DayStack[] = chartDays(snapshot.days, first).map((date) => {
     const values = perDay.get(date);
     const segments = series.map((s) => ({ key: s.key, value: values?.get(s.key) ?? 0 })).filter((s) => s.value > 0);
     return {

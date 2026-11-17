@@ -4,7 +4,7 @@ import { Chip, Dot, type Category, type DotKind } from "./Dot.tsx";
 import { ChevronRightIcon, CrewIcon, FileIcon, FolderIcon, GearIcon, InboxIcon, TerminalIcon } from "./icons.tsx";
 import "./PaletteRow.css";
 
-// DESIGN.md §4 Palette row (1.11, the interface polish): one result — the kind's icon in --ink-2, the name (--ink, 500,
+// DESIGN.md §4 Palette row (1.13, the interface polish): one result — the kind's icon in --ink-2, the name (--ink, 500,
 // the matched letters 600), one line of detail in --ink-2 (a path in mono --text-xs), and at the right the client
 // folder's Chip and name, an age in mono, or a command's chord as a Kbd. --row-h tall; the selected row on
 // --accent-soft. A group is its label, its rows and "N more". Presentation only: the palette owns the keys

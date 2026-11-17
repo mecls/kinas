@@ -2,7 +2,7 @@
 
 *2026-11-15. Written from the captain's comparison of Kinas with ten screenshots of Orca, an agent IDE whose look they
 like, and their answers to four questions (§7). Kinas's way of working stays exactly as it is; what changes is how it
-looks and how quickly things are found. To be built from `origin/main` at `0f63948`. It amends DESIGN.md (to 1.11)
+looks and how quickly things are found. To be built from `origin/main` at `0f63948`. It amends DESIGN.md (to 1.13)
 before any code, and adds no key chord.*
 
 ## 1. Objective
@@ -198,7 +198,7 @@ theme you know is unchanged.
 
 **Records**
 
-38. **DESIGN.md first.** DESIGN.md 1.11 is written before any code: the dark values and §2.4's measurements, §2.5's
+38. **DESIGN.md first.** DESIGN.md 1.13 is written before any code: the dark values and §2.4's measurements, §2.5's
     capitals rule, §3.1's sidebar and status bar, the new components in §4 (StatusBar, UsagePopover,
     PaletteGroup and PaletteRow, SettingsNav and SettingsRow, LineCounts), §5's Home, Usage and Settings, §6's reset
     wording. `keymap.md` gains a note that this change adds no chord, and where the palette's rows and the status bar

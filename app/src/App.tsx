@@ -810,7 +810,7 @@ export function App() {
           />
         </aside>
       </div>
-      {/* The window's foot (DESIGN.md 1.11 §3.1): a static sibling after the stage, never conditional (ADR 0002). */}
+      {/* The window's foot (DESIGN.md 1.13 §3.1): a static sibling after the stage, never conditional (ADR 0002). */}
       <StatusBar readings={statusReadings} />
       {palette && (
         <Palette

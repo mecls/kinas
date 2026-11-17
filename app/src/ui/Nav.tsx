@@ -39,7 +39,7 @@ export function NavItem({
 }
 
 /**
- * The sidebar's search row (1.11, the interface polish, rule 19): under the wordmark, a magnifier, "Search" and the
+ * The sidebar's search row (1.13, the interface polish, rule 19): under the wordmark, a magnifier, "Search" and the
  * palette's chord as a Kbd. A click opens the palette, the same one ⌘K opens.
  */
 export function SearchRow({ chord, onClick }: { chord: string; onClick: () => void }) {

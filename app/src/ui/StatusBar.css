@@ -1,4 +1,4 @@
-/* DESIGN.md §4 Status bar (1.11): a --hit row on --bg with a --line along its top, --text-sm in --ink-2, the numbers in
+/* DESIGN.md §4 Status bar (1.13): a --hit row on --bg with a --line along its top, --text-sm in --ink-2, the numbers in
    mono --ink. One line: it never wraps, and what does not fit is cut at the right edge. */
 .ui-statusbar {
   display: flex;

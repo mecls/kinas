@@ -30,7 +30,7 @@
 }
 
 /* The title bar spans the window, whichever columns are showing; the sidebar and the stage fill the row below it. The
-   status bar (DESIGN.md 1.11, §3.1) spans it too, in the row below them: always there, so nothing above the terminal
+   status bar (DESIGN.md 1.13, §3.1) spans it too, in the row below them: always there, so nothing above the terminal
    moves. */
 .shell > .ui-titlebar,
 .shell > .ui-statusbar {

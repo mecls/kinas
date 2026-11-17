@@ -1,7 +1,7 @@
 import { browser, $, expect } from "@wdio/globals";
 import { hook, waitForShell } from "../helpers.ts";
 
-// The status bar (tasks/interface-polish, rules 23–24; DESIGN.md 1.11 §3.1), slice 1: the window's foot stands on every
+// The status bar (tasks/interface-polish, rules 23–24; DESIGN.md 1.13 §3.1), slice 1: the window's foot stands on every
 // page, across the whole window, with the sidebar shown and hidden — and the terminal's process never changes for it
 // (ADR 0002; build-spec invariant 1). Slice 6 adds the readings' tones, the crew, the VPS, the popover and full screen.
 

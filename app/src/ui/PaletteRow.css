@@ -1,4 +1,4 @@
-/* DESIGN.md §4 Palette row (1.11): one line, --row-h tall, never wrapping. The name leads in --ink 500 and keeps its
+/* DESIGN.md §4 Palette row (1.13): one line, --row-h tall, never wrapping. The name leads in --ink 500 and keeps its
    room; the detail gives way first, ending in an ellipsis; the end (a folder, an age, a chord) never shrinks. */
 .ui-palette-group > ul {
   margin: 0;
@@ -10,7 +10,7 @@
   margin-top: var(--space-2);
 }
 
-/* The group's label. DESIGN.md 1.11 §2.5 sets it in capitals with the group-label style in slice 5. */
+/* The group's label. DESIGN.md 1.13 §2.5 sets it in capitals with the group-label style in slice 5. */
 .ui-palette-label {
   padding: var(--space-2) var(--space-3) var(--space-1);
   color: var(--ink-2);

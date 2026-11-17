@@ -1,6 +1,6 @@
 import "./StatusBar.css";
 
-// DESIGN.md §4 Status bar (1.11, the interface polish): the window's foot, one row across the whole window below the
+// DESIGN.md §4 Status bar (1.13, the interface polish): the window's foot, one row across the whole window below the
 // three columns (§3.1). Presentation only — App works out what it says. Like the title bar it is a static part of the
 // window, never conditional, so nothing above the terminal moves (ADR 0002).
 //

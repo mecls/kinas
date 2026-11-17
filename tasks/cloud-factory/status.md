@@ -8,12 +8,24 @@
     DESIGN.md gains that variant.
 - Gate 2 · Architecture: APPROVED 2026-11-17 — `architecture.md` (private, main checkout), approved as written, with
   its seven least-sure points standing; it records ADRs 0021–0023 to be written in slice 0, docs first
-- Gate 3 · Program design: in progress — `build-spec.md` §0–§11 (private, main checkout), §11.5's nine least-sure
-  decisions
-- Gate 4 · Slice plan: pending
+- Gate 3 · Program design: APPROVED 2026-11-17 — `build-spec.md` §11 (private, main checkout), approved as written,
+  with §11.5's nine least-sure decisions standing (no QR code: the link and the code, each with Copy)
+- Gate 4 · Slice plan: in progress — `build-spec.md` §12
 
-## Slices
-- (written at Gate 4)
+## Slices (build-spec.md §12)
+- [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13, ⌘6), and the probe on the captain's VPS
+- [ ] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle)
+- [ ] Slice 2 · the real reading: the companion runs Firstmate on the VPS; the unreachable path
+- [ ] Slice 3 · the Work page on the VPS, and Herdr actions through the companion
+- [ ] Slice 4 · setup: the bootstrap, the checks, Install, the client folders
+- [ ] Slice 5 · usage and context from the VPS
+- [ ] Slice 6 · answers from the Mac, as inbox notes → ship point 1
+- [ ] Slice 7 · the cloud store: the companion writes summaries
+- [ ] Slice 8 · the phone: paired, reading
+- [ ] Slice 9 · notifications
+- [ ] Slice 10 · answers from the phone → ship point 2
+- [ ] Slice 11 · the factory's events
+- [ ] Slice 12 · the Factory page and tab → ship point 3
 
 ## Notes for a fresh session
 

@@ -13,9 +13,10 @@ import { hook, waitForHook } from "../helpers.ts";
 // accent is a second choice on the same page — stored by Rust, painted by the page as one property on the root, and
 // derived by the dark theme through a color-mix the tests compute the same way. Neither choice touches the PTY.
 
-const DARK = "#14171e";
+// DESIGN.md 1.13 (the interface polish, slice 5): the dark ground is neutral, and the pane's ground follows it.
+const DARK = "#0f0f0f";
 const LIGHT = "#f4f2ec";
-const PANE_DARK = "#10192b";
+const PANE_DARK = "#0f0f0f";
 const PANE_LIGHT = "#f4f2ec";
 
 /** Sets a React-controlled select (the embedded driver's own select handling does not reach React's onChange). */
@@ -120,7 +121,7 @@ describe("Settings → Appearance", () => {
     expect(await prefersLight()).toBe(false);
     expect(await stored()).toBe("dark");
     await browser.waitUntil(async () => (await hook<string | null>("terminalBackground")) === PANE_DARK, { timeout: 10000, timeoutMsg: "the pane kept its light theme" });
-    expect(await viewportBackground()).toBe("rgb(16, 25, 43)");
+    expect(await viewportBackground()).toBe("rgb(15, 15, 15)");
   });
 
   it("an accent chosen in Settings is painted at once, stored, derived for the dark theme, and the PTY never notices", async () => {

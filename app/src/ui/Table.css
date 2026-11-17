@@ -59,6 +59,9 @@ table.ui-table tbody tr:hover td {
 }
 table.ui-table .ui-table-r {
   text-align: right;
+}
+/* Numbers are mono; a number column's header is a label, in the body face (DESIGN.md §2.5). */
+table.ui-table td.ui-table-r {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }

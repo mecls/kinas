@@ -46,8 +46,8 @@
       "font-size": "12px"
     },
     "section[data-page=\"home\"] [data-section=\"waiting\"] .ui-empty": {
-      "background-color": "rgb(255, 255, 255)",
-      "border-top-style": "dashed",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "border-top-style": "none",
       "color": "rgb(91, 97, 112)"
     },
     "section[data-page=\"home\"] [data-tone=\"danger\"] .ui-bar i": {
@@ -56,9 +56,9 @@
   },
   "dark": {
     "section[data-page=\"home\"] .ui-gauge": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(43, 49, 64)"
+      "border-top-color": "rgb(39, 39, 39)"
     },
     "section[data-page=\"home\"] .ui-gauge .ui-num": {
       "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
@@ -66,20 +66,20 @@
       "font-weight": "500"
     },
     "section[data-page=\"home\"] .ui-plist": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(43, 49, 64)"
+      "border-top-color": "rgb(39, 39, 39)"
     },
     "section[data-page=\"home\"] .ui-progress-event": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px"
     },
     "section[data-page=\"home\"] .ui-progress-row": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "min-height": "56px"
     },
     "section[data-page=\"home\"] .ui-rows-title": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px",
       "font-weight": "500"
     },
@@ -90,20 +90,20 @@
       "height": "28px"
     },
     "section[data-page=\"home\"] .ui-titlerow h1": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "20px",
       "font-weight": "600",
       "line-height": "28px"
     },
     "section[data-page=\"home\"] [data-section=\"usage\"] .ui-caption": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px"
     },
     "section[data-page=\"home\"] [data-section=\"waiting\"] .ui-empty": {
-      "background-color": "rgb(27, 31, 39)",
-      "border-top-style": "dashed",
-      "color": "rgb(161, 167, 180)"
+      "background-color": "rgba(0, 0, 0, 0)",
+      "border-top-style": "none",
+      "color": "rgb(163, 163, 163)"
     },
     "section[data-page=\"home\"] [data-tone=\"danger\"] .ui-bar i": {
       "background-color": "rgb(229, 87, 94)"

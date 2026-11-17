@@ -161,7 +161,7 @@ describe("the component stories (a debug build, #stories)", () => {
     const seen: Record<string, Contract> = {};
     for (const [name, bg] of [
       ["light", "#f4f2ec"],
-      ["dark", "#14171e"],
+      ["dark", "#0f0f0f"],
     ] as const) {
       await theme(name, bg);
       seen[name] = await capture();
@@ -211,6 +211,6 @@ describe("the component stories (a debug build, #stories)", () => {
         }
       }
     }
-    await theme("dark", "#14171e");
+    await theme("dark", "#0f0f0f");
   });
 });

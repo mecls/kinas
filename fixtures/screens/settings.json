@@ -55,7 +55,7 @@
   },
   "dark": {
     "section[data-page=\"settings\"] .hook-line": {
-      "background-color": "rgb(35, 40, 51)",
+      "background-color": "rgb(33, 33, 33)",
       "border-radius": "6px"
     },
     "section[data-page=\"settings\"] .problem": {
@@ -64,24 +64,24 @@
       "font-size": "12px"
     },
     "section[data-page=\"settings\"] .settings-help": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "12px"
     },
     "section[data-page=\"settings\"] .settings-section": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(43, 49, 64)",
+      "border-top-color": "rgb(39, 39, 39)",
       "padding-top": "12px"
     },
     "section[data-page=\"settings\"] .settings-section h2": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-size": "15px",
       "font-weight": "600",
       "line-height": "22px"
     },
     "section[data-page=\"settings\"] .shortcut-chord": {
-      "border-top-color": "rgb(58, 65, 82)",
+      "border-top-color": "rgb(54, 54, 54)",
       "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
       "font-size": "12px"
     },
@@ -91,18 +91,18 @@
       "height": "28px"
     },
     "section[data-page=\"settings\"] .ui-button[data-kind=\"secondary\"]": {
-      "background-color": "rgb(27, 31, 39)",
-      "border-top-color": "rgb(58, 65, 82)",
-      "color": "rgb(237, 238, 242)"
+      "background-color": "rgb(23, 23, 23)",
+      "border-top-color": "rgb(54, 54, 54)",
+      "color": "rgb(237, 237, 237)"
     },
     "section[data-page=\"settings\"] .ui-input": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "6px",
-      "border-top-color": "rgb(58, 65, 82)",
+      "border-top-color": "rgb(54, 54, 54)",
       "height": "28px"
     },
     "section[data-page=\"settings\"] .ui-titlerow h1": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-size": "20px",
       "font-weight": "600"
     }

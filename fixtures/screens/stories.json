@@ -26,8 +26,8 @@
       "width": "10px"
     },
     "[data-story=\"EmptyState/plain\"] .ui-empty": {
-      "border-top-color": "rgb(207, 201, 188)",
-      "border-top-style": "dashed",
+      "border-top-color": "rgb(91, 97, 112)",
+      "border-top-style": "none",
       "color": "rgb(91, 97, 112)"
     },
     "[data-story=\"Field/switch\"] .ui-switch[aria-checked=\"true\"]": {
@@ -150,7 +150,7 @@
     },
     "[data-story=\"Table/today\"] th": {
       "color": "rgb(91, 97, 112)",
-      "font-size": "12px",
+      "font-size": "11px",
       "height": "36px"
     },
     "[data-story=\"TerminalChrome/working\"] .ui-termchrome": {
@@ -193,16 +193,16 @@
       "height": "28px"
     },
     "[data-story=\"Button/secondary\"] .ui-button": {
-      "background-color": "rgb(27, 31, 39)",
-      "border-top-color": "rgb(58, 65, 82)",
-      "color": "rgb(237, 238, 242)"
+      "background-color": "rgb(23, 23, 23)",
+      "border-top-color": "rgb(54, 54, 54)",
+      "color": "rgb(237, 237, 237)"
     },
     "[data-story=\"Button/text\"] .ui-button": {
       "background-color": "rgba(0, 0, 0, 0)",
-      "color": "rgb(161, 167, 180)"
+      "color": "rgb(163, 163, 163)"
     },
     "[data-story=\"Card/selected\"] .ui-card": {
-      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "background-color": "oklab(0.280091 -0.004908 -0.016235)",
       "box-shadow": "oklab(0.623875 -0.027266 -0.090197) 2px 0px 0px 0px inset"
     },
     "[data-story=\"Chip/cat-1\"] .ui-chip": {
@@ -210,9 +210,9 @@
       "width": "10px"
     },
     "[data-story=\"EmptyState/plain\"] .ui-empty": {
-      "border-top-color": "rgb(58, 65, 82)",
-      "border-top-style": "dashed",
-      "color": "rgb(161, 167, 180)"
+      "border-top-color": "rgb(163, 163, 163)",
+      "border-top-style": "none",
+      "color": "rgb(163, 163, 163)"
     },
     "[data-story=\"Field/switch\"] .ui-switch[aria-checked=\"true\"]": {
       "background-color": "oklab(0.623875 -0.027266 -0.090197)",
@@ -221,23 +221,23 @@
     },
     "[data-story=\"Field/text\"] .ui-input": {
       "border-radius": "6px",
-      "border-top-color": "rgb(58, 65, 82)",
+      "border-top-color": "rgb(54, 54, 54)",
       "height": "28px"
     },
     "[data-story=\"Gauge/danger\"] .ui-bar i": {
       "background-color": "rgb(229, 87, 94)"
     },
     "[data-story=\"Gauge/fine\"] .ui-bar i": {
-      "background-color": "rgb(161, 167, 180)"
+      "background-color": "rgb(163, 163, 163)"
     },
     "[data-story=\"Gauge/fine\"] .ui-gauge": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(43, 49, 64)",
+      "border-top-color": "rgb(39, 39, 39)",
       "padding-top": "16px"
     },
     "[data-story=\"Gauge/fine\"] .ui-gauge-detail": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "11px"
     },
     "[data-story=\"Gauge/fine\"] .ui-num": {
@@ -253,16 +253,16 @@
       "background-color": "rgb(217, 160, 58)"
     },
     "[data-story=\"InboxItem/plan\"] .ui-inbox-item": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px"
     },
     "[data-story=\"MetricRow/rows\"] .ui-metric-row": {
-      "border-top-color": "rgb(237, 238, 242)",
+      "border-top-color": "rgb(237, 237, 237)",
       "height": "36px"
     },
     "[data-story=\"Nav/sidebar\"] .ui-nav[aria-current=\"page\"]": {
-      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
-      "color": "rgb(237, 238, 242)",
+      "background-color": "oklab(0.280091 -0.004908 -0.016235)",
+      "color": "rgb(237, 237, 237)",
       "height": "30px"
     },
     "[data-story=\"Nav/sidebar\"] .ui-nav[aria-current=\"page\"] .ui-icon": {
@@ -273,26 +273,26 @@
       "font-size": "20px"
     },
     "[data-story=\"PaletteRow/files\"] .ui-palette-detail": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-family": "\"JetBrains Mono\", \"SF Mono\", ui-monospace, Menlo, monospace",
       "font-size": "11px"
     },
     "[data-story=\"PaletteRow/files\"] .ui-palette-name b": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-weight": "600"
     },
     "[data-story=\"PaletteRow/files\"] .ui-palette-row[aria-selected=\"true\"]": {
-      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "background-color": "oklab(0.280091 -0.004908 -0.016235)",
       "border-radius": "6px",
       "font-size": "13px",
       "height": "36px"
     },
     "[data-story=\"ProgressRow/list\"] .ui-progress-row[aria-selected=\"true\"]": {
-      "background-color": "oklab(0.308114 -0.006278 -0.029705)",
+      "background-color": "oklab(0.280091 -0.004908 -0.016235)",
       "min-height": "56px"
     },
     "[data-story=\"SectionHeader/reading\"] .ui-caption": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px"
     },
     "[data-story=\"SectionHeader/reading\"] .ui-section-action": {
@@ -304,9 +304,9 @@
       "line-height": "22px"
     },
     "[data-story=\"StatusBadge/decision\"] .ui-badge": {
-      "background-color": "rgb(35, 40, 51)",
+      "background-color": "rgb(33, 33, 33)",
       "border-radius": "999px",
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-size": "12px",
       "height": "22px"
     },
@@ -319,42 +319,42 @@
       "background-color": "rgb(79, 179, 122)"
     },
     "[data-story=\"TabStrip/plain\"] .ui-tab[aria-selected=\"false\"]": {
-      "color": "rgb(161, 167, 180)"
+      "color": "rgb(163, 163, 163)"
     },
     "[data-story=\"TabStrip/plain\"] .ui-tab[aria-selected=\"true\"]": {
-      "background-color": "rgb(27, 31, 39)",
-      "color": "rgb(237, 238, 242)",
+      "background-color": "rgb(23, 23, 23)",
+      "color": "rgb(237, 237, 237)",
       "font-size": "12px",
       "max-width": "196px"
     },
     "[data-story=\"TabStrip/plain\"] .ui-tabstrip": {
-      "background-color": "rgb(35, 40, 51)",
-      "box-shadow": "rgb(43, 49, 64) 0px -1px 0px 0px inset",
+      "background-color": "rgb(33, 33, 33)",
+      "box-shadow": "rgb(39, 39, 39) 0px -1px 0px 0px inset",
       "height": "32px"
     },
     "[data-story=\"Table/today\"] th": {
-      "color": "rgb(161, 167, 180)",
-      "font-size": "12px",
+      "color": "rgb(163, 163, 163)",
+      "font-size": "11px",
       "height": "36px"
     },
     "[data-story=\"TerminalChrome/working\"] .ui-termchrome": {
-      "background-color": "rgb(35, 40, 51)",
+      "background-color": "rgb(33, 33, 33)",
       "height": "32px"
     },
     "[data-story=\"TitleBar/back-and-forward\"] .ui-titlebar-button[aria-label=\"Back\"]": {
       "border-radius": "6px",
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "height": "28px",
       "width": "28px"
     },
     "[data-story=\"TitleBar/start\"] .ui-titlebar": {
-      "background-color": "rgb(20, 23, 30)",
-      "box-shadow": "rgb(43, 49, 64) 0px -1px 0px 0px inset",
+      "background-color": "rgb(15, 15, 15)",
+      "box-shadow": "rgb(39, 39, 39) 0px -1px 0px 0px inset",
       "height": "32px",
       "padding-left": "12px"
     },
     "[data-story=\"TitleBar/start\"] .ui-titlebar-button[aria-label=\"Back\"]": {
-      "color": "rgb(110, 116, 130)"
+      "color": "rgb(110, 110, 110)"
     },
     "[data-story=\"TitleRow/home\"] h1": {
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
@@ -363,7 +363,7 @@
       "line-height": "28px"
     },
     "[data-story=\"Toast/success\"] .ui-toast": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "box-shadow": "rgba(0, 0, 0, 0.4) 0px 8px 24px 0px, rgba(0, 0, 0, 0.3) 0px 1px 3px 0px"
     }
   }

@@ -151,7 +151,7 @@ describe("the screens (AC-9)", () => {
       mkdirSync(screens, { recursive: true });
       for (const [name, bg] of [
         ["light", "#f4f2ec"],
-        ["dark", "#14171e"],
+        ["dark", "#0f0f0f"],
       ] as const) {
         await theme(name, bg);
         await show(page, key);

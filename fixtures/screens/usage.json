@@ -27,7 +27,7 @@
     },
     "section[data-page=\"usage\"] .ui-table th": {
       "color": "rgb(91, 97, 112)",
-      "font-size": "12px",
+      "font-size": "11px",
       "height": "36px"
     },
     "section[data-page=\"usage\"] .ui-titlerow h1": {
@@ -54,18 +54,18 @@
   },
   "dark": {
     "section[data-page=\"usage\"] .chart-wrap": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(43, 49, 64)"
+      "border-top-color": "rgb(39, 39, 39)"
     },
     "section[data-page=\"usage\"] .legend li": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px"
     },
     "section[data-page=\"usage\"] .ui-gauge": {
-      "background-color": "rgb(27, 31, 39)",
+      "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(43, 49, 64)",
+      "border-top-color": "rgb(39, 39, 39)",
       "padding-top": "16px"
     },
     "section[data-page=\"usage\"] .ui-gauge .ui-num": {
@@ -74,34 +74,34 @@
       "line-height": "32px"
     },
     "section[data-page=\"usage\"] .ui-section-head h2": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-size": "15px",
       "font-weight": "600"
     },
     "section[data-page=\"usage\"] .ui-table th": {
-      "color": "rgb(161, 167, 180)",
-      "font-size": "12px",
+      "color": "rgb(163, 163, 163)",
+      "font-size": "11px",
       "height": "36px"
     },
     "section[data-page=\"usage\"] .ui-titlerow h1": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-size": "20px",
       "font-weight": "600"
     },
     "section[data-page=\"usage\"] .usage-note": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px"
     },
     "section[data-page=\"usage\"] [data-section=\"convex-month\"] .ui-metric-row": {
-      "border-top-color": "rgb(237, 238, 242)",
+      "border-top-color": "rgb(237, 237, 237)",
       "height": "36px"
     },
     "section[data-page=\"usage\"] [data-section=\"convex-month\"] .ui-rows-title": {
-      "color": "rgb(161, 167, 180)",
+      "color": "rgb(163, 163, 163)",
       "font-size": "12px"
     },
     "section[data-page=\"usage\"] [data-section=\"hostinger\"] .ui-card-title": {
-      "color": "rgb(237, 238, 242)",
+      "color": "rgb(237, 237, 237)",
       "font-weight": "500"
     }
   }

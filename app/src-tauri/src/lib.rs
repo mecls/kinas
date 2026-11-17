@@ -105,6 +105,7 @@ pub fn run() {
         .manage(reader::ReaderState::default())
         .manage(reader::changes::ChangesState::default())
         .manage(search::Index::default())
+        .manage(recent::RecentMemory::default())
         .invoke_handler(tauri::generate_handler![
             commands::store_info,
             commands::pty_start,

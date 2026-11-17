@@ -96,6 +96,9 @@ theme you know is unchanged.
     past that the Files group says only the first 200,000 are searched.)*
 14. **What an empty box shows.** Before anything is typed: **Recent** — the last eight things opened anywhere in Kinas
     (a file, a folder, a task, a workspace, a setting), newest first, kept across a relaunch — then **Commands**.
+    *(Amended 2026-11-17, the captain's choice at ship point 1: ADR 0007 says the one path Kinas stores is a pin, so
+    files, folders and workspaces stay in Recent only until Kinas quits, like the reader's tabs; tasks and settings are
+    kept across a relaunch.)*
 15. **Matching.** Case-insensitive and accent-insensitive (so "reuniao" finds "reunião", however the Mac stored the
     name). A match at the start of a word ranks above one inside a word; a name match above a path match. Each group
     shows its five best, then "N more", which opens the group in place. *(Clarified at Gate 2, 2026-11-15: accents

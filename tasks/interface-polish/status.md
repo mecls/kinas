@@ -5,7 +5,9 @@
   keeps the window's sidebar; Recent is anything opened anywhere)
   - Mockups: APPROVED 2026-11-15 — `mockups/window.html`, `mockups/palette.html`, `mockups/settings.html`,
     `mockups/usage.html`, `mockups/crew-and-files.html`
-- Gate 2 · Architecture: APPROVED 2026-11-15 — `architecture.md`, private, at its absolute path in the main checkout
+- Gate 2 · Architecture: APPROVED 2026-11-15; one point reopened and settled 2026-11-17 — Recent stored opened paths
+  against ADR 0007; the captain chose "memory for paths": files, folders and workspaces until Kinas quits, tasks and
+  settings across a relaunch (PRD rule 14's dated note; build-spec §17). Originally: APPROVED 2026-11-15 — `architecture.md`, private, at its absolute path in the main checkout
   (`tasks/interface-polish/architecture.md`), written 2026-11-15, with its five PRD clarifications written into
   `prd.md` as dated notes (rules 9, 13, 15, 25, 36); no ADR proposed
 - Gate 3 · Program design: APPROVED 2026-11-15 — `build-spec.md` §11, private, in the main checkout beside
@@ -18,7 +20,7 @@
 - [x] Slice 1 · tracer bullet: ⌘K finds a stubbed file and opens it; the status bar row stands; `ptyPid` unchanged — 2026-11-16, `1cc8106`, local: palette 7/7, statusbar 3/3, layout specs 28/28, cargo 458, clippy clean; `bun test` timed out in untouched tests under heavy load (build-spec §17)
 - [x] Slice 2 · the real file index (`search.rs`) and the palette's rows, commands with their chords — 2026-11-16, local: Rust 10 new tests, clippy clean; bun 19 new tests; palette.e2e 8/8 (one unexplained miss in four runs, build-spec §17), stories 2/2 (contract only gained the row), staleness 4/4, tree-changes 22/22; rule 18 probe 45 ms slowest over 63,915 entries in a debug build. `bun run check`: two failures outside the branch's code under load (crew-setup timeouts; the review's 4 MB diff test passing its 500 ms deadline), build-spec §17
 - [x] Slice 3 · the palette's in-window sources: open tabs, folders, tasks, inbox, settings; the sidebar's Search row — 2026-11-16, local: `bun run check` green (934 bun, 466 Rust, clippy clean); palette.e2e 10/10, shell 7/7, settings 10/10, crew-settings 6/6, stories 2/2 (contract unchanged); several words now match when each is found (build-spec §17)
-- [ ] Slice 4 · Workspaces, Recent, the failure lines → ship point 1
+- [ ] Slice 4 · Workspaces, Recent, the failure lines → ship point 1 — 2026-11-17: 4.1–4.3 built and committed locally (`a934a97`); ship point 1 stopped once: the full e2e ran 40 of 41 green, `reader-tabs.e2e` AC-5 red because Recent stored opened paths against ADR 0007; the captain chose memory for paths (2026-11-17), now built
 - [ ] Slice 5 · the look: neutral dark, new tokens, group labels, `Kbd`, names lead, empty states; contracts re-recorded
 - [ ] Slice 6 · the status bar for real, the usage popover, reset captions; the sidebar's connection row gone
 - [ ] Slice 7 · the sidebar's live folders and nav chords → ship point 2

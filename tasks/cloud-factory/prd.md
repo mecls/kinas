@@ -1,10 +1,11 @@
 # The factory in the cloud — Implementation Spec
 
 *2026-11-16. Written from the captain's ask and their eight answers (§7), after a read of the code at `a8ddbc9` and
-of Herdr, Firstmate and Anthropic's terms as they stand today. It changes where every agent runs and adds two places
+of Herdr, Firstmate and Anthropic's terms as they stand today. Amended 2026-11-17 at Gate 2: rules 16–17 name
+Firstmate's inbox as the way an answer reaches the first mate (§7). It changes where every agent runs and adds two places
 to watch them from — the phone and a Factory page. Every rule of the first mate (`tasks/first-mate/prd.md`) and of
 Firstmate, current (`tasks/crew-firstmate-current/prd.md`) stands, except the one this spec replaces on purpose: an
-answer now reaches the first mate through Firstmate's own answer channel instead of the clipboard (rules 16–17).*
+answer now reaches the first mate as a note in Firstmate's inbox instead of the clipboard (rules 16–17).*
 
 ## 1. Objective
 
@@ -14,7 +15,7 @@ is away from it, a question the first mate holds waits until they are back. This
 one Linux VPS the captain rents, and makes Kinas the factory's dashboard in two places: on the Mac, where the Work page
 becomes a terminal into the VPS and every crew page reads the VPS, and on the phone, a private Kinas web page that
 shows what waits, the crew and the factory's numbers, notifies when the first mate needs the captain, and sends the
-answer back. A Factory page, on the Mac and the phone, measures the factory from what it already records: how many
+answer to the first mate. A Factory page, on the Mac and the phone, measures the factory from what it already records: how many
 tasks merged, how long they took from dispatch to merge, how long they waited on the captain, and how often they
 went red. Claude Code stays the harness, signed in on the VPS with the captain's own subscription.
 
@@ -111,18 +112,23 @@ phone sees titles, questions and numbers, never code.
 
 ### Answering
 
-16. **An answer reaches the first mate through Firstmate's own answer channel.** Approve, Deny and Answer — on the
-    phone, and on the Mac while a VPS is set — deliver the same words the Inbox puts on the clipboard today (`On
-    stock-webhook: Approved — go ahead.`) into the channel Firstmate keeps for answers from its other channels. This is
-    the first thing Kinas writes into Firstmate. A new decision record supersedes ADR 0017 and amends ADR 0020 for
-    exactly this, and nothing else: Kinas still never dispatches, sends orders, releases, parks, tears down or types
-    into a pane. Without a VPS, the Mac answers by the clipboard as today.
+16. **An answer reaches the first mate as a note in Firstmate's inbox.** Approve, Deny and Answer — on the phone, and
+    on the Mac while a VPS is set — deliver the same words the Inbox puts on the clipboard today (`On stock-webhook:
+    Approved — go ahead.`) as one note in Firstmate's inbox, the surface Firstmate keeps for the captain's words when
+    the captain is not in its chat. The note wakes the first mate once, and it acts on it as on the same words typed
+    in its chat: it relays them to the worker and closes or releases the hold itself, under its own rules (a release
+    while the captain is marked away is still refused). This is the first thing Kinas writes into Firstmate. A new
+    decision record supersedes ADR 0017 and ADR 0020 for exactly this, and nothing else: Kinas still never
+    dispatches, sends orders, releases, parks, tears down or types into a pane. Without a VPS, the Mac answers by the
+    clipboard as today.
 17. **An answer is delivered once, or refused with the reason.** An answer is for one open question. If the question
     was answered first somewhere else — the Mac, the first mate's chat — or is no longer open, nothing is sent and the
     item says `already answered at 14:05` or `no longer waiting`. A double tap sends one answer. A delivered answer
-    shows on its item as `answered from the phone at 14:05` and in the task's timeline. When the VPS cannot be reached,
-    the answer is not queued: the phone says it was not delivered and keeps the text for another try. What Firstmate
-    refuses — a release while the captain is away — is shown in Firstmate's own words.
+    shows on its item as `answered from the phone at 14:05`, then `read by the first mate at 14:06` once Firstmate
+    records the note handled, and in the task's timeline. When the VPS cannot be reached, the answer is not queued:
+    the phone says it was not delivered and keeps the text for another try; an answer not taken within 60 s is
+    dropped, never delivered late. If the first mate replies to the note, its reply is shown on the item in its own
+    words.
 
 ### The factory
 
@@ -208,8 +214,9 @@ is listed by name in Settings from then on.
 
 1. **The probe (before any code).** On the captain's VPS: Herdr at Kinas's version as a headless server, Firstmate at
    the pin with one local-only project, a first mate and two workers on `claude`; 30 snapshots fetched over SSH and
-   parsed by Kinas's own parser with 0 errors; a held question answered through Firstmate's answer channel and seen
-   by the first mate; the Work page's paste reaches the first mate's pane through the remote attach.
+   parsed by Kinas's own parser with 0 errors; a held question answered by a note in Firstmate's inbox, acted on by
+   the first mate (the worker gets the words, the hold closes) and shown handled in the inbox's receipts; the Work
+   page's paste reaches the first mate's pane through the remote attach.
 2. **Lid closed for an hour** with two tasks in flight: both progress on the VPS; the Factory page, opened after, has
    their real dispatch and merge times.
 3. **A held question end to end:** the phone's notification arrives within 60 s of the reading that shows the hold;
@@ -247,10 +254,10 @@ is listed by name in Settings from then on.
    crew of four on the client projects; the probe measures one task's peak, and Firstmate's lane cap keeps the crew
    inside it.
 2. **The store** — Gate 2: a deployment Miraside owns in the EU, separate from the dashboard's.
-3. **Keyed decisions** — whether Firstmate's answer channel takes an answer to a keyed decision as it does to a held
-   task (the probe). If not, a decision is answered in the first mate's chat, and the phone says so on the item.
-4. **Herdr's version** — Kinas pins 0.9.0; remote calls need 0.9.1 or later on both ends (current stable 0.9.5), and
-   Firstmate verifies its pane parsing only on 0.9.0 (the probe).
+3. ~~Keyed decisions~~ — settled at Gate 2: at the pin, Firstmate has "no separate decision type"; a decision is a
+   task held for the captain, and its answer reaches the first mate the same way (rule 16).
+4. ~~Herdr's version~~ — settled at Gate 2: every Herdr call runs on the VPS, so both ends stay on 0.9.0, which has
+   `--remote`; the probe proves the attach.
 5. **DESIGN.md's number** — `main` is at 1.12; the interface polish holds 1.11 on its branch. This feature's amendment
    takes the next free number when it is written.
 
@@ -261,6 +268,8 @@ is listed by name in Settings from then on.
   **A home-screen web app.**
 - How should a phone answer reach the first mate? Through Firstmate's own answer channel (Kinas writes for the first
   time) · the phone shows, the chat answers → **Through Firstmate's own answer channel.**
+  (Gate 2 found the surface for it: Firstmate's inbox, which wakes the first mate with the captain's words; its
+  keyed-answer intake would close the call without the worker hearing them. Rules 16–17 say so.)
 - What may leave the VPS? Summaries to a store · nothing (a private network) · everything → **Summaries to a store
   Miraside owns; code, diffs, briefs and transcripts never leave.**
 - What is out? → **LLM-judge scoring and benchmark replays; other people; Kinas buying servers; Kinas's own e2e and

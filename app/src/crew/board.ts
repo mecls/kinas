@@ -193,6 +193,16 @@ export function duration(ms: number): string {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
 }
 
+/** A time span in its largest whole unit (build-spec §11.2): "41 min", "1 h", "2 d". Recent's ages, and slice 7's task
+ * lines. Under a minute is "0 min". */
+export function largestUnit(ms: number): string {
+  const min = Math.max(0, Math.floor(ms / 60_000));
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h`;
+  return `${Math.floor(h / 24)} d`;
+}
+
 /**
  * "working 12 min", "done in 41 min", or "" when there is no start. It counts from the fleet ledger's dispatch when Kinas
  * kept one (DESIGN.md 1.12), else from when Kinas first saw the task working; "done in" runs to the ledger's merge, else

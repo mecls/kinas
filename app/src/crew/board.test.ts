@@ -3,7 +3,7 @@ import type { CrewLanes, CrewTask, CrewWord } from "../api.ts";
 import { seatFolders } from "../shell/folders.ts";
 import { lanesCaption } from "./lanes.ts";
 import { BADGE } from "../ui/StatusBadge.tsx";
-import { BADGE_OF, cardOrder, duration, elapsedText, fleetAsOf, fleetShown, forgetComeBack, laneCounts, lanesOf, metaLine, onScreen, prLine, toStamp } from "./board.ts";
+import { BADGE_OF, cardOrder, duration, elapsedText, fleetAsOf, fleetShown, forgetComeBack, laneCounts, lanesOf, largestUnit, metaLine, onScreen, prLine, toStamp } from "./board.ts";
 
 // The board's rules (build spec §4 Crew page, PRD rules 18–19, AC-7): lanes by repository in the sidebar's order, then
 // the unmatched by name without chips; counts; card order; elapsed texts; PR lines.
@@ -313,5 +313,15 @@ describe("the Work page chrome's badge (first-mate PRD rule 24)", () => {
     const work = readFileSync(join(import.meta.dir, "..", "pages", "Work.tsx"), "utf8");
     expect(work).toMatch(/paneBadge\(pane\)/);
     expect(work.includes("Partial<Record<CrewWord")).toBe(false);
+  });
+});
+
+describe("largestUnit", () => {
+  test("the largest whole unit", () => {
+    expect(largestUnit(41 * 60_000)).toBe("41 min");
+    expect(largestUnit(72 * 60_000)).toBe("1 h");
+    expect(largestUnit(50 * 3_600_000)).toBe("2 d");
+    expect(largestUnit(30_000)).toBe("0 min");
+    expect(largestUnit(-5)).toBe("0 min");
   });
 });

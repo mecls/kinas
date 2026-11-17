@@ -123,6 +123,23 @@ pub(crate) fn attached_session() -> Option<String> {
     (!pane.shell).then_some(pane.session)
 }
 
+/// Herdr's view for a command that lists the session (the palette's Workspaces, interface polish rule 13): the view the
+/// crew's thread holds while it is younger than `max_age_ms`, else asked of Herdr now and kept for the thread too. None
+/// for a plain-shell pane — Kinas asks Herdr nothing then — or when Herdr does not answer.
+pub(crate) fn live_view(app: &AppHandle, max_age_ms: i64) -> Option<View> {
+    attached_session()?;
+    let live = app.state::<CrewLive>().live();
+    if held_is_fresh(&live, now_ms(), max_age_ms) {
+        return live.view;
+    }
+    refresh_live(app)
+}
+
+/// A view is held and younger than `max_age_ms`: a gap, so one stamped in what is now the future is not fresh.
+fn held_is_fresh(live: &LiveView, now: i64, max_age_ms: i64) -> bool {
+    live.view.is_some() && (0..max_age_ms).contains(&(now - live.observed_at))
+}
+
 /// Asks Herdr for the session's view and the focused pane's foreground, and keeps it. None when Herdr did not answer.
 fn refresh_live(app: &AppHandle) -> Option<View> {
     let now = now_ms();
@@ -498,6 +515,15 @@ fn watch_home(home: &Path, tx: Sender<CrewWake>) -> Option<notify::RecommendedWa
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_held_view_answers_while_it_is_younger_than_the_limit() {
+        let held = LiveView { view: Some(View::default()), observed_at: 10_000, ..LiveView::default() };
+        assert!(held_is_fresh(&held, 10_000 + HERDR_FRESH_MS - 1, HERDR_FRESH_MS));
+        assert!(!held_is_fresh(&held, 10_000 + HERDR_FRESH_MS, HERDR_FRESH_MS), "old");
+        assert!(!held_is_fresh(&held, 9_000, HERDR_FRESH_MS), "stamped in what is now the future");
+        assert!(!held_is_fresh(&LiveView { observed_at: 10_000, ..LiveView::default() }, 10_001, HERDR_FRESH_MS), "Herdr did not answer");
+    }
 
     fn ran(exit: Exit, stdout: &str, last_err: Option<&str>) -> Ran {
         Ran { exit, stdout: stdout.into(), first_err: None, last_err: last_err.map(str::to_string) }

@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { statusFromStore, statusLines, type Command } from "@kinas/commands";
 import { dispatchAppAction } from "../actions.ts";
-import { filesIndexWarm, filesSearch, getUsageSnapshot, refreshReadings, type CrewSnapshot, type FileSearch } from "../api.ts";
+import {
+  filesIndexWarm,
+  filesSearch,
+  getUsageSnapshot,
+  herdrWorkspaces,
+  recentList,
+  refreshReadings,
+  type CrewSnapshot,
+  type FileSearch,
+  type HerdrWorkspace,
+  type RecentItem,
+} from "../api.ts";
 import { refreshRoot, waitingCount } from "../reader/changes.ts";
 import type { Shortcuts } from "../settings/shortcuts.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import { SearchIcon } from "../ui/icons.tsx";
 import { moreKey, PaletteFoot, PaletteGroupView } from "../ui/PaletteRow.tsx";
+import { paletteKey } from "./keys.ts";
 import { highlight } from "./match.ts";
 import { snapshotAdapter } from "./snapshotAdapter.ts";
 import {
@@ -16,10 +28,13 @@ import {
   folderItems,
   GROUP_LABEL,
   inboxItems,
+  NOTE,
   openItems,
+  recentItems,
   settingItems,
   taskItems,
   toGroup,
+  workspaceItems,
   type OpenItem,
   type PaletteGroup,
   type PaletteItem,
@@ -29,10 +44,12 @@ import {
 // it — the terminal included — so the next keystroke reaches the shell without a click (R31).
 //
 // The interface polish (tasks/interface-polish, PRD rules 12–18): one search, in groups of Palette rows (ui/PaletteRow),
-// each showing five then "N more", in rule 13's order. The in-window groups — Open, Client folders, Tasks, Inbox,
-// Settings — are searched only once something is typed (rule 14). Commands answer as the query changes; Files asks search.rs 60 ms after the last
-// keystroke, each question numbered so only the latest answer is drawn. The keys stay these four — typing, ↑ ↓,
-// Enter, Esc (build-spec invariant 8); "N more" is a row the arrows reach, and Enter on it opens its group.
+// each showing five then "N more", in rule 13's order. Before anything is typed: Recent, then Commands (rule 14). Once
+// something is typed, every source: Commands and the in-window groups answer as the query changes; Files asks
+// search.rs 60 ms after the last keystroke, each question numbered so only the latest answer is drawn; Workspaces are
+// read from Herdr once, when the palette opens. A source still being read, or one that failed, says so in one line
+// and the rest work (rule 18). The keys stay these four — typing, ↑ ↓, Enter, Esc (build-spec invariant 8, keys.ts);
+// "N more" is a row the arrows reach, and Enter on it opens its group.
 
 /** How long typing must pause before Files asks Rust. */
 const FILES_DEBOUNCE_MS = 60;
@@ -43,7 +60,7 @@ const INDEXING_RETRY_MS = 250;
  * Crew page's First mate, for "Go to the first mate". `onOpen`: a file or folder found by name, opened as a sidebar
  * click opens it. `shortcuts`: the chords bound now, shown on their commands (rule 9). `folders`: the client folders,
  * whose chip a file under one carries. `tabs`: the reader's tabs. `crew`: App's one crew reading, for Tasks and Inbox.
- * `onTask`, `onItem`, `onSetting`: rule 16's Enter for a task, an inbox item and a setting. */
+ * `onTask`, `onItem`, `onSetting`, `onWorkspace`: rule 16's Enter for a task, an inbox item, a setting, a workspace. */
 export function Palette({
   onClose,
   filesFolder,
@@ -56,6 +73,7 @@ export function Palette({
   onTask,
   onItem,
   onSetting,
+  onWorkspace,
 }: {
   onClose: () => void;
   filesFolder: string | null;
@@ -68,6 +86,8 @@ export function Palette({
   onTask: (id: string) => void;
   onItem: OpenItem;
   onSetting: (id: string) => void;
+  /** Focuses a Herdr workspace and shows the Work page. Resolves once Herdr has answered; rejects with its refusal. */
+  onWorkspace: (id: string, label: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -75,8 +95,14 @@ export function Palette({
   const [output, setOutput] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Rust's latest answer, and the query it answered: the last one stays drawn while the next is asked. */
-  const [answer, setAnswer] = useState<{ query: string; files: FileSearch | null } | null>(null);
+  const [answer, setAnswer] = useState<{ query: string; files: FileSearch | null; failed?: string } | null>(null);
   const files = answer?.files ?? null;
+  /** Herdr's workspaces, read once when the palette opens: still being read, read, or why they could not be. */
+  const [workspaces, setWorkspaces] = useState<{ state: "loading" } | { state: "ready"; list: HerdrWorkspace[] } | { state: "failed"; reason: string }>({
+    state: "loading",
+  });
+  /** Recent, read once when the palette opens. */
+  const [recent, setRecent] = useState<RecentItem[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const returnFocus = useRef<Element | null>(document.activeElement);
   const searchSeq = useRef(0);
@@ -84,8 +110,18 @@ export function Palette({
   useEffect(() => {
     input.current?.focus();
     void filesIndexWarm().catch(() => {});
+    let live = true;
+    herdrWorkspaces().then(
+      (list) => live && setWorkspaces({ state: "ready", list }),
+      (e: unknown) => live && setWorkspaces({ state: "failed", reason: String(e) }),
+    );
+    recentList().then(
+      (list) => live && setRecent(list),
+      () => {},
+    );
     const previous = returnFocus.current;
     return () => {
+      live = false;
       if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
   }, []);
@@ -111,9 +147,9 @@ export function Palette({
           setAnswer({ query, files: found });
           if (found.indexing) timer = window.setTimeout(ask, INDEXING_RETRY_MS);
         },
-        // A search that fails leaves Files out, as a group with no match is left out.
-        () => {
-          if (seq === searchSeq.current) setAnswer({ query, files: null });
+        // A search that fails says why in the Files group's one line (rule 18).
+        (e: unknown) => {
+          if (seq === searchSeq.current) setAnswer({ query, files: null, failed: String(e) });
         },
       );
     };
@@ -159,10 +195,19 @@ export function Palette({
 
   // The callbacks change with every render of App; the rows reach them through this, so the groups are rebuilt only
   // when what they show changes.
-  const acts = useRef({ run, onOpen, onClose, onTask, onItem, onSetting });
+  const acts = useRef({ run, onOpen, onClose, onTask, onItem, onSetting, onWorkspace });
   useEffect(() => {
-    acts.current = { run, onOpen, onClose, onTask, onItem, onSetting };
+    acts.current = { run, onOpen, onClose, onTask, onItem, onSetting, onWorkspace };
   });
+
+  /** Focuses a workspace: the palette closes once Herdr has answered, and stays open to say why when it refused. */
+  const focusWorkspace = (id: string, label: string) => {
+    setError(null);
+    acts.current.onWorkspace(id, label).then(
+      () => acts.current.onClose(),
+      (e: unknown) => setError(String(e)),
+    );
+  };
 
   /** Each group with every row it matched (`all`), and as shown (`group`). */
   const built = useMemo(() => {
@@ -179,24 +224,47 @@ export function Palette({
       };
     const out: { all: PaletteItem[]; group: PaletteGroup }[] = [];
     const add = (id: PaletteGroup["id"], all: PaletteItem[], beyond = 0) => out.push({ all, group: toGroup(id, all, opened.has(id), beyond) });
+    /** A group that has no rows, only its one line: a source still being read, or one that failed. */
+    const line = (id: PaletteGroup["id"], state: "loading" | "failed", note: string) =>
+      out.push({ all: [], group: { id, label: GROUP_LABEL[id], items: [], more: 0, state, note } });
+    const typed = query.trim() !== "";
+    if (!typed) {
+      const rows = recentItems(recent, Date.now(), folders, crew?.tasks ?? [], {
+        open,
+        task: then((id: string) => acts.current.onTask(id)),
+        workspace: (label: string) => {
+          const w = workspaces.state === "ready" ? workspaces.list.find((x) => x.label === label) : undefined;
+          if (w) focusWorkspace(w.id, w.label);
+          else setError(workspaces.state === "failed" ? NOTE.noHerdr : `No workspace is called ${label} now`);
+        },
+        setting: then((id: string) => acts.current.onSetting(id)),
+      });
+      out.push({ all: rows, group: { id: "recent", label: GROUP_LABEL.recent, items: rows, more: 0, state: "ready" } });
+    }
     add(
       "command",
       commandItems(query, shortcuts, (c) => void acts.current.run(c)),
     );
-    if (query.trim() !== "") add("open", openItems(query, tabs, folders, open));
-    if (files?.indexing) {
-      out.push({ all: [], group: { id: "file", label: GROUP_LABEL.file, items: [], more: 0, state: "loading", note: "Indexing files…" } });
-    } else if (files) {
+    if (typed) add("open", openItems(query, tabs, folders, open));
+    if (files?.indexing) line("file", "loading", NOTE.indexing);
+    else if (files) {
       add("file", fileItems(files, folders, open), files.more);
-    }
-    if (query.trim() !== "") {
+      const last = out[out.length - 1]!;
+      if (files.capped && last.group.id === "file") last.group.note = NOTE.capped;
+    } else if (typed && answer?.query === query && answer.failed) line("file", "failed", NOTE.filesFailed(answer.failed));
+    if (typed) {
       add("folder", folderItems(query, folders, open));
       add("task", taskItems(query, crew?.tasks ?? [], folders, then((id: string) => acts.current.onTask(id))));
       add("inbox", inboxItems(query, crew?.decisions ?? [], folders, crew?.now ?? Date.now(), then((task: string, key: string) => acts.current.onItem(task, key))));
+      if (workspaces.state === "ready") add("workspace", workspaceItems(query, workspaces.list, folders, (w) => focusWorkspace(w.id, w.label)));
+      else if (workspaces.state === "loading") line("workspace", "loading", NOTE.readingHerdr);
+      else line("workspace", "failed", NOTE.noHerdr);
       add("setting", settingItems(query, then((id: string) => acts.current.onSetting(id))));
     }
     return out.filter(({ group: g }) => g.items.length > 0 || g.state !== "ready");
-  }, [query, shortcuts, files, folders, opened, tabs, crew]);
+    // `focusWorkspace` reads only refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, shortcuts, files, answer, folders, opened, tabs, crew, workspaces, recent]);
   const groups = useMemo(() => built.map((b) => b.group), [built]);
 
   /** Every row the arrows reach, in order: each group's items, then its "N more". */
@@ -225,18 +293,17 @@ export function Palette({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
+    const key = paletteKey(e.key);
+    if (key === null) return;
+    e.preventDefault();
+    if (key === "Escape") {
       e.stopPropagation();
       onClose();
-    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (keys.length === 0) return;
-      const at = current === null ? 0 : keys.indexOf(current);
-      setSelectedKey(keys[Math.max(0, Math.min(keys.length - 1, at + (e.key === "ArrowDown" ? 1 : -1)))]!);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
+    } else if (key === "Enter") {
       enter();
+    } else if (keys.length > 0) {
+      const at = current === null ? 0 : keys.indexOf(current);
+      setSelectedKey(keys[Math.max(0, Math.min(keys.length - 1, at + (key === "ArrowDown" ? 1 : -1)))]!);
     }
   };
 
@@ -250,14 +317,14 @@ export function Palette({
             ref={input}
             className="palette-input"
             value={query}
-            placeholder="Search files, folders, tasks, settings and commands"
+            placeholder="Search files, folders, tasks, workspaces, settings and commands"
             aria-label="Search"
             onChange={(e) => setQuery(e.currentTarget.value)}
           />
         </div>
         <div className="palette-body">
           <ul className="palette-list" role="listbox" aria-label="Results">
-            {groups.length === 0 && !blank && answer?.query === query && <li className="palette-empty">Nothing matches "{query.trim()}"</li>}
+            {groups.every((g) => g.items.length === 0) && !blank && answer?.query === query && <li className="palette-empty">Nothing matches "{query.trim()}"</li>}
             {groups.map((g) => (
               <PaletteGroupView
                 key={g.id}

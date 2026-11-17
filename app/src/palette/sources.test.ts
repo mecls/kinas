@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { CrewDecision, CrewTask, FileSearch } from "../api.ts";
+import type { CrewDecision, CrewTask, FileSearch, RecentItem } from "../api.ts";
 import { DEFAULT_SHORTCUTS } from "../settings/shortcuts.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
-import { commandItems, fileItems, folderItems, folderOf, GROUP_SHOWN, inboxItems, openItems, settingItems, taskItems, toGroup, type PaletteItem } from "./sources.ts";
+import { commandItems, fileItems, folderItems, folderOf, GROUP_SHOWN, inboxItems, openItems, recentItems, RECENT_SHOWN, settingItems, taskItems, toGroup, workspaceItems, type PaletteItem } from "./sources.ts";
 
 const folder = (name: string, path: string): SeatedFolder => ({
   name,
@@ -188,5 +188,56 @@ describe("the in-window sources", () => {
     const folders = [{ ...folder("acme", "/root/clients/acme"), hidden: true }, { ...folder("acme-old", "/root/old/acme"), removed: true }, folder("beta", "/root/beta")];
     expect(folderItems("acme", folders, () => {}).map((i) => [i.title, i.detail, i.mono])).toEqual([["acme", "Hidden from the sidebar", false]]);
     expect(folderItems("beta", folders, () => {}).map((i) => [i.title, i.detail, i.mono])).toEqual([["beta", "~/beta", true]]);
+  });
+});
+
+describe("Workspaces and Recent", () => {
+  test("workspaces by label and folder, the focused one saying so", () => {
+    const ws = [
+      { id: "w1", label: "firstmate", focused: false, cwd: "/h/firstmate" },
+      { id: "w2", label: "acme", focused: true, cwd: "/root/clients/acme" },
+      { id: "w3", label: "notes", focused: false, cwd: "/root/clients/acme/notes" },
+    ];
+    const focused: string[] = [];
+    const items = workspaceItems("acme", ws, FOLDERS, (w) => focused.push(w.id));
+    expect(items.map((i) => [i.title, i.detail, i.folder?.name])).toEqual([
+      ["acme", "Herdr workspace · focused", "acme"],
+      ["notes", "Herdr workspace", "acme"],
+    ]);
+    items[1]!.act();
+    expect(focused).toEqual(["w3"]);
+  });
+
+  test("recent drops nothing it was given, shows eight, and opens each by its own door", () => {
+    const now = 10 * 86_400_000;
+    const list: RecentItem[] = [
+      { kind: "file", key: "/root/clients/acme/docs/prd.md", label: "prd.md", at: now - 8 * 60_000, display: "clients/acme/docs/prd.md" },
+      { kind: "task", key: "inv-1", label: "Inventory sync rewrite", at: now - 2 * 3_600_000 },
+      { kind: "workspace", key: "clients/globex", label: "clients/globex", at: now - 86_400_000 },
+      { kind: "setting", key: "ollama.key", label: "API key", at: now - 3 * 86_400_000 },
+      { kind: "folder", key: "/root/clients/acme", label: "acme", at: now - 3 * 86_400_000 },
+      ...Array.from({ length: 6 }, (_, n): RecentItem => ({ kind: "setting", key: `s${n}`, label: `s${n}`, at: now })),
+    ];
+    const tasks = [task("inv-1", { title: "Inventory sync rewrite", word: "needs decision" })];
+    const opened: string[] = [];
+    const items = recentItems(list, now, FOLDERS, tasks, {
+      open: (p) => opened.push(`open ${p}`),
+      task: (id) => opened.push(`task ${id}`),
+      workspace: (label) => opened.push(`workspace ${label}`),
+      setting: (id) => opened.push(`setting ${id}`),
+    });
+    expect(items).toHaveLength(RECENT_SHOWN);
+    expect(items.slice(0, 5).map((i) => [i.kind, i.title, i.detail, i.age, i.folder?.name])).toEqual([
+      ["file", "prd.md", "clients/acme/docs/prd.md", "8 min", "acme"],
+      ["task", "Inventory sync rewrite", "needs decision", "2 h", undefined],
+      ["workspace", "clients/globex", "Herdr workspace", "1 d", undefined],
+      ["setting", "API key", "Settings · Ollama Cloud", "3 d", undefined],
+      ["folder", "acme", "Client folder", "3 d", "acme"],
+    ]);
+    expect(items[0]!.mono).toBe(true);
+    expect(items[1]!.dot).toEqual({ color: "--warn", kind: "ring" });
+    expect(new Set(items.map((i) => i.key)).size).toBe(RECENT_SHOWN);
+    for (const i of items.slice(0, 5)) i.act();
+    expect(opened).toEqual(["open /root/clients/acme/docs/prd.md", "task inv-1", "workspace clients/globex", "setting ollama.key", "open /root/clients/acme"]);
   });
 });

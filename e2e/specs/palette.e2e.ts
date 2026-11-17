@@ -14,8 +14,9 @@ const shown = () =>
     groups: [...document.querySelectorAll(".ui-palette-group")].map((g) => `${g.getAttribute("data-group")}: ${[...g.querySelectorAll(".ui-palette-row")].map((r) => r.getAttribute("data-key")).join(", ")}`),
   }));
 
-/** Opens the palette, types `query`, and waits for the row keyed `key`; a miss says what the palette showed instead. */
-async function find(query: string, key: string) {
+/** Opens the palette, types `query`, and waits for the row keyed `key` (or a key it matches); a miss says what the
+ * palette showed instead. */
+async function find(query: string, key: string | RegExp) {
   await browser.keys(["Meta", "k"]);
   await expect($(".palette")).toBeDisplayed();
   // The e2e build's driver (tauri-plugin-wdio-webdriver 1.4.0) types a key action's characters by script and inserts
@@ -25,7 +26,7 @@ async function find(query: string, key: string) {
   await browser.waitUntil(
     async () => {
       last = await shown();
-      return last.groups.some((g) => g.split(/[:,] /).includes(key));
+      return last.groups.some((g) => g.split(/[:,] /).some((k) => (typeof key === "string" ? k === key : key.test(k))));
     },
     { timeout: 20000, interval: 500, timeoutMsg: `"${query}" never listed ${key}` },
   ).catch((e: Error) => {
@@ -184,5 +185,40 @@ describe("the command palette", () => {
       { timeout: 15000, interval: 250, timeoutMsg: "the task's detail never opened in the panel" },
     );
     if (process.env.KINAS_E2E_SHOTS) await browser.saveScreenshot(`${process.env.KINAS_E2E_SHOTS}/palette-task.png`);
+  });
+
+  // Slice 4, Journey B and rule 18: this spec's pane is a plain shell, so no Herdr is attached. Workspaces says why in one
+  // line, and every other group answers as before.
+  it("with no Herdr, Workspaces says why in one line and the rest still answer", async () => {
+    await find("readme", /^file:.*\/README\.md$/);
+    const seen = await browser.execute(() => {
+      const ws = document.querySelector('[data-group="workspace"]');
+      return {
+        state: ws?.getAttribute("data-state") ?? null,
+        note: ws?.querySelector(".ui-palette-note")?.textContent ?? null,
+        rows: ws?.querySelectorAll(".ui-palette-row").length ?? null,
+        files: document.querySelectorAll('[data-group="file"] .ui-palette-row').length,
+        order: [...document.querySelectorAll(".ui-palette-group")].map((g) => g.getAttribute("data-group")).filter((g) => g === "file" || g === "workspace"),
+      };
+    });
+    expect(seen).toEqual({ state: "failed", note: "Herdr is not running, so no workspace can be searched.", rows: 0, files: 1, order: ["file", "workspace"] });
+    if (process.env.KINAS_E2E_SHOTS) await browser.saveScreenshot(`${process.env.KINAS_E2E_SHOTS}/palette-no-herdr.png`);
+    await browser.keys(["Escape"]);
+    await expect($(".palette")).not.toBeExisting();
+  });
+
+  // Slice 4, rule 14: before anything is typed, Recent lists what was opened, newest first — here the task, the setting
+  // and README.md this spec opened — then Commands.
+  it("an empty box shows Recent, newest first, then Commands", async () => {
+    await browser.keys(["Meta", "k"]);
+    await expect($(".palette")).toBeDisplayed();
+    await browser.waitUntil(async () => (await shown()).groups.some((g) => g.startsWith("recent: ")), { timeout: 15000, timeoutMsg: "Recent never showed" });
+    const seen = await shown();
+    const recent = seen.groups.find((g) => g.startsWith("recent: "))!.slice("recent: ".length).split(", ");
+    expect(recent.slice(0, 2)).toEqual(["recent:task:ledger-9c2e", "recent:setting:ollama.key"]);
+    expect(recent.some((k) => /^recent:file:.*\/README\.md$/.test(k))).toBe(true);
+    expect(seen.groups.map((g) => g.split(":")[0])).toEqual(["recent", "command"]);
+    if (process.env.KINAS_E2E_SHOTS) await browser.saveScreenshot(`${process.env.KINAS_E2E_SHOTS}/palette-recent.png`);
+    await browser.keys(["Escape"]);
   });
 });

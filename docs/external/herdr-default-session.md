@@ -28,6 +28,9 @@ Herdr is the session runtime in the Work page's terminal (Herdr 0.9.0 today). Th
   5 s, asked at most every 2 s) — and Enter on one runs `workspace focus <id>`, as Open in the terminal does. It asks
   Herdr nothing new and types nothing into any pane. With no attached session (a plain-shell pane) the palette says
   "Herdr is not running".
+- Amended 2026-11-17 (as built, slice 4): when the held view is older than 5 s, the palette asks `api snapshot` itself
+  rather than waiting on the crew thread's 2 s gap — once per palette opening, and the answer is kept for the thread
+  too. Enter on a workspace then asks the thread for a fresh view, for the Work page's chrome.
 
 ## What it can do
 

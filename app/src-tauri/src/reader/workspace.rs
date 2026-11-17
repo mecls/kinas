@@ -13,6 +13,7 @@
 use std::path::Path;
 
 use serde::Serialize;
+use tauri::Manager;
 
 use crate::herdr::{find_herdr, herdr_args, run, session, NOT_INSTALLED, NOT_RUNNING, OPENING};
 
@@ -69,6 +70,62 @@ pub fn workspace_with_label(snapshot_json: &str, label: &str) -> Option<String> 
     matches.first()?.get("workspace_id")?.as_str().map(str::to_string)
 }
 
+/// One of Herdr's workspaces, as the palette lists it (interface polish, rule 13 Workspaces): its id, its label, whether it
+/// holds the focus, and the folder of its first pane that reports one.
+#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+pub struct HerdrWorkspace {
+    pub id: String,
+    pub label: String,
+    pub focused: bool,
+    pub cwd: Option<String>,
+}
+
+/// What the palette says when there is no Herdr to list: a plain-shell pane, no binary, or no answer.
+pub const NO_HERDR: &str = "Herdr is not running";
+
+/// The view's workspaces in Herdr's own order (its numbers).
+pub(crate) fn workspaces_of(view: &crate::herdr::View) -> Vec<HerdrWorkspace> {
+    let mut list: Vec<&crate::herdr::Workspace> = view.workspaces.iter().collect();
+    list.sort_by_key(|w| w.number);
+    list.into_iter()
+        .map(|w| HerdrWorkspace {
+            id: w.id.clone(),
+            label: w.label.clone(),
+            focused: w.focused,
+            cwd: view.panes.iter().filter(|p| p.workspace_id == w.id).find_map(|p| p.cwd.clone()),
+        })
+        .collect()
+}
+
+/// The workspaces of the session the Work pane attaches, from the crew's live view of Herdr (asked again only when that
+/// view is older than the chrome's 5 s). Lists; changes nothing.
+#[tauri::command]
+pub async fn herdr_workspaces(app: tauri::AppHandle) -> Result<Vec<HerdrWorkspace>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::readers::crew::live_view(&app, crate::readers::crew::HERDR_FRESH_MS).map(|v| workspaces_of(&v)).ok_or_else(|| NO_HERDR.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Focuses a workspace by its id, as Open in the terminal focuses one; the Work page then shows it. Nothing is typed.
+#[tauri::command]
+pub async fn herdr_focus_workspace(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if crate::readers::crew::attached_session().is_none() {
+            return Err(NO_HERDR.to_string());
+        }
+        let _one_at_a_time = OPENING.lock().unwrap_or_else(|p| p.into_inner());
+        let herdr = find_herdr().ok_or_else(|| NOT_INSTALLED.to_string())?;
+        crate::herdr::workspace_focus(&herdr, &id)?;
+        // The crew's thread reads the new focus for the chrome.
+        app.state::<crate::readers::runtime::ReaderControl>().crew_herdr();
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// `dir` has already been checked by the caller (R9) and is a folder.
 pub fn open_folder(dir: &Path, label: &str) -> Result<Opened, String> {
     let _one_at_a_time = OPENING.lock().unwrap_or_else(|p| p.into_inner());
@@ -92,6 +149,24 @@ mod tests {
 
     // What Herdr 0.9.0 printed on 2026-09-21 (throwaway session `kinas-ws-probe`), trimmed to what is read.
     const SNAPSHOT: &str = r#"{"id":"cli:api:snapshot","result":{"snapshot":{"focused_workspace_id":"w2","workspaces":[{"active_tab_id":"w1:t1","agent_status":"unknown","focused":false,"label":"sidebar-folders","number":1,"pane_count":1,"tab_count":1,"workspace_id":"w1"},{"active_tab_id":"w2:t1","agent_status":"unknown","focused":true,"label":"probe root/one two","number":2,"pane_count":1,"tab_count":1,"workspace_id":"w2"},{"active_tab_id":"w3:t1","agent_status":"unknown","focused":false,"label":"-x","number":3,"pane_count":1,"tab_count":1,"workspace_id":"w3"},{"active_tab_id":"w4:t1","agent_status":"unknown","focused":false,"label":"plain","number":4,"pane_count":1,"tab_count":1,"workspace_id":"w4"}]}}}"#;
+
+    #[test]
+    fn the_palette_lists_every_workspace_in_herdr_s_order_with_its_first_pane_s_folder() {
+        use crate::herdr::{Pane, View, Workspace};
+        let ws = |id: &str, label: &str, number: u32, focused: bool| Workspace { id: id.into(), label: label.into(), number, focused };
+        let pane = |id: &str, w: &str, cwd: Option<&str>| Pane { id: id.into(), workspace_id: w.into(), tab_label: None, focused: false, cwd: cwd.map(str::to_string) };
+        let view = View {
+            focused_pane: None,
+            workspaces: vec![ws("w3", "kinas/docs", 3, false), ws("w1", "firstmate", 1, false), ws("w2", "acme", 2, true)],
+            panes: vec![pane("p1", "w1", None), pane("p2", "w1", Some("/h/firstmate")), pane("p3", "w2", Some("/p/acme")), pane("p4", "w3", None)],
+        };
+        let listed = workspaces_of(&view);
+        assert_eq!(listed.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["w1", "w2", "w3"]);
+        assert_eq!(listed[0], HerdrWorkspace { id: "w1".into(), label: "firstmate".into(), focused: false, cwd: Some("/h/firstmate".into()) });
+        assert!(listed[1].focused);
+        assert_eq!(listed[2].cwd, None);
+        assert!(workspaces_of(&View::default()).is_empty());
+    }
 
     #[test]
     fn a_workspace_is_found_by_its_whole_label_and_by_nothing_less() {

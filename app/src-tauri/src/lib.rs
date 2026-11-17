@@ -13,6 +13,7 @@ mod reader;
 mod readers;
 mod readings;
 mod redact;
+mod recent;
 mod search;
 mod staleness;
 mod store;
@@ -181,6 +182,10 @@ pub fn run() {
             reader::pins::reader_unpin,
             search::files_index_warm,
             search::files_search,
+            recent::recent_list,
+            recent::recent_push,
+            reader::workspace::herdr_workspaces,
+            reader::workspace::herdr_focus_workspace,
             reader::changes::tree_changes_watch,
             reader::changes::tree_changes_refresh,
             reader::changes::tree_changes_diff,

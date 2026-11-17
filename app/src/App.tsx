@@ -9,6 +9,7 @@ import {
   crewErrorOf,
   focusCrewPane,
   getUiPrefs,
+  herdrFocusWorkspace,
   launchFirstMate,
   listProjects,
   onAppNavigate,
@@ -22,6 +23,7 @@ import {
   readerPin,
   readerPins,
   readerUnpin,
+  recentPush,
   type ReaderSide,
   setFolderHidden,
   setReaderSide as saveReaderSide,
@@ -42,6 +44,7 @@ import { connectionOf } from "./shell/connection.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { back, canBack, canForward, EMPTY_HISTORY, forward, type History, patchScroll, type Place, readerAtOf, record, samePlace } from "./shell/history.ts";
 import { addedLine, seatFolders } from "./shell/folders.ts";
+import { SETTINGS } from "./settings/index.ts";
 import type { Notice } from "./shell/notice.ts";
 import { Sidebar } from "./shell/Sidebar.tsx";
 import { CrewPage } from "./pages/Crew.tsx";
@@ -180,6 +183,9 @@ export function App() {
   );
   // One crew reading for every page that shows the crew (crew/useCrew.ts): Crew, Inbox, and Home's night.
   const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
+  /** The crew as last read, for callbacks that name a task by its title without being remade on every reading. */
+  const crewRef = useRef(crew);
+  crewRef.current = crew;
   /** A reply box the Inbox should open: the task detail's Answer or Deny sends the captain there. */
   const [inboxRequest, setInboxRequest] = useState<(InboxBox & { seq: number }) | null>(null);
   /** An Inbox item the palette chose: the Inbox shows with it focused (interface polish, rule 16). */
@@ -342,6 +348,16 @@ export function App() {
     }
     setNav(next);
   }, []);
+
+  // Recent (interface polish, rule 14): a file or folder the reader shows, however it was opened — the sidebar, the
+  // palette, `kinas open`, a link. Its README showing with a folder counts too; a file shown again moves to the front.
+  const shownFile = nav.problem ? null : (nav.doc?.path ?? null);
+  useEffect(() => {
+    if (shownFile) void recentPush({ kind: "file", key: shownFile, label: baseName(shownFile) }).catch(() => {});
+  }, [shownFile]);
+  useEffect(() => {
+    if (nav.folder) void recentPush({ kind: "folder", key: nav.folder, label: baseName(nav.folder) }).catch(() => {});
+  }, [nav.folder]);
 
   const onSettled = useCallback((seq: number) => {
     if (pending.current?.seq !== seq) return;
@@ -520,6 +536,8 @@ export function App() {
   const openTask = useCallback((id: string) => {
     expandedRef.current = false;
     setReader((r) => ({ ...r, open: true, expanded: false, occupant: "task", task: id }));
+    const title = crewRef.current?.tasks.find((t) => t.id === id)?.title ?? id;
+    void recentPush({ kind: "task", key: id, label: title }).catch(() => {});
   }, []);
 
   // **Open its pane** (§4, rule 22's clicks): Rust focuses the task's worker workspace, and only when that worked does
@@ -598,6 +616,20 @@ export function App() {
     (id: string) => {
       setSettingsTarget((t) => ({ id, seq: (t?.seq ?? 0) + 1 }));
       goTo("settings");
+      void recentPush({ kind: "setting", key: id, label: SETTINGS.find((x) => x.id === id)?.label ?? id }).catch(() => {});
+    },
+    [goTo],
+  );
+  // A Herdr workspace from the palette (rule 16): Rust focuses it — nothing is typed — and only then does the Work page
+  // show with the terminal holding the keys, as Open in the terminal does. A refusal is the palette's to say. Recent
+  // keeps it by its label: an id is only good while Herdr runs.
+  const focusWorkspace = useCallback(
+    async (id: string, label: string) => {
+      await herdrFocusWorkspace(id);
+      wantTerminalFocus.current = true;
+      goTo("work");
+      setFocusTick((n) => n + 1);
+      void recentPush({ kind: "workspace", key: label, label }).catch(() => {});
     },
     [goTo],
   );
@@ -793,6 +825,7 @@ export function App() {
           onTask={openTask}
           onItem={openInboxItem}
           onSetting={openSetting}
+          onWorkspace={focusWorkspace}
         />
       )}
     </div>

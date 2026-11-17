@@ -1,8 +1,8 @@
 import { commandsFor, type Command } from "@kinas/commands";
-import type { CrewDecision, CrewTask, FileSearch } from "../api.ts";
-import { BADGE_OF } from "../crew/board.ts";
+import type { CrewDecision, CrewTask, FileSearch, HerdrWorkspace, RecentItem } from "../api.ts";
+import { BADGE_OF, largestUnit } from "../crew/board.ts";
 import { ageText, titleOf } from "../crew/inbox.ts";
-import { sectionOf, settingMatches } from "../settings/index.ts";
+import { sectionOf, SETTINGS, settingMatches } from "../settings/index.ts";
 import { chordLabel, SHORTCUT_ACTIONS, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { Category, DotKind } from "../ui/Dot.tsx";
@@ -11,8 +11,9 @@ import { ranked, score } from "./match.ts";
 
 // What the palette searches, as groups of rows (tasks/interface-polish, PRD rules 13–17; build-spec §11.2). Each
 // source is a pure function of what the window already holds, so it answers as the query changes; the Files group
-// alone waits on Rust (`search.rs`). Slice 2: Commands and Files. Slice 3: Open, Client folders, Tasks, Inbox and
-// Settings, each searched only once something is typed (rule 14). Workspaces and Recent come in slice 4.
+// and Workspaces wait on Rust (`search.rs`, Herdr's live view). Slice 2: Commands and Files. Slice 3: Open, Client
+// folders, Tasks, Inbox and Settings, each searched only once something is typed (rule 14). Slice 4: Workspaces, and
+// Recent, the empty box's first group.
 
 export type PaletteKind = "command" | "open" | "file" | "folder" | "task" | "inbox" | "workspace" | "setting";
 
@@ -60,6 +61,18 @@ export const GROUP_LABEL: Readonly<Record<PaletteGroup["id"], string>> = {
 
 /** Each group shows its five best, then "N more" (rule 15). */
 export const GROUP_SHOWN = 5;
+
+/** The empty box's Recent shows the last eight (rule 14). */
+export const RECENT_SHOWN = 8;
+
+/** The groups' one lines (rule 18): a source still being read, or one that failed. */
+export const NOTE = {
+  indexing: "Indexing files…",
+  readingHerdr: "Reading Herdr…",
+  noHerdr: "Herdr is not running, so no workspace can be searched.",
+  capped: "Only the first 200,000 files and folders are searched.",
+  filesFailed: (reason: string) => `Files could not be searched: ${reason}`,
+} as const;
 
 /** How many files the Files group asks Rust for: five shown, the rest behind "N more". */
 export const FILES_ASKED = 50;
@@ -194,6 +207,71 @@ export function settingItems(q: string, openSetting: (id: string) => void): Pale
     detail: sectionOf(s).title,
     act: () => openSetting(s.id),
   }));
+}
+
+/** Herdr's workspaces by label and folder, in Herdr's order; the focused one says so. */
+export function workspaceItems(q: string, ws: readonly HerdrWorkspace[], folders: readonly SeatedFolder[], focus: (w: HerdrWorkspace) => void): PaletteItem[] {
+  return ranked(ws, (w) => score(q, w.label, w.cwd ?? undefined)).map((w) => {
+    const f = w.cwd ? folderOf(w.cwd, folders) : null;
+    return {
+      kind: "workspace",
+      key: `workspace:${w.id}`,
+      title: w.label,
+      detail: w.focused ? "Herdr workspace · focused" : "Herdr workspace",
+      folder: f ? { name: f.name, cat: f.cat } : undefined,
+      act: () => focus(w),
+    };
+  });
+}
+
+/** What Recent's rows open: each kind's own door. */
+export interface RecentDoors {
+  open: (path: string) => void;
+  task: (id: string) => void;
+  workspace: (label: string) => void;
+  setting: (id: string) => void;
+}
+
+/** A path as Recent shows it: under the client folder that holds it, by that folder's name; else whole. */
+function shownPath(path: string, folders: readonly SeatedFolder[]): string {
+  const f = folderOf(path, folders);
+  if (!f) return path;
+  const rest = path.slice(f.path.length).replace(/^\/+/, "");
+  return rest === "" ? f.name : `${f.name}/${rest}`;
+}
+
+/** The last eight things opened, newest first, each saying what it is and how long ago (rule 14). */
+export function recentItems(list: readonly RecentItem[], now: number, folders: readonly SeatedFolder[], tasks: readonly CrewTask[], doors: RecentDoors): PaletteItem[] {
+  return list.slice(0, RECENT_SHOWN).map((r) => {
+    const base = { key: `recent:${r.kind}:${r.key}`, title: r.label, age: largestUnit(now - r.at) };
+    if (r.kind === "file" || r.kind === "folder") {
+      const f = folderOf(r.key, folders);
+      const client = r.kind === "folder" && f?.path === r.key;
+      return {
+        ...base,
+        kind: r.kind === "file" ? "file" : "folder",
+        dir: r.kind === "folder",
+        detail: client ? "Client folder" : (r.display ?? shownPath(r.key, folders)),
+        mono: !client,
+        folder: f ? { name: f.name, cat: f.cat } : undefined,
+        act: () => doors.open(r.key),
+      };
+    }
+    if (r.kind === "task") {
+      const t = tasks.find((x) => x.id === r.key);
+      const badge = t ? BADGE[BADGE_OF[t.word]] : null;
+      return {
+        ...base,
+        kind: "task",
+        detail: badge ? badge.word : "Task",
+        dot: badge ? { color: badge.color, kind: badge.kind } : undefined,
+        act: () => doors.task(r.key),
+      };
+    }
+    if (r.kind === "workspace") return { ...base, kind: "workspace", detail: "Herdr workspace", act: () => doors.workspace(r.key) };
+    const setting = SETTINGS.find((x) => x.id === r.key);
+    return { ...base, kind: "setting", detail: setting ? `Settings · ${sectionOf(setting).title}` : "Settings", act: () => doors.setting(r.key) };
+  });
 }
 
 /** A group from its rows: the first `GROUP_SHOWN`, or all when opened; `beyond` counts matches never sent (Files). */

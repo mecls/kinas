@@ -596,6 +596,33 @@ export const filesIndexWarm = () => invoke<void>("files_index_warm");
 /** Names under the projects folder only; nothing is written or logged (build-spec invariant 5). */
 export const filesSearch = (query: string, limit: number) => invoke<FileSearch>("files_search", { query, limit });
 
+/** Recent (interface polish, rule 14): the last 20 things opened anywhere, newest first, kept across a relaunch. */
+export type RecentKind = "file" | "folder" | "task" | "workspace" | "setting";
+export interface RecentItem {
+  kind: RecentKind;
+  /** A file's or folder's real path; a task's id; a workspace's label; a setting's id. */
+  key: string;
+  label: string;
+  at: number;
+  /** A file's or a folder's path under the projects folder, or `~/…`, as the sidebar writes it. */
+  display?: string;
+}
+/** Newest first; a file or folder gone from disk is left out. */
+export const recentList = () => invoke<RecentItem[]>("recent_list");
+/** Something was opened: it moves to the front. */
+export const recentPush = (item: Omit<RecentItem, "at">) => invoke<void>("recent_push", { item });
+
+/** One of Herdr's workspaces, for the palette's Workspaces group (rule 13). */
+export interface HerdrWorkspace {
+  id: string;
+  label: string;
+  focused: boolean;
+  cwd: string | null;
+}
+/** The attached session's workspaces; rejects with "Herdr is not running" when there is none to ask. */
+export const herdrWorkspaces = () => invoke<HerdrWorkspace[]>("herdr_workspaces");
+export const herdrFocusWorkspace = (id: string) => invoke<void>("herdr_focus_workspace", { id });
+
 /** A download's answer. The file's **name** only: where Miguel put the copy never comes back across this line. */
 export type ReaderExported = { status: "saved"; name: string; bytes: number } | { status: "cancelled" };
 /**

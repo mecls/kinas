@@ -60,26 +60,27 @@ async function reshowSettings() {
 }
 
 describe("Settings grouped, and the crew's install", () => {
-  it("groups the cards into six sections, every card keeping its data-section", async () => {
+  it("groups the cards into five groups in rule 32's order, every card keeping its data-section", async () => {
     await $('section[data-page="home"]').waitForDisplayed({ timeout: 60000 });
     await go("Settings");
+    // The interface polish (rule 32): the groups are the section list's — Providers, Crew, Workspace, Interface, System —
+    // each named by its group label in the list, the cards in the same order on the right.
     const groups = await waitInPage(
       () =>
-        [...document.querySelectorAll('section[data-page="settings"] .settings-group')].map((g) => [
+        [...document.querySelectorAll('section[data-page="settings"] .settings-body .settings-group')].map((g) => [
           g.getAttribute("data-group"),
-          g.querySelector(".ui-section-head h2")?.textContent,
+          document.querySelector(`section[data-page="settings"] .settings-nav-group[data-group="${g.getAttribute("data-group")}"] .settings-nav-label`)?.textContent,
           [...g.querySelectorAll("[data-section]")].map((c) => c.getAttribute("data-section")).join(","),
         ]),
-      (g) => g.length === 6,
-      "Settings never showed six groups",
+      (g) => g.length === 5,
+      "Settings never showed five groups",
     );
     expect(groups).toEqual([
       ["providers", "Providers", "claude,ollama,convex,hostinger"],
       ["crew", "Crew", "crew"],
-      ["client-folders", "Client folders", "projects,folders"],
-      ["shortcuts", "Shortcuts", "shortcuts,hotkey"],
-      ["appearance", "Appearance", "appearance"],
-      ["advanced", "Advanced", "menu-bar,login,org,reader,cli"],
+      ["workspace", "Workspace", "projects,folders,org"],
+      ["interface", "Interface", "appearance,shortcuts,hotkey,menu-bar,reader"],
+      ["system", "System", "login,cli"],
     ]);
   });
 

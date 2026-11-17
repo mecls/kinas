@@ -1,0 +1,51 @@
+/* DESIGN.md §4 Settings row (1.13): the label and its line on the left, the control on the right; a wide control under
+   them. Rows in one card are parted by a 1 px --line. Tokens only. */
+.ui-setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ui-setting-row + .ui-setting-row {
+  border-top: 1px solid var(--line);
+}
+
+.ui-setting-row[data-wide] {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.ui-setting-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-setting-label {
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  font-weight: 500;
+}
+
+.ui-setting-desc {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.ui-setting-control {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ui-setting-row[data-wide] > .ui-setting-control {
+  display: block;
+}

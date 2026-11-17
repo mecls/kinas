@@ -1,30 +1,29 @@
 {
   "light": {
-    "section[data-page=\"settings\"] .hook-line": {
-      "background-color": "rgb(237, 234, 226)",
-      "border-radius": "6px"
-    },
     "section[data-page=\"settings\"] .problem": {
       "color": "rgb(196, 38, 46)",
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-block-title": {
+      "color": "rgb(27, 31, 39)",
+      "font-size": "15px",
+      "font-weight": "600",
+      "line-height": "22px"
     },
     "section[data-page=\"settings\"] .settings-help": {
       "color": "rgb(91, 97, 112)",
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "12px"
     },
+    "section[data-page=\"settings\"] .settings-nav-item[aria-current=\"true\"]": {
+      "background-color": "oklab(0.939156 -0.004411 -0.014591)",
+      "color": "rgb(27, 31, 39)"
+    },
     "section[data-page=\"settings\"] .settings-section": {
       "background-color": "rgb(255, 255, 255)",
       "border-radius": "10px",
-      "border-top-color": "rgb(227, 223, 213)",
-      "padding-top": "12px"
-    },
-    "section[data-page=\"settings\"] .settings-section h2": {
-      "color": "rgb(27, 31, 39)",
-      "font-size": "15px",
-      "font-weight": "600",
-      "line-height": "22px"
+      "border-top-color": "rgb(227, 223, 213)"
     },
     "section[data-page=\"settings\"] .shortcut-chord": {
       "border-top-color": "rgb(207, 201, 188)",
@@ -47,6 +46,20 @@
       "border-top-color": "rgb(207, 201, 188)",
       "height": "28px"
     },
+    "section[data-page=\"settings\"] .ui-setting-desc": {
+      "color": "rgb(91, 97, 112)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .ui-setting-label": {
+      "color": "rgb(27, 31, 39)",
+      "font-size": "13px",
+      "font-weight": "500"
+    },
+    "section[data-page=\"settings\"] .ui-setting-row + .ui-setting-row": {
+      "border-top-color": "rgb(227, 223, 213)",
+      "border-top-style": "solid",
+      "padding-top": "12px"
+    },
     "section[data-page=\"settings\"] .ui-titlerow h1": {
       "color": "rgb(27, 31, 39)",
       "font-size": "20px",
@@ -54,31 +67,30 @@
     }
   },
   "dark": {
-    "section[data-page=\"settings\"] .hook-line": {
-      "background-color": "rgb(33, 33, 33)",
-      "border-radius": "6px"
-    },
     "section[data-page=\"settings\"] .problem": {
       "color": "rgb(229, 87, 94)",
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .settings-block-title": {
+      "color": "rgb(237, 237, 237)",
+      "font-size": "15px",
+      "font-weight": "600",
+      "line-height": "22px"
     },
     "section[data-page=\"settings\"] .settings-help": {
       "color": "rgb(163, 163, 163)",
       "font-family": "Inter, -apple-system, \"SF Pro Text\", system-ui, sans-serif",
       "font-size": "12px"
     },
+    "section[data-page=\"settings\"] .settings-nav-item[aria-current=\"true\"]": {
+      "background-color": "oklab(0.280091 -0.004908 -0.016235)",
+      "color": "rgb(237, 237, 237)"
+    },
     "section[data-page=\"settings\"] .settings-section": {
       "background-color": "rgb(23, 23, 23)",
       "border-radius": "10px",
-      "border-top-color": "rgb(39, 39, 39)",
-      "padding-top": "12px"
-    },
-    "section[data-page=\"settings\"] .settings-section h2": {
-      "color": "rgb(237, 237, 237)",
-      "font-size": "15px",
-      "font-weight": "600",
-      "line-height": "22px"
+      "border-top-color": "rgb(39, 39, 39)"
     },
     "section[data-page=\"settings\"] .shortcut-chord": {
       "border-top-color": "rgb(54, 54, 54)",
@@ -100,6 +112,20 @@
       "border-radius": "6px",
       "border-top-color": "rgb(54, 54, 54)",
       "height": "28px"
+    },
+    "section[data-page=\"settings\"] .ui-setting-desc": {
+      "color": "rgb(163, 163, 163)",
+      "font-size": "12px"
+    },
+    "section[data-page=\"settings\"] .ui-setting-label": {
+      "color": "rgb(237, 237, 237)",
+      "font-size": "13px",
+      "font-weight": "500"
+    },
+    "section[data-page=\"settings\"] .ui-setting-row + .ui-setting-row": {
+      "border-top-color": "rgb(39, 39, 39)",
+      "border-top-style": "solid",
+      "padding-top": "12px"
     },
     "section[data-page=\"settings\"] .ui-titlerow h1": {
       "color": "rgb(237, 237, 237)",

@@ -5,35 +5,175 @@
    and the sections find things by. Tokens only. */
 
 .settings {
-  /* A form reads best narrow: two panels' width, not the page's. */
-  max-width: calc(var(--panel-w) * 2);
+  /* The section list beside the rows (1.13, rule 32): the list a sidebar's width, the rows two panels' width. */
+  max-width: calc(var(--panel-w) * 2 + var(--sidebar-w) + var(--space-6));
   padding: var(--space-5) var(--space-6) var(--space-7);
   outline: none;
+  container-type: inline-size;
+}
+
+/* Two columns inside the page (1.13): the section list, sticky while the rows scroll, and the rows. */
+.settings-cols {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+}
+
+.settings-nav {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--hit);
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.settings-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+  outline: none;
+}
+
+.settings-nav-group {
+  display: grid;
+  margin-bottom: var(--space-2);
+}
+
+.settings-nav-label {
+  margin: var(--space-2) var(--space-2) var(--space-1);
+}
+
+.settings-nav-item {
+  height: calc(var(--hit) + var(--space-0));
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: default;
+}
+
+.settings-nav-item:hover {
+  background: var(--surface-2);
+}
+
+.settings-nav-item[aria-current="true"] {
+  background: var(--accent-soft);
+}
+
+/* While something is typed, a section with no matching row (rule 34). */
+.settings-nav-item[data-dim] {
+  color: var(--ink-3);
+}
+
+.settings-body {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.settings-group {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.settings-group:empty {
+  display: none;
+}
+
+/* A section: its title, then its rows in one card. */
+.settings-block-title {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+}
+
+.settings-empty {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* A row's own status word: the dot and the words (the Claude connection). */
+.settings-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1h);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* What a card says under its rows: its help, the last outcome. */
+.settings-card-foot {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.settings-card-foot > :last-child {
+  margin-bottom: 0;
+}
+
+.settings-wide-field {
+  width: 100%;
+}
+
+/* A control on a row's right (1.13): a field a sidebar's width, the form's buttons beside it on the same line. */
+.ui-setting-control .row {
+  flex-wrap: nowrap;
+  margin: 0;
+}
+
+.ui-setting-control .field:not(.settings-wide-field) {
+  width: var(--sidebar-w);
+  min-width: 0;
+}
+
+/* Narrow (a wide reader panel beside the page): the list goes above the rows, unstuck. */
+@container (width < 44rem) {
+  .settings-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-nav {
+    position: static;
+  }
 }
 
 .settings .ui-titlerow {
   margin-bottom: var(--space-3);
 }
 
-/* Six groups, each a section with its header (DESIGN.md §5 Settings, 1.4); inside one, the cards are --space-3 apart.
-   (Until 2026-09-24 the cards were one column, spaced by a sibling rule here.) */
-.settings-group {
-  display: grid;
-  gap: var(--space-3);
-}
-.settings-group > .ui-section-head {
-  margin-bottom: 0;
-}
-.settings .ui-titlerow + .settings-group {
-  margin-top: 0;
+/* A section's card holds its rows edge to edge: each row has its own padding (ui/SettingsRow.css). */
+.settings-section.ui-card {
+  padding: 0;
 }
 
-.settings-section h2 {
-  margin: 0 0 var(--space-2);
-  color: var(--ink);
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
+/* A message or a problem said under the rows, inside the card. */
+.settings-section > .settings-message,
+.settings-section > .problem {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
 }
 
 .settings-help {
@@ -88,17 +228,12 @@
   min-width: calc(var(--sidebar-w) + var(--space-5));
 }
 
-.settings-section > .field,
-.settings-section > .ui-accent {
-  margin-top: var(--space-1);
-}
-
 /* The Claude hook: each line of shell to paste, with its Copy. */
 .hook-line {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  margin: var(--space-1h) 0 0;
+  margin: var(--space-2) 0 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -111,29 +246,10 @@
 
 /* Shortcuts: what it does, the chord, Change. */
 
-.shortcut-list {
-  margin: 0 0 var(--space-3);
-  padding: 0;
-  list-style: none;
-}
-
 .shortcut {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: var(--row-h);
-}
-
-.shortcut + .shortcut {
-  border-top: 1px solid var(--line);
-}
-
-.shortcut-title {
-  flex: 1;
-  min-width: 0;
-  color: var(--ink);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
 }
 
 /* The chord as the Kbd component draws one. */

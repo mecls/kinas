@@ -210,3 +210,89 @@ describe("Settings from the sidebar, and its shortcuts", () => {
     await expect($('select[aria-label="Convex plan"]')).toHaveValue("starter");
   });
 });
+
+// The interface polish, slice 9 (rules 32–35): the section list beside the rows, Settings' own search, and the rows.
+// Reads are one script each: every WebDriver command here costs seconds (usage.e2e.ts).
+describe("Settings' section list and search", () => {
+  const page = () =>
+    browser.execute(() => {
+      const root = document.querySelector('section[data-page="settings"]')!;
+      const shownBlocks = [...root.querySelectorAll(".settings-block:not([hidden])")].map((b) => b.getAttribute("data-block"));
+      const shownRows = [...root.querySelectorAll(".ui-setting-row:not([hidden])")].filter((r) => !r.closest("[hidden]")).map((r) => r.getAttribute("data-setting"));
+      return {
+        current: root.querySelector('.settings-nav-item[aria-current="true"]')?.getAttribute("data-nav") ?? null,
+        dimmed: [...root.querySelectorAll(".settings-nav-item[data-dim]")].length,
+        shownBlocks,
+        shownRows,
+        empty: root.querySelector('[data-testid="settings-no-match"]')?.textContent ?? null,
+      };
+    });
+
+  /** Sets the search box as typing would (the driver's key actions drop spaces; React reads the input event). */
+  const search = (q: string) =>
+    browser.execute((value: string) => {
+      const input = document.querySelector<HTMLInputElement>('section[data-page="settings"] input[aria-label="Search settings"]')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }, q);
+
+  it("lists every section in its group, and a click scrolls the page to it and marks it", async () => {
+    await browser.keys(["Meta", ","]);
+    await $('section[data-page="settings"] .settings-nav').waitForDisplayed({ timeout: 15000 });
+    const nav = await browser.execute(() =>
+      [...document.querySelectorAll('section[data-page="settings"] .settings-nav-group')].map((g) => `${g.querySelector(".settings-nav-label")?.textContent}: ${[...g.querySelectorAll(".settings-nav-item")].map((i) => i.textContent).join(", ")}`),
+    );
+    expect(nav).toEqual([
+      "Providers: Claude Code, Ollama Cloud, Convex, Hostinger VPS",
+      "Crew: Firstmate",
+      "Workspace: Projects folder, Client folders, Organisation",
+      "Interface: Appearance, Keyboard shortcuts, Global hotkey, Menu bar, Reader",
+      "System: Launch at login, kinas CLI",
+    ]);
+    await browser.execute(() => (document.querySelector('section[data-page="settings"] [data-nav="reader"]') as HTMLElement).click());
+    await browser.waitUntil(
+      () =>
+        browser.execute(() => {
+          const page = document.querySelector<HTMLElement>('section[data-page="settings"]')!;
+          const block = page.querySelector<HTMLElement>('[data-block="reader"]')!;
+          const top = block.getBoundingClientRect().top - page.getBoundingClientRect().top;
+          return top >= -2 && top < page.clientHeight / 2;
+        }),
+      { timeout: 10000, timeoutMsg: "the Reader section never came to the top" },
+    );
+    expect((await page()).current).toBe("reader");
+  });
+
+  it("a search keeps the rows whose label or description matches, and their sections; none says so", async () => {
+    await search("deploy");
+    await browser.waitUntil(async () => (await page()).shownBlocks.length === 1, { timeout: 10000, timeoutMsg: "the search never narrowed the page" });
+    const one = await page();
+    expect({ blocks: one.shownBlocks, rows: one.shownRows }).toEqual({ blocks: ["convex"], rows: ["convex.key", "convex.url"] });
+    expect(one.dimmed).toBe(14);
+    if (process.env.KINAS_E2E_SHOTS) await browser.saveScreenshot(`${process.env.KINAS_E2E_SHOTS}/settings-search.png`);
+    await search("zzz");
+    await browser.waitUntil(async () => (await page()).empty !== null, { timeout: 10000, timeoutMsg: "no match was never said" });
+    expect((await page()).empty).toBe("No setting matches “zzz”.");
+    await search("");
+    await browser.waitUntil(async () => (await page()).shownBlocks.length === 15, { timeout: 10000, timeoutMsg: "clearing the search never brought every section back" });
+    expect((await page()).dimmed).toBe(0);
+  });
+
+  it("every setting is a row with its label and one line, and the shell lines stay open while nothing is received", async () => {
+    const rows = await browser.execute(() =>
+      [...document.querySelectorAll('section[data-page="settings"] .ui-setting-row')].map((r) => ({
+        id: r.getAttribute("data-setting"),
+        label: r.querySelector(".ui-setting-label")?.textContent ?? "",
+        desc: r.querySelector(".ui-setting-desc")?.textContent ?? "",
+      })),
+    );
+    expect(rows).toHaveLength(27);
+    expect(rows.every((r) => r.label !== "" && r.desc !== "")).toBe(true);
+    // Rule 35: the connection is never seen here, so the three lines are open, not folded.
+    const lines = await browser.execute(() => ({
+      lines: document.querySelectorAll('[data-setting="claude.lines"] .hook-line').length,
+      fold: [...document.querySelectorAll('[data-setting="claude.lines"] button')].some((b) => b.textContent === "Show the lines"),
+    }));
+    expect(lines).toEqual({ lines: 3, fold: false });
+  });
+});

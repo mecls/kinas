@@ -137,7 +137,7 @@ describe("the command palette", () => {
     const seen = await browser.execute(() => {
       const r = document.querySelector('.ui-palette-row[data-kind="file"]');
       return {
-        label: document.querySelector('[data-group="file"] .ui-palette-label')?.textContent,
+        label: document.querySelector('.ui-palette-group[data-group="file"] .ui-palette-label')?.textContent,
         name: r?.querySelector(".ui-palette-name")?.textContent?.normalize("NFC"),
         marked: r?.querySelector(".ui-palette-name b")?.textContent?.normalize("NFC"),
         detail: r?.querySelector(".ui-palette-detail")?.textContent?.normalize("NFC"),
@@ -192,12 +192,12 @@ describe("the command palette", () => {
   it("with no Herdr, Workspaces says why in one line and the rest still answer", async () => {
     await find("readme", /^file:.*\/README\.md$/);
     const seen = await browser.execute(() => {
-      const ws = document.querySelector('[data-group="workspace"]');
+      const ws = document.querySelector('.ui-palette-group[data-group="workspace"]');
       return {
         state: ws?.getAttribute("data-state") ?? null,
         note: ws?.querySelector(".ui-palette-note")?.textContent ?? null,
         rows: ws?.querySelectorAll(".ui-palette-row").length ?? null,
-        files: document.querySelectorAll('[data-group="file"] .ui-palette-row').length,
+        files: document.querySelectorAll('.ui-palette-group[data-group="file"] .ui-palette-row').length,
         order: [...document.querySelectorAll(".ui-palette-group")].map((g) => g.getAttribute("data-group")).filter((g) => g === "file" || g === "workspace"),
       };
     });

@@ -29,8 +29,11 @@ import { AccentField } from "../ui/AccentField.tsx";
 import { addedLine, listedFolders, removedFolders, seatFolders, type SeatedFolder } from "../shell/folders.ts";
 import { latestOnly } from "../shell/latest.ts";
 import { CATEGORIES } from "../ui/category.ts";
-import { Button, Card, Chip, Section, SectionHeader, Switch, TitleRow } from "../ui/index.ts";
-import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_TITLES, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
+import { Button, Card, Chip, Dot, Switch, TitleRow } from "../ui/index.ts";
+import { SECTIONS, SETTINGS, settingMatches } from "../settings/index.ts";
+import { Block, Row, SettingsMatch } from "../settings/Row.tsx";
+import { SettingsNav } from "../settings/SettingsNav.tsx";
+import { chordLabel, DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, shortcutProblem, type AppAction, type Shortcuts } from "../settings/shortcuts.ts";
 import { failedRead } from "./readFailure.ts";
 
 // Settings (PRD §3.9, amended 2026-09-15): a page, opened from the gear at the foot of the sidebar or ⌘,. It stays
@@ -109,6 +112,15 @@ export function SettingsPage({
   const [recording, setRecording] = useState<Recording | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  /** Settings' own search (rule 34): the rows whose label or description matches, and the sections that hold them. */
+  const [query, setQuery] = useState("");
+  const matchingIds = useMemo(() => (query.trim() === "" ? null : new Set(settingMatches(query).map((s) => s.id))), [query]);
+  const matchingSections = useMemo(() => (matchingIds === null ? null : new Set(SETTINGS.filter((s) => matchingIds.has(s.id)).map((s) => s.section))), [matchingIds]);
+  /** The section in view, marked in the list (rule 32). */
+  const [current, setCurrent] = useState(SECTIONS[0]!.id);
+  /** Rule 35: the shell lines, unfolded on request while the connection is receiving. */
+  const [showLines, setShowLines] = useState(false);
 
   // Read on every visit and after every change, so two reads can be out at once — and get_settings waits on three
   // Keychain calls, so they can finish in either order. Only the newest counts (shell/latest.ts): Light then Dark must
@@ -154,6 +166,41 @@ export function SettingsPage({
     }
   }, [active, target, settings]);
 
+  /** A section clicked in the list: marked while it stays on screen, even where the page cannot scroll it to the top. */
+  const clicked = useRef<string | null>(null);
+  /** A click in the section list: the page scrolls the section to its top, and the list marks it at once. */
+  const showSection = (id: string) => {
+    clicked.current = id;
+    setCurrent(id);
+    body.current?.querySelector(`[data-block="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "start" });
+  };
+
+  // The section in view (rule 32): the topmost section whose top has passed under the page's top third. Read on the
+  // page's scroll, which is the scroll container the sections move in; an IntersectionObserver gave the last section
+  // no chance when it is too short to reach the top.
+  useEffect(() => {
+    const page = root.current?.closest<HTMLElement>("section.page");
+    if (!active || !settings || !page) return;
+    const read = () => {
+      const blocks = [...(body.current?.querySelectorAll<HTMLElement>(".settings-block:not([hidden])") ?? [])];
+      if (blocks.length === 0) return;
+      const pinned = clicked.current ? blocks.find((b) => b.dataset.block === clicked.current) : undefined;
+      if (pinned) {
+        const box = pinned.getBoundingClientRect();
+        const view = page.getBoundingClientRect();
+        if (box.bottom > view.top && box.top < view.bottom) return;
+        clicked.current = null;
+      }
+      const line = page.getBoundingClientRect().top + page.clientHeight / 3;
+      const atEnd = page.scrollTop + page.clientHeight >= page.scrollHeight - 2;
+      const passed = blocks.filter((b) => b.getBoundingClientRect().top <= line);
+      const shown = atEnd ? blocks[blocks.length - 1]! : (passed[passed.length - 1] ?? blocks[0]!);
+      setCurrent(shown.dataset.block ?? SECTIONS[0]!.id);
+    };
+    page.addEventListener("scroll", read, { passive: true });
+    return () => page.removeEventListener("scroll", read);
+  }, [active, settings]);
+
   const act = async (section: string, what: () => Promise<void>, done?: string) => {
     setMessage(null);
     try {
@@ -192,6 +239,9 @@ export function SettingsPage({
   // Read again on every visit and after every change: a failed read keeps what was read before, and says so (ADR 0004).
   const unread = settings ? failedRead("settings", loadError, true) : null;
 
+  const hook = settings?.claude_hook;
+  // Rule 35: the shell lines fold away once the connection is receiving, and stay open while it is not.
+  const linesFolded = hook?.state === "receiving" && !showLines;
   return (
     <div className="settings" ref={root} tabIndex={-1} onKeyDown={onKeyDown} data-recording={recording ? "true" : undefined}>
       <TitleRow title="Settings" />
@@ -200,238 +250,272 @@ export function SettingsPage({
           {unread}
         </p>
       )}
-      {!settings ? (
+      {!settings || !hook ? (
         <p className="settings-help">{failedRead("settings", loadError, false) ?? "Reading settings…"}</p>
       ) : (
-        <>
-          <Section className="settings-group" data-group="providers">
-            <SectionHeader title="Providers" />
-            <Card className="settings-section" data-section="claude">
-              <h2>Claude Code connection</h2>
-              <p className="settings-help" data-testid="hook-status" data-setting="claude.connection">
-                Status: {HOOK_STATE[settings.claude_hook.state]}
-                {settings.claude_hook.minutes_ago !== null && settings.claude_hook.state === "last_seen" && ` ${settings.claude_hook.minutes_ago} min ago`}
-              </p>
-              <p className="settings-help">
-                Add these lines to <code>~/.claude/statusline-command.sh</code>, directly after <code>input=$(cat)</code>. Kinas never edits that file.
-              </p>
-              {CLAUDE_HOOK_LINES.map((line, i) => (
-                <div className="hook-line" key={i} data-setting={i === 0 ? "claude.lines" : undefined}>
-                  <code>{line}</code>
-                  <Button
-                    className="button"
-                    // The app's one clipboard door (terminal/clipboard.ts), as the Crew page's Copy uses it: "Copied"
-                    // only once the line is on the clipboard.
-                    onClick={() =>
-                      void writeClipboard(line).then((ok) => {
-                        if (!ok) return;
-                        setCopied(i);
-                        window.setTimeout(() => setCopied(null), 1500);
-                      })
-                    }
-                  >
-                    {copied === i ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-              ))}
-            </Card>
-            <Card className="settings-section" data-section="ollama">
-              <h2>Ollama Cloud API key</h2>
-              <form
-                className="row"
-                data-setting="ollama.key"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setSaving(true);
-                  void act("ollama", () => saveOllamaKey(key), "Saved").finally(() => {
-                    setSaving(false);
-                    setKey("");
-                  });
-                }}
-              >
-                <input
-                  type="password"
-                  className="ui-input field"
-                  autoComplete="off"
-                  aria-label="Ollama Cloud API key"
-                  placeholder={settings.ollama_key_saved ? "A key is saved" : "No key saved"}
-                  value={key}
-                  onChange={(e) => setKey(e.currentTarget.value)}
-                />
-                <Button type="submit" kind="primary" className="button" disabled={saving || key.trim() === ""}>
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-                {settings.ollama_key_saved && (
-                  <Button className="button" onClick={() => void act("ollama", () => removeOllamaKey(), "Removed")}>
-                    Remove
-                  </Button>
-                )}
-              </form>
-              {note("ollama")}
-            </Card>
-            <ConvexSection settings={settings} act={act} note={note} />
-            <HostingerSection settings={settings} act={act} note={note} />
-          </Section>
+        <div className="settings-cols">
+          <SettingsNav query={query} onQuery={setQuery} current={current} matching={matchingSections} onSection={showSection} />
+          <SettingsMatch.Provider value={matchingIds}>
+            <div className="settings-body" ref={body}>
+              {matchingIds !== null && matchingIds.size === 0 && (
+                <p className="settings-empty" data-testid="settings-no-match">
+                  No setting matches &ldquo;{query.trim()}&rdquo;.
+                </p>
+              )}
+              <div className="settings-group" data-group="providers">
+                <Block id="claude">
+                  <Card className="settings-section" data-section="claude">
+                    <Row id="claude.connection">
+                      <span className="settings-status" data-testid="hook-status" data-state={hook.state}>
+                        <Dot color={hook.state === "receiving" ? "--ok" : "--stale"} />
+                        {HOOK_STATE[hook.state]}
+                        {hook.minutes_ago !== null && hook.state === "last_seen" && ` ${hook.minutes_ago} min ago`}
+                      </span>
+                    </Row>
+                    <Row id="claude.lines" wide={!linesFolded}>
+                      {linesFolded ? (
+                        <Button className="button" onClick={() => setShowLines(true)}>
+                          Show the lines
+                        </Button>
+                      ) : (
+                        CLAUDE_HOOK_LINES.map((line, i) => (
+                          <div className="hook-line" key={i}>
+                            <code>{line}</code>
+                            <Button
+                              className="button"
+                              // The app's one clipboard door (terminal/clipboard.ts), as the Crew page's Copy uses it:
+                              // "Copied" only once the line is on the clipboard.
+                              onClick={() =>
+                                void writeClipboard(line).then((ok) => {
+                                  if (!ok) return;
+                                  setCopied(i);
+                                  window.setTimeout(() => setCopied(null), 1500);
+                                })
+                              }
+                            >
+                              {copied === i ? "Copied" : "Copy"}
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </Row>
+                  </Card>
+                </Block>
+                <Block id="ollama">
+                  <Card className="settings-section" data-section="ollama">
+                    <Row id="ollama.key">
+                      <form
+                        className="row"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          setSaving(true);
+                          void act("ollama", () => saveOllamaKey(key), "Saved").finally(() => {
+                            setSaving(false);
+                            setKey("");
+                          });
+                        }}
+                      >
+                        <input
+                          type="password"
+                          className="ui-input field"
+                          autoComplete="off"
+                          aria-label="Ollama Cloud API key"
+                          placeholder={settings.ollama_key_saved ? "A key is saved" : "No key saved"}
+                          value={key}
+                          onChange={(e) => setKey(e.currentTarget.value)}
+                        />
+                        <Button type="submit" kind="primary" className="button" disabled={saving || key.trim() === ""}>
+                          {saving ? "Saving…" : "Save"}
+                        </Button>
+                        {settings.ollama_key_saved && (
+                          <Button className="button" onClick={() => void act("ollama", () => removeOllamaKey(), "Removed")}>
+                            Remove
+                          </Button>
+                        )}
+                      </form>
+                    </Row>
+                    {note("ollama")}
+                  </Card>
+                </Block>
+                <ConvexSection settings={settings} act={act} note={note} />
+                <HostingerSection settings={settings} act={act} note={note} />
+              </div>
 
-          <Section className="settings-group" data-group="crew">
-            <SectionHeader title="Crew" />
-            <CrewSection active={active} />
-          </Section>
+              <div className="settings-group" data-group="crew">
+                <CrewSection active={active} />
+              </div>
 
-          <Section className="settings-group" data-group="client-folders">
-            <SectionHeader title="Client folders" />
-            <Card className="settings-section" data-section="projects">
-              <h2>Projects folder</h2>
-              <p className="settings-help">
-                Where `kinas open` looks: a bare name is searched for under this folder, and anything inside it opens without a flag. The CLI reads this too.
-              </p>
-              <input
-                className="ui-input field"
-                aria-label="Projects folder"
-                data-setting="projects.root"
-                defaultValue={settings.projects_root}
-                spellCheck={false}
-                disabled={settings.projects_root_from_env}
-                onBlur={(e) => {
-                  const value = e.currentTarget.value.trim();
-                  if (value && value !== settings.projects_root) void act("projects", () => setProjectsRoot(value).then(onProjectsChange));
-                }}
-              />
-              {settings.projects_root_from_env && <p className="problem">KINAS_ROOT is set in the environment, so it wins over this field.</p>}
-              {note("projects")}
-            </Card>
-            <Card className="settings-section" data-section="folders" data-setting="folders.list">
-              <h2>Client folders</h2>
-              <p className="settings-help">
-                Every git repository up to three levels under the projects folder, and the folders you added. The chip is the folder&apos;s colour on every page; click it for the next of the six. A folder out of the sidebar is off Home too. An internal folder is listed last, with the tag. Remove takes a folder out of Kinas without touching it on disk.
-              </p>
-              <ClientFolders
-                projects={projects}
-                onCategory={(name, cat) => void act("folders", () => setFolderCategory(name, cat).then(onProjectsChange))}
-                onInternal={(name, internal) => void act("folders", () => setFolderInternal(name, internal).then(onProjectsChange))}
-                onHidden={(f, hidden) => void act("folders", () => setFolderHidden(f.path, hidden).then(onProjectsChange))}
-                onRemoved={(f, removed) => void act("folders", () => setFolderRemoved(f.path, removed).then(onProjectsChange), removed ? `Removed ${f.name}. Restore it below.` : `Restored ${f.name}`)}
-                onAdd={() =>
-                  void act("folders", async () => {
-                    const result = await addClientFolder();
-                    onProjectsChange();
-                    const line = addedLine(result);
-                    if (line) setMessage({ section: "folders", text: line });
-                  })
-                }
-              />
-              {note("folders")}
-            </Card>
-          </Section>
+              <div className="settings-group" data-group="workspace">
+                <Block id="projects">
+                  <Card className="settings-section" data-section="projects">
+                    <Row id="projects.root" wide>
+                      <input
+                        className="ui-input field settings-wide-field"
+                        aria-label="Projects folder"
+                        defaultValue={settings.projects_root}
+                        spellCheck={false}
+                        disabled={settings.projects_root_from_env}
+                        onBlur={(e) => {
+                          const value = e.currentTarget.value.trim();
+                          if (value && value !== settings.projects_root) void act("projects", () => setProjectsRoot(value).then(onProjectsChange));
+                        }}
+                      />
+                      {settings.projects_root_from_env && <p className="problem">KINAS_ROOT is set in the environment, so it wins over this field.</p>}
+                    </Row>
+                    {note("projects")}
+                  </Card>
+                </Block>
+                <Block id="folders">
+                  <Card className="settings-section" data-section="folders">
+                    <Row id="folders.list" wide>
+                      <p className="settings-help">
+                        The chip is the folder&apos;s colour on every page; click it for the next of the six. A folder out of the sidebar is off Home too. An internal folder is listed last, with the tag. Remove takes a folder out of Kinas without touching it on disk.
+                      </p>
+                      <ClientFolders
+                        projects={projects}
+                        onCategory={(name, cat) => void act("folders", () => setFolderCategory(name, cat).then(onProjectsChange))}
+                        onInternal={(name, internal) => void act("folders", () => setFolderInternal(name, internal).then(onProjectsChange))}
+                        onHidden={(f, hidden) => void act("folders", () => setFolderHidden(f.path, hidden).then(onProjectsChange))}
+                        onRemoved={(f, removed) => void act("folders", () => setFolderRemoved(f.path, removed).then(onProjectsChange), removed ? `Removed ${f.name}. Restore it below.` : `Restored ${f.name}`)}
+                        onAdd={() =>
+                          void act("folders", async () => {
+                            const result = await addClientFolder();
+                            onProjectsChange();
+                            const line = addedLine(result);
+                            if (line) setMessage({ section: "folders", text: line });
+                          })
+                        }
+                      />
+                    </Row>
+                    {note("folders")}
+                  </Card>
+                </Block>
+                <Block id="org">
+                  <Card className="settings-section" data-section="org">
+                    <Row id="org.name">
+                      <input
+                        className="ui-input field"
+                        aria-label="Organisation name"
+                        defaultValue={settings.org_name}
+                        onBlur={(e) => {
+                          const name = e.currentTarget.value.trim();
+                          if (name && name !== settings.org_name) void act("org", () => setOrgName(name));
+                        }}
+                      />
+                    </Row>
+                    {note("org")}
+                  </Card>
+                </Block>
+              </div>
 
-          <Section className="settings-group" data-group="shortcuts">
-            <SectionHeader title="Shortcuts" />
-            <Card className="settings-section" data-section="shortcuts">
-              <h2>Keyboard shortcuts</h2>
-              <p className="settings-help">Each one includes ⌘, so none of them takes a key from the terminal. Press Change, then the new chord; Esc cancels.</p>
-              <ul className="shortcut-list">
-                {SHORTCUT_ACTIONS.map((action) => (
-                  <ShortcutRow key={action} id={action} setting={`shortcuts.${action}`} title={SHORTCUT_TITLES[action]} chord={shortcuts[action]} {...recorder(action)} />
-                ))}
-              </ul>
-              {note("shortcuts")}
-              <Button
-                className="button"
-                disabled={SHORTCUT_ACTIONS.every((action) => shortcuts[action] === DEFAULT_SHORTCUTS[action])}
-                onClick={() => void act("shortcuts", () => onShortcutsChange(DEFAULT_SHORTCUTS), "Defaults restored")}
-              >
-                Restore defaults
-              </Button>
-            </Card>
-            <Card className="settings-section" data-section="hotkey">
-              <h2>Global hotkey</h2>
-              <p className="settings-help">Works from any app, even when Kinas is hidden.</p>
-              <ul className="shortcut-list">
-                <ShortcutRow id="hotkey" setting="hotkey.chord" title="Bring Kinas forward and open the palette" chord={settings.global_hotkey} {...recorder("hotkey")} />
-              </ul>
-              {settings.hotkey_error && <p className="problem">hotkey unavailable: {settings.hotkey_error}</p>}
-              {note("hotkey")}
-            </Card>
-          </Section>
+              <div className="settings-group" data-group="interface">
+                <Block id="appearance">
+                  <Card className="settings-section" data-section="appearance">
+                    <Row id="appearance.theme">
+                      <select className="ui-input field" aria-label="Appearance" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
+                        {APPEARANCE_CHOICES.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Row>
+                    <Row id="appearance.accent" wide>
+                      <AccentField value={settings.accent} onChange={(hex) => void act("appearance", () => setAccent(hex))} />
+                    </Row>
+                    {note("appearance")}
+                  </Card>
+                </Block>
+                <Block id="shortcuts">
+                  <Card className="settings-section" data-section="shortcuts">
+                    {SHORTCUT_ACTIONS.map((action) => (
+                      <Row key={action} id={`shortcuts.${action}`}>
+                        <ShortcutRow id={action} chord={shortcuts[action]} {...recorder(action)} />
+                      </Row>
+                    ))}
+                    <div className="settings-card-foot">
+                      <p className="settings-help">Each one includes ⌘, so none of them takes a key from the terminal. Press Change, then the new chord; Esc cancels.</p>
+                      {note("shortcuts")}
+                      <Button
+                        className="button"
+                        disabled={SHORTCUT_ACTIONS.every((action) => shortcuts[action] === DEFAULT_SHORTCUTS[action])}
+                        onClick={() => void act("shortcuts", () => onShortcutsChange(DEFAULT_SHORTCUTS), "Defaults restored")}
+                      >
+                        Restore defaults
+                      </Button>
+                    </div>
+                  </Card>
+                </Block>
+                <Block id="hotkey">
+                  <Card className="settings-section" data-section="hotkey">
+                    <Row id="hotkey.chord">
+                      <ShortcutRow id="hotkey" chord={settings.global_hotkey} {...recorder("hotkey")} />
+                    </Row>
+                    {settings.hotkey_error && <p className="problem">hotkey unavailable: {settings.hotkey_error}</p>}
+                    {note("hotkey")}
+                  </Card>
+                </Block>
+                <Block id="menu-bar">
+                  <Card className="settings-section" data-section="menu-bar">
+                    <Row id="menu-bar.quota">
+                      <select className="ui-input field" aria-label="Menu bar quota" value={settings.menu_bar_quota} onChange={(e) => void act("menu-bar", () => setMenuBarQuota(e.currentTarget.value))}>
+                        {MENU_BAR_CHOICES.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Row>
+                    {note("menu-bar")}
+                  </Card>
+                </Block>
+                <Block id="reader">
+                  <Card className="settings-section" data-section="reader">
+                    <Row id="reader.editor" wide>
+                      <input
+                        className="ui-input field settings-wide-field"
+                        aria-label="Editor for Open in editor"
+                        defaultValue={settings.reader_editor}
+                        spellCheck={false}
+                        onBlur={(e) => {
+                          const value = e.currentTarget.value.trim();
+                          if (value !== settings.reader_editor) void act("reader", () => setReaderEditor(value));
+                        }}
+                      />
+                    </Row>
+                    {note("reader")}
+                  </Card>
+                </Block>
+              </div>
 
-          <Section className="settings-group" data-group="appearance">
-            <SectionHeader title="Appearance" />
-            <Card className="settings-section" data-section="appearance">
-              <h2>Appearance</h2>
-              <p className="settings-help">Warm white with royal blue, or the dark ground. The title bar follows.</p>
-              <select className="ui-input field" aria-label="Appearance" data-setting="appearance.theme" value={settings.appearance} onChange={(e) => void act("appearance", () => setAppearance(e.currentTarget.value))}>
-                {APPEARANCE_CHOICES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <p className="settings-help">The accent: the selected nav row, primary buttons and a selected card's edge. A shade that would not read in either ground is not saved.</p>
-              <AccentField setting="appearance.accent" value={settings.accent} onChange={(hex) => void act("appearance", () => setAccent(hex))} />
-              {note("appearance")}
-            </Card>
-          </Section>
-
-          <Section className="settings-group" data-group="advanced">
-            <SectionHeader title="Advanced" />
-            <Card className="settings-section" data-section="menu-bar">
-              <h2>Menu bar</h2>
-              <select className="ui-input field" aria-label="Menu bar quota" data-setting="menu-bar.quota" value={settings.menu_bar_quota} onChange={(e) => void act("menu-bar", () => setMenuBarQuota(e.currentTarget.value))}>
-                {MENU_BAR_CHOICES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              {note("menu-bar")}
-            </Card>
-            <Card className="settings-section" data-section="login">
-              <h2>Launch at login</h2>
-              <label className="row" data-setting="login.launch">
-                <input type="checkbox" checked={settings.launch_at_login} onChange={(e) => void act("login", () => setLaunchAtLogin(e.currentTarget.checked))} />
-                Open Kinas when I log in
-              </label>
-              {settings.autostart_error && <p className="problem">launch at login unavailable: {settings.autostart_error}</p>}
-              {note("login")}
-            </Card>
-            <Card className="settings-section" data-section="org">
-              <h2>Organisation name</h2>
-              <input
-                className="ui-input field"
-                aria-label="Organisation name"
-                data-setting="org.name"
-                defaultValue={settings.org_name}
-                onBlur={(e) => {
-                  const name = e.currentTarget.value.trim();
-                  if (name && name !== settings.org_name) void act("org", () => setOrgName(name));
-                }}
-              />
-              {note("org")}
-            </Card>
-            <Card className="settings-section" data-section="reader">
-              <h2>Reader</h2>
-              <p className="settings-help">Open in editor splits Herdr&apos;s focused pane and runs this command with the file.</p>
-              <input
-                className="ui-input field"
-                aria-label="Editor for Open in editor"
-                data-setting="reader.editor"
-                defaultValue={settings.reader_editor}
-                spellCheck={false}
-                onBlur={(e) => {
-                  const value = e.currentTarget.value.trim();
-                  if (value !== settings.reader_editor) void act("reader", () => setReaderEditor(value));
-                }}
-              />
-              {note("reader")}
-            </Card>
-            <Card className="settings-section" data-section="cli">
-              <h2>kinas CLI</h2>
-              <p className={settings.cli_link.state === "conflict" ? "problem" : "settings-help"} data-testid="cli-link" data-setting="cli.link">
-                {linkText(settings.cli_link)}
-              </p>
-            </Card>
-          </Section>
-        </>
+              <div className="settings-group" data-group="system">
+                <Block id="login">
+                  <Card className="settings-section" data-section="login">
+                    <Row id="login.launch">
+                      <input
+                        type="checkbox"
+                        aria-label="Open Kinas when you log in"
+                        checked={settings.launch_at_login}
+                        onChange={(e) => void act("login", () => setLaunchAtLogin(e.currentTarget.checked))}
+                      />
+                    </Row>
+                    {settings.autostart_error && <p className="problem">launch at login unavailable: {settings.autostart_error}</p>}
+                    {note("login")}
+                  </Card>
+                </Block>
+                <Block id="cli">
+                  <Card className="settings-section" data-section="cli">
+                    <Row id="cli.link" wide>
+                      <p className={settings.cli_link.state === "conflict" ? "problem" : "settings-help"} data-testid="cli-link">
+                        {linkText(settings.cli_link)}
+                      </p>
+                    </Row>
+                  </Card>
+                </Block>
+              </div>
+            </div>
+          </SettingsMatch.Provider>
+        </div>
       )}
     </div>
   );
@@ -439,23 +523,19 @@ export function SettingsPage({
 
 function ShortcutRow({
   id,
-  setting,
-  title,
   chord,
   recording,
   onRecording,
 }: {
   id: string;
-  /** Its id in settings/index.ts, which the palette opens. */
-  setting: string;
-  title: string;
   chord: string;
   recording: boolean;
   onRecording: (on: boolean) => void;
 }) {
+  // A Settings row's control (the interface polish, rule 33): the row says the shortcut's name; this is its chord and
+  // its Change. `data-shortcut` and `.shortcut-chord` stay the hooks the specs find a shortcut by.
   return (
-    <li className="shortcut" data-shortcut={id} data-setting={setting} data-recording={recording ? "true" : undefined}>
-      <span className="shortcut-title">{title}</span>
+    <span className="shortcut" data-shortcut={id} data-recording={recording ? "true" : undefined}>
       <kbd className="shortcut-chord">{recording ? "Press a chord…" : chordLabel(chord)}</kbd>
       <Button
         className="button"
@@ -468,7 +548,7 @@ function ShortcutRow({
       >
         {recording ? "Cancel" : "Change"}
       </Button>
-    </li>
+    </span>
   );
 }
 

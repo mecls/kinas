@@ -3,6 +3,7 @@ import { getCrewSettings, type CrewSettings, type FirstmateOptions, type LaneOpt
 import { clock } from "../crew/detail.ts";
 import { ToolTable } from "../crew/ToolTable.tsx";
 import { Card, Dot, Table } from "../ui/index.ts";
+import { Block, Row } from "./Row.tsx";
 
 // Settings → Crew (build spec §4 Settings; mockup settings-crew.html): Firstmate's install as the app last probed it —
 // the commit against the pin, the home, the backend, the prerequisites, the away record, the tools and the projects'
@@ -113,8 +114,9 @@ export function CrewSection({ active }: { active: boolean }) {
   const missingPrereqs = settings?.prereqs.filter((p) => p.state !== "installed").map((p) => p.name) ?? [];
 
   return (
-    <Card className="settings-section" data-section="crew" data-setting="crew.firstmate">
-      <h2>Firstmate</h2>
+    <Block id="crew">
+    <Card className="settings-section" data-section="crew">
+      <Row id="crew.firstmate" wide>
       {error && <p className="crew-problem">Could not read Firstmate's config: {error}</p>}
       {!settings ? (
         !error && <p className="settings-help">Reading Firstmate's install…</p>
@@ -173,6 +175,8 @@ export function CrewSection({ active }: { active: boolean }) {
           <p className="settings-help crew-after">Modes, the project list and away mode are the first mate's: ask in its pane.</p>
         </>
       )}
+      </Row>
     </Card>
+    </Block>
   );
 }

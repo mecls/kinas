@@ -4,20 +4,19 @@ import { join } from "node:path";
 import { SECTIONS, SETTINGS, sectionOf, settingMatches } from "./index.ts";
 import { SHORTCUT_ACTIONS } from "./shortcuts.ts";
 
-// The registry the palette searches is the page as built: every id it lists is on Settings as `data-setting`, and every
-// `data-setting` on Settings is in it (build-spec §11.4, settings/index.test.ts).
+// The registry the palette searches is the page as built: every id it lists is a row on Settings, and every row on
+// Settings is in it (build-spec §11.4, settings/index.test.ts). A row draws `data-setting` with its id (ui/SettingsRow).
 
 const here = import.meta.dir;
 const sources = [join(here, "..", "pages", "Settings.tsx"), ...readdirSync(here).filter((f) => /Section\.tsx$/.test(f)).map((f) => join(here, f))];
 
-/** The ids the page's source puts on its elements: as attributes, through a `setting` prop, or one per shortcut. */
+/** The ids the page's source draws as rows (settings/Row.tsx, slice 9): `<Row id="…">`, or one per shortcut. */
 function idsOnThePage(): string[] {
   const ids: string[] = [];
   for (const file of sources) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/\b(?:data-setting|setting)="([a-z][a-z.-]*)"/g)) ids.push(m[1]!);
-    for (const m of text.matchAll(/\bdata-setting=\{[^}]*?"([a-z][a-z.-]*)"/g)) ids.push(m[1]!);
-    if (text.includes("setting={`shortcuts.${action}`}")) ids.push(...SHORTCUT_ACTIONS.map((a) => `shortcuts.${a}`));
+    for (const m of text.matchAll(/<Row\b[^>]*?\bid="([a-z][a-z.-]*)"/g)) ids.push(m[1]!);
+    if (text.includes("id={`shortcuts.${action}`}")) ids.push(...SHORTCUT_ACTIONS.map((a) => `shortcuts.${a}`));
   }
   return ids;
 }

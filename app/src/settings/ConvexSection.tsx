@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { removeConvexKey, saveConvexKey, setConvexDeployment, setConvexPlan, type SettingsView } from "../api.ts";
 import { Button, Card } from "../ui/index.ts";
+import { Block, Row } from "./Row.tsx";
 
 // Settings → Convex (prd-convex-usage.md §3 Configure). The key form is the Ollama one: a password input whose
 // *placeholder* says whether a key is saved — never its value — and which clears on submit.
@@ -25,86 +26,80 @@ export function ConvexSection({ settings, act, note }: Props) {
   const [saving, setSaving] = useState(false);
 
   return (
-    <Card className="settings-section" data-section="convex">
-      <h2>Convex usage</h2>
-      <p className="settings-help">
-        Mint the deploy key in the deployment&apos;s Settings with <strong>only</strong> <code>deployment:usage:view</code>. So scoped it cannot deploy,
-        read or write data, run functions, or read environment variables — and Kinas only ever reads.
-      </p>
-
-      <form
-        data-setting="convex.key"
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSaving(true);
-          void act("convex", () => saveConvexKey(key), "Saved").finally(() => {
-            setSaving(false);
-            setKey("");
-          });
-        }}
-      >
-        <input
-          type="password"
-          className="ui-input field"
-          autoComplete="off"
-          aria-label="Convex deploy key"
-          placeholder={settings.convex_key_saved ? "A key is saved" : "No key saved"}
-          value={key}
-          onChange={(e) => setKey(e.currentTarget.value)}
-        />
-        {/* Labelled, because there is more than one "Save" on this page and a text selector would match the
-            first — which is Ollama's. The embedded driver refuses a text selector mixed with CSS, so an
-            aria-label is the only way for a test to name this button unambiguously. */}
-        <Button type="submit" kind="primary" className="button" aria-label="Save Convex deploy key" disabled={saving || key.trim() === ""}>
-          {saving ? "Saving…" : "Save"}
-        </Button>
-        {settings.convex_key_saved && (
-          <Button className="button" onClick={() => void act("convex", () => removeConvexKey(), "Removed")}>
-            Remove
-          </Button>
-        )}
-      </form>
-
-      <div className="row" data-setting="convex.url">
-        {/* Saved on blur, like the other text settings. `defaultValue` rather than a controlled value, so a
-            settings reload cannot fight what is being typed. Empty disconnects the deployment: no requests. */}
-        <input
-          type="url"
-          className="ui-input field"
-          autoComplete="off"
-          aria-label="Convex deployment URL"
-          placeholder="https://your-deployment.convex.cloud"
-          defaultValue={settings.convex_deployment_url}
-          onBlur={(e) => {
-            const url = e.currentTarget.value.trim();
-            if (url === settings.convex_deployment_url) return;
-            void act("convex", () => setConvexDeployment(url), url === "" ? "Deployment cleared" : "Deployment saved");
-          }}
-        />
-      </div>
-
-      <div className="row" data-setting="convex.plan">
-        <label className="settings-help" htmlFor="convex-plan">
-          Plan
-        </label>
-        {/* The tier only chooses which published allowances the gauges divide by (R6). */}
-        <select
-          id="convex-plan"
-          className="ui-input field"
-          aria-label="Convex plan"
-          value={settings.convex_plan === "professional" ? "professional" : "starter"}
-          onChange={(e) => void act("convex", () => setConvexPlan(e.currentTarget.value), "Plan saved")}
-        >
-          <option value="starter">Starter</option>
-          <option value="professional">Professional</option>
-        </select>
-      </div>
-
-      <p className="settings-help">
-        One deployment, and per-deployment figures rather than team-wide ones. Storage, file storage, backups and seats are not in this API at all.
-      </p>
-      {note("convex")}
-    </Card>
+    <Block id="convex">
+      <Card className="settings-section" data-section="convex">
+        <Row id="convex.key">
+          <form
+            className="row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSaving(true);
+              void act("convex", () => saveConvexKey(key), "Saved").finally(() => {
+                setSaving(false);
+                setKey("");
+              });
+            }}
+          >
+            <input
+              type="password"
+              className="ui-input field"
+              autoComplete="off"
+              aria-label="Convex deploy key"
+              placeholder={settings.convex_key_saved ? "A key is saved" : "No key saved"}
+              value={key}
+              onChange={(e) => setKey(e.currentTarget.value)}
+            />
+            {/* Labelled, because there is more than one "Save" on this page and a text selector would match the
+                first — which is Ollama's. The embedded driver refuses a text selector mixed with CSS, so an
+                aria-label is the only way for a test to name this button unambiguously. */}
+            <Button type="submit" kind="primary" className="button" aria-label="Save Convex deploy key" disabled={saving || key.trim() === ""}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            {settings.convex_key_saved && (
+              <Button className="button" onClick={() => void act("convex", () => removeConvexKey(), "Removed")}>
+                Remove
+              </Button>
+            )}
+          </form>
+        </Row>
+        <Row id="convex.url" wide>
+          {/* Saved on blur, like the other text settings. `defaultValue` rather than a controlled value, so a
+              settings reload cannot fight what is being typed. Empty disconnects the deployment: no requests. */}
+          <input
+            type="url"
+            className="ui-input field settings-wide-field"
+            autoComplete="off"
+            aria-label="Convex deployment URL"
+            placeholder="https://your-deployment.convex.cloud"
+            defaultValue={settings.convex_deployment_url}
+            onBlur={(e) => {
+              const url = e.currentTarget.value.trim();
+              if (url === settings.convex_deployment_url) return;
+              void act("convex", () => setConvexDeployment(url), url === "" ? "Deployment cleared" : "Deployment saved");
+            }}
+          />
+        </Row>
+        <Row id="convex.plan">
+          {/* The tier only chooses which published allowances the gauges divide by (R6). */}
+          <select
+            className="ui-input field"
+            aria-label="Convex plan"
+            value={settings.convex_plan === "professional" ? "professional" : "starter"}
+            onChange={(e) => void act("convex", () => setConvexPlan(e.currentTarget.value), "Plan saved")}
+          >
+            <option value="starter">Starter</option>
+            <option value="professional">Professional</option>
+          </select>
+        </Row>
+        <div className="settings-card-foot">
+          <p className="settings-help">
+            Mint the key in the deployment&apos;s Settings. So scoped it cannot deploy, read or write data, run functions, or read environment
+            variables — and Kinas only ever reads. One deployment, and per-deployment figures rather than team-wide ones. Storage, file storage,
+            backups and seats are not in this API at all.
+          </p>
+          {note("convex")}
+        </div>
+      </Card>
+    </Block>
   );
 }

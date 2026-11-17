@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { highlight } from "../../palette/match.ts";
 import { PaletteFoot, PaletteGroupView, type PaletteRowGroup } from "../PaletteRow.tsx";
+import { SettingsRow } from "../SettingsRow.tsx";
 import { StatusBar } from "../StatusBar.tsx";
 import { UsagePopover } from "../UsagePopover.tsx";
 import {
@@ -951,6 +952,28 @@ export const STORIES: Story[] = [
         ),
       },
       { name: "empty", node: <UsagePopover inline usageChord="⌘4" onOpenUsage={noop} onClose={noop} blocks={[]} /> },
+    ],
+  },
+  {
+    component: "SettingsRow",
+    states: [
+      {
+        name: "rows",
+        node: (
+          <Card>
+            <SettingsRow id="ollama.key" label="API key" description="Used only to read your usage. Stored in the Keychain.">
+              <Input placeholder="A key is saved" />
+              <Button>Remove</Button>
+            </SettingsRow>
+            <SettingsRow id="convex.url" label="Deployment URL" description="The deployment whose usage Kinas reads." wide>
+              <Input placeholder="https://happy-otter-123.convex.cloud" />
+            </SettingsRow>
+            <SettingsRow id="claude.lines" label="Status line" description="Three lines for ~/.claude/statusline-command.sh. Kinas never edits that file.">
+              <Button>Show the lines</Button>
+            </SettingsRow>
+          </Card>
+        ),
+      },
     ],
   },
 ];

@@ -27,16 +27,16 @@ describe("the Usage page", () => {
     await gauge("claude-plan", "session").waitForExist({ timeout: 60000 });
     await expect(gauge("claude-plan", "session")).toHaveText(expect.stringContaining("42% used"));
     await expect(gauge("claude-plan", "session")).toHaveAttribute("data-state", "fresh");
-    // The app takes up to a minute to start under the driver, so the countdown has moved on a little; after
-    // 22:00 the reset is tomorrow and the clock carries the date.
-    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringMatching(/resets in 1 h \d{1,2} m \((\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}\)/));
+    // The app takes up to a minute to start under the driver, so the countdown has moved on a little.
+    // DESIGN.md §6, 1.13 (the interface polish): within a day a reset reads relative, its clock time the tooltip.
+    await expect(gauge("claude-plan", "session")).toHaveText(expect.stringMatching(/resets in 1 h \d{1,2} m(?! \()/));
     await expect(gauge("claude-plan", "week")).toHaveText(expect.stringContaining("24% used"));
   });
 
   it("shows Ollama's session and week as % used, like ollama.com, with no reset time", async () => {
     await gauge("ollama-cloud", "session").waitForExist({ timeout: 60000 });
     await expect(gauge("ollama-cloud", "session")).toHaveText(expect.stringContaining("2.5% used"));
-    await expect(gauge("ollama-cloud", "session")).toHaveText(expect.stringContaining("resets: not reported"));
+    await expect(gauge("ollama-cloud", "session")).toHaveText(expect.stringContaining("resets not reported"));
     await expect(gauge("ollama-cloud", "week")).toHaveText(expect.stringContaining("34% used"));
   });
 

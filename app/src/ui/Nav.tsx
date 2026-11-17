@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Kbd } from "./Button.tsx";
-import { Chip, Dot, Tag, type Category } from "./Dot.tsx";
-import { SearchIcon, ServerIcon } from "./icons.tsx";
+import { Chip, Tag, type Category } from "./Dot.tsx";
+import { SearchIcon } from "./icons.tsx";
 import "./Nav.css";
 
 // DESIGN.md §3.1: the sidebar's wordmark, its navigation rows, the client folders with their chips and the VPS row
@@ -56,22 +56,6 @@ export function NavHeading({ children }: { children: ReactNode }) {
   return <h4 className="ui-nav-h ui-group-label">{children}</h4>;
 }
 
+/** The VPS's word, on the status bar since the interface polish (rule 22): the sidebar draws no machine row. */
 export type ConnectionState = "connected" | "stale" | "error";
 
-const CONNECTION: Record<ConnectionState, { color: string; kind: "solid" | "ring" }> = {
-  connected: { color: "--ok", kind: "solid" },
-  stale: { color: "--stale", kind: "solid" },
-  error: { color: "--danger", kind: "solid" },
-};
-
-/** The VPS at the foot of the sidebar: the colour and the word say the same thing. */
-export function ConnectionRow({ name, state, detail }: { name: ReactNode; state: ConnectionState; detail?: string }) {
-  return (
-    <div className="ui-machine" title={detail}>
-      <ServerIcon />
-      <span className="ui-nav-label">{name}</span>
-      <Dot color={CONNECTION[state].color} kind={CONNECTION[state].kind} />
-      <span className="ui-ink2">{state}</span>
-    </div>
-  );
-}

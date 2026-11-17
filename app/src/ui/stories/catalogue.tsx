@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { highlight } from "../../palette/match.ts";
 import { PaletteFoot, PaletteGroupView, type PaletteRowGroup } from "../PaletteRow.tsx";
+import { StatusBar } from "../StatusBar.tsx";
+import { UsagePopover } from "../UsagePopover.tsx";
 import {
   AccentField,
   Badges,
@@ -15,7 +17,6 @@ import {
   CheckIcon,
   ChecksList,
   Chip,
-  ConnectionRow,
   CrewIcon,
   Dot,
   EmptyState,
@@ -576,7 +577,6 @@ export const STORIES: Story[] = [
             <NavHeading>Client folders</NavHeading>
             <NavItem chip={1} label="northwind" />
             <NavItem chip={5} label="kinas" tag="internal" />
-            <ConnectionRow name="Hostinger VPS" state="connected" />
             <NavItem icon={<GearIcon />} label="Settings" />
           </div>
         ),
@@ -607,16 +607,6 @@ export const STORIES: Story[] = [
         node: (
           <div style={{ display: "flex", gap: "var(--space-4)", color: "var(--ink-2)" }}>
             <BackIcon /> <EyeIcon /> <CodeIcon /> <ChangesIcon /> <ListIcon /> <ExpandIcon /> <CollapseIcon />
-          </div>
-        ),
-      },
-      {
-        name: "connection-states",
-        node: (
-          <div style={{ width: "var(--sidebar-w)" }}>
-            <ConnectionRow name="Hostinger VPS" state="connected" />
-            <ConnectionRow name="Hostinger VPS" state="stale" />
-            <ConnectionRow name="Hostinger VPS" state="error" detail="HTTP 401" />
           </div>
         ),
       },
@@ -885,6 +875,69 @@ export const STORIES: Story[] = [
       },
       { name: "indexing", node: paletteGroup("inv", { id: "file", label: "Files", more: 0, state: "loading", note: "Indexing files…", items: [] }, null) },
       { name: "foot", node: <PaletteFoot /> },
+    ],
+  },
+  {
+    component: "StatusBar",
+    states: [
+      {
+        name: "readings",
+        node: <StatusBar readings={[{ key: "w", label: "Claude week", pct: "24%" }, { key: "s", label: "Claude session", pct: "62%" }, { key: "o", label: "Ollama session", pct: "2.5%" }]} />,
+      },
+      {
+        name: "tones-crew-vps",
+        node: (
+          <StatusBar
+            readings={[
+              { key: "w", label: "Claude week", pct: "84%", tone: "warn" },
+              { key: "s", label: "Claude session", pct: "97%", tone: "danger" },
+              { key: "o", label: "Ollama session", pct: "2.5%", tone: "stale" },
+            ]}
+            crew={[
+              { key: "needsYou", text: "1 needs you", color: "--warn" },
+              { key: "failed", text: "1 failed", color: "--danger" },
+              { key: "working", text: "2 working", color: "--meter" },
+            ]}
+            vps={{ name: "Hostinger VPS", state: "connected", detail: "as of 13:50" }}
+          />
+        ),
+      },
+      { name: "vps-stale", node: <StatusBar readings={[{ key: "w", label: "Claude week", pct: "24%" }]} vps={{ name: "Hostinger VPS", state: "stale", detail: "as of 09:31" }} /> },
+      { name: "empty", node: <StatusBar readings={[]} empty /> },
+    ],
+  },
+  {
+    component: "UsagePopover",
+    states: [
+      {
+        name: "providers",
+        node: (
+          <UsagePopover
+            inline
+            usageChord="⌘4"
+            onOpenUsage={noop}
+            onClose={noop}
+            blocks={[
+              {
+                provider: "Claude",
+                cat: 1,
+                asOf: "as of 13:50",
+                windows: [
+                  { key: "w", label: "week", used: 24, tone: "meter", usedText: "24% used", reset: "resets Thu 2 Oct, 12:43", resetTitle: "resets in 3 d 18 h" },
+                  { key: "s", label: "session", used: 97, tone: "danger", usedText: "97% used", reset: "resets in 1 h 59 m", resetTitle: "resets Mon 28 Sep, 15:51" },
+                ],
+              },
+              {
+                provider: "Ollama",
+                cat: 3,
+                asOf: "as of 13:48",
+                windows: [{ key: "o", label: "session", used: 2.5, tone: "meter", usedText: "2.5% used", reset: "resets in 4 h 10 m", resetTitle: "resets Mon 28 Sep, 18:02" }],
+              },
+            ]}
+          />
+        ),
+      },
+      { name: "empty", node: <UsagePopover inline usageChord="⌘4" onOpenUsage={noop} onClose={noop} blocks={[]} /> },
     ],
   },
 ];

@@ -1,12 +1,13 @@
 /* DESIGN.md §4 Status bar (1.13): a --hit row on --bg with a --line along its top, --text-sm in --ink-2, the numbers in
-   mono --ink. One line: it never wraps, and what does not fit is cut at the right edge. */
+   mono --ink. One line: it never wraps, and what does not fit is cut at the right edge. Its parts are buttons drawn as
+   text, a --surface-2 ground on point. */
 .ui-statusbar {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-1);
   min-width: 0;
   height: var(--hit);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   background: var(--bg);
   box-shadow: inset 0 1px 0 var(--line);
   color: var(--ink-2);
@@ -16,6 +17,52 @@
   overflow: hidden;
   user-select: none;
   cursor: default;
+}
+
+.ui-statusbar-part {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1h);
+  height: calc(var(--hit) - var(--space-1));
+  padding: 0 var(--space-1h);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+
+.ui-statusbar-part:hover,
+.ui-statusbar-part[aria-expanded="true"] {
+  background: var(--surface-2);
+}
+
+.ui-statusbar-part:focus-visible {
+  outline: var(--focus-w) solid var(--accent);
+  outline-offset: calc(var(--focus-w) * -1);
+}
+
+.ui-statusbar-part[data-part="readings"] {
+  gap: var(--space-4);
+}
+
+.ui-statusbar-reading,
+.ui-statusbar-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ui-statusbar-sep {
+  margin: 0 var(--space-1h);
+  color: var(--ink-3);
+}
+
+.ui-statusbar-gap {
+  flex: 1;
+  min-width: var(--space-4);
 }
 
 .ui-statusbar-num {

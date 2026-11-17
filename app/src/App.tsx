@@ -40,7 +40,6 @@ import { Palette } from "./palette/Palette.tsx";
 import { Reader, type ReaderNav, type ReaderRequest } from "./reader/Reader.tsx";
 import { SIDE_DEFAULT } from "./reader/side.ts";
 import { actionForEvent, chordLabel, DEFAULT_SHORTCUTS, withDefaults, type Shortcuts } from "./settings/shortcuts.ts";
-import { connectionOf } from "./shell/connection.ts";
 import { focusTerminal, terminalHasFocus } from "./shell/focus.ts";
 import { back, canBack, canForward, EMPTY_HISTORY, forward, type History, patchScroll, type Place, readerAtOf, record, samePlace } from "./shell/history.ts";
 import { addedLine, seatFolders } from "./shell/folders.ts";
@@ -57,14 +56,17 @@ import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
 import { useSplit } from "./shell/useSplit.ts";
 import { TitleBar } from "./ui/index.ts";
-import { StatusBar, type StatusReading } from "./ui/StatusBar.tsx";
-import { heroSlots } from "./pages/home.ts";
-import { PROVIDER_LABEL, usedPct, WINDOW_LABEL } from "./usage/format.ts";
+import { StatusBar } from "./ui/StatusBar.tsx";
+import { UsagePopover } from "./ui/UsagePopover.tsx";
+import { crewWords, popoverBlocks, statusModel, type CrewTotals } from "./shell/statusBar.ts";
 
 /** The pages, always mounted (below). Home is the first screen since 2026-09-22 (keymap.md: ⌘1 Home, ⌘2 Work, ⌘4 Usage). */
 export type Page = "home" | "work" | "crew" | "inbox" | "usage" | "settings";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
+
+/** The status bar's crew counts, each with its dot (DESIGN.md §4 Status bar): what waits, what failed, what works. */
+const CREW_DOT: Record<keyof CrewTotals, string> = { needsYou: "--warn", failed: "--danger", working: "--meter" };
 
 /**
  * The panel on the right of the window. It holds one thing at a time (DESIGN.md 1.4): the reader, or a crew task's
@@ -169,20 +171,14 @@ export function App() {
   // One usage poller for Home and Usage (usage/useUsageSnapshot.ts): readings count as on screen on either page. The
   // sidebar's VPS row reads the same snapshot, so it never disagrees with the Usage page's Hostinger section.
   const usage = useUsageSnapshot(page === "home" || page === "usage");
-  const connection = useMemo(() => (usage.snapshot ? connectionOf(usage.snapshot, usage.error) : null), [usage.snapshot, usage.error]);
-  // The status bar's readings (the interface polish, slice 1): Home's three gauges, from the same snapshot. A gauge with no
-  // reading says nothing here. Slice 6 moves this into shell/statusBar.ts with the tones, the crew and the VPS.
-  const statusReadings = useMemo<StatusReading[]>(
-    () =>
-      usage.snapshot
-        ? heroSlots(usage.snapshot).flatMap((s) =>
-            s.quota ? [{ key: `${s.subscription}/${s.window}`, label: `${PROVIDER_LABEL[s.subscription]} ${WINDOW_LABEL[s.window]}`, pct: `${usedPct(s.quota.used_pct)}%` }] : [],
-          )
-        : [],
-    [usage.snapshot],
-  );
   // One crew reading for every page that shows the crew (crew/useCrew.ts): Crew, Inbox, and Home's night.
   const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
+  // The status bar (the interface polish, slice 6; shell/statusBar.ts): Home's three gauges, the crew's counts and the
+  // VPS, from the same snapshot and crew reading the pages show, so the bar never disagrees with them.
+  const bar = useMemo(() => statusModel(usage.snapshot, crew, usage.error), [usage.snapshot, crew, usage.error]);
+  const barCrew = useMemo(() => (bar.crew ? crewWords(bar.crew).map((w) => ({ ...w, color: CREW_DOT[w.key] })) : null), [bar.crew]);
+  /** The Usage popover above the readings (rule 25): a fixed sibling of the shell, never wrapping the terminal. */
+  const [usagePopover, setUsagePopover] = useState(false);
   /** The crew as last read, for callbacks that name a task by its title without being remade on every reading. */
   const crewRef = useRef(crew);
   crewRef.current = crew;
@@ -620,6 +616,17 @@ export function App() {
     },
     [goTo],
   );
+  // The VPS on the status bar: the Usage page, at its Hostinger section (rule 25). The scroll waits for the page to
+  // show — a hidden section has nowhere to scroll to.
+  const [vpsTarget, setVpsTarget] = useState(0);
+  const showVps = useCallback(() => {
+    goTo("usage");
+    setVpsTarget((n) => n + 1);
+  }, [goTo]);
+  useEffect(() => {
+    if (vpsTarget === 0 || page !== "usage") return;
+    document.querySelector('section[data-page="usage"] [data-section="hostinger"]')?.scrollIntoView({ block: "start" });
+  }, [vpsTarget, page]);
   // A Herdr workspace from the palette (rule 16): Rust focuses it — nothing is typed — and only then does the Work page
   // show with the terminal holding the keys, as Open in the terminal does. A refusal is the palette's to say. Recent
   // keeps it by its label: an id is only good while Herdr runs.
@@ -710,7 +717,6 @@ export function App() {
         projects={projects}
         notice={notice}
         panelOpen={readerShowing}
-        connection={connection}
         waiting={crew?.waiting ?? 0}
         crew={{ installed: !!crew && crew.page !== "uninstalled", repos: crew?.crew_repos ?? [] }}
         onAddToCrew={(f) => void addFolderToCrew(f)}
@@ -811,7 +817,28 @@ export function App() {
         </aside>
       </div>
       {/* The window's foot (DESIGN.md 1.13 §3.1): a static sibling after the stage, never conditional (ADR 0002). */}
-      <StatusBar readings={statusReadings} />
+      <StatusBar
+        readings={bar.readings}
+        empty={bar.empty}
+        crew={barCrew}
+        vps={bar.vps}
+        open={usagePopover}
+        onReadings={() => setUsagePopover((o) => !o)}
+        onCrew={() => goTo("crew")}
+        onVps={showVps}
+        onSettings={() => openSetting("claude.connection")}
+      />
+      {usagePopover && usage.snapshot && (
+        <UsagePopover
+          blocks={popoverBlocks(usage.snapshot)}
+          usageChord={chordLabel(shortcuts["go.usage"])}
+          onOpenUsage={() => {
+            setUsagePopover(false);
+            goTo("usage");
+          }}
+          onClose={() => setUsagePopover(false)}
+        />
+      )}
       {palette && (
         <Palette
           onClose={() => setPalette(false)}

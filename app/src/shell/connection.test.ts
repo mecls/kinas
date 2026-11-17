@@ -71,14 +71,19 @@ describe("the VPS row while the usage snapshot cannot be read (ADR 0004)", () =>
 });
 
 describe("one usage poller (build spec §11.1)", () => {
-  test("the sidebar draws the VPS row from App's one usage snapshot and never reads the snapshot itself", () => {
+  test("the status bar draws the VPS from App's one usage snapshot and never reads the snapshot itself", () => {
     const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const { join } = require("node:path") as typeof import("node:path");
+    // The interface polish (rule 22): the VPS left the sidebar for the status bar.
+    const model = readFileSync(join(import.meta.dir, "statusBar.ts"), "utf8");
+    const bar = readFileSync(join(import.meta.dir, "..", "ui", "StatusBar.tsx"), "utf8");
     const sidebar = readFileSync(join(import.meta.dir, "Sidebar.tsx"), "utf8");
-    expect(sidebar.includes("getUsageSnapshot")).toBe(false);
-    expect(sidebar.includes("onReadingsChanged")).toBe(false);
-    // Positive control: the row is still drawn there, from a prop.
-    expect(sidebar.includes("ConnectionRow")).toBe(true);
-    expect(sidebar.includes("connection")).toBe(true);
+    for (const source of [model, bar, sidebar]) {
+      expect(source.includes("getUsageSnapshot")).toBe(false);
+      expect(source.includes("onReadingsChanged")).toBe(false);
+    }
+    // Positive control: the model judges the VPS with this file's connectionOf, from the snapshot it is handed.
+    expect(model.includes("connectionOf(snapshot")).toBe(true);
+    expect(sidebar.includes("ConnectionRow")).toBe(false);
   });
 });

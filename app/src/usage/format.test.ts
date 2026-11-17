@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asOf, compactTokens, gb, gib, leftPct, resetsIn, tone, usedPct, withStale } from "./format.ts";
+import { asOf, compactTokens, gb, gib, leftPct, lisbonDayClock, resetsCaption, tone, usedPct, withStale } from "./format.ts";
 
 test("a stale row's unit says stale after its words, or alone when it had none — never ' · stale' with nothing before it", () => {
   expect(withStale("of 8 GiB", true)).toBe("of 8 GiB · stale");
@@ -11,21 +11,27 @@ test("a stale row's unit says stale after its words, or alone when it had none �
 const NOW = 1_789_390_320_000; // 2026-09-14T12:52:00Z = 13:52 in Lisbon
 const MIN = 60_000;
 
-describe("resetsIn", () => {
-  test("hours and minutes, with the Lisbon clock time", () => {
-    expect(resetsIn(NOW + 2 * 60 * MIN + 14 * MIN, NOW)).toBe("resets in 2 h 14 m (16:06)");
+describe("resetsCaption (DESIGN.md §6, 1.13)", () => {
+  test("within a day it reads relative, the absolute time its tooltip", () => {
+    expect(resetsCaption(NOW + 119 * MIN, NOW)).toEqual({ text: "resets in 1 h 59 m", title: "resets Mon 14 Sep, 15:51" });
+    expect(resetsCaption(NOW + 18 * MIN, NOW).text).toBe("resets in 18 m");
+    expect(resetsCaption(NOW + 30_000, NOW).text).toBe("resets in <1 m");
+    expect(resetsCaption(NOW + 24 * 60 * MIN - 1, NOW).text).toBe("resets in 23 h 59 m");
   });
-  test("under an hour", () => {
-    expect(resetsIn(NOW + 18 * MIN, NOW)).toBe("resets in 18 m (14:10)");
+
+  test("beyond a day it reads absolute, the relative time its tooltip", () => {
+    expect(resetsCaption(1_789_714_800_000, NOW)).toEqual({ text: "resets Fri 18 Sep, 08:00", title: "resets in 3 d 18 h" });
+    expect(resetsCaption(NOW + 24 * 60 * MIN, NOW).text).toBe("resets Tue 15 Sep, 13:52");
   });
-  test("under a minute", () => {
-    expect(resetsIn(NOW + 30_000, NOW)).toBe("resets in <1 m (13:52)");
+
+  test("no reset reported says so, with nothing to hover", () => {
+    expect(resetsCaption(null, NOW)).toEqual({ text: "resets not reported", title: "" });
   });
-  test("days away shows the date", () => {
-    expect(resetsIn(1_789_714_800_000, NOW)).toBe("resets in 3 d 18 h (2026-09-18 08:00)");
-  });
-  test("no reset time reported", () => {
-    expect(resetsIn(null, NOW)).toBe("resets: not reported");
+
+  test("the day clock is Lisbon's, with the month and weekday from fixed names", () => {
+    expect(lisbonDayClock(Date.UTC(2026, 9, 1, 23, 30))).toBe("Fri 2 Oct, 00:30");
+    expect(lisbonDayClock(Date.UTC(2026, 11, 31, 23, 59))).toBe("Thu 31 Dec, 23:59");
+    expect(lisbonDayClock(Date.UTC(2026, 6, 15, 11, 5))).toBe("Wed 15 Jul, 12:05");
   });
 });
 

@@ -10,16 +10,44 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** "resets in 2 h 14 m (14:10)"; a day or more away: "resets in 3 d 19 h (2026-09-18 08:00)". */
-export function resetsIn(resetsAt: number | null, now: number): string {
-  if (resetsAt === null) return "resets: not reported";
-  const left = Math.max(0, resetsAt - now);
-  const clock = lisbonClock(resetsAt, now);
-  if (left < MINUTE) return `resets in <1 m (${clock})`;
-  if (left >= DAY) return `resets in ${Math.floor(left / DAY)} d ${Math.floor((left % DAY) / HOUR)} h (${clock})`;
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const lisbonDay = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Europe/Lisbon",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** "Thu 2 Oct, 12:43" on the Lisbon clock: names from fixed tables, so a locale's "Sept" never shows up. */
+export function lisbonDayClock(ms: number): string {
+  const p = Object.fromEntries(lisbonDay.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  const weekday = WEEKDAY[new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day))).getUTCDay()];
+  return `${weekday} ${Number(p.day)} ${MONTH[Number(p.month) - 1]}, ${p.hour}:${p.minute}`;
+}
+
+/** "1 h 59 m", "18 m", "<1 m", "3 d 18 h": how long until `at`. */
+function until(at: number, now: number): string {
+  const left = Math.max(0, at - now);
+  if (left < MINUTE) return "<1 m";
+  if (left >= DAY) return `${Math.floor(left / DAY)} d ${Math.floor((left % DAY) / HOUR)} h`;
   const hours = Math.floor(left / HOUR);
   const minutes = Math.floor((left % HOUR) / MINUTE);
-  return hours > 0 ? `resets in ${hours} h ${minutes} m (${clock})` : `resets in ${minutes} m (${clock})`;
+  return hours > 0 ? `${hours} h ${minutes} m` : `${minutes} m`;
+}
+
+/**
+ * A reset as DESIGN.md §6 says it (1.13): relative within a day, "resets in 1 h 59 m", and absolute beyond, "resets
+ * Thu 2 Oct, 12:43", on the Lisbon clock; the other form is the tooltip. Home, Usage and the Usage popover all say it so.
+ */
+export function resetsCaption(resetsAt: number | null, now: number): { text: string; title: string } {
+  if (resetsAt === null) return { text: "resets not reported", title: "" };
+  const relative = `resets in ${until(resetsAt, now)}`;
+  const absolute = `resets ${lisbonDayClock(resetsAt)}`;
+  return resetsAt - now < DAY ? { text: relative, title: absolute } : { text: absolute, title: relative };
 }
 
 export function asOf(updatedAt: number | null, now: number): string {

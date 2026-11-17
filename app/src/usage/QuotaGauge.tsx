@@ -1,6 +1,6 @@
 import type { QuotaView, ReaderView } from "../api.ts";
 import { Gauge } from "../ui/index.ts";
-import { asOf, lisbonClock, PROVIDER_LABEL, resetsIn, tone, usedPct, WINDOW_LABEL } from "./format.ts";
+import { asOf, lisbonClock, PROVIDER_LABEL, resetsCaption, tone, usedPct, WINDOW_LABEL } from "./format.ts";
 
 // One quota as a gauge, the same on Home and on Usage (DESIGN.md §4 Gauge), and the caption a section of readings
 // carries. The number never lies: a dead reading says why, a window past its reset shows "—" (its stored number belongs
@@ -22,8 +22,14 @@ export const quotaTitle = (q: QuotaView) => `${PROVIDER_LABEL[q.subscription]} �
 export function quotaDetail(q: QuotaView, reader: ReaderView | undefined, now: number): string {
   if (q.state === "reset") return `reset at ${q.resets_at === null ? "—" : lisbonClock(q.resets_at, now)} · waiting for a new reading`;
   if (q.state === "dead") return reader?.last_error ?? "no recent reading";
-  const resets = resetsIn(q.resets_at, now);
+  const resets = resetsCaption(q.resets_at, now).text;
   return q.state === "stale" ? `${resets} · ${asOf(q.updated_at, now)} · stale` : resets;
+}
+
+/** The reset's other form, for the detail line's tooltip (DESIGN.md §6, 1.13); none when there is no reset to say. */
+export function quotaDetailTitle(q: QuotaView, now: number): string | undefined {
+  if (q.state === "reset" || q.state === "dead") return undefined;
+  return resetsCaption(q.resets_at, now).title || undefined;
 }
 
 /** Hidden number: dead, or a window past its reset. Otherwise "% used", rounded up so usage is never understated. */
@@ -36,7 +42,7 @@ export function QuotaGauge({ quota, reader, now }: { quota: QuotaView; reader: R
       used={shownUsed(quota)}
       unit="% used"
       tone={tone(quota.used_pct, quota.state)}
-      detail={quotaDetail(quota, reader, now)}
+      detail={<span title={quotaDetailTitle(quota, now)}>{quotaDetail(quota, reader, now)}</span>}
       dead={quota.state === "dead"}
       muted={quota.state === "stale"}
       placeholder="—"

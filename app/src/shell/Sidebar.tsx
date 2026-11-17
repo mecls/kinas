@@ -8,7 +8,6 @@ import { chordLabel, type Shortcuts } from "../settings/shortcuts.ts";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  ConnectionRow,
   CrewIcon,
   FileIcon,
   FolderIcon,
@@ -26,7 +25,6 @@ import {
   Toast,
   Wordmark,
 } from "../ui/index.ts";
-import type { Connection } from "./connection.ts";
 import { type Notice, NOTICE_MS } from "./notice.ts";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
@@ -69,7 +67,6 @@ export function Sidebar({
   onAdd,
   notice,
   panelOpen,
-  connection = null,
   waiting = 0,
   crew = { installed: false, repos: [] },
   onAddToCrew = () => {},
@@ -100,8 +97,6 @@ export function Sidebar({
   /** What the shell last said. Shown here only while the panel is closed — open, the reader's status line has it. */
   notice: Notice | null;
   panelOpen: boolean;
-  /** The VPS row at the foot, from App's one usage snapshot (shell/connection.ts); null draws no row. */
-  connection?: Connection | null;
   /** The crew's one waiting count (crew::read::waiting), on the Inbox row; hidden at zero. */
   waiting?: number;
   /** What Add to crew needs: whether Firstmate is installed, and the repositories already in the crew. */
@@ -182,8 +177,7 @@ export function Sidebar({
       </div>
 
       <SidebarNotice notice={notice} panelOpen={panelOpen} />
-      {/* The VPS row, from the same reading the Usage page shows (shell/connection.ts); nothing when no machine is watched. */}
-      {connection && <ConnectionRow name={connection.name} state={connection.state} detail={connection.detail} />}
+      {/* The VPS line moved to the status bar (the interface polish, rule 22). */}
       {/* The last row, below the machine (folder views, 2026-09-23): out of the scrolling sections, always in view. */}
       <div className="sidebar-foot">
         <NavItem icon={<GearIcon />} label="Settings" current={current("settings")} onClick={() => onGo("settings")} aria-label="Settings" title={`Settings (${chord("settings")})`} />

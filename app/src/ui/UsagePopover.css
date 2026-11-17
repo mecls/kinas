@@ -1,0 +1,99 @@
+/* DESIGN.md §4 Usage popover (1.13): a --surface sheet, --radius-md, 1 px --line, --shadow-float, fixed above the
+   status bar's readings at the window's bottom-left. A block per provider, its windows under it; "Open Usage" at its
+   foot. Tokens only. */
+.ui-popover {
+  position: fixed;
+  left: var(--space-2);
+  bottom: calc(var(--hit) + var(--space-1));
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-w);
+  max-height: calc(100vh - var(--chrome-h) - var(--hit) - var(--space-5));
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  outline: none;
+}
+
+/* In the stories, drawn where it stands. */
+.ui-popover[data-inline] {
+  position: static;
+  max-height: none;
+}
+
+.ui-popover-block {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ui-popover-block + .ui-popover-block {
+  border-top: 1px solid var(--line);
+}
+
+.ui-popover-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+}
+
+.ui-popover-name {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.ui-popover-asof {
+  margin-left: auto;
+  color: var(--ink-2);
+}
+
+.ui-popover-window {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.ui-popover-label {
+  color: var(--ink-2);
+}
+
+.ui-popover-line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.ui-popover-line > :first-child {
+  color: var(--ink);
+}
+
+.ui-popover-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink-2);
+}
+
+.ui-popover-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.ui-popover-foot:hover {
+  background: var(--surface-2);
+}

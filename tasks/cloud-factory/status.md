@@ -10,7 +10,8 @@
   its seven least-sure points standing; it records ADRs 0021–0023 to be written in slice 0, docs first
 - Gate 3 · Program design: APPROVED 2026-11-17 — `build-spec.md` §11 (private, main checkout), approved as written,
   with §11.5's nine least-sure decisions standing (no QR code: the link and the code, each with Copy)
-- Gate 4 · Slice plan: in progress — `build-spec.md` §12
+- Gate 4 · Slice plan: APPROVED 2026-11-17 — `build-spec.md` §12, approved as written: thirteen slices (0–12), three
+  ship points (after slices 6, 10 and 12)
 
 ## Slices (build-spec.md §12)
 - [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13, ⌘6), and the probe on the captain's VPS

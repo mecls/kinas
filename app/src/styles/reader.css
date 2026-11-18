@@ -355,6 +355,16 @@
   min-width: 0;
 }
 
+/* A changed file's line counts (1.13, rule 36), between its name and its mark: they give way before the name is cut,
+   shrinking first (ui/LineCounts.css). */
+.tree-counts {
+  display: flex;
+  flex: 0 1000 auto;
+  min-width: 0;
+  margin: 0 var(--space-1h);
+  overflow: hidden;
+}
+
 /* A deleted entry, kept where it was until a refresh or a reload (tree changes rule 9): the name struck through, in the
    tree's own colours — its D says the rest. */
 .tree-row[data-gone] > .tree-item {

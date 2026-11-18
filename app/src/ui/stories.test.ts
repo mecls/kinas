@@ -43,7 +43,6 @@ const NOT_YET: Record<string, string> = {
   "Tab bar": "the phone — not built in this pass (DESIGN.md §3.3)",
   "Launch form": "the phone and the palette's launch form — Build 3",
   // 1.13, the interface polish (tasks/interface-polish): each leaves this list in the slice that builds it.
-  "Line counts": "the interface polish, slice 10",
 };
 
 const stories = new Map(STORIES.map((s) => [s.component, s.states.map((st) => st.name)]));

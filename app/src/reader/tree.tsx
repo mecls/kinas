@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { type DirEntry, type DirListing, readerListDir } from "../api.ts";
 import { ChangeMark } from "../ui/index.ts";
+import { countsText, LineCounts } from "../ui/LineCounts.tsx";
 import { type CrewRow, crewWordsFor, type FolderMarks, type Gone, mergeCrewRows, mergeDeleted, rowWords, useFolderMarks, watchRoot, wordsFor } from "./changes.ts";
 
 // The folder tree (reader R35): one folder at a time from Rust, children loaded when a folder is expanded. It starts at
@@ -78,6 +79,12 @@ function FileRow({ entry, selected, onOpen, marks }: TreeProps & { entry: Row })
   const crew = marks.crewOf(entry.path);
   const crewWords = crewWordsFor(entry.name, crew, null);
   const label = rowWords(entry.name, words, crew, null);
+  // The interface polish (rule 36): a changed file's line counts before its mark — an added file only +N, a deleted one
+  // only −N — their own tooltip saying them; a file Kinas could not count says why in its mark's tooltip.
+  const { lines, why } = marks.linesOf(entry.path);
+  const added = lines && mark !== "D" ? lines.added : undefined;
+  const removed = lines && mark !== "A" ? lines.removed : undefined;
+  const markWords = words && why && !lines ? `${words}; no line counts: ${why}` : words;
   return (
     <li>
       <div className="tree-row" data-mark={mark ?? undefined} data-crew={crew?.mark} data-crew-row={isCrewRow(entry) ? "" : undefined} data-gone={isGone(entry) ? "" : undefined}>
@@ -93,7 +100,12 @@ function FileRow({ entry, selected, onOpen, marks }: TreeProps & { entry: Row })
           {entry.name}
         </button>
         {crew && crewWords && <ChangeMark mark={crew.mark} words={crewWords} hollow />}
-        {mark && words && <ChangeMark mark={mark} words={words} />}
+        {mark && lines && (
+          <span className="tree-counts" title={`${countsText(added, removed)} lines${words ? `, ${words.slice(words.indexOf(",") + 2)}` : ""}`}>
+            <LineCounts added={added} removed={removed} />
+          </span>
+        )}
+        {mark && markWords && <ChangeMark mark={mark} words={markWords} />}
       </div>
     </li>
   );

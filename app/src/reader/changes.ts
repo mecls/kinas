@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { type ChangeEntry, type CrewEntry, type FolderRollup, type Mark, onTreeChanged, type ReaderKind, type TreeChanges, treeChangesRefresh, treeChangesWatch } from "../api.ts";
+import { type ChangeEntry, type CrewEntry, type FolderRollup, type LineCounts, type Mark, onTreeChanged, type ReaderKind, type TreeChanges, treeChangesRefresh, treeChangesWatch } from "../api.ts";
 
 // Tree changes in the webview (tasks/tree-changes/prd.md): Rust decides every mark and sends a root's whole summary
 // after each burst; this module keeps the latest summary per root and hands the trees what to draw. Memory only, and
@@ -32,6 +32,8 @@ export interface FolderMarks {
   sinceOf(path: string): string;
   /** Whether a row's mark waits for a push: its entry's, else the added folder's above it; false for none. */
   waitsOf(path: string): boolean;
+  /** A file's own line counts and, when it has none, why (rule 36): only from its own entry, never a folder's. */
+  linesOf(path: string): { lines: LineCounts | null; why: string | null };
   /** The crew's mark on a row (crew marks), or null. */
   crewOf(path: string): CrewEntry | null;
   /** A folder's crew roll-up, or null. */
@@ -182,13 +184,14 @@ export function folderMarksOf(summary: TreeChanges | null, touchedSeq: (dir: str
       return ms === undefined ? "" : sinceLabel(ms);
     },
     waitsOf: (path) => (byPath.get(path) ?? addedAbove(path))?.waits ?? false,
+    linesOf: (path) => ({ lines: byPath.get(path)?.lines ?? null, why: byPath.get(path)?.lines_why ?? null }),
     crewOf: (path) => crew.get(path) ?? null,
     crewRollupOf: (path) => crewFolders.get(path) ?? null,
     crewRowsIn: (dir) => crewRows.get(dir) ?? [],
   };
 }
 
-const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false, crewOf: () => null, crewRollupOf: () => null, crewRowsIn: () => [] };
+const NO_MARKS: FolderMarks = { markOf: () => null, rollupOf: () => null, deletedIn: () => [], touchedSeq: () => 0, sinceOf: () => "", waitsOf: () => false, linesOf: () => ({ lines: null, why: null }), crewOf: () => null, crewRollupOf: () => null, crewRowsIn: () => [] };
 
 /**
  * What a live reload draws (tree changes rule 25; crew marks rule 14). `began` is the Changes view's baseline when the

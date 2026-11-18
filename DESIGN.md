@@ -290,6 +290,7 @@ Each component exists once in `app/src/ui/` and is used by name. An agent that n
 | StatusBar | readings, tones-crew-vps, vps-stale, empty |
 | UsagePopover | providers, empty |
 | SettingsRow | rows |
+| LineCounts | modified, added, deleted |
 
 **Button.** Three kinds: primary (`--accent`, `--accent-ink`), secondary (`--surface`, 1 px `--line-strong`, `--ink`), and text (`--ink-2`, no border). Height is `--hit` on the Mac and `--hit-touch` on the phone. The label names exactly what happens ("Approve plan", not "Submit"), and the toast that follows uses the same verb. (1.13: the `Kbd` beside a label or inside a button has a `--surface-2` fill; it is also how the palette, the nav rows, the search row and the Usage popover show a chord.)
 

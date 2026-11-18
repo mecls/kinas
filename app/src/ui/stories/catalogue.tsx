@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { highlight } from "../../palette/match.ts";
 import { PaletteFoot, PaletteGroupView, type PaletteRowGroup } from "../PaletteRow.tsx";
+import { LineCounts } from "../LineCounts.tsx";
 import { SettingsRow } from "../SettingsRow.tsx";
 import { StatusBar } from "../StatusBar.tsx";
 import { UsagePopover } from "../UsagePopover.tsx";
@@ -974,6 +975,14 @@ export const STORIES: Story[] = [
           </Card>
         ),
       },
+    ],
+  },
+  {
+    component: "LineCounts",
+    states: [
+      { name: "modified", node: <LineCounts added={11} removed={173} /> },
+      { name: "added", node: <LineCounts added={42} /> },
+      { name: "deleted", node: <LineCounts removed={7} /> },
     ],
   },
 ];

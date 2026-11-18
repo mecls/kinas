@@ -31,3 +31,4 @@ export * from "./icons.tsx";
 export { StatusBar, type StatusReading, type StatusCrewPart, type StatusVps } from "./StatusBar.tsx";
 export { UsagePopover, type UsagePopoverBlock, type UsagePopoverWindow } from "./UsagePopover.tsx";
 export { SettingsRow } from "./SettingsRow.tsx";
+export { LineCounts, countsText } from "./LineCounts.tsx";

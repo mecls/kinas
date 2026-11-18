@@ -1,0 +1,22 @@
+/* DESIGN.md §4 Line counts (1.13): mono --text-xs, the added in --ok-ink and the removed in --danger-ink. When the row
+   is too narrow for both, the counts give way before the name is cut: they shrink to nothing first. */
+.ui-line-counts {
+  display: inline-flex;
+  flex: 0 1000 auto;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-line-added {
+  color: var(--ok-ink);
+}
+
+.ui-line-removed {
+  color: var(--danger-ink);
+}

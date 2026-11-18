@@ -649,6 +649,15 @@ export interface ChangeEntry {
   since_ms: number;
   /** A push would clear it: git does not ignore it, and its repository can push. Its words end ", not pushed". */
   waits: boolean;
+  /** A changed file's added and removed lines, as its Diff counts them (the interface polish, rule 36); null for a
+   * folder or a file Kinas could not count, `lines_why` saying why. */
+  lines: LineCounts | null;
+  lines_why: string | null;
+}
+
+export interface LineCounts {
+  added: number;
+  removed: number;
 }
 
 /**

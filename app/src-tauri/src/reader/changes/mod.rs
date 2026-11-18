@@ -123,7 +123,21 @@ pub struct ChangeEntry {
     pub since_ms: Millis,
     /// A push would clear it: git does not ignore it, and its repository can push (PRD rule 13, ", not pushed").
     pub waits: bool,
+    /// The file's added and removed lines against its baseline, as its Diff counts them (the interface polish, rule
+    /// 36). None for a folder, and for a file Kinas could not count — `lines_why` says why.
+    pub lines: Option<LineCounts>,
+    pub lines_why: Option<&'static str>,
 }
+
+/// A changed file's line counts (the interface polish, rule 36): "+N" and "−N" in its tree row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct LineCounts {
+    pub added: u32,
+    pub removed: u32,
+}
+
+/// A marked file's counts, or why it has none, in words for its tooltip.
+type Counted = Result<LineCounts, &'static str>;
 
 /// A folder that existed at both moments, with changes beneath it (rule 10).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -169,6 +183,8 @@ struct Record {
     /// Paths named by bursts before the baseline was in. A file here when its turn to be copied comes gets no copy.
     queued: BTreeSet<PathBuf>,
     marks: BTreeMap<PathBuf, Tag>,
+    /// Each marked file's line counts, taken when its mark was settled (rule 36). Read only for a path still marked.
+    lines: BTreeMap<PathBuf, Counted>,
     /// Held only to keep the watch alive. Dropping the record drops it and `feed`, the channel's two senders, which
     /// ends the burst thread.
     #[allow(dead_code)]
@@ -184,7 +200,7 @@ struct Record {
 
 impl Record {
     fn new(root: PathBuf, since_ms: Millis, generation: u64) -> Self {
-        Record { root, since_ms, generation, watching: true, baseline: None, queued: BTreeSet::new(), marks: BTreeMap::new(), watcher: None, feed: None, copy_bytes: 0, crew_repos: Vec::new(), crew: crew::CrewView::default() }
+        Record { root, since_ms, generation, watching: true, baseline: None, queued: BTreeSet::new(), marks: BTreeMap::new(), lines: BTreeMap::new(), watcher: None, feed: None, copy_bytes: 0, crew_repos: Vec::new(), crew: crew::CrewView::default() }
     }
 }
 
@@ -230,7 +246,18 @@ fn summary(record: &Record, repos: &HashMap<PathBuf, Repo>, touched: Vec<PathBuf
     let entries: Vec<ChangeEntry> = record
         .marks
         .iter()
-        .map(|(path, tag)| ChangeEntry { path: path.display().to_string(), kind: tag.kind, mark: tag.mark, since_ms: since_of(path), waits: waits(path, tag) })
+        .map(|(path, tag)| {
+            let counted = (tag.kind == Kind::File).then(|| record.lines.get(path).copied()).flatten();
+            ChangeEntry {
+                path: path.display().to_string(),
+                kind: tag.kind,
+                mark: tag.mark,
+                since_ms: since_of(path),
+                waits: waits(path, tag),
+                lines: counted.and_then(Result::ok),
+                lines_why: counted.and_then(Result::err),
+            }
+        })
         .collect();
     TreeChanges {
         root: record.root.display().to_string(),
@@ -867,6 +894,8 @@ type Judged = BTreeMap<PathBuf, Option<(Kind, Mark)>>;
 struct Settled {
     next: Option<Baseline>,
     marks: BTreeMap<PathBuf, Option<Tag>>,
+    /// Each marked file's counts against the baseline the marks were settled on (rule 36).
+    lines: BTreeMap<PathBuf, Counted>,
 }
 
 /// The one check (architecture 5), with no guard held. Every path judged marked that its repository's upstream holds
@@ -892,7 +921,48 @@ fn settle(baseline: &Baseline, before: &BTreeMap<PathBuf, Tag>, mut judged: Judg
         }
     }
     let marks = tags(judged, before, next.as_ref().unwrap_or(baseline), git);
-    Settled { next, marks }
+    // Counted after the marks are decided, against the baseline they were settled on: counting never decides a mark.
+    let against = next.as_ref().unwrap_or(baseline);
+    let lines = marks
+        .iter()
+        .filter_map(|(path, tag)| tag.filter(|t| t.kind == Kind::File).map(|t| (path.clone(), counts_for(against, path, t.mark, git, diff::COUNT_DEADLINE))))
+        .collect();
+    Settled { next, marks, lines }
+}
+
+/// A marked file's added and removed lines (rule 36), as its Diff would count them: an added file is all additions, a
+/// deleted one all removals, a modified one its text now against its text at the baseline. Within `deadline`; a file
+/// Kinas kept no text for, one over the reader's 4 MB, one that is not text, or one too slow to count has none, and
+/// says why.
+fn counts_for(baseline: &Baseline, path: &Path, mark: Mark, git: Option<&Git>, deadline: std::time::Duration) -> Counted {
+    let before = match mark {
+        Mark::Added => Vec::new(),
+        Mark::Modified | Mark::Deleted => match baseline.entries.get(path).map(|b| &b.text) {
+            Some(BaseText::Copy(bytes)) => bytes.to_vec(),
+            Some(BaseText::Blob { head, .. }) => match git.map(|g| g.blob_head(&head.repo, &head.commit, path, access::MAX_TEXT_BYTES as usize)) {
+                Some(Ok((bytes, false))) => bytes,
+                Some(Ok((_, true))) => return Err("over 4 MB"),
+                _ => return Err("git could not read its text then"),
+            },
+            Some(BaseText::NoCopy(NoCopy::Image)) => return Err("an image"),
+            Some(BaseText::NoCopy(NoCopy::TooLarge)) => return Err("over 4 MB"),
+            Some(BaseText::NoCopy(NoCopy::Budget)) => return Err("no copy kept: the folder holds more text than Kinas keeps"),
+            Some(BaseText::NoCopy(_)) => return Err("no copy kept"),
+            None | Some(BaseText::NotText) => return Err("not text"),
+        },
+    };
+    let after = match mark {
+        Mark::Deleted => String::new(),
+        Mark::Added | Mark::Modified => match access::read_text(path) {
+            Ok(text) => text.text,
+            Err(access::Denied::TooLarge(_)) => return Err("over 4 MB"),
+            Err(_) => return Err("not text"),
+        },
+    };
+    match diff::count(&String::from_utf8_lossy(&before), &after, deadline) {
+        Some((added, removed)) => Ok(LineCounts { added, removed }),
+        None => Err("too many changes to count in time"),
+    }
 }
 
 /// Each judged mark as the record keeps it. Whether git ignores the path is carried from `before` when it was marked
@@ -934,14 +1004,26 @@ fn install_settled(state: &ChangesState, root: &Path, from: &Arc<Baseline>, sett
     // Judged against a baseline a refresh has since replaced: the new one will judge these paths itself.
     let record = roots.get_mut(root).filter(|r| r.baseline.as_ref().is_some_and(|b| Arc::ptr_eq(b, from)))?;
     let touched: BTreeSet<PathBuf> = settled.marks.iter().filter(|(p, tag)| from_disk || record.marks.get(*p) != tag.as_ref()).filter_map(|(p, _)| p.parent().map(Path::to_path_buf)).collect();
+    // Counts belong to a mark (rule 36): set with it, recounted whenever it is settled again, gone when it goes.
     for (path, tag) in settled.marks {
         match tag {
-            Some(tag) => record.marks.insert(path, tag),
-            None => record.marks.remove(&path),
-        };
+            Some(tag) => {
+                record.marks.insert(path.clone(), tag);
+                match settled.lines.get(&path) {
+                    Some(counted) => record.lines.insert(path, *counted),
+                    None => record.lines.remove(&path),
+                };
+            }
+            None => {
+                record.marks.remove(&path);
+                record.lines.remove(&path);
+            }
+        }
     }
     let before_pruning = record.marks.clone();
     record.marks.retain(|p, _| !compare::under_marked_folder(root, p, &before_pruning));
+    let Record { marks, lines, .. } = &mut *record;
+    lines.retain(|p, _| marks.contains_key(p));
     if let Some(next) = settled.next {
         *budget_used = budget_used.saturating_sub(record.copy_bytes) + next.copy_bytes;
         record.copy_bytes = next.copy_bytes;
@@ -1478,6 +1560,69 @@ mod tests {
         let file = std::fs::File::options().write(true).open(root.join("a.md")).unwrap();
         file.set_modified(std::time::SystemTime::now() + Duration::from_secs(5)).unwrap();
         assert_eq!(marked(&burst(&state, &root, &["a.md"]), &root), ["M a.md"]);
+    }
+
+    /// Each marked path's counts as the summary says them: "A docs/x.md +2", "D a.md -3", "M b.md +1 -1", "M c.md (why)".
+    fn counted(summary: &TreeChanges, root: &Path) -> Vec<String> {
+        summary
+            .entries
+            .iter()
+            .map(|e| {
+                let name = Path::new(&e.path).strip_prefix(root).unwrap().display().to_string();
+                let letter = serde_json::to_value(e.mark).unwrap().as_str().unwrap().to_string();
+                match (e.lines, e.lines_why) {
+                    (Some(c), None) => format!("{letter} {name} +{} -{}", c.added, c.removed),
+                    (None, Some(why)) => format!("{letter} {name} ({why})"),
+                    (None, None) => format!("{letter} {name}"),
+                    (Some(_), Some(_)) => panic!("counts and a reason both"),
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn counts_follow_marks() {
+        let (_dir, root, state) = watched(&[("a.md", b"one\ntwo\nthree\n"), ("b.md", b"keep\nold\n")], 1024);
+        std::fs::remove_file(root.join("a.md")).unwrap();
+        std::fs::write(root.join("b.md"), "keep\nnew\nmore\n").unwrap();
+        std::fs::write(root.join("c.md"), "x\ny\n").unwrap();
+        // A: lines now; D: lines then; M: the Diff's own count.
+        assert_eq!(counted(&burst(&state, &root, &["a.md", "b.md", "c.md"]), &root), ["D a.md +0 -3", "M b.md +2 -1", "A c.md +2 -0"]);
+        // Saved again, the count follows the text.
+        std::fs::write(root.join("b.md"), "keep\nnew\n").unwrap();
+        assert!(counted(&burst(&state, &root, &["b.md"]), &root).contains(&"M b.md +1 -1".to_string()));
+        // The mark cleared: its counts go with it.
+        std::fs::write(root.join("b.md"), "keep\nold\n").unwrap();
+        let answer = burst(&state, &root, &["b.md"]);
+        assert!(!counted(&answer, &root).iter().any(|e| e.contains("b.md")));
+        assert!(!state.lock().roots[&root].lines.contains_key(&root.join("b.md")));
+    }
+
+    #[test]
+    fn counts_past_deadline_leave_the_mark() {
+        let (_dir, root, _state) = watched(&[("a.md", b"one\n")], 1024);
+        let baseline = baseline::take(&root, None, 1024, &|_| false);
+        std::fs::write(root.join("a.md"), "one\ntwo\n").unwrap();
+        // A zero deadline: no counts, said so — and the mark is the judge's, which counting never touches.
+        assert_eq!(counts_for(&baseline, &root.join("a.md"), Mark::Modified, None, Duration::ZERO), Err("too many changes to count in time"));
+        assert_eq!(counts_for(&baseline, &root.join("a.md"), Mark::Modified, None, diff::COUNT_DEADLINE), Ok(LineCounts { added: 1, removed: 0 }));
+    }
+
+    #[test]
+    fn no_copy_no_counts() {
+        let big = vec![b'x'; access::MAX_TEXT_BYTES as usize + 10];
+        // An image, a file over 4 MB, and one past the copy budget: each keeps its mark and says why it has no counts.
+        let (_dir, root, state) = watched(&[("photo.png", b"\x89PNG\r\n"), ("big.md", &big), ("a.md", b"# A\n")], 0);
+        std::fs::write(root.join("photo.png"), b"\x89PNG\r\n2").unwrap();
+        std::fs::write(root.join("big.md"), [&big[..], b"y"].concat()).unwrap();
+        std::fs::write(root.join("a.md"), "# A, edited\n").unwrap();
+        let answer = burst(&state, &root, &["photo.png", "big.md", "a.md"]);
+        assert_eq!(
+            counted(&answer, &root),
+            ["M a.md (no copy kept: the folder holds more text than Kinas keeps)", "M big.md (over 4 MB)", "M photo.png (an image)"]
+        );
+        // A folder's roll-up is never counted: only file entries carry counts.
+        assert!(answer.entries.iter().filter(|e| e.kind == Kind::Dir).all(|e| e.lines.is_none() && e.lines_why.is_none()));
     }
 
     #[test]

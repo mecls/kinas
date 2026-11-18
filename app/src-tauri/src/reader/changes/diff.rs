@@ -10,6 +10,8 @@ use similar::{Algorithm, ChangeTag, TextDiff};
 use super::{Mark, Millis};
 
 pub const DIFF_DEADLINE: Duration = Duration::from_millis(500);
+/// A changed file's line counts in a tree (the interface polish, rule 36) are taken within this, per file.
+pub const COUNT_DEADLINE: Duration = Duration::from_millis(100);
 pub const CONTEXT_LINES: usize = 3;
 /// A run folds only if at least this many lines would be hidden: folding three lines behind a row saves nothing.
 pub const MIN_FOLDED: usize = 4;
@@ -105,6 +107,25 @@ pub fn diff(before: &str, after: &str, deadline: Duration) -> Result<(Vec<DiffRo
         .collect();
     let folds = fold_runs(&mut rows, CONTEXT_LINES, MIN_FOLDED);
     Ok((rows, folds, added, removed))
+}
+
+/// How many lines `before` to `after` adds and removes, as `diff` counts them — or None past `deadline`, which leaves a
+/// mark without counts rather than counting coarsely (rule 36). Counts only: no rows are built.
+pub fn count(before: &str, after: &str, deadline: Duration) -> Option<(u32, u32)> {
+    let until = Instant::now() + deadline;
+    let text_diff = TextDiff::configure().algorithm(Algorithm::Myers).deadline(until).diff_lines(before, after);
+    if Instant::now() >= until {
+        return None;
+    }
+    let (mut added, mut removed) = (0u32, 0u32);
+    for change in text_diff.iter_all_changes() {
+        match change.tag() {
+            ChangeTag::Insert => added += 1,
+            ChangeTag::Delete => removed += 1,
+            ChangeTag::Equal => {}
+        }
+    }
+    Some((added, removed))
 }
 
 /// Folds each run of unchanged lines down to `context` lines on the side of every change it touches — the head of a
@@ -217,6 +238,18 @@ mod tests {
         assert_eq!(rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["one", "two", "TWO"]);
         let (rows, ..) = diff("no newline", "no newline at the end", DIFF_DEADLINE).unwrap();
         assert_eq!(rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["no newline", "no newline at the end"]);
+    }
+
+    #[test]
+    fn count_matches_diff() {
+        let before: String = (1..=40).map(|n| format!("line {n}\n")).collect();
+        let after = before.replace("line 7\n", "line seven\n").replace("line 30\n", "") + "line 41\nline 42\n";
+        for (b, a) in [(before.as_str(), after.as_str()), ("", "a\nb\n"), ("a\nb\nc\n", ""), ("same\n", "same\n"), ("x\r\ny\r\n", "x\ny\nz\n")] {
+            let (_, _, added, removed) = diff(b, a, DIFF_DEADLINE).unwrap();
+            assert_eq!(count(b, a, COUNT_DEADLINE), Some((added, removed)));
+        }
+        assert_eq!(count(&before, &after, COUNT_DEADLINE), Some((3, 2)));
+        assert_eq!(count(&before, &after, Duration::ZERO), None, "past the deadline: no counts");
     }
 
     #[test]

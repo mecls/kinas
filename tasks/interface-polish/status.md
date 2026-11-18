@@ -27,7 +27,13 @@
 - [x] Slice 8 · Home (quiet line, attention without heroes) and Usage (chart trim) — 2026-11-17, local: home 4/4, crew-home 1/1, screens 3/3 (home.json recorded again: three selectors gone with the rows, two added for the quiet line, nothing else moved), usage 12/12, statusbar 6/6; `bun test` 985; Rust 495 on the second run (the review's 4 MB test missed its deadline once more under load), clippy clean
 - [x] Slice 9 · Settings: section list, search, rows, folding lines — 2026-11-17, local: `bun run check` green (989 bun, 495 Rust, clippy clean); settings 13/13, crew-settings 6/6, palette 12/12, appearance 10/10, keyboard 5/5, stories 2/2, screens 3/3 with `settings.json` recorded again (the cards' headings and hook line gone, the block title, rows, labels, lines, the hairline and the marked list item recorded); two runs under iCloud's load timed out cases, every case green in the last
 - [x] Slice 10 · line counts on changed files — 2026-11-18, local: Rust 499 (`count_matches_diff`, `counts_follow_marks`, `counts_past_deadline_leave_the_mark`, `no_copy_no_counts`), clippy clean, `bun test` 991; tree-changes 20/20 (A +1, M +1 −0, D −N, the big file's why), crew-marks 9/9, stories 2/2; the review's 4 MB test missed its deadline once more under load and passed the rerun
-- [ ] Slice 11 · the record: screens, smoke test, private names → ship point 3
+- [x] Slice 11 · the record: screens, smoke test, private names → ship point 3 — 2026-11-18, local (`1f4a2c5`): the
+  smoke test's Recent (ADR 0007) and status bar lines; all 42 screens retaken, none changed but for live readings, so
+  none committed again; private names 0 hits over the branch. Full e2e alone 36/42 under load 47–54 with the Mac
+  swapping, the six green alone on the same build; `bun run check` green (991 bun, 499 Rust, clippy clean). The debug
+  cache cleared at the captain's word (10 → 17 GiB free, still under the 30 GiB floor); release `Kinas.app` built 12:49,
+  not opened beside the captain's running Kinas, not installed. **Ship points 1–3 wait for the captain's word on the
+  push, and the build on their word to install** (build-spec §19 lists what only the captain can check)
 
 ## Notes for a fresh session
 

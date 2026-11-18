@@ -600,8 +600,10 @@ time the crew is used for real (2026-09-25, slice 9). Each is also an `outstandi
 
 - [ ] ⌘K from the Work pane, type part of a file name you know: it is in Files within a blink, Enter opens it in the
       reader, Esc or a click gives the terminal its keys back.
-- [ ] ⌘K with nothing typed: Recent lists what you last opened, across a relaunch.
-- [ ] The status bar on every page; a click on the readings opens the popover; its resets agree with the Usage page.
+- [ ] ⌘K with nothing typed: Recent lists what you last opened, newest first; after a relaunch only the tasks and
+      settings are still there — files, folders and workspaces are never stored (ADR 0007; amended 2026-11-17).
+- [ ] The status bar on every page and in full screen (⌃⌘F), the terminal never restarting; a click on the readings
+      opens the popover; its resets agree with the Usage page.
 - [ ] A client folder with crew work says needs you, failed or working, and lists its tasks in flight.
 - [ ] Settings: the section list scrolls the page; typing "key" leaves only the key rows.
 - [ ] Save a file in a watched tree: its row shows "+N −M" before its mark.

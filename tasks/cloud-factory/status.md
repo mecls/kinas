@@ -15,7 +15,7 @@
 
 ## Slices (build-spec.md §12)
 - [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13, ⌘6), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe waits for the captain's new VPS
-- [ ] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle)
+- [ ] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle) — in progress, paused 2026-11-18: the door, the place, the companion's rpc, the remote reading and migration 0008 committed as WIP (`08a4c49`); the guard rule, Settings' card and the e2e remain
 - [ ] Slice 2 · the real reading: the companion runs Firstmate on the VPS; the unreachable path
 - [ ] Slice 3 · the Work page on the VPS, and Herdr actions through the companion
 - [ ] Slice 4 · setup: the bootstrap, the checks, Install, the client folders
@@ -49,3 +49,6 @@
 - **The machine (2026-11-17):** a new dedicated VPS the captain rents for the agents — not the `hostinger` or `miraside`
   SSH aliases already on this Mac. The probe (slice 0.3) runs there scratch-only under `~/kinas-probe`, removed after;
   the captain signs `claude` in when asked. Slice 0.3 waits for that VPS.
+- **Paused 2026-11-18 at the captain's request:** the agents may move to a home-lab machine instead of a rented VPS;
+  the captain will explain. Nothing more is built until then. The hand-off is private, beside the analysis
+  (`tasks/cloud-factory/handoff.md` in the main checkout).

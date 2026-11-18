@@ -9,6 +9,7 @@
 //   kinas open [<path>]      any text file, image or folder in the Kinas reader; no path reopens the last one (open.ts)
 //   kinas crew setup         install the crew: Firstmate at its pin and the tools, asking y/N before each (crew-setup.ts)
 //   kinas crew status [--json]  the crew as the app last mirrored it: counts and words, never a task's name (crew.ts)
+//   kinas companion rpc      on the VPS only: answer one request from Kinas on the Mac (companion/; ADR 0021)
 //
 // Amended 2026-09-24 (the first mate): `kinas crew setup` is the one exception to "read, never written". With the
 // captain's yes for each step it clones Firstmate at its pin into the data directory, writes the clone's
@@ -32,6 +33,7 @@ import { colorEnabled, paint, polarityFromEnv } from "@kinas/commands/theme";
 import { computePacket, ContextCache, currentOrg, flat, insideRoot, loadConfig, renderAgentPacket, renderOperator, shown, within, type KinasConfig } from "@kinas/context";
 import { dataDir, openReadOnly } from "@kinas/store/sqlite-readonly";
 import { spawnRefresh } from "./background.ts";
+import { companion, COMPANION_USAGE } from "./companion/main.ts";
 import { crew, CREW_USAGE } from "./crew.ts";
 import { ask, forTerminal, LAUNCH_TIMEOUT_MS, launchAndAsk, OPEN_EXIT, type OpenRequest, outcome, resolveTarget } from "./open.ts";
 
@@ -59,6 +61,7 @@ function usage(): string {
     "    --anywhere        ask Kinas to open a path outside the projects root",
     "    --launch          start Kinas first when it is not running",
     ...CREW_USAGE,
+    ...COMPANION_USAGE,
   ].join("\n");
 }
 
@@ -302,6 +305,7 @@ async function main(argv: string[]): Promise<number> {
   if (name === "context") return context(rest);
   if (name === "open") return open(rest);
   if (name === "crew") return (await cliCommand("crew")!.run({ now: Date.now(), crew: () => crew(rest) })).exit ?? EXIT.error;
+  if (name === "companion") return (await cliCommand("companion")!.run({ now: Date.now(), companion: () => companion(rest) })).exit ?? EXIT.error;
   return status(rest);
 }
 

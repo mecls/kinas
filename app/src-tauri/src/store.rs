@@ -14,6 +14,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (5, include_str!("../../../migrations/0005_crew.sql")),
     (6, include_str!("../../../migrations/0006_crew_seen.sql")),
     (7, include_str!("../../../migrations/0007_crew_current.sql")),
+    (8, include_str!("../../../migrations/0008_cloud_factory.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -447,11 +448,14 @@ mod tests {
         assert!(before.iter().filter(|(_, c)| *c > 0).count() >= 7, "the v6 store has rows in the tables it must keep: {before:?}");
 
         let store = Store::open(dir.path()).unwrap();
-        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), 7);
+        // Amended 2026-11-18 (the factory in the cloud): the store opens at the latest migration, as the 0006 test
+        // above already reads it, so schema_migrations gains one row per migration after 6.
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), MIGRATIONS.last().unwrap().0);
         let after = tables(&store.conn());
+        let added = MIGRATIONS.iter().filter(|(v, _)| *v > 6).count() as i64;
         for (name, rows) in &before {
             let kept = after.iter().find(|(n, _)| n == name).map(|(_, c)| *c);
-            let expected = if name == "schema_migrations" { rows + 1 } else { *rows };
+            let expected = if name == "schema_migrations" { rows + added } else { *rows };
             assert_eq!(kept, Some(expected), "{name}: rows before {rows}, after {kept:?}");
         }
         assert_eq!(after.iter().find(|(n, _)| n == "crew_ledger").map(|(_, c)| *c), Some(0), "crew_ledger is new and empty");
@@ -464,5 +468,70 @@ mod tests {
         assert_eq!(row, (5, Some(6), None, None), "the row kept, its new columns empty");
         let bad = store.conn().execute("INSERT INTO crew_ledger (org_id, task_id, event, at) VALUES ('org-1', 'x', 'status', 1)", []);
         assert!(bad.is_err(), "crew_ledger keeps only the four events");
+    }
+
+    /// The factory in the cloud (build spec §6, §17 2026-11-18): 0008 only adds — CREATE TABLE and CREATE INDEX, no
+    /// word that drops, renames, deletes, updates or replaces — and a store at v7 with rows in its tables migrates to v8
+    /// with every row of every table kept and the four new tables empty.
+    #[test]
+    fn migration_0008_only_adds() {
+        let sql = MIGRATIONS.iter().find(|(v, _)| *v == 8).expect("0008 listed").1;
+        let code: String = sql.lines().filter(|l| !l.trim_start().starts_with("--")).collect::<Vec<_>>().join("\n");
+        let words: Vec<String> = code.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').map(|w| w.to_ascii_uppercase()).collect();
+        for forbidden in ["DROP", "RENAME", "DELETE", "UPDATE", "REPLACE", "ALTER", "INSERT"] {
+            assert!(!words.iter().any(|w| w == forbidden), "0008 contains {forbidden}");
+        }
+        for line in code.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            let statement_start = line.starts_with("CREATE TABLE ") || line.starts_with("CREATE INDEX ");
+            let inside_create = !line.contains(';') || line == ");";
+            assert!(statement_start || inside_create, "0008 has a statement that is not a CREATE: {line}");
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_FILE);
+        let tables = |conn: &Connection| -> Vec<(String, i64)> {
+            let names: Vec<String> = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect();
+            names.into_iter().map(|n| { let c = conn.query_row(&format!("SELECT count(*) FROM \"{n}\""), [], |r| r.get(0)).unwrap(); (n, c) }).collect()
+        };
+        let before = {
+            let mut conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)").unwrap();
+            for (version, sql) in MIGRATIONS.iter().filter(|(v, _)| *v <= 7) {
+                let tx = conn.transaction().unwrap();
+                tx.execute_batch(sql).unwrap();
+                tx.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)", params![version]).unwrap();
+                tx.commit().unwrap();
+            }
+            conn.execute_batch(
+                "INSERT INTO orgs (id, name, created_at) VALUES ('org-1', 'test', 0);
+                 INSERT INTO settings (org_id, key, value) VALUES ('org-1', 'appearance', '\"dark\"');
+                 INSERT INTO reader_status (org_id, reader, state, stale_after_ms, dead_after_ms) VALUES ('org-1', 'crew', 'ok', 60000, 43200000);
+                 INSERT INTO crew_tasks (org_id, id, kind, snapshot_generated, first_seen_at, last_seen_at) VALUES ('org-1', 'live-9c2e', 'scout', 'g', 2, 3);
+                 INSERT INTO crew_ledger (org_id, task_id, event, at, pr_url) VALUES ('org-1', 'live-9c2e', 'dispatched', 1, '');",
+            )
+            .unwrap();
+            tables(&conn)
+        };
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(count(&store, "SELECT MAX(version) FROM schema_migrations"), MIGRATIONS.last().unwrap().0);
+        let after = tables(&store.conn());
+        let added = MIGRATIONS.iter().filter(|(v, _)| *v > 7).count() as i64;
+        for (name, rows) in &before {
+            let kept = after.iter().find(|(n, _)| n == name).map(|(_, c)| *c);
+            let expected = if name == "schema_migrations" { rows + added } else { *rows };
+            assert_eq!(kept, Some(expected), "{name}: rows before {rows}, after {kept:?}");
+        }
+        for new in ["vps_reachability", "crew_answers", "factory_events", "focus_spans"] {
+            assert_eq!(after.iter().find(|(n, _)| n == new).map(|(_, c)| *c), Some(0), "{new} is new and empty");
+        }
+        let conn = store.conn();
+        assert!(conn.execute("INSERT INTO factory_events (org_id, task_id, project, event, at) VALUES ('org-1', 't', 'p', 'status', 1)", []).is_err(), "only the factory's events");
+        assert!(conn.execute("INSERT INTO crew_answers (org_id, request_id, task_id, item_key, kind, origin, outcome) VALUES ('org-1', 'r', 't', 'k', 'approve', 'mac', 'queued')", []).is_err(), "only the five outcomes");
     }
 }

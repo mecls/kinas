@@ -11,6 +11,7 @@ pub(crate) mod launch;
 pub(crate) mod orders;
 pub(crate) mod pin;
 pub(crate) mod read;
+pub(crate) mod remote_cmds;
 pub(crate) mod repo;
 pub(crate) mod seen;
 pub(crate) mod tools;

@@ -3,6 +3,7 @@
 //! across the script (§6.15). Kinas reads the fleet this way only: no file under the home is opened except to learn
 //! that one of the two trigger files changed.
 
+pub mod bundle;
 pub mod capacity;
 pub mod gh;
 mod guard;
@@ -291,6 +292,15 @@ fn first_answer(app: &AppHandle, started_at: i64, seen: &mut bool, view: Option<
 /// One cycle: the snapshot, the parse, Herdr's view, the write, the log line, `crew_changed`. Returns whether the
 /// snapshot succeeded.
 fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut bool, memo: &mut Memo) -> bool {
+    // With the agents on a VPS (ADR 0021), the crew is read there, through the one door, and nothing here runs.
+    let place = {
+        let store = app.state::<Store>();
+        let conn = store.conn();
+        crate::place::place(&conn, store.org_id())
+    };
+    if let crate::place::Place::Vps { target, label } = place {
+        return cycle_remote(app, &target, &label);
+    }
     let started = Instant::now();
     // Herdr is asked whether or not Firstmate is installed: the chrome and the start focus need its view.
     let view = refresh_live(app);
@@ -348,6 +358,67 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
             false
         }
     };
+    changed(app);
+    ok
+}
+
+/// One cycle with the agents on a VPS (build spec §11.3 A): one `bundle` through the door, with no guard held; then
+/// the same parser and the same `mirror::record` as a local cycle, on the bytes the VPS's scripts printed. A failed
+/// call writes no crew table (ADR 0004): the crew reader's row says why, and `vps_reachability` keeps the rest.
+/// Slice 1 reads the fleet alone; Herdr's view, the clones' repositories, PRs, lanes and the ledger arrive in slice 2.
+fn cycle_remote(app: &AppHandle, target: &str, label: &str) -> bool {
+    let started = Instant::now();
+    let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
+    let reply = crate::remote::call(target, &data_dir, &crate::remote::Request::Bundle { cursor: None });
+    let now = now_ms();
+    let decoded = reply.map(bundle::decode);
+    let store = app.state::<Store>();
+    let ok = match decoded {
+        Err(why) => {
+            let conn = store.conn();
+            let _ = bundle::remember(&conn, store.org_id(), label, now, Err(why));
+            let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::Error(&why.words(label)), now);
+            false
+        }
+        Ok(Err(message)) => {
+            let conn = store.conn();
+            let _ = bundle::remember(&conn, store.org_id(), label, now, Err(crate::remote::Unreachable::BadReply));
+            let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::Error(&message), now);
+            false
+        }
+        Ok(Ok(b)) => {
+            let mut conn = store.conn();
+            let _ = bundle::remember(&conn, store.org_id(), label, now, Ok(&b.companion));
+            if !b.installed {
+                let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::NotConfigured("Firstmate isn't installed on the VPS"), now);
+                drop(conn);
+                changed(app);
+                return true;
+            }
+            let outcome = match &b.snapshot {
+                Some(out) => read(&out.ran()),
+                None => Err("the VPS sent no fleet snapshot".into()),
+            };
+            let workers = match &outcome {
+                Ok(fleet) => mirror::workers_of(fleet, None, None),
+                Err(_) => Vec::new(),
+            };
+            let found = Found { workers, ..Found::default() };
+            let written = mirror::record(&mut conn, store.org_id(), &outcome, &found, now);
+            let words = crate::crew::read::worker_words(&conn, store.org_id()).unwrap_or_default();
+            drop(conn);
+            app.state::<CrewLive>().set_worker_words(words);
+            match (&outcome, &written) {
+                (Ok(fleet), Ok(_)) => {
+                    *app.state::<CrewLive>().generated.lock().unwrap_or_else(|p| p.into_inner()) = Some(fleet.generated.clone());
+                    *app.state::<CrewLive>().orphans.lock().unwrap_or_else(|p| p.into_inner()) = fleet.orphans.clone();
+                    true
+                }
+                _ => false,
+            }
+        }
+    };
+    log::info!("crew: remote {} in {} ms", if ok { "reading" } else { "reading failed" }, started.elapsed().as_millis());
     changed(app);
     ok
 }

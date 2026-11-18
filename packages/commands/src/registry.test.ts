@@ -8,6 +8,7 @@ describe("the registry (R36, CLI v0)", () => {
       ["context", ["cli"]],
       ["open", ["cli"]],
       ["crew", ["cli"]],
+      ["companion", ["cli"]],
       ["refresh", ["palette"]],
       ["files.refresh", ["palette"]],
       ["go.home", ["palette"]],
@@ -21,9 +22,9 @@ describe("the registry (R36, CLI v0)", () => {
     ]);
   });
 
-  test("the CLI door is status, context, open and crew", () => {
-    // crew joined on 2026-09-24 (the first mate).
-    expect(commandsFor("cli").map((c) => c.cliName)).toEqual(["status", "context", "open", "crew"]);
+  test("the CLI door is status, context, open, crew and companion", () => {
+    // crew joined on 2026-09-24 (the first mate); companion on 2026-11-17 (the factory in the cloud).
+    expect(commandsFor("cli").map((c) => c.cliName)).toEqual(["status", "context", "open", "crew", "companion"]);
     expect(cliCommand("refresh")).toBeUndefined();
   });
 

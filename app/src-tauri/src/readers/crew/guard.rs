@@ -5,7 +5,9 @@
 //! - `crew/` or `readers/crew/` could write a file — under Firstmate's home above all (ADR 0016);
 //! - any code names a Firstmate script but the four Kinas runs (ADR 0020: the three read-only ones and
 //!   `fm-capacity.sh`), or names one outside `crew/firstmate.rs`, the only file that builds a path under `<home>/bin/` —
-//!   `fm-send.sh` above all (slice 0's finding), and `fm-park.sh`, which writes.
+//!   `fm-send.sh` above all (slice 0's finding), and `fm-park.sh`, which writes;
+//! - any file but `remote.rs` names `ssh`, `scp` or `sftp` as a program, or `remote.rs` builds a shell string — the one
+//!   door is a fixed argv with the request on stdin (ADR 0024).
 //!
 //! Test modules and comments are not code here: a test may write a fixture, and a comment may say what is never run.
 //! The negative control plants each forbidden thing in a string and proves the guard finds it.
@@ -18,6 +20,10 @@ const TYPING: &[&str] = &["send-text", "send-keys", "\"sh\", \"-c\"", "sh -c", "
 const WRITES: &[&str] = &["File::create", "File::options", "OpenOptions", "fs::write", "fs::rename", "fs::copy", "remove_file", "remove_dir", "create_dir", "set_permissions", "::symlink(", "hard_link(", "write!("];
 const READ_ONLY_SCRIPTS: &[&str] = &["fm-fleet-snapshot.sh", "fm-afk-contract.sh", "fm-project-mode.sh", "fm-capacity.sh"];
 const SCRIPT_FILE: &str = "crew/firstmate.rs";
+/// `ssh` and its kin as a program: a literal that is the bare name or ends in `/name`. `"ssh://"` and words are not.
+const SSH_NAMES: &[&str] = &["\"ssh\"", "/ssh\"", "\"scp\"", "/scp\"", "\"sftp\"", "/sftp\""];
+const SHELL_STRINGS: &[&str] = &["\"sh\"", "\"bash\"", "\"zsh\"", "\"-c\"", "\"-lc\"", "sh -c"];
+const DOOR_FILE: &str = "remote.rs";
 
 /// A file's code: everything before its `#[cfg(test)]` module, without comment lines and trailing ` // ` comments.
 fn code_of(text: &str) -> Vec<(usize, String)> {
@@ -63,6 +69,15 @@ fn violations(files: &[(String, String)]) -> Vec<String> {
                     out.push(format!("{path}:{n}: writes a file ({bad})"));
                 }
             }
+            if path == DOOR_FILE {
+                for bad in SHELL_STRINGS.iter().filter(|b| line.contains(*b)) {
+                    out.push(format!("{path}:{n}: builds a shell string at the door ({bad})"));
+                }
+            } else {
+                for bad in SSH_NAMES.iter().filter(|b| line.contains(*b)) {
+                    out.push(format!("{path}:{n}: runs ssh outside {DOOR_FILE} ({bad})"));
+                }
+            }
             for script in scripts_in(&line) {
                 if !READ_ONLY_SCRIPTS.contains(&script.as_str()) {
                     out.push(format!("{path}:{n}: names {script}, which Kinas never runs"));
@@ -99,7 +114,7 @@ fn crate_sources() -> Vec<(String, String)> {
 #[test]
 fn no_typing_no_writes_four_scripts() {
     let files = crate_sources();
-    for scope in ["crew/launch.rs", "crew/firstmate.rs", "readers/crew/mirror.rs", "herdr.rs", "reader/changes/crew.rs"] {
+    for scope in ["crew/launch.rs", "crew/firstmate.rs", "readers/crew/mirror.rs", "herdr.rs", "reader/changes/crew.rs", DOOR_FILE] {
         assert!(files.iter().any(|(p, t)| p == scope && t.len() > 500), "the guard is not reading {scope}");
     }
     assert_eq!(violations(&files), Vec::<String>::new());
@@ -121,6 +136,11 @@ fn the_guards_find_what_is_planted() {
         ("lib.rs", r#"let hold = "fm-captain-hold.sh";"#),
         ("crew/firstmate.rs", r#"script(home, "fm-park.sh", &["tick"], LIMIT)"#),
         ("crew/launch.rs", r#"let s = home.join("bin/fm-fleet-snapshot.sh");"#),
+        ("crew/launch.rs", r#"Command::new("ssh").arg(target);"#),
+        ("pty.rs", r#"const SSH: &str = "/usr/bin/ssh";"#),
+        ("readers/crew/mod.rs", r#"run(&["scp", from, to]);"#),
+        ("remote.rs", r#"let a = [target, "-c", line];"#),
+        ("remote.rs", r#"Command::new("bash").arg(script);"#),
     ] {
         assert_eq!(violations(&planted(path, line)).len(), 1, "{path}: {line}");
     }
@@ -128,6 +148,10 @@ fn the_guards_find_what_is_planted() {
     let fine = vec![
         ("crew/firstmate.rs".to_string(), "// not fm-send.sh, never\nfn a() { script(h, \"fm-project-mode.sh\", &[]) }\n#[cfg(test)]\nmod t { fn b() { std::fs::write(p, \"\"); } }\n".to_string()),
         ("crew/pin.rs".to_string(), "const A: u8 = 1; // COMMON_TOOLS, fm-bootstrap.sh:909\n".to_string()),
+        // The door itself names ssh; a URL's scheme and a sentence are not a program.
+        ("remote.rs".to_string(), "const SSH: &str = \"/usr/bin/ssh\";\nfn d(p: &Path) { p.join(\"ssh\"); }\n".to_string()),
+        ("crew/repo.rs".to_string(), "fn u(s: &str) { s.strip_prefix(\"ssh://\"); }\n".to_string()),
+        ("place.rs".to_string(), "const H: &str = \"Write it as user@host, host, or an ssh alias.\";\n".to_string()),
     ];
     assert_eq!(violations(&fine), Vec::<String>::new());
 }

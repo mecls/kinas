@@ -349,3 +349,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Settings → Where agents run (the factory in the cloud, DESIGN.md 1.14): the Reachable row, its connection on one line
+   and Herdr's two versions on the next, the second marked only while they differ. */
+.place-reachable {
+  align-items: flex-start;
+}
+.place-reach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.place-herdr {
+  color: var(--ink-2);
+}

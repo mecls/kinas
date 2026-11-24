@@ -2,8 +2,9 @@
 // exception to the CLI's read-only rule besides `kinas crew setup`: it keeps its own state folder, and later writes a
 // note into Firstmate's inbox (ADR 0022) and summaries to the cloud store (ADR 0023). On the Mac it is never run.
 
+import { run } from "@kinas/context";
 import { companionPaths } from "./paths.ts";
-import { MAX_REQUEST_BYTES, rpc } from "./rpc.ts";
+import { MAX_REQUEST_BYTES, rpc, versionIn } from "./rpc.ts";
 
 export const COMPANION_USAGE = ["  companion rpc       (on the VPS) answer one request from Kinas on the Mac: JSON on stdin, JSON on stdout"];
 
@@ -22,10 +23,21 @@ async function readStdin(limit: number): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+/** How long `herdr --version` may take before hello says nothing about Herdr. */
+const HERDR_VERSION_LIMIT_MS = 3_000;
+
+/** `<path> --version`, a fixed argv with no shell and no PATH lookup; null when it is missing, slow or unreadable. */
+async function versionOf(path: string): Promise<string | null> {
+  const r = await run([path, "--version"], { timeoutMs: HERDR_VERSION_LIMIT_MS });
+  return r.ok ? versionIn(r.stdout.slice(0, 200)) : null;
+}
+
 export async function companion(args: string[]): Promise<number> {
   const [sub, ...rest] = args;
   if (sub === "rpc" && rest.length === 0) {
-    const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), { paths: companionPaths(), version: COMPANION_VERSION });
+    const paths = companionPaths();
+    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr) };
+    const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;
   }

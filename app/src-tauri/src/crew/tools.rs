@@ -71,6 +71,14 @@ pub(crate) fn clear() {
     *CACHE.lock().unwrap_or_else(|p| p.into_inner()) = None;
 }
 
+/// This Mac's Herdr version, beside the VPS's in Settings → Where agents run (build spec §17, 2026-11-24 #4). It runs
+/// `herdr --version` on the login shell's PATH, as the tool check does; None when Herdr is missing or says no version.
+pub(crate) fn herdr_version_here() -> Option<String> {
+    let path = login_path();
+    let bin = which("herdr", path)?;
+    run(&bin, &["--version"], path).and_then(|r| version_in(&r.stdout))
+}
+
 /// The first required tool that is not installed at or above its floor: what blocks the launch.
 pub(crate) fn first_missing_required(h: &Health) -> Option<&'static str> {
     h.tools.iter().find(|t| t.required && t.state != "installed").map(|t| t.name)

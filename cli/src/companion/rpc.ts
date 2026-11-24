@@ -13,6 +13,13 @@ export const MAX_REQUEST_BYTES = 64 * 1024;
 export interface RpcDeps {
   paths: Paths;
   version: string;
+  /** `herdr --version` at `paths.herdr`, its first `x.y.z`; null when it is not there or says nothing readable. */
+  herdrVersion: () => Promise<string | null>;
+}
+
+/** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
+export function versionIn(text: string): string | null {
+  return /(?<![0-9.])(\d+\.\d+\.\d+)/.exec(text)?.[1] ?? null;
 }
 
 export interface RpcResult {
@@ -35,8 +42,11 @@ export async function rpc(stdin: string, deps: RpcDeps): Promise<RpcResult> {
 
 async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
   switch (request.verb) {
-    case "hello":
-      return { reply: { v: RPC_VERSION, companion: { version: deps.version } }, exit: 0 };
+    case "hello": {
+      // The machine's Herdr beside the Mac's (build spec §17, 2026-11-24 #4): the Reachable row says when they differ.
+      const herdr = await deps.herdrVersion();
+      return { reply: { v: RPC_VERSION, companion: { version: deps.version }, herdr: herdr === null ? null : { version: herdr } }, exit: 0 };
+    }
     case "bundle":
       return bundle(deps);
     case "refresh":

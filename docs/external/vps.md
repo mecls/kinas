@@ -18,6 +18,8 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
   - `~/.local/state/kinas/` — the companion's latest reading, its event log and its cursors;
   - `~/.config/kinas/companion.env` (mode 0600) — `KINAS_COMPANION_SECRET` and `CONVEX_URL` (see `kinas-cloud.md`);
   - `~/.local/share/kinas/firstmate` — Firstmate's home at the pin (`FM_HOME`; see `firstmate-home.md`);
+  - `~/.local/bin/herdr` — Herdr, run by that path (never looked up on a PATH); `hello` reports its version, which
+    Settings shows beside the Mac's;
   - `~/projects/` — the client repositories' working copies (`KINAS_ROOT` there);
   - systemd user units `kinas-herdr.service` (`herdr server --session default`) and `kinas-companion.service`
     (`kinas companion run`), with lingering enabled by the captain (`loginctl enable-linger`, which needs root). Each

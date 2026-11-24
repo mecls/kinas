@@ -297,6 +297,22 @@ export const focusCrewPane = (task: string) => invoke<void>("crew_focus_pane", {
 /** Open the PR (Firstmate, current): a task id goes to Rust, which opens the https URL it stored; never a URL from here. */
 export const openCrewPr = (taskId: string) => invoke<void>("crew_open_pr", { taskId });
 export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");
+
+/** Where the agents run (the factory in the cloud, ADR 0024; `place.rs`): this Mac, or one VPS by its ssh target and label. */
+export type Place = { place: "mac" } | { place: "vps"; target: string; label: string };
+export const getPlace = () => invoke<Place>("get_place");
+/** Refused with the reason in `message` (a target that is not `user@host`, `host` or an alias; a label not `[a-z0-9-]`). */
+export const setPlace = (place: Place) => invoke<Place>("set_place", { place });
+/** The Reachable row (`crew/remote_cmds.rs` `Hello`): one call through the door, and Herdr's version on both sides. */
+export interface RemoteHello {
+  reachable: boolean;
+  problem: string | null;
+  companion_version: string | null;
+  herdr_there: string | null;
+  herdr_here: string | null;
+  checked_at: number;
+}
+export const remoteHello = () => invoke<RemoteHello>("remote_hello");
 /** The launcher: "focused" (it was running), "run" (its workspace was there without it), "created". */
 export const launchFirstMate = () => invoke<"focused" | "run" | "created">("crew_launch");
 /** A crew command's refusal, in its own words (CrewError), or the error as it came. */

@@ -81,6 +81,8 @@ pub(crate) struct CrewLive {
     project_repos: Mutex<Vec<String>>,
     /// The last good snapshot's `main_inventory.orphan_in_flight`, for the Reconcile group; not stored.
     orphans: Mutex<Vec<String>>,
+    /// With the agents on a VPS: whether Firstmate's home is there, as the last bundle said; None before one arrived.
+    remote_installed: Mutex<Option<bool>>,
 }
 
 impl CrewLive {
@@ -97,6 +99,16 @@ impl CrewLive {
     /// A PR's checks as `gh` last listed them this run; empty before it answered.
     pub(crate) fn checks_of(&self, url: &str) -> Vec<(String, String)> {
         self.checks.lock().unwrap_or_else(|p| p.into_inner()).get(url).cloned().unwrap_or_default()
+    }
+
+    /// Whether Firstmate is installed on the VPS, as the last bundle said: the Crew page's state while the place is a
+    /// VPS, in place of this Mac's home. False until a bundle has said so.
+    pub(crate) fn remote_installed(&self) -> bool {
+        self.remote_installed.lock().unwrap_or_else(|p| p.into_inner()).unwrap_or(false)
+    }
+
+    fn set_remote_installed(&self, installed: bool) {
+        *self.remote_installed.lock().unwrap_or_else(|p| p.into_inner()) = Some(installed);
     }
 
     /// The last good snapshot's `generated`, for the Crew page's `as of` caption.
@@ -389,6 +401,7 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str) -> bool {
         Ok(Ok(b)) => {
             let mut conn = store.conn();
             let _ = bundle::remember(&conn, store.org_id(), label, now, Ok(&b.companion));
+            app.state::<CrewLive>().set_remote_installed(b.installed);
             if !b.installed {
                 let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::NotConfigured("Firstmate isn't installed on the VPS"), now);
                 drop(conn);

@@ -49,21 +49,49 @@ fn blocked_line(h: &Health) -> Option<String> {
     tools::first_missing_required(h).map(|tool| format!("{tool} isn't installed — run kinas crew setup"))
 }
 
+/// What the Crew page's state is read from (ADR 0024): this Mac's Firstmate home, tools, lanes and Herdr, or — with the
+/// agents on a VPS — the VPS's last bundle, which says only whether Firstmate is installed there. Whether the first mate
+/// runs there, the lanes and the reconcile lines arrive with Herdr's view through the companion (slices 2–3); until
+/// then they read as off, never as this Mac's.
+#[derive(Debug, PartialEq, Eq)]
+struct PageFacts {
+    installed: bool,
+    running: bool,
+    lanes_on: bool,
+    blocked: Option<String>,
+    reconcile: bool,
+}
+
+fn page_facts(on_vps: bool, remote_installed: bool, here: impl FnOnce() -> PageFacts) -> PageFacts {
+    if on_vps {
+        PageFacts { installed: remote_installed, running: false, lanes_on: false, blocked: None, reconcile: false }
+    } else {
+        here()
+    }
+}
+
 /// The Crew page's reading: the tasks inside retention, the page's state and the collector's status. It never probes
 /// the tools itself (it is read every 30 s); `blocked` comes from the health Settings or the page last asked for.
 #[tauri::command]
 pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
     tauri::async_runtime::spawn_blocking(move || {
         let home = crew_home(&app);
-        // The file check and the collector's memory, before the guard.
-        let installed = home::installed(&home);
-        // The lane gate (Firstmate, current): only a cap or `auto`, never a `quota-provider`, shows free lanes.
-        let lanes_on = installed && matches!(config::lane_config(&home), config::LaneConfig::Cap(_) | config::LaneConfig::Auto);
         let live = app.state::<CrewLive>();
-        let generated = live.generated();
-        let running = live.live().first_mate_there();
-        let blocked = tools::cached(&home).as_ref().and_then(blocked_line);
         let store = app.state::<Store>();
+        let on_vps = matches!(crate::place::place(&store.conn(), store.org_id()), crate::place::Place::Vps { .. });
+        // The file check and the collector's memory, before the guard.
+        let PageFacts { installed, running, lanes_on, blocked, reconcile } = page_facts(on_vps, live.remote_installed(), || {
+            let installed = home::installed(&home);
+            PageFacts {
+                installed,
+                running: live.live().first_mate_there(),
+                // The lane gate (Firstmate, current): only a cap or `auto`, never a `quota-provider`, shows free lanes.
+                lanes_on: installed && matches!(config::lane_config(&home), config::LaneConfig::Cap(_) | config::LaneConfig::Auto),
+                blocked: tools::cached(&home).as_ref().and_then(blocked_line),
+                reconcile: true,
+            }
+        });
+        let generated = live.generated();
         let conn = store.conn();
         let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, running, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
         let facts = read::reconcile_facts(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
@@ -81,7 +109,9 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
             })
             .collect();
         let live_view = live.live();
-        view.reconcile = read::reconcile_lines(&facts, live_view.view.as_ref(), crate::readers::crew::attached_session().as_deref(), &live.orphans());
+        if reconcile {
+            view.reconcile = read::reconcile_lines(&facts, live_view.view.as_ref(), crate::readers::crew::attached_session().as_deref(), &live.orphans());
+        }
         view.crew_repos.extend(live.project_repos());
         view.crew_repos.sort_unstable();
         view.crew_repos.dedup();
@@ -476,6 +506,15 @@ mod tests {
     use super::*;
     use crate::herdr::{Pane, View, Workspace};
     use crate::readers::crew::LiveView;
+
+    #[test]
+    fn on_a_vps_the_page_reads_the_vps_and_never_this_mac() {
+        let here = || PageFacts { installed: false, running: true, lanes_on: true, blocked: Some("herdr isn't installed".into()), reconcile: true };
+        let vps = page_facts(true, true, || panic!("this Mac's home, tools and Herdr are not read with the agents on a VPS"));
+        assert_eq!(vps, PageFacts { installed: true, running: false, lanes_on: false, blocked: None, reconcile: false });
+        assert!(!page_facts(true, false, || panic!("not read")).installed, "before a bundle says so, Firstmate is not installed there");
+        assert_eq!(page_facts(false, true, here), here(), "on this Mac, the VPS's last word is ignored");
+    }
 
     fn live(focused: &str, fg: &[&str], observed_at: i64) -> LiveView {
         let ws = |id: &str, label: &str| Workspace { id: id.into(), label: label.into(), number: 1, focused: false };

@@ -39,6 +39,7 @@ describe("the settings registry", () => {
       "Providers",
       "Providers",
       "Crew",
+      "Crew",
       "Workspace",
       "Workspace",
       "Workspace",

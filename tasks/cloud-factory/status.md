@@ -19,7 +19,7 @@
 
 ## Slices (build-spec.md §12)
 - [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13 — now 1.14 —, ⌘6; ADR 0024 superseded 0021 on 2026-11-24), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe waits for the captain's new VPS
-- [ ] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle) — in progress, paused 2026-11-18: the door, the place, the companion's rpc, the remote reading and migration 0008 committed as WIP (`08a4c49`); the guard rule, Settings' card and the e2e remain
+- [x] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle) — done 2026-11-24: the door, the place, the companion's `rpc` (`hello` with Herdr's version, `bundle`), the remote reading, migration 0008 (tables only), the ssh guard, Settings → Where agents run (This Mac / VPS, target, label, Reachable with both Herdrs), the Crew page's state from the VPS, and `vps.e2e.ts` case 1 through a stub ssh and a fake VPS; `bun run check` green (bun 1,008, cargo 519 + 3 ignored, clippy clean) and the spec green alone
 - [ ] Slice 2 · the real reading: the companion runs Firstmate on the VPS; the unreachable path
 - [ ] Slice 3 · the Work page on the VPS, and Herdr actions through the companion
 - [ ] Slice 4 · setup: the bootstrap, the checks, Install, the client folders

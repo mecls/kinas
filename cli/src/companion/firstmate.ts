@@ -1,7 +1,7 @@
 // The only file in the companion that names a Firstmate script, and its only runner (build spec §6.6, §11.2 `FmCall`;
 // ADRs 0020, 0022). The list is a type: four read-only scripts with Kinas's argv and limits
 // (app/src-tauri/src/crew/firstmate.rs), the read-only hold check, and the inbox's `note` and `receipts` — the one write,
-// ADR 0022's. `fm-send.sh`, any hold, spawn, park or teardown script is never run; firstmate.test.ts holds the guard.
+// ADR 0022's, as ADR 0025 restates it. `fm-send.sh`, any hold, spawn, park or teardown script is never run; firstmate.test.ts holds the guard.
 //
 // Each runs as Kinas runs it on the Mac: `bash <home>/bin/<script> <args>`, cwd the home, FM_HOME the home, the PATH
 // the companion builds from constants (paths.ts `companionPath`), no inherited HERDR_*, stdin closed unless the call
@@ -20,7 +20,7 @@ export type FmCall =
   | { script: "fm-project-mode.sh"; args: [string] }
   | { script: "fm-captain-hold.sh"; args: ["open", string, "--distinguish-absent"] }
   | { script: "fm-inbox.sh"; args: ["note", "--request-id", string, "--json", "-"]; stdin: string }
-  | { script: "fm-inbox.sh"; args: ["receipts", "--json"] };
+  | { script: "fm-inbox.sh"; args: ["receipts"] };
 
 /** The calls, by what they are for: the only way the rest of the companion names one. */
 export const CALL = {
@@ -30,7 +30,8 @@ export const CALL = {
   mode: (project: string): FmCall => ({ script: "fm-project-mode.sh", args: [project] }),
   holdOpen: (task: string): FmCall => ({ script: "fm-captain-hold.sh", args: ["open", task, "--distinguish-absent"] }),
   note: (requestId: string, words: string): FmCall => ({ script: "fm-inbox.sh", args: ["note", "--request-id", requestId, "--json", "-"], stdin: words }),
-  receipts: { script: "fm-inbox.sh", args: ["receipts", "--json"] },
+  // `receipts` prints its JSON (`fm-inbox-receipts.v1`) with no flag; `--json` is refused at the pin (ADR 0025).
+  receipts: { script: "fm-inbox.sh", args: ["receipts"] },
 } as const satisfies Record<string, FmCall | ((...a: never[]) => FmCall)>;
 
 /** One script's answer, as the Mac's `bundle.rs` `ScriptOut` reads it. `stderr_first` is never logged. */

@@ -1,7 +1,7 @@
 # 0022 · With agents on a VPS, the captain's answers reach the first mate as notes in Firstmate's inbox, and Kinas runs only the Firstmate commands listed here
 
 Date: 2026-11-17
-Status: accepted
+Status: superseded by 0025
 
 ## Context
 

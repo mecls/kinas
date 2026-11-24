@@ -18,9 +18,9 @@
   wording). Approved as written; the approvals above stand for everything else.
 
 ## Slices (build-spec.md §12)
-- [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13 — now 1.14 —, ⌘6; ADR 0024 superseded 0021 on 2026-11-24), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe ran on 2026-11-24 on the home lab and **stopped at the note**: the first mate read the inbox answer and did not pass it on, and `receipts --json` is refused at the pin. The captain decides (build spec §19)
+- [x] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13 — now 1.14 —, ⌘6; ADR 0024 superseded 0021 on 2026-11-24), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe ran on 2026-11-24 on the home lab: it stopped at the note (the first mate read the answer and auto mode blocked its relay; `receipts --json` refused), the captain chose an allow rule and ADR 0025 (supersedes 0022), and with the rule a fresh first mate relayed the note; `herdr --remote` from the Mac carried a paste; torn down (build spec §19)
 - [x] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle) — done 2026-11-24: the door, the place, the companion's `rpc` (`hello` with Herdr's version, `bundle`), the remote reading, migration 0008 (tables only), the ssh guard, Settings → Where agents run (This Mac / VPS, target, label, Reachable with both Herdrs), the Crew page's state from the VPS, and `vps.e2e.ts` case 1 through a stub ssh and a fake VPS; `bun run check` green (bun 1,008, cargo 519 + 3 ignored, clippy clean) and the spec green alone
-- [ ] Slice 2 · the real reading: the companion runs Firstmate on the VPS; the unreachable path — paused by the probe; the companion's half (2.0, 2.1, 2.2, 2.5) is kept as WIP
+- [ ] Slice 2 · the real reading: the companion runs Firstmate on the VPS; the unreachable path — under way: the companion's half (2.0, 2.1, 2.2, 2.5) built (WIP commit); the Mac's half next
 - [ ] Slice 3 · the Work page on the VPS, and Herdr actions through the companion
 - [ ] Slice 4 · setup: the bootstrap, the checks, Install, the client folders
 - [ ] Slice 5 · usage and context from the VPS
@@ -52,7 +52,7 @@
   next number free when it is written. Never run the e2e suite beside that session's e2e or a cargo build.
 - **The machine (2026-11-17):** a new dedicated VPS the captain rents for the agents — not the `hostinger` or `miraside`
   SSH aliases already on this Mac. The probe (slice 0.3) runs there scratch-only under `~/kinas-probe`, removed after;
-  the captain signs `claude` in when asked. Slice 0.3 ran on the home lab on 2026-11-24 and stopped at the note (§19).
+  the captain signs `claude` in when asked. Slice 0.3 ran on the home lab on 2026-11-24 (§19).
 - **Paused 2026-11-18 at the captain's request:** the agents may move to a home-lab machine instead of a rented VPS;
   the captain will explain. Nothing more is built until then. The hand-off is private, beside the analysis
   (`tasks/cloud-factory/handoff.md` in the main checkout).

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { firstmate, installed, laneConfigOf, scriptEnv } from "./firstmate.ts";
+import { CALL, firstmate, installed, laneConfigOf, scriptEnv } from "./firstmate.ts";
 
 // The companion's fixed Firstmate list (build spec §6.6, slice 2.5; ADRs 0020, 0022).
 
@@ -52,15 +52,15 @@ describe("the companion's Firstmate list", () => {
     writeFileSync(probe, '#!/usr/bin/env bash\necho "home=$FM_HOME path=$PATH herdr=${HERDR_PANE_ID:-none} pwd=$PWD args=$*"\ncat\necho oops >&2\nexit 3\n');
     chmodSync(probe, 0o755);
     const fm = firstmate(home, "/usr/bin:/bin", { HERDR_PANE_ID: "w1:p1", KEEP: "1" });
-    const out = await fm.run({ script: "fm-inbox.sh", args: ["note", "--request-id", "kinas-1", "--json", "-"], stdin: "the words\n" }, 5000);
+    const out = await fm.run(CALL.note("kinas-1", "the words\n"), 5000);
     expect(out).toEqual({
       exit: 3,
       timed_out: false,
       stdout: `home=${home} path=/usr/bin:/bin herdr=none pwd=${home} args=note --request-id kinas-1 --json -\nthe words\n`,
       stderr_first: "oops",
     });
-    const quiet = await fm.run({ script: "fm-inbox.sh", args: ["receipts", "--json"] }, 5000);
-    expect(quiet.stdout.endsWith("args=receipts --json\n")).toBe(true);
+    const quiet = await fm.run(CALL.receipts, 5000);
+    expect(quiet.stdout.endsWith("args=receipts\n")).toBe(true);
     expect(scriptEnv({ HERDR_SESSION: "x", herdr_env: "y", KEEP: "1" }, "/h", "/p")).toEqual({ KEEP: "1", PATH: "/p", FM_HOME: "/h" });
   });
 

@@ -12,6 +12,10 @@
   with §11.5's nine least-sure decisions standing (no QR code: the link and the code, each with Copy)
 - Gate 4 · Slice plan: APPROVED 2026-11-17 — `build-spec.md` §12, approved as written: thirteen slices (0–12), three
   ship points (after slices 6, 10 and 12)
+- Gates 2–4 · amendment: APPROVED 2026-11-24 — the home lab verified; five changes in `build-spec.md` §17
+  (2026-11-24): the companion's own PATH, Herdr's unit adopts and never doubles, Install never replaces a foreign
+  Herdr, Herdr's version in `hello` with the machine's pin at 0.9.5, any Linux with systemd (with ADR 0024 for the
+  wording). Approved as written; the approvals above stand for everything else.
 
 ## Slices (build-spec.md §12)
 - [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13, ⌘6), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe waits for the captain's new VPS

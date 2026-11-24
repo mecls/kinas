@@ -5,7 +5,7 @@ The operating system for a company that runs on AI agents. Local first, one pers
 
 Kinas is a Mac app with the kinas CLI inside it. It gives one developer a single place to work: a Home page that says what happened overnight and what needs you, a terminal pane with Herdr and the crew, a usage page that shows what every provider subscription and this machine are doing, and, as the agents move in, the run feed, the approvals that reach your phone, and the deployer that ships client changes with rollback.
 
-Everything runs on your Mac by default. No API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows. Amended 2026-11-17 (the factory in the cloud, ADR 0021): you may instead run every agent on one VPS you rent, which Kinas reaches over SSH with your own key, and a private page on your phone shows what waits on you and answers it — see **Agents on a VPS**. Kinas never buys or provisions a server and holds no key for it.
+Everything runs on your Mac by default. No API bill from Kinas: bring your own subscriptions (Claude Code, Codex, Ollama Cloud, or any provider the harness speaks) and Kinas reads their real usage windows. Amended 2026-11-17 (the factory in the cloud, ADR 0024, which superseded 0021): you may instead run every agent on one Linux machine you own or rent, which Kinas reaches over SSH with your own key, and a private page on your phone shows what waits on you and answers it — see **Agents on a VPS**. Kinas never buys or provisions a server and holds no key for it.
 
 Kinas is built as a castle: it decides the contracts, the doors, the gates, and the record. Everything inside is a seam you fill with your own tools: the harness, the store, the session runtime, the build conductor, the review loop, the channel, the providers. Defaults are shipped for every seam and none is required (`docs/adr/0013-v1-is-local-seams-swap.md`).
 
@@ -192,9 +192,10 @@ note, for a `local-only` project, the commit that will land — Firstmate's own 
 
 ## Agents on a VPS
 
-Added 2026-11-17 (the factory in the cloud; ADRs 0021–0023; each part lands with its slice of
+Added 2026-11-17 (the factory in the cloud; ADRs 0022–0024; each part lands with its slice of
 `tasks/cloud-factory/`). Settings → **Where agents run** chooses this Mac (the default, everything as above) or a VPS:
-a Linux machine you rent and can already reach with `ssh` and your key. With a VPS, every agent session runs there —
+a Linux machine with systemd that you own or rent — a VPS or a home lab — and can already reach with `ssh` and your key
+(amended 2026-11-24, ADR 0024). With a VPS, every agent session runs there —
 Herdr's `default` session with your own Claude Code and Pi sessions, and the crew — and the Mac runs Kinas only: the
 Work page attaches the VPS's Herdr session (`herdr --remote`), and the crew pages, the Inbox and Usage read the VPS
 through **`kinas companion`**, a small part of Kinas that runs there as your user, all the time, under systemd.

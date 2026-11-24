@@ -292,7 +292,7 @@ fn first_answer(app: &AppHandle, started_at: i64, seen: &mut bool, view: Option<
 /// One cycle: the snapshot, the parse, Herdr's view, the write, the log line, `crew_changed`. Returns whether the
 /// snapshot succeeded.
 fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut bool, memo: &mut Memo) -> bool {
-    // With the agents on a VPS (ADR 0021), the crew is read there, through the one door, and nothing here runs.
+    // With the agents on a VPS (ADR 0024), the crew is read there, through the one door, and nothing here runs.
     let place = {
         let store = app.state::<Store>();
         let conn = store.conn();

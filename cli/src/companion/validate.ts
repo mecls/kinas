@@ -1,4 +1,4 @@
-// The only parser of an rpc request (build spec §10, "the companion's rpc input"; ADR 0021). The Mac sends one JSON
+// The only parser of an rpc request (build spec §10, "the companion's rpc input"; ADR 0024). The Mac sends one JSON
 // document on stdin; anything that is not exactly one of these shapes — an unknown verb, an extra field, a field of the
 // wrong type, a string too long — is refused, and nothing runs. Verbs join as their slices land (§11.2).
 

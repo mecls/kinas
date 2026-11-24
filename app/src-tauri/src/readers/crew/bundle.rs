@@ -1,4 +1,4 @@
-//! The companion's reading as the Mac receives it (build spec §11.2 `Bundle`; ADR 0021): the outputs of Firstmate's
+//! The companion's reading as the Mac receives it (build spec §11.2 `Bundle`; ADR 0024): the outputs of Firstmate's
 //! scripts on the VPS, verbatim, plus what only the VPS knows. Each part goes to the parser the local cycle already uses
 //! — nothing here interprets the crew. Fields join as their slices land; one the Mac does not know yet is ignored, and a
 //! bundle of another version is refused with one line.

@@ -12,7 +12,8 @@ answer now reaches the first mate as a note in Firstmate's inbox instead of the 
 Today every agent the captain uses runs on the Mac: their own Claude Code and Pi sessions in Herdr's `default`
 session, and the crew — Firstmate's first mate and its workers. When the Mac sleeps, the crew stops; when the captain
 is away from it, a question the first mate holds waits until they are back. This change moves every agent session to
-one Linux VPS the captain rents, and makes Kinas the factory's dashboard in two places: on the Mac, where the Work page
+one Linux machine the captain owns or rents (called the VPS here; amended 2026-11-24, ADR 0024: today the captain's
+home lab), and makes Kinas the factory's dashboard in two places: on the Mac, where the Work page
 becomes a terminal into the VPS and every crew page reads the VPS, and on the phone, a private Kinas web page that
 shows what waits, the crew and the factory's numbers, notifies when the first mate needs the captain, and sends the
 answer to the first mate. A Factory page, on the Mac and the phone, measures the factory from what it already records: how many
@@ -42,7 +43,8 @@ phone sees titles, questions and numbers, never code.
    captain's own Claude Code and Pi sessions, the first mate and its workers. The Mac runs Kinas only — no `claude`,
    no `pi`, no Herdr server of Kinas's starting. Without a VPS set, Kinas works on the Mac exactly as today. Kinas
    shows one place at a time; switching moves nothing, and sessions on the other side keep running, unshown.
-2. **The captain rents the VPS; Kinas never buys, sizes, rebuilds or deletes one.** Kinas connects with the captain's
+2. **The captain owns or rents the VPS — any Linux with systemd (amended 2026-11-24, ADR 0024); Kinas never buys,
+   sizes, rebuilds or deletes one, and never replaces or stops what it did not install there.** Kinas connects with the captain's
    own SSH setup — their key, their agent — and holds no key of its own (ADR 0006). The Hostinger reader stays
    read-only (ADR 0008). Kinas installs software on the VPS only item by item, after a yes, as `kinas crew setup` does
    on the Mac, and only as the captain's user, never as root.
@@ -154,7 +156,7 @@ phone sees titles, questions and numbers, never code.
 
 ## 3. Flows
 
-**Setting up the VPS (once).** The captain rents a Linux VPS and can reach it with `ssh` and their key. In Settings →
+**Setting up the VPS (once).** The captain owns or rents a Linux machine with systemd and can reach it with `ssh` and their key. In Settings →
 **Where agents run** they add it: an SSH target and a label. Kinas checks the VPS and lists each item with its state:
 reachable; the operating system; Herdr at Kinas's version, with its server running; Firstmate at the pin; the crew's
 tools; Kinas's companion; Claude Code signed in; `gh` signed in; `ANTHROPIC_API_KEY` not set. Each missing piece Kinas
@@ -239,7 +241,7 @@ is listed by name in Settings from then on.
   themselves** (the talk's self-improvement loop): each spends subscription usage; this feature measures only from
   records.
 - **Other people**: one captain, one VPS, one Claude account; no team access.
-- **Kinas creating, sizing, paying for or deleting servers**: the captain rents the VPS.
+- **Kinas creating, sizing, paying for or deleting servers**: the captain owns or rents the VPS.
 - **Kinas's own e2e suite and release build on the VPS**: they need macOS.
 - **Starting work from the phone** (DESIGN.md's Launch tab): a second way to write to the first mate.
 - **Reading the VPS's files in the Mac's reader and Files, and the Changes view's crew marks** for workers on the VPS:
@@ -252,7 +254,8 @@ is listed by name in Settings from then on.
 
 1. **Which VPS, and how big** — the captain's. Proposed: Ubuntu 24.04 LTS, 8 vCPU, 16 GB memory, 200 GB disk, for a
    crew of four on the client projects; the probe measures one task's peak, and Firstmate's lane cap keeps the crew
-   inside it.
+   inside it. *Settled 2026-11-24:* the captain's home lab — Debian 13, 8 cores, 15 GB with 12 GiB for the agents'
+   user, 294 GB free — reached over Tailscale; the probe measures against the 12 GiB.
 2. **The store** — Gate 2: a deployment Miraside owns in the EU, separate from the dashboard's.
 3. ~~Keyed decisions~~ — settled at Gate 2: at the pin, Firstmate has "no separate decision type"; a decision is a
    task held for the captain, and its answer reaches the first mate the same way (rule 16).

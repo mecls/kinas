@@ -1,4 +1,4 @@
-//! Where the agents run (ADR 0021; build spec §7 Place): this Mac, the default, or one VPS named by an SSH target and a
+//! Where the agents run (ADR 0024; build spec §7 Place): this Mac, the default, or one VPS named by an SSH target and a
 //! label. Kept in the settings table as `place`, `vps_target` and `vps_label`. A target is what OpenSSH is given as its
 //! host argument, so it is held to a shape that can never be read as an option or a shell word: `user@host`, `host`,
 //! `host:port` is not ssh's syntax and is refused (a port belongs in `~/.ssh/config`), and an alias is just a host.

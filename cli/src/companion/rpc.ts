@@ -1,4 +1,4 @@
-// `kinas companion rpc` (ADR 0021): one request on stdin, one JSON reply on stdout, then exit — 0 answered, 1 failed,
+// `kinas companion rpc` (ADR 0024): one request on stdin, one JSON reply on stdout, then exit — 0 answered, 1 failed,
 // 2 refused. The Mac's door (app/src-tauri/src/remote.rs) is the only caller. Slice 1: `hello` and `bundle`, which hands
 // back the latest reading as the run loop left it (slice 2 writes it; until then a test or the e2e's fake VPS does).
 

@@ -4,7 +4,7 @@
 //! killed whole at the limit, so a script's grandchildren go with it; both pipes drained on threads so a chatty child
 //! never blocks. Precedents: `reader/herdr.rs::run` (the drain) and `pty::terminate` (the group kill).
 //! `run_fed` is the same runner with bytes on the child's stdin and a ceiling on its stdout — the remote door's
-//! (ADR 0021): the request travels on stdin, never in argv.
+//! (ADR 0024): the request travels on stdin, never in argv.
 
 use std::ffi::OsString;
 use std::io::{Read, Write};
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(lines.last(), Some(&"STDIN-EOF"));
     }
 
-    /// The remote door's request travels on stdin (ADR 0021): what is fed is what the child reads, then EOF.
+    /// The remote door's request travels on stdin (ADR 0024): what is fed is what the child reads, then EOF.
     #[test]
     fn run_fed_writes_stdin_then_closes_it() {
         let r = Run { program: Path::new("/bin/cat"), args: &[], cwd: None, set: &[], limit: Duration::from_secs(5) };

@@ -18,7 +18,7 @@
   wording). Approved as written; the approvals above stand for everything else.
 
 ## Slices (build-spec.md §12)
-- [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13, ⌘6), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe waits for the captain's new VPS
+- [ ] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13 — now 1.14 —, ⌘6; ADR 0024 superseded 0021 on 2026-11-24), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe waits for the captain's new VPS
 - [ ] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle) — in progress, paused 2026-11-18: the door, the place, the companion's rpc, the remote reading and migration 0008 committed as WIP (`08a4c49`); the guard rule, Settings' card and the e2e remain
 - [ ] Slice 2 · the real reading: the companion runs Firstmate on the VPS; the unreachable path
 - [ ] Slice 3 · the Work page on the VPS, and Herdr actions through the companion

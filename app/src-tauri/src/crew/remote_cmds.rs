@@ -1,5 +1,5 @@
 //! Settings → Where agents run (build spec §4, §11.2): what the webview asks of the VPS, each through the one door
-//! (ADR 0021), off the main thread and with no store guard held across the call. Slice 1: the Reachable row.
+//! (ADR 0024), off the main thread and with no store guard held across the call. Slice 1: the Reachable row.
 
 use crate::place::{place, Place};
 use crate::readers::runtime::ReaderControl;

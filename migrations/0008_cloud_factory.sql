@@ -1,9 +1,9 @@
--- The factory in the cloud (tasks/cloud-factory/prd.md; ADRs 0021–0023). Additive only, the captain's standing rule:
+-- The factory in the cloud (tasks/cloud-factory/prd.md; ADRs 0022–0024). Additive only, the captain's standing rule:
 -- four new tables and two indexes, nothing rebuilt, renamed or rewritten. reader_status is left as it is: while the
 -- place is a VPS, the crew reader's own row carries why the VPS could not be read, and vps_reachability below keeps the
 -- rest (build spec §17, 2026-11-18).
 
--- The VPS as the Mac last reached it through the door (ADR 0021): one row per org, replaced on each attempt.
+-- The VPS as the Mac last reached it through the door (ADR 0024): one row per org, replaced on each attempt.
 -- reason is a code from remote.rs (`timeout`, `host-key`, …), never ssh's own words.
 CREATE TABLE vps_reachability (
   org_id TEXT NOT NULL PRIMARY KEY REFERENCES orgs(id),

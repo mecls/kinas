@@ -489,8 +489,8 @@ The pin moves to Firstmate `427056c`, and the crew pages show what it now publis
 
 ## Agents on a VPS
 
-Every agent on one VPS the captain rents; Kinas its dashboard on the Mac and the phone (2026-11-17,
-`tasks/cloud-factory/prd.md`, ADRs 0021–0023). The steps named are `vps.e2e.ts`'s and `factory.e2e.ts`'s, as they are
+Every agent on one Linux machine the captain owns or rents, called the VPS; Kinas its dashboard on the Mac and the
+phone (2026-11-17, `tasks/cloud-factory/prd.md`, ADRs 0022–0024; 0024 superseded 0021 on 2026-11-24). The steps named are `vps.e2e.ts`'s and `factory.e2e.ts`'s, as they are
 built; the rest are the captain's, on the real VPS and phone.
 
 - [ ] The probe: on the VPS, Herdr headless in `kinas-probe-0008`, a scratch Firstmate home at the pin, a first mate and

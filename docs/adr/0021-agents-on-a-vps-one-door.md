@@ -1,7 +1,7 @@
 # 0021 · Agents may run on one VPS the captain rents; Kinas reaches it through one door, holds no key and never provisions it
 
 Date: 2026-11-17
-Status: accepted
+Status: superseded by 0024
 
 ## Context
 

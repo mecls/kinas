@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { validate } from "./validate.ts";
 
-describe("the companion's request validator (ADR 0021)", () => {
+describe("the companion's request validator (ADR 0024)", () => {
   test("accepts each verb in its exact shape", () => {
     expect(validate({ verb: "hello" })).toEqual({ verb: "hello" });
     expect(validate({ verb: "refresh" })).toEqual({ verb: "refresh" });

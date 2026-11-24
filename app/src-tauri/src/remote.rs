@@ -1,4 +1,4 @@
-//! The one door to the VPS (ADR 0021; build spec §6.1, §11.2): the only code in the app that runs `ssh`. Always
+//! The one door to the VPS (ADR 0024; build spec §6.1, §11.2): the only code in the app that runs `ssh`. Always
 //! `/usr/bin/ssh` with a fixed argv — batch mode, connect and keepalive limits, a control socket under Kinas's data
 //! directory — then `--`, the validated target, and the constant remote command `.local/bin/kinas companion rpc`. The
 //! request travels as one JSON document on the child's stdin (`proc::run_fed`); nothing a source, a setting or the

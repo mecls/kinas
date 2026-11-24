@@ -1,4 +1,4 @@
-// `kinas companion <rpc>` — the part of Kinas that runs on the VPS (ADRs 0021–0023; docs/external/vps.md). It is the one
+// `kinas companion <rpc>` — the part of Kinas that runs on the VPS (ADRs 0022–0024; docs/external/vps.md). It is the one
 // exception to the CLI's read-only rule besides `kinas crew setup`: it keeps its own state folder, and later writes a
 // note into Firstmate's inbox (ADR 0022) and summaries to the cloud store (ADR 0023). On the Mac it is never run.
 

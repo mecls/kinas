@@ -15,7 +15,7 @@ export interface CommandContext {
   openFile?: () => Promise<string[]>;
   /** CLI only: `kinas crew setup` or `kinas crew status`, run by the door with its arguments; its exit code. */
   crew?: () => Promise<number>;
-  /** CLI only, on the VPS: `kinas companion rpc`, run by the door with its arguments; its exit code (ADR 0021). */
+  /** CLI only, on the VPS: `kinas companion rpc`, run by the door with its arguments; its exit code (ADR 0024). */
   companion?: () => Promise<number>;
   /** Palette only. */
   navigate?: (page: "home" | "usage" | "work" | "crew" | "inbox") => void;
@@ -97,7 +97,7 @@ export const commands: readonly Command[] = [
     },
   },
   {
-    // The part of Kinas that runs on the VPS (the factory in the cloud, ADRs 0021–0023): `kinas companion rpc` answers
+    // The part of Kinas that runs on the VPS (the factory in the cloud, ADRs 0022–0024): `kinas companion rpc` answers
     // one request from the Mac's door. It writes its own state, so there is no palette door.
     id: "companion",
     title: "Companion",

@@ -53,6 +53,23 @@ impl Unreachable {
         format!("can't reach {label}: {why}")
     }
 
+    /// The reason a stored code names, for the status bar's tooltip.
+    pub fn from_code(code: &str) -> Option<Unreachable> {
+        [
+            Unreachable::HostKeyChanged,
+            Unreachable::LoginRefused,
+            Unreachable::TimedOut,
+            Unreachable::NotReachable,
+            Unreachable::CompanionMissing,
+            Unreachable::CompanionRefused,
+            Unreachable::CompanionFailed,
+            Unreachable::ReplyTooLarge,
+            Unreachable::BadReply,
+        ]
+        .into_iter()
+        .find(|u| u.code() == code)
+    }
+
     /// The short word the log carries.
     pub fn code(self) -> &'static str {
         match self {
@@ -84,6 +101,8 @@ pub(crate) struct Cursor {
 pub(crate) enum Request {
     Hello,
     Bundle { cursor: Option<Cursor> },
+    /// A reading on the VPS now (Refresh readings), before the bundle that carries it.
+    Refresh,
 }
 
 impl Request {
@@ -91,6 +110,7 @@ impl Request {
         match self {
             Request::Hello => "hello",
             Request::Bundle { .. } => "bundle",
+            Request::Refresh => "refresh",
         }
     }
 }

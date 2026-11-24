@@ -1,16 +1,19 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeFakeHome } from "../fake-firstmate/make.ts";
 
 // A fake VPS for the VPS specs (build spec §12 slice 1.5; ADR 0024): a stub `ssh` the app runs in place of /usr/bin/ssh
 // (KINAS_E2E_SSH, debug builds only), and the machine it "reaches" — a home folder holding `.local/bin/kinas` (the CLI
-// this run built) and a companion root holding the latest reading (fixtures/companion-bundle.synthetic.json) and a
-// Herdr that says 0.9.5. Nothing leaves this Mac and no real ssh runs.
+// this run built) and a companion root holding the latest reading (fixtures/companion-bundle.synthetic.json), a
+// Herdr that says 0.9.5 and answers nothing else, and the fake Firstmate home of the crew specs (slice 2), so `refresh`
+// runs the companion's own reading over the same snapshot. Nothing leaves this Mac and no real ssh runs.
 //
 // The stub takes the door's argv as ssh would: options up to `--`, then the target, then the remote command, which it
 // runs from the fake home exactly as written (`.local/bin/kinas companion rpc`, relative to the login folder), with the
-// request on its stdin. It answers only `TARGET`; any other target fails as an unresolvable host does, exit 255. Each
-// call's argv goes to `calls.log` beside it, never the request.
+// request on its stdin and HOME the fake home, as a login there has. It answers only `TARGET`; any other target fails as
+// an unresolvable host does, exit 255, and while `down` exists beside it (`setDown`) every call times out as a machine
+// that stopped answering does. Each call's argv goes to `calls.log` beside it, never the request.
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const fixtures = join(repo, "fixtures");
@@ -46,7 +49,8 @@ export function makeFakeVps(dataDir: string): FakeVps {
   mkdirSync(join(root, "state"), { recursive: true });
   copyFileSync(join(fixtures, "companion-bundle.synthetic.json"), join(root, "state", "reading.json"));
   mkdirSync(join(root, "bin"), { recursive: true });
-  script(join(root, "bin", "herdr"), `echo "herdr 0.9.5"`);
+  script(join(root, "bin", "herdr"), `[ "$1" = "--version" ] || exit 1\necho "herdr 0.9.5"`);
+  makeFakeHome(root, "firstmate-fleet-snapshot.current.synthetic.json", { clones: true });
 
   const ssh = join(dir, "ssh");
   script(
@@ -57,9 +61,17 @@ export function makeFakeVps(dataDir: string): FakeVps {
       `[ "$1" = "--" ] || { echo "ssh: the door's argv has no --" >&2; exit 255; }`,
       `shift; target=$1; shift`,
       `[ "$target" = '${TARGET}' ] || { echo "ssh: Could not resolve hostname $target: nodename nor servname provided" >&2; exit 255; }`,
+      `[ -e '${join(dir, "down")}' ] && { echo "ssh: connect to host vps-e2e port 22: Operation timed out" >&2; exit 255; }`,
       `cd '${home}' || exit 255`,
-      `KINAS_COMPANION_ROOT='${root}' exec "$@"`,
+      `HOME='${home}' KINAS_COMPANION_ROOT='${root}' exec "$@"`,
     ].join("\n"),
   );
   return { ssh, root, calls };
+}
+
+/** The machine stops answering (`true`) or answers again (`false`), as the stub sees it on its next call. */
+export function setDown(dataDir: string, down: boolean): void {
+  const flag = join(dataDir, "fake-vps", "down");
+  if (down) writeFileSync(flag, "");
+  else rmSync(flag, { force: true });
 }

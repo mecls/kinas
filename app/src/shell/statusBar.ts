@@ -5,7 +5,7 @@ import type { Category } from "../ui/Dot.tsx";
 import type { Tone } from "../ui/Bar.tsx";
 import * as convex from "../usage/convex.ts";
 import { asOf, PROVIDER_LABEL, resetsCaption, tone, usedPct, WINDOW_LABEL } from "../usage/format.ts";
-import { connectionOf, type Connection } from "./connection.ts";
+import { connectionOf, type Connection, type Machine } from "./connection.ts";
 import { crewCounts } from "./folderState.ts";
 
 // The status bar's words (tasks/interface-polish, PRD rules 23–25; DESIGN.md §4 Status bar and Usage popover, 1.13):
@@ -34,8 +34,8 @@ export interface BarModel {
   empty: boolean;
   /** Null before the crew is set up, or before it has been read. */
   crew: CrewTotals | null;
-  /** Null when no VPS is watched. */
-  vps: Connection | null;
+  /** Null when no VPS is watched. With the agents on a VPS, that machine (DESIGN.md 1.14); else Hostinger's reading. */
+  vps: Connection | Machine | null;
 }
 
 /** A tone the bar draws: warn, danger and stale. A dead or reset reading has no number to warn about. */
@@ -62,7 +62,7 @@ export function crewWords(totals: CrewTotals): { key: keyof CrewTotals; text: st
 }
 
 /** The bar's model: Home's three gauges as readings, the crew's counts, the VPS (rules 23–24). */
-export function statusModel(snapshot: UsageSnapshot | null, crew: CrewSnapshot | null, readError: string | null = null): BarModel {
+export function statusModel(snapshot: UsageSnapshot | null, crew: CrewSnapshot | null, readError: string | null = null, machine: Machine | null = null): BarModel {
   const slots = snapshot ? heroSlots(snapshot) : [];
   const readings = slots.flatMap((s): BarReading[] => {
     const q = s.quota;
@@ -74,7 +74,7 @@ export function statusModel(snapshot: UsageSnapshot | null, crew: CrewSnapshot |
     readings,
     empty: snapshot !== null && readings.length === 0,
     crew: crewTotals(crew),
-    vps: snapshot ? connectionOf(snapshot, readError) : null,
+    vps: machine ?? (snapshot ? connectionOf(snapshot, readError) : null),
   };
 }
 

@@ -126,6 +126,7 @@ pub fn run() {
             place::get_place,
             place::set_place,
             crew::remote_cmds::remote_hello,
+            crew::remote_cmds::place_status,
             crew::crew_launch,
             crew::crew_task,
             crew::crew_focus_pane,

@@ -50,9 +50,9 @@ fn blocked_line(h: &Health) -> Option<String> {
 }
 
 /// What the Crew page's state is read from (ADR 0024): this Mac's Firstmate home, tools, lanes and Herdr, or — with the
-/// agents on a VPS — the VPS's last bundle, which says only whether Firstmate is installed there. Whether the first mate
-/// runs there, the lanes and the reconcile lines arrive with Herdr's view through the companion (slices 2–3); until
-/// then they read as off, never as this Mac's.
+/// agents on a VPS — the VPS's last bundle: whether Firstmate is installed there, whether the first mate's workspace is
+/// in its Herdr session, and whether its lane gate is open. The tools' blocked line and the reconcile lines need setup's
+/// checks there (slice 4); until then they read as off, never as this Mac's.
 #[derive(Debug, PartialEq, Eq)]
 struct PageFacts {
     installed: bool,
@@ -62,9 +62,17 @@ struct PageFacts {
     reconcile: bool,
 }
 
-fn page_facts(on_vps: bool, remote_installed: bool, here: impl FnOnce() -> PageFacts) -> PageFacts {
+/// What the VPS's last bundle said: Firstmate installed, the first mate's workspace in Herdr, the lane gate open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Remote {
+    installed: bool,
+    running: bool,
+    lanes_on: bool,
+}
+
+fn page_facts(on_vps: bool, remote: Remote, here: impl FnOnce() -> PageFacts) -> PageFacts {
     if on_vps {
-        PageFacts { installed: remote_installed, running: false, lanes_on: false, blocked: None, reconcile: false }
+        PageFacts { installed: remote.installed, running: remote.installed && remote.running, lanes_on: remote.installed && remote.lanes_on, blocked: None, reconcile: false }
     } else {
         here()
     }
@@ -80,7 +88,8 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let store = app.state::<Store>();
         let on_vps = matches!(crate::place::place(&store.conn(), store.org_id()), crate::place::Place::Vps { .. });
         // The file check and the collector's memory, before the guard.
-        let PageFacts { installed, running, lanes_on, blocked, reconcile } = page_facts(on_vps, live.remote_installed(), || {
+        let remote = Remote { installed: live.remote_installed(), running: live.live().first_mate_there(), lanes_on: live.remote_lanes_on() };
+        let PageFacts { installed, running, lanes_on, blocked, reconcile } = page_facts(on_vps, remote, || {
             let installed = home::installed(&home);
             PageFacts {
                 installed,
@@ -510,10 +519,15 @@ mod tests {
     #[test]
     fn on_a_vps_the_page_reads_the_vps_and_never_this_mac() {
         let here = || PageFacts { installed: false, running: true, lanes_on: true, blocked: Some("herdr isn't installed".into()), reconcile: true };
-        let vps = page_facts(true, true, || panic!("this Mac's home, tools and Herdr are not read with the agents on a VPS"));
+        let installed = Remote { installed: true, ..Remote::default() };
+        let vps = page_facts(true, installed, || panic!("this Mac's home, tools and Herdr are not read with the agents on a VPS"));
         assert_eq!(vps, PageFacts { installed: true, running: false, lanes_on: false, blocked: None, reconcile: false });
-        assert!(!page_facts(true, false, || panic!("not read")).installed, "before a bundle says so, Firstmate is not installed there");
-        assert_eq!(page_facts(false, true, here), here(), "on this Mac, the VPS's last word is ignored");
+        let all = Remote { installed: true, running: true, lanes_on: true };
+        assert_eq!(page_facts(true, all, || panic!("not read")), PageFacts { installed: true, running: true, lanes_on: true, blocked: None, reconcile: false });
+        let gone = Remote { installed: false, running: true, lanes_on: true };
+        assert_eq!(page_facts(true, gone, || panic!("not read")), PageFacts { installed: false, running: false, lanes_on: false, blocked: None, reconcile: false }, "nothing installed there reads as nothing running");
+        assert!(!page_facts(true, Remote::default(), || panic!("not read")).installed, "before a bundle says so, Firstmate is not installed there");
+        assert_eq!(page_facts(false, all, here), here(), "on this Mac, the VPS's last word is ignored");
     }
 
     fn live(focused: &str, fg: &[&str], observed_at: i64) -> LiveView {

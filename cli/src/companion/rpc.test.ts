@@ -10,7 +10,7 @@ const FIXTURE = join(import.meta.dir, "..", "..", "..", "fixtures", "companion-b
 function deps() {
   const root = mkdtempSync(join(tmpdir(), "kinas-companion-"));
   const paths = companionPaths({ KINAS_COMPANION_ROOT: root });
-  return { paths, version: "0.1.0", herdrVersion: async (): Promise<string | null> => "0.9.5", readNow: async () => {} };
+  return { paths, version: "0.1.0", herdrVersion: async (): Promise<string | null> => "0.9.5", readNow: async () => {}, now: () => 1_794_834_015_000 };
 }
 
 describe("kinas companion rpc (slice 1)", () => {
@@ -48,7 +48,7 @@ describe("kinas companion rpc (slice 1)", () => {
     writeFileSync(d.paths.reading, readFileSync(FIXTURE, "utf8"));
     const { reply, exit } = await rpc('{"verb":"bundle","cursor":null}', d);
     expect(exit).toBe(0);
-    expect(reply).toEqual({ ...JSON.parse(readFileSync(FIXTURE, "utf8")), ledger: null });
+    expect(reply).toEqual({ ...JSON.parse(readFileSync(FIXTURE, "utf8")), served_at: 1_794_834_015_000, ledger: null });
   });
 
   test("bundle with a cursor returns only the newer complete ledger lines; another file or a shorter one starts at 0", async () => {

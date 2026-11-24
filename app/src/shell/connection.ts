@@ -1,7 +1,7 @@
-import type { ReaderView, UsageSnapshot } from "../api.ts";
+import type { MachineState, PlaceStatus, ReaderView, UsageSnapshot } from "../api.ts";
 import { failedRead } from "../pages/readFailure.ts";
 import type { ConnectionState } from "../ui/Nav.tsx";
-import { asOf } from "../usage/format.ts";
+import { asOf, lisbonClock } from "../usage/format.ts";
 
 // The VPS row at the foot of the sidebar (DESIGN.md §3.1): one machine, one word. The word is the Hostinger
 // reader's state as the usage snapshot reports it — the same reading the Usage page shows, so the two never
@@ -42,4 +42,33 @@ function judged(snapshot: Pick<UsageSnapshot, "now" | "readers">): Connection | 
     return { name: VPS_NAME, state: "stale", detail: since === null ? "no reading yet" : asOf(since, snapshot.now) };
   }
   return { name: VPS_NAME, state: "connected", detail: asOf(since, snapshot.now) };
+}
+
+/** The agents' machine on the bar (DESIGN.md 1.14): its label, one of four states, and the hover's words. */
+export interface Machine {
+  name: string;
+  state: MachineState;
+  /** The word the bar shows. */
+  word: string;
+  detail: string;
+}
+
+const MACHINE_WORD: Record<MachineState, string> = {
+  connected: "connected",
+  reconnecting: "reconnecting",
+  unreachable: "unreachable",
+  not_running: "Kinas on the VPS is not running",
+};
+
+/** The machine part from `place_status`; null while the agents run on this Mac. Times are Lisbon's, as the Usage page's. */
+export function machineOf(status: PlaceStatus | null, now: number): Machine | null {
+  if (!status) return null;
+  const last = status.last_success_at === null ? "no reading yet" : `last reading ${lisbonClock(status.last_success_at, now)}`;
+  const detail =
+    status.state === "unreachable" && status.since !== null
+      ? `${status.label} · unreachable since ${lisbonClock(status.since, now)} · ${last}`
+      : status.state === "not_running"
+        ? `${status.label} · reached, but its reading loop has stopped · ${last}`
+        : `${status.label} · ${MACHINE_WORD[status.state]} · ${last}`;
+  return { name: status.label, state: status.state, word: MACHINE_WORD[status.state], detail: status.problem ? `${detail} · ${status.problem}` : detail };
 }

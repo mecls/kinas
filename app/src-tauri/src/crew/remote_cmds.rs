@@ -1,5 +1,6 @@
 //! Settings → Where agents run (build spec §4, §11.2): what the webview asks of the VPS, each through the one door
-//! (ADR 0024), off the main thread and with no store guard held across the call. Slice 1: the Reachable row.
+//! (ADR 0024), off the main thread and with no store guard held across the call. Slice 1: the Reachable row. Slice 2:
+//! the status bar's VPS part, read from what the crew's readings left (`vps_reachability`), never a call of its own.
 
 use crate::place::{place, Place};
 use crate::readers::runtime::ReaderControl;
@@ -21,6 +22,85 @@ pub struct Hello {
     /// This Mac's Herdr.
     pub herdr_here: Option<String>,
     pub checked_at: i64,
+}
+
+/// The status bar's VPS part (DESIGN.md 1.14): the agents' machine in four states.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MachineState {
+    Connected,
+    /// The door failed less than `RECONNECTING_MS` ago, after a success; or nothing has been tried yet.
+    Reconnecting,
+    Unreachable,
+    /// The door works but the companion's run loop has not read for `HEARTBEAT_MS`: `Kinas on the VPS is not running`.
+    NotRunning,
+}
+
+/// Two missed readings (the loop reads every 15 s) before a failing door reads as unreachable.
+const RECONNECTING_MS: i64 = 30_000;
+/// The run loop's heartbeat is its reading; one older than this, while the door works, means the loop is not running.
+const HEARTBEAT_MS: i64 = 60_000;
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct PlaceStatus {
+    pub label: String,
+    pub state: MachineState,
+    /// When the door started failing: `unreachable since 14:02`.
+    pub since: Option<i64>,
+    pub last_success_at: Option<i64>,
+    /// `can't reach vps-1: timed out` while failing; None otherwise.
+    pub problem: Option<String>,
+}
+
+/// `vps_reachability`'s one row, as read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Reach {
+    pub last_attempt_at: i64,
+    pub last_success_at: Option<i64>,
+    pub reason: Option<String>,
+    pub heartbeat_at: Option<i64>,
+}
+
+/// The four states from the last attempt. `failing_since` is this run's memory of the first failure; without it (Kinas
+/// restarted while the VPS was down) the last attempt stands in.
+pub(crate) fn status_of(label: &str, reach: Option<&Reach>, failing_since: Option<i64>, now: i64) -> PlaceStatus {
+    let status = |state, since, last_success_at, problem| PlaceStatus { label: label.to_string(), state, since, last_success_at, problem };
+    let Some(r) = reach else { return status(MachineState::Reconnecting, None, None, None) };
+    match &r.reason {
+        None => {
+            // A heartbeat stamped in what is now the future has an unknown age: not a reason to say the loop stopped.
+            let stopped = r.heartbeat_at.is_none_or(|at| now - at > HEARTBEAT_MS);
+            status(if stopped { MachineState::NotRunning } else { MachineState::Connected }, None, r.last_success_at, None)
+        }
+        Some(code) => {
+            let since = failing_since.unwrap_or(r.last_attempt_at);
+            let fresh = r.last_success_at.is_some() && (0..RECONNECTING_MS).contains(&(now - since));
+            let problem = remote::Unreachable::from_code(code).map(|u| u.words(label));
+            status(if fresh { MachineState::Reconnecting } else { MachineState::Unreachable }, Some(since), r.last_success_at, problem)
+        }
+    }
+}
+
+/// The status bar's VPS part: None while the agents run on this Mac. Reads the store only.
+#[tauri::command]
+pub async fn place_status(app: AppHandle) -> Result<Option<PlaceStatus>, RemoteError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<Store>();
+        let conn = store.conn();
+        let Place::Vps { label, .. } = place(&conn, store.org_id()) else { return Ok(None) };
+        let reach = conn
+            .query_row(
+                "SELECT last_attempt_at, last_success_at, reason, companion_heartbeat_at FROM vps_reachability WHERE org_id = ?1",
+                [store.org_id()],
+                |r| Ok(Reach { last_attempt_at: r.get(0)?, last_success_at: r.get(1)?, reason: r.get(2)?, heartbeat_at: r.get(3)? }),
+            )
+            .ok();
+        drop(conn);
+        let failing_since = app.state::<crate::readers::crew::CrewLive>().remote_failing_since();
+        Ok(Some(status_of(&label, reach.as_ref(), failing_since, now_ms())))
+    })
+    .await
+    .map_err(|e| RemoteError { message: format!("could not read the VPS's state: {e}") })?
 }
 
 /// A version as the screen may show it: at most 40 characters of digits, dots and letters.
@@ -80,6 +160,33 @@ pub async fn remote_hello(app: AppHandle) -> Result<Hello, RemoteError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// DESIGN.md 1.14, build spec §4 and Journey C: the four states of the status bar's VPS part.
+    #[test]
+    fn the_machine_reads_in_four_states() {
+        let now = 1_000_000;
+        let ok = Reach { last_attempt_at: now - 5_000, last_success_at: Some(now - 5_000), reason: None, heartbeat_at: Some(now - 10_000) };
+        assert_eq!(status_of("vps-1", Some(&ok), None, now).state, MachineState::Connected);
+        let stopped = Reach { heartbeat_at: Some(now - 61_000), ..ok.clone() };
+        assert_eq!(status_of("vps-1", Some(&stopped), None, now).state, MachineState::NotRunning);
+        assert_eq!(status_of("vps-1", Some(&Reach { heartbeat_at: None, ..ok.clone() }), None, now).state, MachineState::NotRunning);
+        let ahead = Reach { heartbeat_at: Some(now + 90_000), ..ok.clone() };
+        assert_eq!(status_of("vps-1", Some(&ahead), None, now).state, MachineState::Connected, "a stamp from the future is not a stopped loop");
+
+        let failing = Reach { last_attempt_at: now - 1_000, last_success_at: Some(now - 20_000), reason: Some("timeout".into()), heartbeat_at: Some(now - 20_000) };
+        let blip = status_of("vps-1", Some(&failing), Some(now - 15_000), now);
+        assert_eq!((blip.state, blip.since), (MachineState::Reconnecting, Some(now - 15_000)));
+        assert_eq!(blip.problem.as_deref(), Some("can't reach vps-1: timed out"));
+        let down = status_of("vps-1", Some(&failing), Some(now - 30_000), now);
+        assert_eq!((down.state, down.since, down.last_success_at), (MachineState::Unreachable, Some(now - 30_000), Some(now - 20_000)));
+        let never = Reach { last_success_at: None, ..failing.clone() };
+        assert_eq!(status_of("vps-1", Some(&never), None, now).state, MachineState::Unreachable, "never reached is not a blip");
+        let restarted = status_of("vps-1", Some(&failing), None, now);
+        assert_eq!(restarted.since, Some(now - 1_000), "after a restart the last attempt stands in");
+        assert_eq!(status_of("vps-1", None, None, now).state, MachineState::Reconnecting, "nothing tried yet");
+        let unknown = Reach { reason: Some("new-code".into()), ..failing };
+        assert_eq!(status_of("vps-1", Some(&unknown), None, now).problem, None, "an unknown code is not put into words");
+    }
 
     #[test]
     fn hello_reads_the_versions_or_says_why_in_fixed_words() {

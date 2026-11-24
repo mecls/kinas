@@ -3,10 +3,13 @@
 //! — nothing here interprets the crew. Fields join as their slices land; one the Mac does not know yet is ignored, and a
 //! bundle of another version is refused with one line.
 
+use super::ledger;
 use crate::proc::{Exit, Ran};
 use crate::remote::Unreachable;
 use rusqlite::{params, Connection};
 use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::path::{Component, Path};
 
 pub(crate) const BUNDLE_VERSION: u32 = 1;
 
@@ -17,9 +20,84 @@ pub(crate) struct Bundle {
     pub installed: bool,
     /// `fm-fleet-snapshot.sh --json`, as it answered.
     pub snapshot: Option<ScriptOut>,
+    /// The VPS's clock when the companion answered: the heartbeat's age is read on that clock, never against this Mac's.
+    #[serde(default)]
+    pub served_at: Option<i64>,
+    /// Firstmate's home on the VPS, as the fleet's paths name it (slice 2): where a task's clone path is checked.
+    #[serde(default)]
+    pub home: Option<String>,
+    /// `fm-capacity.sh --json`, only behind the lane gate on the VPS; `capacity_at` says when it ran there.
+    #[serde(default)]
+    pub capacity: Option<ScriptOut>,
+    #[serde(default)]
+    pub capacity_at: Option<i64>,
+    /// Each clone under `<home>/projects/` and its `[remote "origin"]` url as the companion read the file.
+    #[serde(default)]
+    pub origins: BTreeMap<String, Option<String>>,
+    /// `herdr api snapshot` and the focused pane's `pane process-info`, verbatim.
+    #[serde(default)]
+    pub herdr_view: Option<String>,
+    #[serde(default)]
+    pub herdr_foreground: Option<String>,
+    /// The latest `gh pr view` of each PR still due on the VPS, verbatim, with when it was asked.
+    #[serde(default)]
+    pub prs: Vec<PrOut>,
+    /// The fleet ledger's complete lines since the Mac's cursor; None while there is no ledger file.
+    #[serde(default)]
+    pub ledger: Option<LedgerChunk>,
 }
 
 #[derive(Debug, Deserialize)]
+pub(crate) struct PrOut {
+    pub url: String,
+    pub checked_at: i64,
+    pub out: ScriptOut,
+}
+
+/// A piece of `state/fleet-ledger.jsonl` on the VPS: bytes `from..to` of the file `dev`/`ino`, complete lines only.
+#[derive(Debug, Deserialize)]
+pub(crate) struct LedgerChunk {
+    pub dev: u64,
+    pub ino: u64,
+    pub from: u64,
+    pub to: u64,
+    pub text: String,
+}
+
+/// The heartbeat on this Mac's clock: as old here, when the bundle was taken, as it was on the VPS when it was served.
+pub(crate) fn heartbeat_here(info: &CompanionInfo, served_at: Option<i64>, now: i64) -> CompanionInfo {
+    let heartbeat_at = served_at.map_or(info.heartbeat_at, |served| now - (served - info.heartbeat_at).max(0));
+    CompanionInfo { heartbeat_at, ..info.clone() }
+}
+
+/// The Mac's ledger cursor as the companion's: the file's identity and the byte after the last line taken.
+pub(crate) fn cursor_for(c: ledger::Cursor) -> crate::remote::Cursor {
+    crate::remote::Cursor { epoch: format!("{}:{}", c.dev, c.ino), offset: c.offset, events: 0 }
+}
+
+/// A chunk as the local reader's `LedgerRead`: the same `parse_lines`, and the cursor past what it consumed — `to` when
+/// it took every line (`to` also skips a line longer than the companion's cap), else `from` plus what it took.
+pub(crate) fn ledger_of(chunk: &LedgerChunk) -> ledger::LedgerRead {
+    let (events, consumed, error) = ledger::parse_lines(chunk.text.as_bytes());
+    let offset = if consumed == chunk.text.len() { chunk.to } else { chunk.from + consumed as u64 };
+    ledger::LedgerRead { events, cursor: ledger::Cursor { dev: chunk.dev, ino: chunk.ino, offset }, error }
+}
+
+/// A task clone's repository on the VPS, checked as `repo::clone_repo` checks one here — an absolute path under
+/// `<home>/projects/`, no `..` — then the origin the companion read, normalised as this Mac's would be.
+pub(crate) fn clone_repo_there(home: &Path, project: &str, origins: &BTreeMap<String, Option<String>>) -> Option<String> {
+    let path = Path::new(project);
+    if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir)) {
+        return None;
+    }
+    if path.strip_prefix(home.join("projects")).ok()?.as_os_str().is_empty() {
+        return None;
+    }
+    let url = origins.get(project.trim_end_matches('/'))?.as_deref()?;
+    crate::crew::repo::normalise(url)
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct CompanionInfo {
     pub version: String,
     pub heartbeat_at: i64,

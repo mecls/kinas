@@ -1,13 +1,16 @@
 import { $, browser, expect } from "@wdio/globals";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LABEL, TARGET } from "../fake-vps/make.ts";
+import { LABEL, setDown, TARGET } from "../fake-vps/make.ts";
 import { APP_LOG } from "../helpers.ts";
 
 // Agents on a VPS (tasks/cloud-factory, build spec §12 slice 1.5; ADRs 0022–0024), against the fake VPS of
 // vps.setup.ts: a stub ssh in place of /usr/bin/ssh, the CLI this run built as the machine's `.local/bin/kinas`, and the
 // companion's reading from fixtures/companion-bundle.synthetic.json. Case 1, the tracer bullet: the place set in
 // Settings, the door's argv exactly as ADR 0024 fixes it, the Reachable row, and the Crew board drawn from the VPS.
+// Case 2, Journey C (slice 2.4): the machine stops answering and comes back — the board keeps its last reading, the
+// status bar's VPS part goes connected → reconnecting → unreachable → connected, and Refresh readings has the companion
+// read the fake Firstmate home there.
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const calls = join(dataDir, "fake-vps", "calls.log");
@@ -81,6 +84,52 @@ describe("agents on a VPS", () => {
     expect(log).toMatch(/remote: hello ok in \d+ ms/);
     expect(log).toMatch(/remote: bundle ok in \d+ ms/);
     expect(log).toMatch(/crew: remote reading in \d+ ms/);
+    expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
+  });
+
+  it("keeps the board while the VPS is unreachable, says so on the status bar, and reads again when it answers", async () => {
+    const part = () => {
+      const b = document.querySelector<HTMLButtonElement>('.ui-statusbar [data-part="vps"]');
+      return b ? { state: b.dataset.state ?? "", text: b.textContent?.trim() ?? "", title: b.title } : null;
+    };
+    const cards = () => [...document.querySelectorAll('section[data-page="crew"] article.crew-card')].map((c) => c.getAttribute("data-task")).sort().join(" ");
+    const refresh = () =>
+      browser.execute(() =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("refresh_readings").then(() => "ok"),
+      );
+    const fmCalls = join(dataDir, "fake-vps", "companion", "firstmate", "state", "calls.log");
+
+    // Refresh readings: the companion reads now (`refresh`), so the bundle's heartbeat is fresh.
+    expect(await refresh()).toBe("ok");
+    const up = await waitInPage(part, (p) => p?.state === "connected", "the bar never named the VPS connected");
+    expect(up.text).toBe(`${LABEL}connected`);
+    expect(up.title).toMatch(new RegExp(`^${LABEL} · connected · last reading \\d\\d:\\d\\d$`));
+    await browser.waitUntil(() => existsSync(fmCalls) && readFileSync(fmCalls, "utf8").includes("fm-fleet-snapshot.sh --json"), {
+      timeout: 30000,
+      timeoutMsg: "the companion never read the fake Firstmate home",
+    });
+    const board = await waitInPage(cards, (v) => v === [...TASKS].sort().join(" "), "the board lost the VPS's tasks after the companion's own reading");
+
+    // The machine stops answering: the next reading fails, nothing on the board moves.
+    setDown(dataDir, true);
+    expect(await refresh()).toBe("ok");
+    const blip = await waitInPage(part, (p) => p?.state === "reconnecting", "the bar never said reconnecting");
+    expect(blip.title).toContain(`can't reach ${LABEL}: timed out`);
+    const down = await waitInPage(part, (p) => p?.state === "unreachable", "the bar never said unreachable", 90000);
+    expect(down.text).toBe(`${LABEL}unreachable`);
+    expect(down.title).toMatch(new RegExp(`^${LABEL} · unreachable since \\d\\d:\\d\\d · last reading \\d\\d:\\d\\d · can't reach ${LABEL}: timed out$`));
+    expect(await browser.execute(cards)).toBe(board);
+
+    // It answers again: Refresh readings reads at once, and the bar says so.
+    setDown(dataDir, false);
+    expect(await refresh()).toBe("ok");
+    await waitInPage(part, (p) => p?.state === "connected", "the bar never said connected again");
+    expect(await browser.execute(cards)).toBe(board);
+
+    const log = logSinceStart();
+    expect(log).toMatch(/remote: refresh ok in \d+ ms/);
+    expect(log).toMatch(/remote: bundle failed \(timeout\) in \d+ ms/);
+    expect(log).toMatch(/crew: remote reading failed in \d+ ms/);
     expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
   });
 });

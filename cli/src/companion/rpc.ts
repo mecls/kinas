@@ -18,6 +18,7 @@ export interface RpcDeps {
   herdrVersion: () => Promise<string | null>;
   /** One reading now (`run.ts` readOnce), for `refresh`. */
   readNow: () => Promise<void>;
+  now: () => number;
 }
 
 /** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
@@ -73,7 +74,8 @@ async function bundle(deps: RpcDeps, cursor: Cursor | null): Promise<RpcResult> 
     const reading = JSON.parse(text) as { v?: unknown };
     if (reading.v !== RPC_VERSION) return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
     // The ledger is read now, from the Mac's own cursor: the reading on disk is shared, the cursor is the Mac's.
-    return { reply: { ...reading, ledger: ledgerSince(deps.paths.home, cursor) }, exit: 0 };
+    // `served_at`: this machine's clock now, so the Mac reads the heartbeat's age on one clock, never across two.
+    return { reply: { ...reading, served_at: deps.now(), ledger: ledgerSince(deps.paths.home, cursor) }, exit: 0 };
   } catch {
     return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
   }

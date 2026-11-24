@@ -313,6 +313,20 @@ export interface RemoteHello {
   checked_at: number;
 }
 export const remoteHello = () => invoke<RemoteHello>("remote_hello");
+
+/** The status bar's VPS part (DESIGN.md 1.14): the agents' machine, as the crew's readings last found it. */
+export type MachineState = "connected" | "reconnecting" | "unreachable" | "not_running";
+export interface PlaceStatus {
+  label: string;
+  state: MachineState;
+  /** When the door started failing. */
+  since: number | null;
+  last_success_at: number | null;
+  /** `can't reach vps-1: timed out` while failing. */
+  problem: string | null;
+}
+/** Null while the agents run on this Mac. Reads Kinas's store only; it never calls the VPS. */
+export const getPlaceStatus = () => invoke<PlaceStatus | null>("place_status");
 /** The launcher: "focused" (it was running), "run" (its workspace was there without it), "created". */
 export const launchFirstMate = () => invoke<"focused" | "run" | "created">("crew_launch");
 /** A crew command's refusal, in its own words (CrewError), or the error as it came. */

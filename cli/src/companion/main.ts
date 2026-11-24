@@ -76,7 +76,7 @@ export async function companion(args: string[]): Promise<number> {
       const prev = lastReading(paths);
       await readOnce(runDeps(paths), prev, prev?.companion.since ?? Date.now());
     };
-    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow };
+    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now };
     const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;

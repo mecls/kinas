@@ -53,6 +53,7 @@ import { InboxPage, type AnswerKind, type InboxBox } from "./pages/Inbox.tsx";
 import { TaskDetail } from "./crew/TaskDetail.tsx";
 import { taskHidden } from "./crew/detail.ts";
 import { useCrew } from "./crew/useCrew.ts";
+import { useMachine } from "./shell/useMachine.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
 import { useSplit } from "./shell/useSplit.ts";
@@ -176,7 +177,9 @@ export function App() {
   const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   // The status bar (the interface polish, slice 6; shell/statusBar.ts): Home's three gauges, the crew's counts and the
   // VPS, from the same snapshot and crew reading the pages show, so the bar never disagrees with them.
-  const bar = useMemo(() => statusModel(usage.snapshot, crew, usage.error), [usage.snapshot, crew, usage.error]);
+  // With the agents on a VPS, the bar's VPS part is that machine (DESIGN.md 1.14), not Hostinger's reading.
+  const machine = useMachine();
+  const bar = useMemo(() => statusModel(usage.snapshot, crew, usage.error, machine), [usage.snapshot, crew, usage.error, machine]);
   const barCrew = useMemo(() => (bar.crew ? crewWords(bar.crew).map((w) => ({ ...w, color: CREW_DOT[w.key] })) : null), [bar.crew]);
   /** The Usage popover above the readings (rule 25): a fixed sibling of the shell, never wrapping the terminal. */
   const [usagePopover, setUsagePopover] = useState(false);
@@ -830,7 +833,7 @@ export function App() {
         open={usagePopover}
         onReadings={() => setUsagePopover((o) => !o)}
         onCrew={() => goTo("crew")}
-        onVps={showVps}
+        onVps={machine ? () => openSetting("place.reachable") : showVps}
         onSettings={() => openSetting("claude.connection")}
       />
       {usagePopover && usage.snapshot && (

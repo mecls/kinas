@@ -23,3 +23,26 @@ export function companionPaths(env: Record<string, string | undefined> = process
   const herdr = root ? join(root, "bin", "herdr") : join(home, ".local", "bin", "herdr");
   return { state, home: fm, reading: join(state, "reading.json"), herdr };
 }
+
+/**
+ * Where Node may be, in order (build spec §17, 2026-11-24 #1): fnm's `default` alias, then Volta. Constants, never read
+ * from a shell's startup files, which neither the door's non-interactive ssh nor a systemd unit runs.
+ */
+export const NODE_DIRS: readonly string[] = [".local/share/fnm/aliases/default/bin", ".volta/bin"];
+/** The system's own folders, last. */
+export const SYSTEM_PATH: readonly string[] = ["/usr/local/bin", "/usr/bin", "/bin"];
+
+/** The first of NODE_DIRS under `home` that holds a `node` it can run, or null. */
+export function nodeDir(home: string, executable: (path: string) => boolean): string | null {
+  for (const dir of NODE_DIRS) if (executable(join(home, dir, "node"))) return join(home, dir);
+  return null;
+}
+
+/**
+ * The PATH every child of the companion runs with — Firstmate's scripts, Herdr, gh, claude: `~/.local/bin` (Kinas, Herdr,
+ * claude), then Node's folder when there is one, then the system's. Never the caller's own PATH.
+ */
+export function companionPath(home: string, executable: (path: string) => boolean): string {
+  const node = nodeDir(home, executable);
+  return [join(home, ".local", "bin"), ...(node ? [node] : []), ...SYSTEM_PATH].join(":");
+}

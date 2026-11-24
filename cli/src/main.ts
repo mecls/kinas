@@ -9,6 +9,7 @@
 //   kinas open [<path>]      any text file, image or folder in the Kinas reader; no path reopens the last one (open.ts)
 //   kinas crew setup         install the crew: Firstmate at its pin and the tools, asking y/N before each (crew-setup.ts)
 //   kinas crew status [--json]  the crew as the app last mirrored it: counts and words, never a task's name (crew.ts)
+//   kinas companion run      on the VPS only: read Firstmate's home every 15 s (companion/run.ts; ADR 0024)
 //   kinas companion rpc      on the VPS only: answer one request from Kinas on the Mac (companion/; ADR 0024)
 //
 // Amended 2026-09-24 (the first mate): `kinas crew setup` is the one exception to "read, never written". With the

@@ -1,10 +1,11 @@
 // `kinas companion rpc` (ADR 0024): one request on stdin, one JSON reply on stdout, then exit — 0 answered, 1 failed,
-// 2 refused. The Mac's door (app/src-tauri/src/remote.rs) is the only caller. Slice 1: `hello` and `bundle`, which hands
-// back the latest reading as the run loop left it (slice 2 writes it; until then a test or the e2e's fake VPS does).
+// 2 refused. The Mac's door (app/src-tauri/src/remote.rs) is the only caller. `hello`; `bundle`, the latest reading as
+// the run loop left it plus the fleet ledger since the Mac's cursor; `refresh`, a reading now.
 
 import { readFile } from "node:fs/promises";
 import type { Paths } from "./paths.ts";
-import { validate, type Request } from "./validate.ts";
+import { ledgerSince } from "./run.ts";
+import { validate, type Cursor, type Request } from "./validate.ts";
 
 export const RPC_VERSION = 1;
 /** A request is a few hundred bytes; anything past this is not one. */
@@ -15,6 +16,8 @@ export interface RpcDeps {
   version: string;
   /** `herdr --version` at `paths.herdr`, its first `x.y.z`; null when it is not there or says nothing readable. */
   herdrVersion: () => Promise<string | null>;
+  /** One reading now (`run.ts` readOnce), for `refresh`. */
+  readNow: () => Promise<void>;
 }
 
 /** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
@@ -48,14 +51,18 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
       return { reply: { v: RPC_VERSION, companion: { version: deps.version }, herdr: herdr === null ? null : { version: herdr } }, exit: 0 };
     }
     case "bundle":
-      return bundle(deps);
+      return bundle(deps, request.cursor);
     case "refresh":
-      // Slice 2 runs a reading now; until then there is nothing to run.
-      return { reply: { v: RPC_VERSION, refreshed: false }, exit: 0 };
+      try {
+        await deps.readNow();
+        return { reply: { v: RPC_VERSION, refreshed: true }, exit: 0 };
+      } catch {
+        return { reply: { v: RPC_VERSION, error: "reading-failed" }, exit: 1 };
+      }
   }
 }
 
-async function bundle(deps: RpcDeps): Promise<RpcResult> {
+async function bundle(deps: RpcDeps, cursor: Cursor | null): Promise<RpcResult> {
   let text: string;
   try {
     text = await readFile(deps.paths.reading, "utf8");
@@ -65,7 +72,8 @@ async function bundle(deps: RpcDeps): Promise<RpcResult> {
   try {
     const reading = JSON.parse(text) as { v?: unknown };
     if (reading.v !== RPC_VERSION) return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
-    return { reply: reading, exit: 0 };
+    // The ledger is read now, from the Mac's own cursor: the reading on disk is shared, the cursor is the Mac's.
+    return { reply: { ...reading, ledger: ledgerSince(deps.paths.home, cursor) }, exit: 0 };
   } catch {
     return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
   }

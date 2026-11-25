@@ -3,13 +3,14 @@
 // as the scripts and programs printed it — Kinas's own parsers read it on the Mac, so nothing here interprets a fleet
 // beyond picking which PRs to ask `gh` about.
 //
-// It runs only what firstmate.ts lists, `herdr api snapshot` and `pane process-info` on the captain's session, and
+// It runs only what firstmate.ts lists, herdr.ts's `api snapshot` and `pane process-info` on the captain's session, and
 // `gh pr view <url> --json <fields>` for a URL that passed the Mac's own check. Nothing it runs changes anything.
 
 import { run } from "@kinas/context";
 import { closeSync, fstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
+import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
 
 export const READING_VERSION = 1;
@@ -20,7 +21,6 @@ export const PR_GAP_MS = 60_000;
 /** `gh pr view`'s fields: the Mac's `gh.rs` FIELDS, never a title or body. */
 export const GH_FIELDS = "number,state,isDraft,mergeable,reviewDecision,statusCheckRollup";
 const GH_LIMIT_MS = 10_000;
-const HERDR_LIMIT_MS = 5_000;
 /** The most of the ledger one bundle carries, as the Mac's `ledger::READ_CAP`. */
 export const LEDGER_CAP = 4 * 1024 * 1024;
 export const LEDGER_FILE = "state/fleet-ledger.jsonl";
@@ -69,7 +69,8 @@ export interface Deps {
   log: (line: string) => void;
   /** `gh` by the companion's PATH; replaced in tests. */
   gh?: (url: string) => Promise<ScriptOut>;
-  herdr?: (args: string[]) => Promise<string | null>;
+  /** herdr.ts's runner on `session`; replaced in tests. */
+  herdr?: Herdr;
 }
 
 // ---- the fleet, only as far as choosing PRs needs ----
@@ -267,10 +268,9 @@ export function ledgerSince(home: string, cursor: { epoch: string; offset: numbe
 
 // ---- one reading ----
 
-async function herdrDefault(deps: Deps, args: string[]): Promise<string | null> {
-  if (deps.herdr) return deps.herdr(args);
-  const env: Record<string, string> = { PATH: deps.path, HOME: process.env.HOME ?? "" };
-  const r = await run([deps.paths.herdr, "--session", deps.session, ...args], { env, timeoutMs: HERDR_LIMIT_MS });
+async function herdrDefault(deps: Deps, call: HerdrCall): Promise<string | null> {
+  const herdr = deps.herdr ?? herdrAt(deps.paths.herdr, deps.session, deps.path);
+  const r = await herdr(call);
   return r.ok ? r.stdout : null;
 }
 
@@ -291,7 +291,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   const base = { v: READING_VERSION, at, companion: { version: deps.version, since, heartbeat_at: at }, home } as const;
 
   // Herdr's view is read whether or not Firstmate is there: the Mac's chrome wants the first mate's pane.
-  const view = await herdrDefault(deps, ["api", "snapshot"]);
+  const view = await herdrDefault(deps, HERDR.snapshot());
   let foreground: string | null = null;
   if (view !== null) {
     let focused: string | null = null;
@@ -300,7 +300,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
     } catch {
       focused = null;
     }
-    if (focused) foreground = await herdrDefault(deps, ["pane", "process-info", "--pane", focused]);
+    if (focused) foreground = await herdrDefault(deps, HERDR.processInfo(focused));
   }
 
   if (!installed(home)) {

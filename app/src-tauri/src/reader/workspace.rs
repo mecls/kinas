@@ -112,6 +112,12 @@ pub async fn herdr_workspaces(app: tauri::AppHandle) -> Result<Vec<HerdrWorkspac
 #[tauri::command]
 pub async fn herdr_focus_workspace(app: tauri::AppHandle, id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
+        // With the agents on a VPS, its Herdr, through the companion.
+        if crate::crew::on_vps::vps(&app).is_some() {
+            crate::crew::on_vps::focus(&app, &id).map_err(|e| e.message)?;
+            app.state::<crate::readers::runtime::ReaderControl>().crew_herdr();
+            return Ok(());
+        }
         if crate::readers::crew::attached_session().is_none() {
             return Err(NO_HERDR.to_string());
         }

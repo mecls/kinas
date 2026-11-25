@@ -1,4 +1,5 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeFakeHome } from "../fake-firstmate/make.ts";
@@ -14,6 +15,11 @@ import { makeFakeHome } from "../fake-firstmate/make.ts";
 // request on its stdin and HOME the fake home, as a login there has. It answers only `TARGET`; any other target fails as
 // an unresolvable host does, exit 255, and while `down` exists beside it (`setDown`) every call times out as a machine
 // that stopped answering does. Each call's argv goes to `calls.log` beside it, never the request.
+//
+// Slice 3: given a throwaway session (`herdrSession`), the machine's Herdr is this Mac's real one on that session — the
+// companion's `--session default` swapped for it, HOME this Mac's so the client finds the session's server — and
+// `bin/claude` is the stand-in the launcher types. Each Herdr call's argv goes to `herdr.log`. Without one, Herdr says
+// 0.9.5 and answers nothing else, as before.
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const fixtures = join(repo, "fixtures");
@@ -29,6 +35,8 @@ export interface FakeVps {
   root: string;
   /** Every argv the stub was run with, one line each. */
   calls: string;
+  /** Every Herdr argv the companion ran, after `--session default`, one line each (slice 3). */
+  herdrCalls: string;
 }
 
 function script(path: string, body: string) {
@@ -36,7 +44,7 @@ function script(path: string, body: string) {
   chmodSync(path, 0o755);
 }
 
-export function makeFakeVps(dataDir: string): FakeVps {
+export function makeFakeVps(dataDir: string, opts: { herdrSession?: string } = {}): FakeVps {
   const dir = join(dataDir, "fake-vps");
   const home = join(dir, "home");
   const root = join(dir, "companion");
@@ -49,7 +57,20 @@ export function makeFakeVps(dataDir: string): FakeVps {
   mkdirSync(join(root, "state"), { recursive: true });
   copyFileSync(join(fixtures, "companion-bundle.synthetic.json"), join(root, "state", "reading.json"));
   mkdirSync(join(root, "bin"), { recursive: true });
-  script(join(root, "bin", "herdr"), `[ "$1" = "--version" ] || exit 1\necho "herdr 0.9.5"`);
+  const herdrCalls = join(dir, "herdr.log");
+  const session = opts.herdrSession;
+  script(
+    join(root, "bin", "herdr"),
+    session === undefined
+      ? `[ "$1" = "--version" ] || exit 1\necho "herdr 0.9.5"`
+      : [
+          `[ "$1" = "--version" ] && { echo "herdr 0.9.5"; exit 0; }`,
+          `[ "$1" = "--session" ] && [ "$2" = "default" ] || { echo "the fake VPS's Herdr serves default only" >&2; exit 1; }`,
+          `shift 2`,
+          `echo "$*" >> '${herdrCalls}'`,
+          `HOME='${homedir()}' exec '${join(homedir(), ".local/bin/herdr")}' --session '${session}' "$@"`,
+        ].join("\n"),
+  );
   makeFakeHome(root, "firstmate-fleet-snapshot.current.synthetic.json", { clones: true });
 
   const ssh = join(dir, "ssh");
@@ -66,7 +87,7 @@ export function makeFakeVps(dataDir: string): FakeVps {
       `HOME='${home}' KINAS_COMPANION_ROOT='${root}' exec "$@"`,
     ].join("\n"),
   );
-  return { ssh, root, calls };
+  return { ssh, root, calls, herdrCalls };
 }
 
 /** The machine stops answering (`true`) or answers again (`false`), as the stub sees it on its next call. */

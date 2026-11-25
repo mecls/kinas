@@ -771,7 +771,7 @@ export function App() {
             <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} crewError={crewError} />
           </section>
           <section className="page" data-page="work" hidden={page !== "work"}>
-            <WorkPage active={page === "work"} shortcuts={shortcuts} />
+            <WorkPage active={page === "work"} shortcuts={shortcuts} machine={machine} />
           </section>
           <section className="page" data-page="settings" hidden={page !== "settings"}>
             <SettingsPage

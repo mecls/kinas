@@ -6,6 +6,7 @@ import { run } from "@kinas/context";
 import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import { firstmate } from "./firstmate.ts";
+import { herdrAt } from "./herdr.ts";
 import { companionPath, companionPaths, type Paths } from "./paths.ts";
 import { MAX_REQUEST_BYTES, rpc, versionIn } from "./rpc.ts";
 import { lastReading, loop, readOnce, type Deps } from "./run.ts";
@@ -76,7 +77,8 @@ export async function companion(args: string[]): Promise<number> {
       const prev = lastReading(paths);
       await readOnce(runDeps(paths), prev, prev?.companion.since ?? Date.now());
     };
-    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now };
+    const herdr = herdrAt(paths.herdr, SESSION, companionPath(homedir(), executable));
+    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr };
     const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;

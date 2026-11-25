@@ -12,6 +12,8 @@ use tauri::{AppHandle, Manager};
 pub(crate) const PLACE_KEY: &str = "place";
 pub(crate) const TARGET_KEY: &str = "vps_target";
 pub(crate) const LABEL_KEY: &str = "vps_label";
+/// Emitted when Settings saves a different place: the Work page's pane starts again on it.
+pub(crate) const PLACE_CHANGED: &str = "place_changed";
 
 const TARGET_HELP: &str = "Write it as user@host, host, or an ssh alias.";
 const LABEL_HELP: &str = "A label is 1 to 32 lowercase letters, digits and dashes.";
@@ -102,14 +104,20 @@ pub async fn get_place(app: AppHandle) -> Result<Place, PlaceError> {
 #[tauri::command]
 pub async fn set_place(app: AppHandle, place: Place) -> Result<Place, PlaceError> {
     tauri::async_runtime::spawn_blocking(move || {
-        let saved = {
+        let (before, saved) = {
             let store = app.state::<Store>();
             let conn = store.conn();
-            save(&conn, store.org_id(), &place).map(|_| self::place(&conn, store.org_id()))
+            let before = self::place(&conn, store.org_id());
+            (before, save(&conn, store.org_id(), &place).map(|_| self::place(&conn, store.org_id())))
         };
         let saved = saved.map_err(|m| PlaceError { message: m.to_string() })?;
         log::info!("place: {}", if saved == Place::Mac { "this Mac" } else { "a VPS" });
         app.state::<crate::readers::runtime::ReaderControl>().refresh();
+        // The Work page's pane attaches where the agents run (slice 3.1): a new place starts it again there.
+        if saved != before {
+            use tauri::Emitter;
+            let _ = app.emit(PLACE_CHANGED, ());
+        }
         Ok(saved)
     })
     .await

@@ -103,6 +103,14 @@ pub(crate) enum Request {
     Bundle { cursor: Option<Cursor> },
     /// A reading on the VPS now (Refresh readings), before the bundle that carries it.
     Refresh,
+    /// Herdr's view of `default` and its focused pane's foreground, read now (slice 3): the chrome and an order's pane.
+    View,
+    /// The launcher, on the VPS (slice 3): focus the first mate, or start it with exactly its program.
+    LaunchFirstMate,
+    /// Focus a workspace Herdr has on the VPS: a worker's pane, the palette's choice.
+    Focus { workspace: String },
+    /// Open in the terminal: a Mac folder's twin under the VPS's projects folder, by its relative path and label.
+    OpenWorkspace { folder: String, label: String },
 }
 
 impl Request {
@@ -111,6 +119,10 @@ impl Request {
             Request::Hello => "hello",
             Request::Bundle { .. } => "bundle",
             Request::Refresh => "refresh",
+            Request::View => "view",
+            Request::LaunchFirstMate => "launch-first-mate",
+            Request::Focus { .. } => "focus",
+            Request::OpenWorkspace { .. } => "open-workspace",
         }
     }
 }
@@ -284,6 +296,17 @@ mod tests {
         assert!(!args.iter().any(|a| a.contains("bundle") || a.contains("e1")), "{args:?}");
         assert_eq!(String::from_utf8(input).unwrap(), "{\"verb\":\"bundle\",\"cursor\":{\"epoch\":\"e1\",\"offset\":42,\"events\":7}}\n");
         assert_eq!(cwd.as_deref(), Some(Path::new("/tmp")));
+    }
+
+    /// Slice 3: each action is the shape the companion's validator accepts (cli/src/companion/validate.ts), word for word.
+    #[test]
+    fn the_actions_are_the_companion_s_shapes() {
+        let json = |r: &Request| serde_json::to_string(r).unwrap();
+        assert_eq!(json(&Request::View), r#"{"verb":"view"}"#);
+        assert_eq!(json(&Request::LaunchFirstMate), r#"{"verb":"launch-first-mate"}"#);
+        assert_eq!(json(&Request::Focus { workspace: "w3".into() }), r#"{"verb":"focus","workspace":"w3"}"#);
+        assert_eq!(json(&Request::OpenWorkspace { folder: "kinas/docs".into(), label: "kinas/docs".into() }), r#"{"verb":"open-workspace","folder":"kinas/docs","label":"kinas/docs"}"#);
+        assert_eq!(Request::OpenWorkspace { folder: String::new(), label: String::new() }.name(), "open-workspace");
     }
 
     #[test]

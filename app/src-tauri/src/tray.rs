@@ -102,21 +102,28 @@ fn waiting(app: &AppHandle) -> u32 {
     crate::crew::read::waiting(&conn, store.org_id()).unwrap_or(0)
 }
 
+/// Reads off the calling thread, then sets the title and the menu on the main thread. The tray handle holds an `Rc`:
+/// cloned and dropped on two threads at once — the crew answering while a reader refreshes — its count could reach
+/// zero and remove the status item off the main thread, which AppKit stops with a trap (seen in the e2e, 2026-11-24).
+/// So `tray_by_id` and everything it returns live on the main thread only.
 pub fn refresh(app: &AppHandle) {
-    let Some(tray) = app.tray_by_id(TRAY_ID) else { return };
     let Some(snapshot) = read(app) else { return };
     let waiting = waiting(app);
     let (subscription, window) = chosen_quota(app);
     let chosen = snapshot.quotas.iter().find(|q| q.subscription == subscription && q.window == window);
     let title = menu_title(chosen.map(|q| (q.used_pct, q.state)), waiting);
-    let _ = tray.set_title(Some(title.as_str()));
-    *TITLE.lock().unwrap_or_else(|p| p.into_inner()) = title;
-    match build_menu(app, &snapshot, waiting) {
-        Ok(menu) => {
-            let _ = tray.set_menu(Some(menu));
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(tray) = handle.tray_by_id(TRAY_ID) else { return };
+        let _ = tray.set_title(Some(title.as_str()));
+        *TITLE.lock().unwrap_or_else(|p| p.into_inner()) = title;
+        match build_menu(&handle, &snapshot, waiting) {
+            Ok(menu) => {
+                let _ = tray.set_menu(Some(menu));
+            }
+            Err(e) => log::error!("tray menu: {e}"),
         }
-        Err(e) => log::error!("tray menu: {e}"),
-    }
+    });
 }
 
 fn build_menu(app: &AppHandle, snapshot: &UsageSnapshot, waiting: u32) -> tauri::Result<Menu<Wry>> {

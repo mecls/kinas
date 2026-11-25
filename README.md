@@ -263,7 +263,7 @@ pane that paints its own 24-bit dark theme does not follow; Claude Code, for one
 | `KINAS_COMPANION_ROOT=<path>` | all (companion) | Where `kinas companion` keeps its state and finds Firstmate's home and Herdr — `<path>/state`, `<path>/firstmate`, `<path>/bin/herdr` — instead of `~/.local/state/kinas`, `~/.local/share/kinas/firstmate` and `~/.local/bin/herdr` (added 2026-11-17, the factory in the cloud; Herdr 2026-11-24) |
 | `KINAS_COMPANION_CLOUD=file:<path>` | all (companion) | The companion writes its cloud calls to that file instead of Convex — a local fake (added 2026-11-17) |
 | `KINAS_E2E_SSH=<path>` | debug | The door runs this program instead of `/usr/bin/ssh`, with the same argv and stdin — a stub that runs the companion locally (added 2026-11-17) |
-| `KINAS_E2E_HERDR_REMOTE=local` | debug | With a VPS set, the Work page attaches the local throwaway session instead of `herdr --remote` (added 2026-11-17) |
+| `KINAS_E2E_HERDR_REMOTE=local` | debug | With a VPS set, the Work page attaches the throwaway session `KINAS_HERDR_SESSION` on this Mac instead of `herdr --remote`, or a plain shell when none is set. `KINAS_PANE_SHELL_ONLY=1`, every spec's default, still gives a plain shell first, so no spec runs a real ssh (added 2026-11-17; as built 2026-11-24) |
 
 The WebDriver plugin and the `window.__kinasTest` hooks exist only in debug builds with the `e2e` feature and
 `TAURI_ENV_DEBUG`; release builds contain neither.

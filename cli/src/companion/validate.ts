@@ -8,11 +8,39 @@ export interface Cursor {
   events: number;
 }
 
-export type Request = { verb: "hello" } | { verb: "bundle"; cursor: Cursor | null } | { verb: "refresh" };
+export type Request =
+  | { verb: "hello" }
+  | { verb: "bundle"; cursor: Cursor | null }
+  | { verb: "refresh" }
+  | { verb: "view" }
+  | { verb: "launch-first-mate" }
+  | { verb: "focus"; workspace: string }
+  | { verb: "open-workspace"; folder: string; label: string };
 
 export type Validated = Request | { refused: string };
 
 const MAX_STRING = 256;
+/** A folder's path under the projects folder, as the Mac's reader allows one. */
+const MAX_FOLDER = 1024;
+/** Open in the terminal's label (reader/workspace.rs `MAX_LABEL_CHARS`). */
+const MAX_LABEL_CHARS = 80;
+
+/** A Herdr workspace id as Herdr prints one (`w3`): letters, digits, `:`, `_`, `-`. */
+export function workspaceId(v: unknown): v is string {
+  return typeof v === "string" && /^[A-Za-z0-9:_-]{1,64}$/.test(v);
+}
+
+/** A folder under the projects folder: `""` (the folder itself) or relative parts, none empty, `.` or `..`. */
+export function relativeFolder(v: unknown): v is string {
+  if (typeof v !== "string" || v.length > MAX_FOLDER || /[\u0000-\u001f\u007f]/.test(v)) return false;
+  if (v === "") return true;
+  return !v.startsWith("/") && v.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+}
+
+/** A workspace label: 1–80 characters and no control character. */
+export function label(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0 && [...v].length <= MAX_LABEL_CHARS && !/[\u0000-\u001f\u007f]/.test(v);
+}
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -39,7 +67,9 @@ export function validate(input: unknown): Validated {
   if (!isObject(input)) return { refused: "the request is not an object" };
   switch (input.verb) {
     case "hello":
-    case "refresh": {
+    case "refresh":
+    case "view":
+    case "launch-first-mate": {
       const extra = onlyKeys(input, ["verb"]);
       return extra ? { refused: extra } : { verb: input.verb };
     }
@@ -48,6 +78,18 @@ export function validate(input: unknown): Validated {
       if (extra) return { refused: extra };
       const cursor = cursorOf(input.cursor);
       return typeof cursor === "string" ? { refused: cursor } : { verb: "bundle", cursor };
+    }
+    case "focus": {
+      const extra = onlyKeys(input, ["verb", "workspace"]);
+      if (extra) return { refused: extra };
+      return workspaceId(input.workspace) ? { verb: "focus", workspace: input.workspace } : { refused: "workspace is not a Herdr workspace id" };
+    }
+    case "open-workspace": {
+      const extra = onlyKeys(input, ["verb", "folder", "label"]);
+      if (extra) return { refused: extra };
+      if (!relativeFolder(input.folder)) return { refused: "folder is not a folder under the projects folder" };
+      if (!label(input.label)) return { refused: "label is not a workspace label" };
+      return { verb: "open-workspace", folder: input.folder, label: input.label };
     }
     default:
       return { refused: "unknown verb" };

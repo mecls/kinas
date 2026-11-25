@@ -334,6 +334,8 @@ export const crewErrorOf = (e: unknown): string =>
   e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string" ? (e as { message: string }).message : String(e);
 /** What the Work page's chrome says about the pane (build spec §4 Work). */
 export interface PaneState {
+  /** The VPS's label while the pane attaches one (DESIGN.md 1.14); null on this Mac. */
+  place: string | null;
   session: string;
   workspace: string | null;
   word: CrewWord | null;
@@ -341,6 +343,8 @@ export interface PaneState {
   stale: boolean;
 }
 export const crewPaneState = () => invoke<PaneState>("crew_pane_state");
+/** Settings → Where agents run changed the place: the Work page's pane starts again on the new one. */
+export const onPlaceChanged = (handler: () => void): Promise<UnlistenFn> => listen("place_changed", handler);
 export const setCrewVisible = (visible: boolean) => invoke<void>("set_crew_visible", { visible });
 export const onCrewChanged = (handler: () => void): Promise<UnlistenFn> => listen("crew_changed", handler);
 

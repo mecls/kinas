@@ -8,6 +8,7 @@ pub(crate) mod firstmate;
 pub(crate) mod focus;
 pub(crate) mod home;
 pub(crate) mod launch;
+pub(crate) mod on_vps;
 pub(crate) mod orders;
 pub(crate) mod pin;
 pub(crate) mod read;
@@ -31,7 +32,8 @@ use tools::{Health, ToolState};
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct CrewError {
     code: &'static str,
-    message: String,
+    /// The one line the screen shows; read outside the crew where another error type carries it (Open in the terminal).
+    pub(crate) message: String,
 }
 
 impl CrewError {
@@ -136,6 +138,18 @@ pub fn set_crew_visible(control: State<'_, ReaderControl>, visible: bool) {
     control.set_crew_visible(visible);
 }
 
+/// The launcher where the agents run: this Mac's (`launch::launch`, with this Mac's tools checked first), or the VPS's
+/// through its companion (`on_vps::launch`, which applies the same rules there). Probes at most once a minute; a tool
+/// the captain just installed is seen after Refresh readings.
+fn launch_by_place(app: &AppHandle) -> Result<launch::Launched, CrewError> {
+    if on_vps::vps(app).is_some() {
+        return on_vps::launch(app);
+    }
+    let home = crew_home(app);
+    let (health, _) = tools::health(&home, now_ms());
+    launch::launch(&home, &health, &launch::Ask::None)
+}
+
 /// **Launch the first mate** and **First mate** on the Crew page, the palette's Go to the first mate, Home's Launch
 /// task while the first mate runs (§11.3 Launching): the launcher, its one log line, then a fresh Herdr view so the
 /// page reads as running.
@@ -143,10 +157,7 @@ pub fn set_crew_visible(control: State<'_, ReaderControl>, visible: bool) {
 pub async fn crew_launch(app: AppHandle) -> Result<launch::Launched, CrewError> {
     tauri::async_runtime::spawn_blocking(move || {
         let started = std::time::Instant::now();
-        let home = crew_home(&app);
-        // Probes at most once a minute; a tool the captain just installed is seen after Refresh readings.
-        let (health, _) = tools::health(&home, now_ms());
-        let launched = launch::launch(&home, &health, &launch::Ask::None)?;
+        let launched = launch_by_place(&app)?;
         log::info!("crew: launched ({}) in {} ms", launched.word(), started.elapsed().as_millis());
         app.state::<ReaderControl>().crew_herdr();
         Ok(launched)
@@ -237,13 +248,19 @@ pub async fn crew_focus_pane(app: AppHandle, task: String) -> Result<(), CrewErr
             let conn = store.conn();
             read::fresh_worker(&conn, store.org_id(), &task, now_ms()).map_err(|e| CrewError::internal(format!("could not read the worker: {e}")))?
         };
-        let session = crate::readers::crew::attached_session();
+        let on_vps = on_vps::vps(&app).is_some();
+        // The session the workers were read in: the VPS's `default`, or the one this Mac's pane attaches.
+        let session = if on_vps { Some(crate::readers::crew::REMOTE_SESSION.to_string()) } else { crate::readers::crew::attached_session() };
         let workspace = worker
             .filter(|(s, _)| session.as_deref() == Some(s.as_str()))
             .and_then(|(_, workspace)| workspace)
             .ok_or_else(|| CrewError { code: "no_task", message: "That task has no pane in this session".into() })?;
-        let herdr = crate::herdr::find_herdr().ok_or_else(|| CrewError { code: "herdr_not_installed", message: crate::herdr::NOT_INSTALLED.into() })?;
-        crate::herdr::workspace_focus(&herdr, &workspace).map_err(|_| CrewError { code: "herdr_not_running", message: crate::herdr::NOT_RUNNING.into() })?;
+        if on_vps {
+            on_vps::focus(&app, &workspace)?;
+        } else {
+            let herdr = crate::herdr::find_herdr().ok_or_else(|| CrewError { code: "herdr_not_installed", message: crate::herdr::NOT_INSTALLED.into() })?;
+            crate::herdr::workspace_focus(&herdr, &workspace).map_err(|_| CrewError { code: "herdr_not_running", message: crate::herdr::NOT_RUNNING.into() })?;
+        }
         app.state::<ReaderControl>().crew_herdr();
         Ok(())
     })
@@ -282,9 +299,7 @@ pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer
         crate::tray::refresh(&app);
         log::info!("crew: answer copied");
         let started = std::time::Instant::now();
-        let home = crew_home(&app);
-        let (health, _) = tools::health(&home, now_ms());
-        let launched = launch::launch(&home, &health, &launch::Ask::None)?;
+        let launched = launch_by_place(&app)?;
         log::info!("crew: launched ({}) in {} ms", launched.word(), started.elapsed().as_millis());
         app.state::<ReaderControl>().crew_herdr();
         Ok(launched)
@@ -300,11 +315,18 @@ pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer
 pub async fn crew_record_order(app: AppHandle, text: String) -> Result<bool, CrewError> {
     tauri::async_runtime::spawn_blocking(move || {
         let Some(text) = orders::clean(&text) else { return Ok(false) };
-        if crate::readers::crew::attached_session().is_none() {
-            return Ok(false);
-        }
-        let Some(herdr) = crate::herdr::find_herdr() else { return Ok(false) };
-        let Ok(view) = crate::herdr::api_snapshot(&herdr) else { return Ok(false) };
+        // Attributed against a view read now: this Mac's Herdr, or the VPS's through its companion (`view`).
+        let view = if on_vps::vps(&app).is_some() {
+            let Some((view, _)) = on_vps::view(&app) else { return Ok(false) };
+            view
+        } else {
+            if crate::readers::crew::attached_session().is_none() {
+                return Ok(false);
+            }
+            let Some(herdr) = crate::herdr::find_herdr() else { return Ok(false) };
+            let Ok(view) = crate::herdr::api_snapshot(&herdr) else { return Ok(false) };
+            view
+        };
         let recorded = {
             let store = app.state::<Store>();
             let conn = store.conn();
@@ -354,9 +376,16 @@ pub async fn crew_add(app: AppHandle, path: String) -> Result<Added, CrewError> 
             return Err(CrewError { code: "already_in_crew", message: "Already in the crew".into() });
         }
         let sentence = repo::sentence(&url);
-        let home = crew_home(&app);
-        let (health, _) = tools::health(&home, now_ms());
-        let launched = launch::launch(&home, &health, &launch::Ask::Add(sentence.clone()))?;
+        // On a VPS the companion types only the first mate's program, never words from the Mac (slice 3): the first
+        // mate is started or focused there, and the sentence goes on the clipboard for the captain to paste.
+        let launched = if on_vps::vps(&app).is_some() {
+            on_vps::launch(&app)?;
+            launch::Launched::Focused
+        } else {
+            let home = crew_home(&app);
+            let (health, _) = tools::health(&home, now_ms());
+            launch::launch(&home, &health, &launch::Ask::Add(sentence.clone()))?
+        };
         let added = if launched == launch::Launched::Focused {
             on_main(&app, &sentence).map_err(|e| CrewError { code: "clipboard", message: format!("Could not put the ask on the clipboard: {e}") })?;
             Added::Copied
@@ -388,6 +417,8 @@ fn on_main(app: &AppHandle, line: &str) -> Result<(), String> {
 /// drops the badge once it is 15 s old. Nothing is drawn from a guess.
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct PaneState {
+    /// The VPS's label while the pane attaches one (DESIGN.md 1.14: `vps-1 · default · shop`); None on this Mac.
+    pub place: Option<String>,
     pub session: String,
     pub workspace: Option<String>,
     pub word: Option<&'static str>,
@@ -399,16 +430,19 @@ const PANE_STALE_MS: i64 = 15_000;
 
 #[tauri::command]
 pub fn crew_pane_state(app: AppHandle) -> PaneState {
+    // The place is read from the store: one indexed row, as every command that routes by place does.
+    let place = on_vps::vps(&app).map(|(_, label)| label);
     let pane = crate::pty::pane_session();
-    if pane.shell {
-        return PaneState { session: pane.session, workspace: None, word: None, profile: Some("plain shell".into()), stale: false };
+    if pane.shell && place.is_none() {
+        return PaneState { place: None, session: pane.session, workspace: None, word: None, profile: Some("plain shell".into()), stale: false };
     }
     let live = app.state::<CrewLive>().live();
     let now = now_ms();
     if wants_fresh_view(&live, now) {
         app.state::<ReaderControl>().crew_herdr();
     }
-    pane_state_of(pane.session, &live, now)
+    let session = if place.is_some() { crate::readers::crew::REMOTE_SESSION.to_string() } else { pane.session };
+    PaneState { place, ..pane_state_of(session, &live, now) }
 }
 
 /// Whether the view is old enough to ask the crew's thread for a fresh one: a gap, not a moment to reach again — a view
@@ -419,7 +453,7 @@ fn wants_fresh_view(live: &crate::readers::crew::LiveView, now: i64) -> bool {
 
 fn pane_state_of(session: String, live: &crate::readers::crew::LiveView, now: i64) -> PaneState {
     let stale = live.view.is_none() || !(0..=PANE_STALE_MS).contains(&(now - live.observed_at));
-    let Some(view) = live.view.as_ref() else { return PaneState { session, workspace: None, word: None, profile: None, stale } };
+    let Some(view) = live.view.as_ref() else { return PaneState { place: None, session, workspace: None, word: None, profile: None, stale } };
     let focused = view.focused_pane.as_deref().and_then(|id| view.pane(id));
     let worker = focused.and_then(|p| live.worker_words.get(&p.id));
     let workspace = match (focused, worker) {
@@ -431,7 +465,7 @@ fn pane_state_of(session: String, live: &crate::readers::crew::LiveView, now: i6
         Some((_, harness)) => harness.clone(),
         None => live.focused_foreground.iter().any(|a| a == "claude" || a.ends_with("/claude")).then(|| "claude".to_string()),
     };
-    PaneState { session, workspace, word: worker.map(|(w, _)| *w).filter(|_| !stale), profile, stale }
+    PaneState { place: None, session, workspace, word: worker.map(|(w, _)| *w).filter(|_| !stale), profile, stale }
 }
 
 /// Settings → Crew, and the Crew page's tool table (§4 Settings).
@@ -579,9 +613,9 @@ mod tests {
     fn the_chrome_says_only_what_is_known() {
         let now = 100_000;
         let first_mate = pane_state_of("default".into(), &live("w1:p1", &["caffeinate", "claude"], now), now);
-        assert_eq!(first_mate, PaneState { session: "default".into(), workspace: Some("firstmate".into()), word: None, profile: Some("claude".into()), stale: false });
+        assert_eq!(first_mate, PaneState { place: None, session: "default".into(), workspace: Some("firstmate".into()), word: None, profile: Some("claude".into()), stale: false });
         let worker = pane_state_of("default".into(), &live("w2:p2", &["claude"], now), now);
-        assert_eq!(worker, PaneState { session: "default".into(), workspace: Some("fm-shop-9c2e".into()), word: Some("working"), profile: Some("claude".into()), stale: false });
+        assert_eq!(worker, PaneState { place: None, session: "default".into(), workspace: Some("fm-shop-9c2e".into()), word: Some("working"), profile: Some("claude".into()), stale: false });
         let shell = pane_state_of("default".into(), &live("w3:p1", &["zsh"], now), now);
         assert_eq!((shell.workspace.as_deref(), shell.word, shell.profile), (Some("kinas"), None, None));
         let old = pane_state_of("default".into(), &live("w2:p2", &["claude"], now - 16_000), now);

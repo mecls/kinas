@@ -44,10 +44,10 @@ function world(opts: { clones?: boolean; snapshot?: string } = {}): World {
       gh.push(url);
       return { exit: 0, timed_out: false, stdout: JSON.stringify({ number: Number(url.split("/").pop()), state: "OPEN" }), stderr_first: null };
     },
-    herdr: async (args) => {
-      herdr.push(args);
-      if (args[0] === "api") return readFileSync(join(FIXTURES, "herdr-api-snapshot.captured.json"), "utf8");
-      return readFileSync(join(FIXTURES, "herdr-process-info.claude.captured.json"), "utf8");
+    herdr: async (call) => {
+      herdr.push([...call.args]);
+      if (call.args[0] === "api") return { ok: true, stdout: readFileSync(join(FIXTURES, "herdr-api-snapshot.captured.json"), "utf8") };
+      return { ok: true, stdout: readFileSync(join(FIXTURES, "herdr-process-info.claude.captured.json"), "utf8") };
     },
   };
   const calls = () => {

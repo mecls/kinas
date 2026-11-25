@@ -10,7 +10,7 @@ const FIXTURE = join(import.meta.dir, "..", "..", "..", "fixtures", "companion-b
 function deps() {
   const root = mkdtempSync(join(tmpdir(), "kinas-companion-"));
   const paths = companionPaths({ KINAS_COMPANION_ROOT: root });
-  return { paths, version: "0.1.0", herdrVersion: async (): Promise<string | null> => "0.9.5", readNow: async () => {}, now: () => 1_794_834_015_000 };
+  return { paths, version: "0.1.0", herdrVersion: async (): Promise<string | null> => "0.9.5", readNow: async () => {}, now: () => 1_794_834_015_000, herdr: async () => ({ ok: false, stdout: "" }) };
 }
 
 describe("kinas companion rpc (slice 1)", () => {
@@ -20,12 +20,16 @@ describe("kinas companion rpc (slice 1)", () => {
       home: "/r/firstmate",
       reading: "/r/state/reading.json",
       herdr: "/r/bin/herdr",
+      projects: "/r/projects",
+      claude: "/r/bin/claude",
     });
     expect(companionPaths({}, "/home/captain")).toEqual({
       state: "/home/captain/.local/state/kinas",
       home: "/home/captain/.local/share/kinas/firstmate",
       reading: "/home/captain/.local/state/kinas/reading.json",
       herdr: "/home/captain/.local/bin/herdr",
+      projects: "/home/captain/projects",
+      claude: "claude",
     });
   });
 

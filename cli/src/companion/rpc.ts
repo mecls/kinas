@@ -1,8 +1,13 @@
 // `kinas companion rpc` (ADR 0024): one request on stdin, one JSON reply on stdout, then exit — 0 answered, 1 failed,
 // 2 refused. The Mac's door (app/src-tauri/src/remote.rs) is the only caller. `hello`; `bundle`, the latest reading as
-// the run loop left it plus the fleet ledger since the Mac's cursor; `refresh`, a reading now.
+// the run loop left it plus the fleet ledger since the Mac's cursor; `refresh`, a reading now; `view`, Herdr's view now;
+// and the Herdr actions
+// (actions.ts) — `launch-first-mate`, `focus`, `open-workspace` — whose outcome is `{ done }` or `{ cannot }`, exit 0
+// either way: "not there" is an answer the Mac puts in words, and a non-zero exit would lose it at the door.
 
 import { readFile } from "node:fs/promises";
+import { focusWorkspace, launchFirstMate, openWorkspace, viewNow } from "./actions.ts";
+import type { Herdr } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
 import { ledgerSince } from "./run.ts";
 import { validate, type Cursor, type Request } from "./validate.ts";
@@ -19,6 +24,8 @@ export interface RpcDeps {
   /** One reading now (`run.ts` readOnce), for `refresh`. */
   readNow: () => Promise<void>;
   now: () => number;
+  /** herdr.ts's runner on the `default` session, for the actions. */
+  herdr: Herdr;
 }
 
 /** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
@@ -60,6 +67,14 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
       } catch {
         return { reply: { v: RPC_VERSION, error: "reading-failed" }, exit: 1 };
       }
+    case "view":
+      return { reply: { v: RPC_VERSION, ...(await viewNow(deps)) }, exit: 0 };
+    case "launch-first-mate":
+      return { reply: { v: RPC_VERSION, ...(await launchFirstMate(deps)) }, exit: 0 };
+    case "focus":
+      return { reply: { v: RPC_VERSION, ...(await focusWorkspace(deps, request.workspace)) }, exit: 0 };
+    case "open-workspace":
+      return { reply: { v: RPC_VERSION, ...(await openWorkspace(deps, request.folder, request.label)) }, exit: 0 };
   }
 }
 

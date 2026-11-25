@@ -97,7 +97,7 @@ describe("the agents' machine on the bar (DESIGN.md 1.14; build spec §4, Journe
   });
 
   test("each of the four states has its word, and the hover says when", () => {
-    expect(machineOf(status({}), now)).toEqual({ name: "vps-1", state: "connected", word: "connected", detail: `vps-1 · connected · last reading ${at(now - 15_000)}` });
+    expect(machineOf(status({}), now)).toEqual({ name: "vps-1", state: "connected", word: "connected", detail: `vps-1 · connected · last reading ${at(now - 15_000)}`, since: null, failing: false });
     expect(machineOf(status({ state: "reconnecting", since: now - 10_000, problem: "can't reach vps-1: timed out" }), now)?.detail).toBe(
       `vps-1 · reconnecting · last reading ${at(now - 15_000)} · can't reach vps-1: timed out`,
     );

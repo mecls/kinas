@@ -51,6 +51,10 @@ export interface Machine {
   /** The word the bar shows. */
   word: string;
   detail: string;
+  /** When the door started failing; null while it works. */
+  since: number | null;
+  /** The door has failed since its last success — not merely untried yet, as at start. */
+  failing: boolean;
 }
 
 const MACHINE_WORD: Record<MachineState, string> = {
@@ -70,5 +74,12 @@ export function machineOf(status: PlaceStatus | null, now: number): Machine | nu
       : status.state === "not_running"
         ? `${status.label} · reached, but its reading loop has stopped · ${last}`
         : `${status.label} · ${MACHINE_WORD[status.state]} · ${last}`;
-  return { name: status.label, state: status.state, word: MACHINE_WORD[status.state], detail: status.problem ? `${detail} · ${status.problem}` : detail };
+  return {
+    name: status.label,
+    state: status.state,
+    word: MACHINE_WORD[status.state],
+    detail: status.problem ? `${detail} · ${status.problem}` : detail,
+    since: status.since,
+    failing: status.problem !== null,
+  };
 }

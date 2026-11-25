@@ -51,7 +51,7 @@ const PR_FRESH_HIDDEN_MS: i64 = 300_000;
 /// The lane reading runs at most this often, Firstmate's own publish interval (build spec §11.5 decision 4).
 const CAPACITY_GAP_MS: i64 = 30_000;
 /// Herdr's session the crew runs in on the VPS (ADR 0024): the workers' endpoints are read against it.
-const REMOTE_SESSION: &str = "default";
+pub(crate) const REMOTE_SESSION: &str = "default";
 
 /// Herdr's last answer (build spec §11.2): the session's view and the focused pane's foreground programs, shared
 /// with the commands (the Crew page's running state, the chrome) behind a lock no one holds across a process.
@@ -159,7 +159,9 @@ pub(crate) fn attached_session() -> Option<String> {
 /// crew's thread holds while it is younger than `max_age_ms`, else asked of Herdr now and kept for the thread too. None
 /// for a plain-shell pane — Kinas asks Herdr nothing then — or when Herdr does not answer.
 pub(crate) fn live_view(app: &AppHandle, max_age_ms: i64) -> Option<View> {
-    attached_session()?;
+    if !vps_set(app) {
+        attached_session()?;
+    }
     let live = app.state::<CrewLive>().live();
     if held_is_fresh(&live, now_ms(), max_age_ms) {
         return live.view;
@@ -173,15 +175,27 @@ fn held_is_fresh(live: &LiveView, now: i64, max_age_ms: i64) -> bool {
 }
 
 /// Asks Herdr for the session's view and the focused pane's foreground, and keeps it. None when Herdr did not answer.
+/// With the agents on a VPS, its Herdr through the companion (`view`, slice 3): the chrome and the palette read it as
+/// fresh as this Mac's.
 fn refresh_live(app: &AppHandle) -> Option<View> {
     let now = now_ms();
     let crew = app.state::<CrewLive>();
     let previous = crew.live();
-    let answer = attached_session().and_then(|_| herdr::find_herdr()).and_then(|bin| {
-        let view = herdr::api_snapshot(&bin).ok()?;
-        let fg = view.focused_pane.as_deref().map(|p| herdr::foreground(&bin, p).unwrap_or_default()).unwrap_or_default();
-        Some((view, fg))
-    });
+    let answer = if vps_set(app) {
+        // While the door is failing, the bundle's own reading tries it again every cycle; a view asked meanwhile would
+        // hold this thread for ssh's connect timeout on every chrome poll. The last view is kept, its age unchanged, so
+        // the chrome's badge goes stale as it would, and the next good bundle clears the flag.
+        if crew.remote_failing_since().is_some() {
+            return previous.view;
+        }
+        crate::crew::on_vps::view(app)
+    } else {
+        attached_session().and_then(|_| herdr::find_herdr()).and_then(|bin| {
+            let view = herdr::api_snapshot(&bin).ok()?;
+            let fg = view.focused_pane.as_deref().map(|p| herdr::foreground(&bin, p).unwrap_or_default()).unwrap_or_default();
+            Some((view, fg))
+        })
+    };
     let (view, focused_foreground) = match answer {
         Some((v, fg)) => (Some(v), fg),
         None => (None, Vec::new()),
@@ -276,14 +290,11 @@ pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx:
             schedule.finished(now_ms(), ok);
             due = None;
         } else if herdr_pending && now >= herdr_due(last_herdr, now) {
-            // Herdr only, for the chrome or after a launch — this Mac's Herdr, so never with the agents on a VPS, whose
-            // view comes with each bundle.
+            // Herdr only, for the chrome or after a launch: this Mac's Herdr, or the VPS's through its companion.
             last_herdr = now;
             herdr_pending = false;
-            if !on_vps {
-                let view = refresh_live(&app);
-                first_answer(&app, started_at, &mut first_answer_seen, view.as_ref());
-            }
+            let view = refresh_live(&app);
+            first_answer(&app, started_at, &mut first_answer_seen, view.as_ref());
         }
     }
 }
@@ -322,7 +333,12 @@ fn first_answer(app: &AppHandle, started_at: i64, seen: &mut bool, view: Option<
         return;
     }
     if let Some(id) = start_focus(started_at, now_ms(), view) {
-        if herdr::find_herdr().is_some_and(|bin| herdr::workspace_focus(&bin, &id).is_ok()) {
+        let focused = if vps_set(app) {
+            crate::crew::on_vps::focus(app, &id).is_ok()
+        } else {
+            herdr::find_herdr().is_some_and(|bin| herdr::workspace_focus(&bin, &id).is_ok())
+        };
+        if focused {
             log::info!("crew: focused the first mate at start");
             // The chrome reads the pane that is focused now.
             app.state::<ReaderControl>().crew_herdr();
@@ -340,7 +356,7 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
         crate::place::place(&conn, store.org_id())
     };
     if let crate::place::Place::Vps { target, label } = place {
-        return cycle_remote(app, &target, &label, memo);
+        return cycle_remote(app, &target, &label, memo, started_at, first_answer_seen);
     }
     let started = Instant::now();
     // Herdr is asked whether or not Firstmate is installed: the chrome and the start focus need its view.
@@ -407,7 +423,7 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
 /// `refresh` when the captain asked for fresh readings — then the same parsers and the same `mirror::record` as a local
 /// cycle, on what the VPS's scripts, Herdr and `gh` printed there. A failed call writes no crew table (ADR 0004): the crew
 /// reader's row says why, and `vps_reachability` keeps the rest.
-fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo) -> bool {
+fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo, started_at: i64, first_answer_seen: &mut bool) -> bool {
     let started = Instant::now();
     let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
     if std::mem::take(&mut memo.remote_refresh) {
@@ -448,6 +464,7 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo) -> 
             live.set_remote_installed(b.installed);
             *live.remote_lanes_on.lock().unwrap_or_else(|p| p.into_inner()) = b.installed && b.capacity.is_some();
             let view = remote_live(app, &b, now);
+            first_answer(app, started_at, first_answer_seen, view.as_ref());
             if !b.installed {
                 let conn = store.conn();
                 let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::NotConfigured("Firstmate isn't installed on the VPS"), now);

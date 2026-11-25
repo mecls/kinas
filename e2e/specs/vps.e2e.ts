@@ -2,7 +2,8 @@ import { $, browser, expect } from "@wdio/globals";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { LABEL, setDown, TARGET } from "../fake-vps/make.ts";
-import { APP_LOG } from "../helpers.ts";
+import { APP_LOG, herdr, herdrSnapshot } from "../helpers.ts";
+import { VPS_SESSION } from "./vps.setup.ts";
 
 // Agents on a VPS (tasks/cloud-factory, build spec §12 slice 1.5; ADRs 0022–0024), against the fake VPS of
 // vps.setup.ts: a stub ssh in place of /usr/bin/ssh, the CLI this run built as the machine's `.local/bin/kinas`, and the
@@ -10,7 +11,11 @@ import { APP_LOG } from "../helpers.ts";
 // Settings, the door's argv exactly as ADR 0024 fixes it, the Reachable row, and the Crew board drawn from the VPS.
 // Case 2, Journey C (slice 2.4): the machine stops answering and comes back — the board keeps its last reading, the
 // status bar's VPS part goes connected → reconnecting → unreachable → connected, and Refresh readings has the companion
-// read the fake Firstmate home there.
+// read the fake Firstmate home there. The Work page's chrome says the same: unreachable since, the pane dimmed.
+// Case 3, slice 3.3: the Work pane attaches the "VPS's" Herdr — the throwaway session `kinas-e2e-vps`, through
+// KINAS_E2E_HERDR_REMOTE=local — its chrome naming the place first, and Launch the first mate runs the launcher there
+// through the companion: the workspace made in Firstmate's home on that side, the stand-in `claude` typed exactly, and
+// a second launch focusing it without typing again.
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const calls = join(dataDir, "fake-vps", "calls.log");
@@ -31,7 +36,7 @@ async function waitInPage<T>(read: () => T, ok: (v: T) => boolean, timeoutMsg: s
 }
 
 /** A click in the page on a sidebar row by its label (the row also carries its chord since the interface polish). */
-const go = (label: "Crew" | "Settings" | "Home") =>
+const go = (label: "Crew" | "Settings" | "Home" | "Work") =>
   browser.execute(
     (l: string) =>
       [...document.querySelectorAll<HTMLButtonElement>(".sidebar button")]
@@ -42,6 +47,18 @@ const go = (label: "Crew" | "Settings" | "Home") =>
 
 /** The log written since this spec's app started (vps.setup.ts's KINAS_E2E_LOG_FROM). */
 const logSinceStart = () => readFileSync(APP_LOG).subarray(Number(process.env.KINAS_E2E_LOG_FROM ?? "0")).toString("utf8");
+
+/** The Work page's chrome: its session line, its detached badge's words, and whether the pane is dimmed. */
+const chrome = () => {
+  const c = document.querySelector('section[data-page="work"] .work > .ui-termchrome');
+  return c
+    ? {
+        session: c.querySelector(".ui-termchrome-session")?.textContent ?? "",
+        detached: c.querySelector("[data-detached]")?.textContent ?? null,
+        dim: document.querySelector('section[data-page="work"] .work-terminal')?.classList.contains("term-detached") ?? false,
+      }
+    : null;
+};
 
 const reachable = () => document.querySelector('section[data-page="settings"] [data-setting="place.reachable"]')?.textContent ?? "";
 
@@ -119,17 +136,87 @@ describe("agents on a VPS", () => {
     expect(down.text).toBe(`${LABEL}unreachable`);
     expect(down.title).toMatch(new RegExp(`^${LABEL} · unreachable since \\d\\d:\\d\\d · last reading \\d\\d:\\d\\d · can't reach ${LABEL}: timed out$`));
     expect(await browser.execute(cards)).toBe(board);
+    // The Work page's chrome says what the bar says, at the bar's own time, over a dimmed pane.
+    const time = /unreachable since (\d\d:\d\d)/.exec(down.title)![1];
+    const away = await waitInPage(chrome, (c) => c?.detached?.startsWith("unreachable") === true && c.dim, "the chrome never said unreachable");
+    expect(away.detached).toBe(`unreachable since ${time}`);
 
     // It answers again: Refresh readings reads at once, and the bar says so.
     setDown(dataDir, false);
     expect(await refresh()).toBe("ok");
     await waitInPage(part, (p) => p?.state === "connected", "the bar never said connected again");
     expect(await browser.execute(cards)).toBe(board);
+    await waitInPage(chrome, (c) => c?.detached === null && c.dim === false, "the chrome never cleared its badge");
 
     const log = logSinceStart();
     expect(log).toMatch(/remote: refresh ok in \d+ ms/);
     expect(log).toMatch(/remote: bundle failed \(timeout\) in \d+ ms/);
     expect(log).toMatch(/crew: remote reading failed in \d+ ms/);
+    expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
+  });
+
+  it("attaches the VPS's session in the Work pane, and launches the first mate there through the companion (slice 3)", async () => {
+    const herdrCalls = join(dataDir, "fake-vps", "herdr.log");
+    const root = join(dataDir, "fake-vps", "companion");
+    const argvLog = join(root, "bin", "argv.log");
+    const runs = () => (existsSync(argvLog) ? readFileSync(argvLog, "utf8").trim().split("\n").filter(Boolean) : []);
+    const firstMates = () => herdrSnapshot(VPS_SESSION).workspaces.filter((w) => w.label === "firstmate");
+    const focusedLabel = () => {
+      const s = herdrSnapshot(VPS_SESSION);
+      return s.workspaces.find((w) => w.workspace_id === s.focused_workspace_id)?.label ?? null;
+    };
+
+    // Saving the place in case 1 started the pane again on the VPS: Herdr's client, its chrome naming the place first.
+    await go("Work");
+    await waitInPage(chrome, (c) => c?.session.startsWith(`${LABEL} · default`) === true && c.detached === null && !c.dim, "the Work pane never attached the VPS");
+    expect(logSinceStart()).toContain(`terminal: attaching ${LABEL}'s default session`);
+    expect(firstMates()).toEqual([]);
+
+    // Launch the first mate: the companion makes the workspace in Firstmate's home there and types exactly its program.
+    await go("Crew");
+    await browser.waitUntil(
+      () =>
+        browser.execute(() => {
+          const b = [...document.querySelectorAll<HTMLButtonElement>('section[data-page="crew"] .crew[data-crew="installed"] .ui-titlerow button')].find((x) => x.textContent === "Launch the first mate");
+          b?.click();
+          return b !== undefined;
+        }),
+      { timeout: 30000, interval: 500, timeoutMsg: "the Crew page never offered Launch the first mate" },
+    );
+    await browser.waitUntil(() => runs().length === 1, { timeout: 20000, timeoutMsg: "the stand-in never ran on the VPS" });
+    expect(runs()).toEqual(["0"]);
+    const made = firstMates();
+    expect(made.length).toBe(1);
+    expect(focusedLabel()).toBe("firstmate");
+    const pane = herdrSnapshot(VPS_SESSION).panes.find((p) => p.workspace_id === made[0]!.workspace_id)!;
+    const asked = readFileSync(herdrCalls, "utf8").trim().split("\n");
+    expect(asked).toContain(`workspace create --cwd ${join(root, "firstmate")} --label firstmate --focus`);
+    expect(asked).toContain(`pane run ${pane.pane_id} ${join(root, "bin", "claude")}`);
+    // Only the companion's five calls ever reached the "VPS's" Herdr.
+    expect(asked.filter((a) => !/^(api snapshot|pane process-info --pane \S+|workspace focus \S+|workspace create --cwd .+ --label .+ --focus|pane run \S+ .+)$/.test(a))).toEqual([]);
+
+    // The chrome reads the VPS's focused workspace.
+    await go("Work");
+    await waitInPage(chrome, (c) => c?.session === `${LABEL} · default · firstmate`, "the chrome never named the first mate's workspace");
+
+    // From another workspace, a second launch focuses the first mate and types nothing.
+    herdr(VPS_SESSION, "workspace", "create", "--cwd", root, "--label", "elsewhere", "--focus");
+    expect(focusedLabel()).toBe("elsewhere");
+    const again = await browser.execute(() =>
+      (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("crew_launch").then(
+        (v) => String(v),
+        (e: unknown) => `refused ${JSON.stringify(e)}`,
+      ),
+    );
+    expect(again).toBe("focused");
+    expect(focusedLabel()).toBe("firstmate");
+    expect(firstMates().length).toBe(1);
+    expect(runs()).toEqual(["0"]);
+
+    const log = logSinceStart();
+    expect(log).toMatch(/remote: launch-first-mate ok in \d+ ms/);
+    expect(log).toMatch(/crew: launched \(created\) in \d+ ms/);
+    expect(log).toMatch(/crew: launched \(focused\) in \d+ ms/);
     expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
   });
 });

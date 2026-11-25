@@ -627,6 +627,9 @@ use tauri::State;
 /// (Kinas started from Finder has no LANG) and stats a folder under `~/Documents`, and the spawn forks the shell — on
 /// the main thread the window froze for all of it (`no_command_on_the_main_thread_resolves_a_path`). The start begins
 /// before anything else: what the pane sends meanwhile waits for this session (`PtyState::begin`, `hold`).
+///
+/// With the agents on a VPS (slice 3.1) the pane is `pty::remote_profile`, and the answer names the VPS: the pane then
+/// starts its client again by itself when it exits, and its chrome says it is detached meanwhile.
 #[tauri::command]
 pub async fn pty_start(
     window: tauri::WebviewWindow,
@@ -635,16 +638,41 @@ pub async fn pty_start(
     on_exit: Channel<Option<u32>>,
     cols: u16,
     rows: u16,
-) -> Result<Option<u32>, String> {
+) -> Result<PaneStarted, String> {
+    use tauri::Manager;
     let state = state.inner().clone();
     let generation = state.begin();
     let starter = state.clone();
+    let app = window.app_handle().clone();
     let started = tauri::async_runtime::spawn_blocking(move || {
-        // The ground the window draws on now, whichever of Settings' three choices made it so; asked again at every
-        // start, so a pane restarted after a change opens on the right logo.
-        let light = matches!(window.theme(), Ok(tauri::Theme::Light));
-        let profile = pty::default_profile(light);
-        log::info!("terminal: starting {} {:?} in {}", profile.program, profile.args, profile.cwd.display());
+        let vps = {
+            let store = app.state::<crate::store::Store>();
+            let conn = store.conn();
+            match crate::place::place(&conn, store.org_id()) {
+                crate::place::Place::Vps { target, label } => Some((target, label)),
+                crate::place::Place::Mac => None,
+            }
+        };
+        let (profile, remote) = match vps {
+            Some((target, label)) => {
+                let Some(herdr) = crate::herdr::find_herdr() else {
+                    starter.fail(generation);
+                    return Err(format!("Herdr isn't installed on this Mac — the Work page attaches {label} with it"));
+                };
+                (pty::remote_profile(&herdr, &target), Some(label))
+            }
+            None => {
+                // The ground the window draws on now, whichever of Settings' three choices made it so; asked again at
+                // every start, so a pane restarted after a change opens on the right logo.
+                let light = matches!(window.theme(), Ok(tauri::Theme::Light));
+                (pty::default_profile(light), None)
+            }
+        };
+        // A remote target is never logged (ADR 0007): the program and the place, not the argv.
+        match &remote {
+            Some(label) => log::info!("terminal: attaching {label}'s default session"),
+            None => log::info!("terminal: starting {} {:?} in {}", profile.program, profile.args, profile.cwd.display()),
+        }
         starter.spawn(
             generation,
             &profile,
@@ -658,12 +686,20 @@ pub async fn pty_start(
                 let _ = on_exit.send(code);
             },
         )
+        .map(|pid| PaneStarted { pid, remote })
     })
     .await;
     started.unwrap_or_else(|e| {
         state.fail(generation);
         Err(format!("the terminal did not start: {e}"))
     })
+}
+
+/// What `pty_start` started: the child's pid, and the VPS's label when the pane attaches one.
+#[derive(serde::Serialize)]
+pub struct PaneStarted {
+    pub pid: Option<u32>,
+    pub remote: Option<String>,
 }
 
 #[tauri::command]

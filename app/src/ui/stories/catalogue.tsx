@@ -527,6 +527,11 @@ export const STORIES: Story[] = [
       // DESIGN.md 1.4: the badge is a worker's only, so the shell and the first mate draw none.
       { name: "shell", node: <TerminalChrome session="shell" profile="plain shell" actions={[{ label: "Copy", onClick: noop }]} /> },
       { name: "first-mate", node: <TerminalChrome session="default · firstmate" profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
+      // DESIGN.md 1.14: on a VPS the place comes first; while the pane is not attached, the badge says so.
+      { name: "vps", node: <TerminalChrome session="vps-1 · default · firstmate" profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "connecting", node: <TerminalChrome session="vps-1 · default" detached={{ state: "connecting" }} actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "reconnecting", node: <TerminalChrome session="vps-1 · default · firstmate" detached={{ state: "reconnecting" }} profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "unreachable", node: <TerminalChrome session="vps-1 · default · firstmate" detached={{ state: "unreachable", since: "14:02" }} profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
     ],
   },
   {

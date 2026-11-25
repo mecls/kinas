@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CALL, firstmate, installed, laneConfigOf, scriptEnv } from "./firstmate.ts";
@@ -70,13 +70,32 @@ describe("the companion's Firstmate list", () => {
     expect(violations({ "setup.ts": "const r = `Bash(bin/fm-park.sh *)`;" })).toEqual(["setup.ts: names fm-park.sh, which the companion never runs"]);
   });
 
+  test("the gate: a note runs only when every worker is proven; no gate, no note; other calls are not gated (ADR 0027)", async () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "kinas-fm-")));
+    mkdirSync(join(home, "bin"));
+    const ran = join(home, "ran");
+    writeFileSync(join(home, "bin", "fm-inbox.sh"), `#!/usr/bin/env bash\necho "$*" >> ${JSON.stringify(ran)}\n`);
+    const refused = firstmate(home, "/usr/bin:/bin", {}, () => ({ refused: "fix-login: started outside Kinas's sandbox" }));
+    expect(await refused.run(CALL.note("kinas-1", "words"), 5000)).toEqual({
+      exit: null,
+      timed_out: false,
+      stdout: "",
+      stderr_first: null,
+      refused: "fix-login: started outside Kinas's sandbox",
+    });
+    expect((await firstmate(home, "/usr/bin:/bin", {}).run(CALL.note("kinas-2", "words"), 5000)).refused).toBe("no worker check: Kinas writes no note without one");
+    expect(existsSync(ran)).toBe(false);
+    expect((await refused.run(CALL.receipts, 5000)).exit).toBe(0);
+    expect(readFileSync(ran, "utf8")).toBe("receipts\n");
+  });
+
   test("a script runs with Kinas's environment: FM_HOME, the given PATH, no Herdr identity, stdin only when given", async () => {
     const home = realpathSync(mkdtempSync(join(tmpdir(), "kinas-fm-")));
     mkdirSync(join(home, "bin"));
     const probe = join(home, "bin", "fm-inbox.sh");
     writeFileSync(probe, '#!/usr/bin/env bash\necho "home=$FM_HOME path=$PATH herdr=${HERDR_PANE_ID:-none} pwd=$PWD args=$*"\ncat\necho oops >&2\nexit 3\n');
     chmodSync(probe, 0o755);
-    const fm = firstmate(home, "/usr/bin:/bin", { HERDR_PANE_ID: "w1:p1", KEEP: "1" });
+    const fm = firstmate(home, "/usr/bin:/bin", { HERDR_PANE_ID: "w1:p1", KEEP: "1" }, () => ({ ok: true }));
     const out = await fm.run(CALL.note("kinas-1", "the words\n"), 5000);
     expect(out).toEqual({
       exit: 3,

@@ -43,6 +43,7 @@ import {
   type SetupDeps,
 } from "./setup.ts";
 import { validFolder, validRepo } from "./validate.ts";
+import { herdrUnitPath, SANDBOX_RUNTIME, seccompHelper, unitPathOf, wrapperState, wrapperText } from "./worker.ts";
 import { recordWritten, writeWhole } from "./written.ts";
 
 export type Cannot =
@@ -73,6 +74,10 @@ export type Cannot =
   | "npm"
   | "clone"
   | "record"
+  | "sandbox-tools"
+  | "no-unit"
+  | "not-ready"
+  | "herdr-restart"
   | "bad-request";
 
 export type Outcome = { done: true } | { cannot: Cannot };
@@ -82,6 +87,8 @@ export interface InstallRequest {
   folder?: string;
   repo?: string;
   adopt?: boolean;
+  /** `worker-sandbox` only: restart Herdr's server so its panes start with the wrapper first (ADR 0027). */
+  restart?: boolean;
 }
 
 const DONE: Outcome = { done: true };
@@ -105,6 +112,8 @@ export async function install(req: InstallRequest, d: SetupDeps): Promise<Outcom
       return relayRule(d);
     case "relay-instruction":
       return relayInstructionFile(d);
+    case "worker-sandbox":
+      return req.restart === true ? restartHerdr(d) : workerSandbox(d);
     case "permission-mode":
       return permissionMode(d);
     case "crew-tools":
@@ -303,7 +312,7 @@ async function herdrService(d: SetupDeps, adopt: boolean): Promise<Outcome> {
       return cannot("herdr-stop");
     }
   }
-  const started = await startUnit(d, HERDR_UNIT, herdrUnit(d.paths.herdr, SESSION, unitPath(d.home), UNIT_HEADER));
+  const started = await startUnit(d, HERDR_UNIT, herdrUnit(d.paths.herdr, SESSION, await herdrUnitPath(d, unitPath(d.home)), UNIT_HEADER));
   if ("cannot" in started) {
     undo();
     return started;
@@ -315,6 +324,59 @@ async function herdrService(d: SetupDeps, adopt: boolean): Promise<Outcome> {
   }
   rmSync(replacing, { force: true });
   return DONE;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Workers in Claude Code's sandbox (ADR 0027).
+
+/**
+ * The wrapper and what it needs, then Kinas's Herdr unit with the wrapper's folder first, reloaded but not restarted:
+ * no pane closes. The seccomp helper's package is installed beside Node only where it is not there; bwrap and socat are
+ * the captain's to install (they need root), and their absence is said.
+ */
+async function workerSandbox(d: SetupDeps): Promise<Outcome> {
+  if (!canInstallHere(d)) return cannot("not-linux");
+  if (!cloned(d.paths.home)) return cannot("no-firstmate");
+  if (d.which("bwrap") === null || d.which("socat") === null) return cannot("sandbox-tools");
+  const unitFile = join(d.paths.units, HERDR_UNIT);
+  const unit = readText(unitFile);
+  if (unit === null) return cannot("no-unit");
+  if (!unit.startsWith(UNIT_HEADER)) return cannot("foreign-unit");
+  const helper = seccompHelper(d);
+  if (helper === null || !existsSync(helper)) {
+    if (d.node === null) return cannot("no-node");
+    const r = await d.run([join(d.node, "npm"), "install", "-g", `${SANDBOX_RUNTIME.name}@${SANDBOX_RUNTIME.version}`], { timeoutMs: NPM_MS });
+    if (!r.ok || seccompHelper(d) === null || !existsSync(seccompHelper(d)!)) return cannot("npm");
+  }
+  const wrapper = join(d.paths.wrapperDir, "claude");
+  if ((await wrapperState(d)) === "foreign") return cannot("foreign");
+  const text = wrapperText(d.paths.realClaude, join(d.paths.bin, "kinas"));
+  mkdirSync(d.paths.wrapperDir, { recursive: true });
+  writeWhole(wrapper, text, 0o755);
+  chmodSync(wrapper, 0o755);
+  const sum = await sha256Of(wrapper);
+  if (sum === null) return cannot("record");
+  try {
+    recordWritten(d.paths, wrapper, { item: "worker-sandbox", version: "1", sha256: sum, at: d.now() }, d.now());
+  } catch {
+    return cannot("record");
+  }
+  writeWhole(unitFile, herdrUnit(d.paths.herdr, SESSION, await herdrUnitPath(d, unitPath(d.home)), UNIT_HEADER));
+  const r = await d.run([d.paths.systemctl, "--user", "daemon-reload"], { timeoutMs: SYSTEMCTL_MS });
+  return r.ok ? DONE : cannot("systemd");
+}
+
+/**
+ * The captain's second click: Herdr's server restarted under its unit so every new pane has the wrapper first. It closes
+ * every pane; Settings says so beside the button. Only once the wrapper and the unit are in place.
+ */
+async function restartHerdr(d: SetupDeps): Promise<Outcome> {
+  if (!canInstallHere(d)) return cannot("not-linux");
+  const path = unitPathOf(d);
+  if ((await wrapperState(d)) !== "kinas" || path === null || path.split(":")[0] !== d.paths.wrapperDir) return cannot("not-ready");
+  const r = await d.run([d.paths.systemctl, "--user", "restart", HERDR_UNIT], { timeoutMs: SYSTEMCTL_MS });
+  if (!r.ok) return cannot("herdr-restart");
+  return (await waitFor(d, true, 30)) ? DONE : cannot("herdr-restart");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

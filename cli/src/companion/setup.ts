@@ -14,6 +14,7 @@ import { packageVersion } from "../crew-setup.ts";
 import { HERDR, serverOf, type Herdr } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
 import { ownPidNs, readProcs } from "./proc.ts";
+import { workerSandboxRow } from "./worker.ts";
 import { isKinasCopy, sha256Of } from "./written.ts";
 
 export { isKinasCopy, sha256Of };
@@ -26,6 +27,7 @@ export const CHECK_IDS = [
   "relay-rule",
   "relay-instruction",
   "first-mate-launch",
+  "worker-sandbox",
   "permission-mode",
   "tools",
   "node",
@@ -47,6 +49,7 @@ export const INSTALL_ITEMS = [
   "firstmate",
   "relay-rule",
   "relay-instruction",
+  "worker-sandbox",
   "permission-mode",
   "crew-tools",
   "companion-service",
@@ -64,6 +67,8 @@ export interface Check {
   adopt?: true;
   /** A command for the captain to run there themselves, from the Mac's fixed shapes. */
   run?: string;
+  /** Install restarts Herdr's server, which closes every pane (ADR 0027): the Mac says so before the click. */
+  restart?: true;
 }
 
 export interface RunOut {
@@ -486,6 +491,7 @@ const ROWS: Record<CheckId, (d: SetupDeps) => Promise<Check>> = {
   "relay-rule": relayRule,
   "relay-instruction": relayInstructionRow,
   "first-mate-launch": firstMateLaunch,
+  "worker-sandbox": workerSandboxRow,
   "permission-mode": permissionMode,
   tools,
   node,

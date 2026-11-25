@@ -13,10 +13,13 @@ import { companionPath, companionPaths, nodeDir, type Paths } from "./paths.ts";
 import { MAX_REQUEST_BYTES, rpc, versionIn } from "./rpc.ts";
 import { lastReading, loop, readOnce, type Deps } from "./run.ts";
 import type { SetupDeps } from "./setup.ts";
+import { answersMayFlow, REFUSED_EXIT, workerLaunch, type WorkerDeps } from "./worker.ts";
 
 export const COMPANION_USAGE = [
   "  companion run       (on the VPS) read Firstmate's home every 15 s into the companion's reading",
   "  companion rpc       (on the VPS) answer one request from Kinas on the Mac: JSON on stdin, JSON on stdout",
+  "  companion worker-launch <task id> <folder> <claude's arguments…>",
+  "                      (on the VPS, run by Kinas's claude wrapper) a Firstmate worker's sandbox settings, or why not",
 ];
 
 /** Herdr's session the crew runs in on the VPS (ADR 0024). */
@@ -31,12 +34,21 @@ const executable = (path: string) => {
   }
 };
 
+/** What the workers' sandbox check reads (worker.ts): this machine, its login, Node's folder and the companion's PATH. */
+function workerDeps(paths: Paths): WorkerDeps {
+  const home = homedir();
+  const path = companionPath(home, executable);
+  return { paths, uid: process.getuid?.() ?? -1, home, node: nodeDir(home, executable), arch: process.arch, which: (name) => Bun.which(name, { PATH: path }) };
+}
+
 function runDeps(paths: Paths): Deps {
   const path = companionPath(homedir(), executable);
+  const workers = workerDeps(paths);
   return {
     paths,
     version: COMPANION_VERSION,
-    fm: firstmate(paths.home, path),
+    // No note while any worker is not proven sandboxed (ADR 0027).
+    fm: firstmate(paths.home, path, process.env, () => answersMayFlow(workers)),
     path,
     session: SESSION,
     clock: Date.now,
@@ -119,6 +131,16 @@ export async function companion(args: string[]): Promise<number> {
     const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;
+  }
+  if (sub === "worker-launch" && rest.length >= 2) {
+    const [id, cwd, ...argv] = rest as [string, string, ...string[]];
+    const out = workerLaunch(workerDeps(companionPaths()), process.env, id, cwd, argv);
+    if ("refused" in out) {
+      process.stderr.write(`kinas: ${out.refused}\n`);
+      return REFUSED_EXIT;
+    }
+    process.stdout.write(`${out.sha256}\n${out.file}\n`);
+    return 0;
   }
   process.stderr.write(`usage:\n${COMPANION_USAGE.join("\n")}\n`);
   return 64;

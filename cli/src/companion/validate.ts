@@ -18,7 +18,7 @@ export type Request =
   | { verb: "launch-first-mate" }
   | { verb: "focus"; workspace: string }
   | { verb: "open-workspace"; folder: string; label: string }
-  | { verb: "install"; item: InstallItem; folder?: string; repo?: string; adopt?: boolean };
+  | { verb: "install"; item: InstallItem; folder?: string; repo?: string; adopt?: boolean; restart?: boolean };
 
 export type Validated = Request | { refused: string };
 
@@ -104,7 +104,7 @@ export function validate(input: unknown): Validated {
     }
     case "install": {
       // Slice 4 (§17 2026-11-25 #4): one item; `clone` names its folder and repository, `adopt` only Herdr's service.
-      const extra = onlyKeys(input, ["verb", "item", "folder", "repo", "adopt"]);
+      const extra = onlyKeys(input, ["verb", "item", "folder", "repo", "adopt", "restart"]);
       if (extra) return { refused: extra };
       if (typeof input.item !== "string" || !(INSTALL_ITEMS as readonly string[]).includes(input.item)) return { refused: "item is not one Kinas installs" };
       const item = input.item as InstallItem;
@@ -115,6 +115,11 @@ export function validate(input: unknown): Validated {
         return { verb: "install", item, folder: input.folder, repo: input.repo };
       }
       if (input.folder !== undefined || input.repo !== undefined) return { refused: "folder and repo are for clone only" };
+      if (input.restart !== undefined) {
+        // ADR 0027: the second click that restarts Herdr's server, for the workers' sandbox only.
+        if (item !== "worker-sandbox" || typeof input.restart !== "boolean" || input.adopt !== undefined) return { refused: "restart is for the workers' sandbox only" };
+        return { verb: "install", item, restart: input.restart };
+      }
       if (input.adopt !== undefined) {
         if (item !== "herdr-service" || typeof input.adopt !== "boolean") return { refused: "adopt is for Herdr's service only" };
         return { verb: "install", item, adopt: input.adopt };

@@ -3,6 +3,10 @@
 // (app/src-tauri/src/crew/firstmate.rs), the read-only hold check, and the inbox's `note` and `receipts` — the one write,
 // ADR 0022's, as ADR 0025 restates it. `fm-send.sh`, any hold, spawn, park or teardown script is never run; firstmate.test.ts holds the guard.
 //
+// The note is gated (ADR 0027, the captain's condition 1): the runner writes no note unless the gate it was given says
+// every worker on the machine is proven sandboxed at that moment; a runner given no gate writes none. A refused note
+// runs nothing and answers `refused` with the gate's words.
+//
 // Each runs as Kinas runs it on the Mac: `bash <home>/bin/<script> <args>`, cwd the home, FM_HOME the home, the PATH
 // the companion builds from constants (paths.ts `companionPath`), no inherited HERDR_*, stdin closed unless the call
 // carries one, killed at its limit.
@@ -40,7 +44,12 @@ export interface ScriptOut {
   timed_out: boolean;
   stdout: string;
   stderr_first: string | null;
+  /** Set when the call was not run at all: the gate's words (a note while a worker is not proven sandboxed). */
+  refused?: string;
 }
+
+/** The gate before a note: `worker.ts` `answersMayFlow`. */
+export type NoteGate = () => { ok: true } | { refused: string };
 
 export interface Firstmate {
   run(call: FmCall, limitMs: number): Promise<ScriptOut>;
@@ -67,10 +76,14 @@ export function scriptEnv(parent: Record<string, string | undefined>, home: stri
   return env;
 }
 
-export function firstmate(home: string, path: string, parent: Record<string, string | undefined> = process.env): Firstmate {
+export function firstmate(home: string, path: string, parent: Record<string, string | undefined> = process.env, gate?: NoteGate): Firstmate {
   const env = scriptEnv(parent, home, path);
   return {
     async run(call, limitMs) {
+      if (call.script === "fm-inbox.sh" && call.args[0] === "note") {
+        const g = gate?.() ?? { refused: "no worker check: Kinas writes no note without one" };
+        if ("refused" in g) return { exit: null, timed_out: false, stdout: "", stderr_first: null, refused: g.refused };
+      }
       const stdin = "stdin" in call ? call.stdin : undefined;
       const r = await run(["bash", join(home, "bin", call.script), ...call.args], { cwd: home, env, timeoutMs: limitMs, stdin });
       const first = r.stderr.split("\n").find((l) => l.trim() !== "");

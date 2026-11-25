@@ -6,7 +6,7 @@ import { FIRSTMATE_PIN, type LinuxRelease } from "@kinas/commands/crew-tools";
 import { run as realRun } from "@kinas/context";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { HerdrCall } from "./herdr.ts";
 import { companionPaths } from "./paths.ts";
 import { HERDR_UNIT, type Releases, type RunOut, type SetupDeps } from "./setup.ts";
@@ -92,6 +92,11 @@ export function fakeMachine(over: Partial<MachineState> = {}, setup: Partial<Set
         if (rest[1] === HERDR_UNIT && state.server.startsWithUnit) state.server.running = true;
         return ok();
       }
+      if (verb === "restart") {
+        if (state.units[rest[0]!] !== "active") return no();
+        if (rest[0] === HERDR_UNIT) state.server.running = state.server.startsWithUnit;
+        return ok();
+      }
       if (verb === "disable" && rest[0] === "--now") {
         state.units[rest[1]!] = "inactive";
         if (rest[1] === HERDR_UNIT) state.server.running = false;
@@ -122,6 +127,14 @@ export function fakeMachine(over: Partial<MachineState> = {}, setup: Partial<Set
     if (cmd === paths.herdr && args[0] === "--version") return ok("herdr 0.9.5\n");
     if (cmd?.endsWith("/npm") && args[0] === "install") {
       state.npm.push(args[2]!);
+      // The sandbox's runtime lands beside Node, its seccomp helper inside, as npm puts it.
+      if (args[2]?.startsWith("@anthropic-ai/sandbox-runtime@")) {
+        for (const arch of ["x64", "arm64"]) {
+          const dir = join(dirname(cmd), "..", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime", "vendor", "seccomp", arch);
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, "apply-seccomp"), "");
+        }
+      }
       return ok();
     }
     if (cmd === "tar") return realRun(argv, { timeoutMs: 20_000 });

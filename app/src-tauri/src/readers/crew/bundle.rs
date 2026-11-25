@@ -52,6 +52,14 @@ pub(crate) struct Bundle {
     /// finished, with when it was scanned there.
     #[serde(default)]
     pub worktrees: Vec<WorktreeOut>,
+    /// The Linux machine's own readings (slice 5.2, `machine.rs`): the plan hand-off, the host and the token counts. Kept
+    /// raw here, so one that does not decode is dropped alone and never the crew's reading with it.
+    #[serde(default)]
+    pub plan: Option<serde_json::Value>,
+    #[serde(default)]
+    pub host: Option<serde_json::Value>,
+    #[serde(default)]
+    pub usage: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]

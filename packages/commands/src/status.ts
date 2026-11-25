@@ -25,6 +25,8 @@ export interface StatusResult {
   missing: StatusProvider[];
   usageToday: UsageRow[];
   host: (HostRow & { state: ReadingState }) | null;
+  /** The Linux machine's, while the agents run there (slice 5.2); its `machine` is the place's label. */
+  linux_host: (HostRow & { state: ReadingState }) | null;
 }
 
 const DEFAULT_LIMITS: Record<string, [number, number]> = {
@@ -51,6 +53,7 @@ export function statusFromStore(store: StorageAdapter, clock: number | (() => nu
   const readers = store.getReaderStatus();
   const quotaRows = store.getQuotas();
   const hostRow = store.getHost();
+  const linuxRow = store.getLinuxHost?.() ?? null;
   const now = typeof clock === "function" ? clock() : clock;
   const readerFor = (id: string): ReaderRow | undefined => readers.find((r) => r.reader === id);
   const limits = (id: string): [number, number] => {
@@ -90,10 +93,23 @@ export function statusFromStore(store: StorageAdapter, clock: number | (() => nu
     missing,
     usageToday: store.getUsageDaily(lisbonDay.format(new Date(now))),
     host: hostRow ? { ...hostRow, state: readingState({ updatedAt: hostRow.updated_at, staleAfterMs: hostStale, deadAfterMs: hostDead, now }) } : null,
+    linux_host: linuxRow ? { ...linuxRow, state: readingState({ updatedAt: linuxRow.updated_at, staleAfterMs: hostStale, deadAfterMs: hostDead, now }) } : null,
   };
 }
 
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+
+const hostJson = (h: HostRow & { state: ReadingState }) => ({
+  machine: h.machine,
+  cpu_pct: h.cpu_pct,
+  mem_used_gb: h.mem_used_gb,
+  mem_total_gb: h.mem_total_gb,
+  disk_free_gb: h.disk_total_gb - h.disk_used_gb,
+  disk_available_gb: h.disk_available_gb,
+  disk_total_gb: h.disk_total_gb,
+  updated_at: iso(h.updated_at),
+  state: h.state,
+});
 
 /** R37 JSON: left_pct and used_pct, ISO times, a state per line. Never a secret — the store holds none. */
 export function statusJson(result: StatusResult) {
@@ -137,17 +153,8 @@ export function statusJson(result: StatusResult) {
       messages: u.messages,
     })),
     // Sizes in GiB, as stored.
-    host: result.host && {
-      machine: result.host.machine,
-      cpu_pct: result.host.cpu_pct,
-      mem_used_gb: result.host.mem_used_gb,
-      mem_total_gb: result.host.mem_total_gb,
-      disk_free_gb: result.host.disk_total_gb - result.host.disk_used_gb,
-      disk_available_gb: result.host.disk_available_gb,
-      disk_total_gb: result.host.disk_total_gb,
-      updated_at: iso(result.host.updated_at),
-      state: result.host.state,
-    },
+    host: result.host && hostJson(result.host),
+    linux_host: result.linux_host && hostJson(result.linux_host),
   };
 }
 
@@ -167,6 +174,16 @@ function diskText(h: HostRow, dead: boolean): string {
 export function statusLines(result: StatusResult, color: boolean): string[] {
   const lines: string[] = [];
   const paint = (line: string, stale: boolean) => (color && stale ? `${GOLD}${line}${RESET}` : line);
+  // Past its dead limit a reading is no longer the machine's: a dash where each reading was, the totals kept, as the
+  // Usage page shows it (Usage.tsx HostSection).
+  const hostLine = (name: string, h: HostRow & { state: ReadingState }) => {
+    const stale = h.state === "stale";
+    const dead = h.state === "dead";
+    const cpu = h.cpu_pct === null || dead ? "—" : `${Math.round(h.cpu_pct)}%`;
+    const used = dead ? "—" : h.mem_used_gb.toFixed(1);
+    const label = name.padEnd(Math.max(LABEL_WIDTH, name.length + 1));
+    return paint(`${label}CPU ${cpu} · memory ${used}/${h.mem_total_gb.toFixed(1)} GiB · ${diskText(h, dead)} · as of ${lisbonClock(h.updated_at, result.now)}${stale ? " (stale)" : ""}`, stale);
+  };
 
   for (const q of result.quotas) {
     lines.push(paint(formatQuotaLine({ ...q, provider: q.subscription, reason: q.reason }, result.now), q.state === "stale"));
@@ -191,16 +208,10 @@ export function statusLines(result: StatusResult, color: boolean): string[] {
   if (!result.host) {
     lines.push("This Mac           no reading yet");
   } else {
-    const h = result.host;
-    const stale = h.state === "stale";
-    // Past its dead limit a reading is no longer this Mac's: a dash where each reading was, the totals kept, as the
-    // Usage page's This Mac shows it (Usage.tsx MacSection).
-    const dead = h.state === "dead";
-    const cpu = h.cpu_pct === null || dead ? "—" : `${Math.round(h.cpu_pct)}%`;
-    const used = dead ? "—" : h.mem_used_gb.toFixed(1);
-    const line = `${"This Mac".padEnd(LABEL_WIDTH)}CPU ${cpu} · memory ${used}/${h.mem_total_gb.toFixed(1)} GiB · ${diskText(h, dead)} · as of ${lisbonClock(h.updated_at, result.now)}${stale ? " (stale)" : ""}`;
-    lines.push(paint(line, stale));
+    lines.push(hostLine("This Mac", result.host));
   }
+  // The Linux machine's, under This Mac, as on the Usage page (DESIGN 1.14, slice 5.2).
+  if (result.linux_host) lines.push(hostLine(`Linux machine · ${result.linux_host.machine}`, result.linux_host));
   return lines;
 }
 

@@ -146,15 +146,34 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
       .all(this.orgId()) as ReaderRow[];
   }
 
+  /** A setting's text as the app saved it (`place.rs`), or null. */
+  private settingText(key: string): string | null {
+    try {
+      const row = this.db.query("SELECT value FROM settings WHERE org_id = ?1 AND key = ?2").get(this.orgId(), key) as { value: string } | null;
+      const value: unknown = row ? JSON.parse(row.value) : null;
+      return typeof value === "string" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private hostColumns(): string {
+    return `machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb,
+            ${this.hasUsageDetails ? "disk_available_gb" : "NULL AS disk_available_gb"}, updated_at`;
+  }
+
+  /** This Mac: the newest row that isn't the Linux machine's, whose label is kept when the place goes back to the Mac. */
   getHost(): HostRow | null {
     return (this.db
-      .query(
-        `SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb,
-                ${this.hasUsageDetails ? "disk_available_gb" : "NULL AS disk_available_gb"}, updated_at
-         FROM hosts
-         WHERE org_id = ?1 ORDER BY updated_at DESC LIMIT 1`,
-      )
-      .get(this.orgId()) ?? null) as HostRow | null;
+      .query(`SELECT ${this.hostColumns()} FROM hosts WHERE org_id = ?1 AND machine IS NOT ?2 ORDER BY updated_at DESC LIMIT 1`)
+      .get(this.orgId(), this.settingText("vps_label")) ?? null) as HostRow | null;
+  }
+
+  /** The Linux machine's row, under the place's label, while the agents run there (slice 5.2). */
+  getLinuxHost(): HostRow | null {
+    const label = this.settingText("place") === "vps" ? this.settingText("vps_label") : null;
+    if (label === null) return null;
+    return (this.db.query(`SELECT ${this.hostColumns()} FROM hosts WHERE org_id = ?1 AND machine = ?2`).get(this.orgId(), label) ?? null) as HostRow | null;
   }
 
   getUsageDaily(date: string): UsageRow[] {

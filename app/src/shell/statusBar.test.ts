@@ -52,6 +52,7 @@ const snapshot = (extra: Partial<UsageSnapshot> = {}): UsageSnapshot =>
     provider_metrics: [],
     readers: [reader("claude-plan"), reader("ollama-cloud"), reader("host"), reader("convex", "not_configured"), reader("hostinger", "not_configured")],
     host: null,
+    linux_host: null,
     usage: [],
     first_usage_date: null,
     days: [],

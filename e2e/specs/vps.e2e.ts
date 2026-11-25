@@ -392,4 +392,85 @@ describe("agents on a VPS", () => {
     const stored = execFileSync("/usr/bin/sqlite3", [join(dataDir, "kinas.sqlite"), `SELECT worktree_touches FROM crew_tasks WHERE id = '${TASK}'`], { encoding: "utf8" }).trim();
     expect(JSON.parse(stored)).toEqual({ paths: ["sub/.claude", "sub/.claude/x", "sub/.mcp.json"], unknown: false });
   });
+  it("shows the Linux machine's host on Usage, its plan in the gauge and its tokens in the counts (slice 5.2)", async () => {
+    const root = join(dataDir, "fake-vps", "companion");
+    const put = (path: string, text: string) => {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), text);
+    };
+    const session = "0f3a9c2e-1b2c-4d5e-8f90-123456789abc";
+    const now = Date.now();
+    const lisbon = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now - 60_000));
+    // What the companion reads on the Linux machine: the status line's hand-off, the session's transcript, and /proc.
+    put("state/claude-rate-limits.json", JSON.stringify({ rate_limits: { five_hour: { used_percentage: 23, resets_at: Math.floor(now / 1000) + 3600 }, seven_day: { used_percentage: 41, resets_at: Math.floor(now / 1000) + 86_400 } }, session_id: session, captured_at: now }));
+    put(
+      `claude-home/projects/-home-claude-projects-shop-9c2e/${session}.jsonl`,
+      `${JSON.stringify({ type: "assistant", timestamp: new Date(now - 60_000).toISOString(), message: { id: "e2e-5-2", model: "claude-opus-5-5-e2e", usage: { input_tokens: 11, cache_read_input_tokens: 100, output_tokens: 7 } } })}\n`,
+    );
+    put("proc/stat", "cpu  100 0 100 700 100 0 0 0 0 0\n");
+    put("proc/meminfo", "MemTotal:       16777216 kB\nMemAvailable:    4194304 kB\n");
+    // The earlier cases' readings counted an empty transcript folder, and a count stands for 5 minutes: the reading on
+    // disk drops it, as a companion that has just started has none.
+    const readingFile = join(root, "state", "reading.json");
+    const { usage: _counted, ...rest } = JSON.parse(readFileSync(readingFile, "utf8")) as Record<string, unknown>;
+    writeFileSync(readingFile, JSON.stringify(rest));
+
+    const refresh = () =>
+      browser.execute(() =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("refresh_readings").then(
+          () => "ok",
+          (e: unknown) => String(e),
+        ),
+      );
+    await go("Usage");
+    expect(await refresh()).toBe("ok");
+
+    // The section, named for the label, after This Mac; CPU is a dash until the companion has two samples.
+    const first = await waitInPage(
+      () => {
+        const s = document.querySelector('section[data-page="usage"] [data-section="linux-host"]');
+        const mac = document.querySelector('section[data-page="usage"] [data-section="host"]');
+        if (!s) return null;
+        const value = (m: string) => s.querySelector(`[data-metric="${m}"] .ui-metric-value`)?.textContent ?? null;
+        return JSON.stringify({
+          title: s.textContent?.includes("Linux machine") ?? false,
+          source: s.querySelector(".ui-caption")?.getAttribute("title") ?? null,
+          after: mac ? (mac.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 : false,
+          cpu: value("cpu"),
+          memory: value("memory"),
+        });
+      },
+      (v) => v !== null,
+      "Usage never showed the Linux machine",
+      60000,
+    );
+    expect(JSON.parse(first!)).toEqual({ title: true, source: LABEL, after: true, cpu: "— all cores", memory: "12.0 GiB of 16.0 GiB used" });
+
+    // The counters moved: busy 100 of 200 over the two readings, 50 %.
+    put("proc/stat", "cpu  150 0 150 800 100 0 0 0 0 0\n");
+    expect(await refresh()).toBe("ok");
+    await waitInPage(
+      () => document.querySelector('section[data-page="usage"] [data-section="linux-host"] [data-metric="cpu"] .ui-metric-value')?.textContent ?? null,
+      (v) => v === "50% all cores",
+      "the Linux machine's CPU never showed",
+      60000,
+    );
+
+    // The plan's gauge took the Linux machine's status line, its time the transcript's last response; the tokens are
+    // the Linux machine's rows, under the label. Only the counts crossed: the store holds no transcript text.
+    const sql = (q: string) => execFileSync("/usr/bin/sqlite3", [join(dataDir, "kinas.sqlite"), q], { encoding: "utf8" }).trim();
+    expect(sql("SELECT \"window\" || ' ' || used_pct || ' ' || source FROM quotas WHERE subscription = 'claude-plan' ORDER BY \"window\"").split("\n")).toEqual([
+      `session 23.0 Claude Code status line · ${LABEL}`,
+      `week 41.0 Claude Code status line · ${LABEL}`,
+    ]);
+    expect(Number(sql("SELECT max(updated_at) FROM quotas WHERE subscription = 'claude-plan'"))).toBeLessThanOrEqual(now - 55_000);
+    expect(sql(`SELECT date || ' ' || harness || ' ' || tokens_in || ' ' || tokens_cache_read || ' ' || tokens_out || ' ' || messages FROM usage_daily WHERE machine = '${LABEL}' AND model = 'claude-opus-5-5-e2e'`)).toBe(
+      `${lisbon} claude-code 11 100 7 1`,
+    );
+    const hostRows = sql("SELECT machine FROM hosts ORDER BY machine").split("\n");
+    expect(hostRows).toContain(LABEL);
+    expect(hostRows.length).toBe(2);
+    const log = logSinceStart();
+    expect(log.includes("e2e-5-2") || log.includes(session)).toBe(false);
+  });
 });

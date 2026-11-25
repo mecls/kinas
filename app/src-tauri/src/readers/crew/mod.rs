@@ -8,6 +8,7 @@ pub mod capacity;
 pub mod gh;
 mod guard;
 pub mod ledger;
+mod machine;
 pub mod mirror;
 pub mod schedule;
 pub mod snapshot;
@@ -236,6 +237,8 @@ struct Memo {
     capacity_at: Option<i64>,
     /// Refresh readings was asked with the agents on a VPS: the next cycle asks the companion for a reading first.
     remote_refresh: bool,
+    /// The Linux machine's plan, host and token counts applied last, by the companion's stamps (slice 5.2).
+    machine: machine::Seen,
 }
 
 pub(crate) fn crew_loop(app: AppHandle, home: PathBuf, tx: Sender<CrewWake>, rx: Receiver<CrewWake>) {
@@ -470,6 +473,11 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo, sta
             {
                 let conn = store.conn();
                 let _ = bundle::remember(&conn, store.org_id(), label, now, Ok(&bundle::heartbeat_here(&b.companion, b.served_at, now)));
+            }
+            {
+                // Usage's readings from the Linux machine, whether or not Firstmate is there (slice 5.2).
+                let mut conn = store.conn();
+                machine::apply(&mut conn, store.org_id(), label, &crate::readers::host::machine_name(), &b, now, &mut memo.machine);
             }
             let live = app.state::<CrewLive>();
             live.set_remote_installed(b.installed);

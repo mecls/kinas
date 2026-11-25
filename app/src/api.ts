@@ -111,7 +111,10 @@ export interface UsageSnapshot {
   /** Read in the same pass as `quotas`, so the page never mixes readings from two moments (convex R§3). */
   provider_metrics: ProviderMetricView[];
   readers: ReaderView[];
+  /** This Mac: the newest row that isn't the Linux machine's. */
   host: HostView | null;
+  /** The Linux machine's row, under the place's label, while the agents run there (slice 5.2). */
+  linux_host: HostView | null;
   /** The last 30 Europe/Lisbon days, oldest first; days with no rows are absent. */
   usage: UsageDay[];
   /** The earliest date in usage_daily, so the chart can hatch the days before it (R26). */

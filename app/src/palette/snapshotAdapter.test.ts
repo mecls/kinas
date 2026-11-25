@@ -15,6 +15,7 @@ const snapshot: UsageSnapshot = {
     { reader: "ollama-cloud", state: "not_configured", last_attempt_at: NOW, last_success_at: null, last_error: "no API key — add one in Settings", stale_after_ms: 600_000, dead_after_ms: 43_200_000 },
   ],
   host: null,
+  linux_host: null,
   usage: [
     { date: "2026-09-14", harness: "pi", provider: "ollama", model: "glm-5.3:cloud", tokens_in: 1200, tokens_cache_read: 0, tokens_out: 300, messages: 2 },
     { date: "2026-09-13", harness: "pi", provider: "ollama", model: "glm-5.3:cloud", tokens_in: 1, tokens_cache_read: 0, tokens_out: 1, messages: 1 },

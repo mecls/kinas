@@ -25,12 +25,17 @@ pub struct HostReading {
     pub disk_available_gb: Option<f64>,
 }
 
-/// `scutil --get LocalHostName`, falling back to "this-mac" if it fails or takes longer than 2 s.
+/// `scutil --get LocalHostName`, falling back to "this-mac" if it fails or takes longer than 2 s. Asked once per run:
+/// this Mac's rows are named by it, and the Linux machine's readings are kept apart from them by it (slice 5.2).
 pub fn machine_name() -> String {
-    run_with_timeout("/usr/sbin/scutil", &["--get", "LocalHostName"], Duration::from_secs(2))
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "this-mac".into())
+    static NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        run_with_timeout("/usr/sbin/scutil", &["--get", "LocalHostName"], Duration::from_secs(2))
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "this-mac".into())
+    })
+    .clone()
 }
 
 fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
@@ -148,6 +153,22 @@ pub fn write_host(conn: &Connection, org_id: &str, machine: &str, reading: &Host
             reading.disk_available_gb,
             now
         ],
+    )?;
+    Ok(())
+}
+
+/// The Linux machine's row (slice 5.2), under the place's label: its CPU share is none until the companion has two
+/// samples. Written as the Mac's row is, so the views read both the same way.
+#[allow(clippy::too_many_arguments)]
+pub fn write_host_there(conn: &Connection, org_id: &str, machine: &str, cpu_pct: Option<f64>, mem: (f64, f64), disk: (f64, f64, Option<f64>), at: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO hosts (org_id, machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, services, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '[]', ?9)
+         ON CONFLICT (org_id, machine) DO UPDATE SET
+           cpu_pct = excluded.cpu_pct, mem_used_gb = excluded.mem_used_gb, mem_total_gb = excluded.mem_total_gb,
+           disk_used_gb = excluded.disk_used_gb, disk_total_gb = excluded.disk_total_gb,
+           disk_available_gb = excluded.disk_available_gb, updated_at = excluded.updated_at",
+        params![org_id, machine, cpu_pct, mem.0, mem.1, disk.0, disk.1, disk.2, at],
     )?;
     Ok(())
 }

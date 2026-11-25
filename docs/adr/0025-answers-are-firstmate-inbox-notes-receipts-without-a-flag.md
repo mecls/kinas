@@ -1,7 +1,7 @@
 # 0025 · With agents on a VPS, answers stay notes in Firstmate's inbox: receipts are read without a flag, and setup lets the first mate relay them
 
 Date: 2026-11-24
-Status: accepted
+Status: superseded by 0026
 
 ## Context
 

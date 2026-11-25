@@ -41,6 +41,13 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     the repository read from the Mac's own folder's origin. Kinas's own Linux binary comes from the release of the
     installed version (`kinas-linux-x64`, `kinas-linux-arm64`); until one is published, Settings gives the two steps by
     hand.
+  - Amended 2026-11-25 (the answer path, ADRs 0026 and 0027):
+    - `~/.local/share/kinas/first-mate-relay.md`: the first mate's relay instruction, passed at launch.
+    - `~/.local/share/kinas/bin/claude`: the workers' wrapper. Its folder is first on `kinas-herdr.service`'s PATH, which takes one restart of Herdr's server, on the captain's second click.
+    - `~/.local/state/kinas/workers/<id>.settings.json` (0600): each worker's settings.
+    - Workers run in Claude Code's sandbox, which needs `bwrap`, `socat` and `@anthropic-ai/sandbox-runtime` in Node's global folder (the seccomp helper `vendor/seccomp/<arch>/apply-seccomp`).
+    - All four files are in Kinas's record. The runtime check reads `/proc` for the user's own processes: environment, command line, PID namespace and seccomp mode.
+    - The reserved paths no worker may read: `~/vault`, `~/.config/last30days`, `~/.config/brain`, `~/.config/search.env`, `~/.config/parallel.env`, `~/.config/agentwikis.env`, `~/.local/share/com.vercel.cli`, `~/.now`, `~/.local/share/now`, `~/.config/obsidian-headless` and `~/.local/state/kinas`.
 - **Claude Code** at `~/.local/bin/claude`, signed in by the captain, in the VPS's terminal, with their own
   subscription. `ANTHROPIC_API_KEY` must not be set there: its presence (never its value) is checked.
 
@@ -63,5 +70,6 @@ list of commands, no root, no shell strings.
   Hostinger token stays GET-only, `hostinger-token.md`).
 - Kinas holding an SSH key, reading `~/.ssh`, or putting a host, a path or ssh's error text in the log.
 - Anything run as root by Kinas; anything written under `~/.claude` on the VPS by Kinas.
+- A worker on the VPS started outside Kinas's sandbox while answers flow: the companion refuses every answer until none is left (ADR 0027).
 - A second account, or someone else's work, on the VPS's Claude Code; an `ANTHROPIC_API_KEY` in its environment.
 - Code, diffs, briefs, reports, transcripts, paths or branch names copied off the VPS (ADR 0023).

@@ -441,7 +441,8 @@ Chart bars are colored by provider category and the legend lists providers only;
 
 *1.14 (the factory in the cloud, slice 5.2, 2026-11-25):* while the agents run on the Linux machine, a section **Linux machine** follows This Mac:
 - the same three metric rows, from the companion's reading;
-- the place's label (`homelab`) as its source, and the same freshness caption;
+- the place's label (`homelab`) as its source, and the same freshness caption. It reads stale after 10 minutes, not
+  This Mac's 2: it comes with the crew's bundle, read every 5 minutes while the Crew page is hidden;
 - its CPU row says — until the companion has two samples.
 
 This Mac shows only the Mac's own row. The Claude gauges take whichever machine's status line was read last, and their source names it (`Claude Code status line · homelab`). The model chart and its tables count both machines' transcripts.

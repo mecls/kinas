@@ -111,6 +111,9 @@ pub struct UsageSnapshot {
     pub claude_hook: HookStatus,
 }
 
+/// The Linux machine's host reading goes stale after twice the bundle's slowest cadence (5 minutes), as Hostinger's does.
+pub const LINUX_HOST_STALE_MS: i64 = 600_000;
+
 fn default_limits(reader: &str) -> (i64, i64) {
     let r = match reader {
         "claude-plan" => Reader::ClaudePlan,
@@ -241,28 +244,33 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
 
     // The Linux machine's label is kept when the place goes back to the Mac, so its row never reads as this Mac's.
     let label = crate::system::get_setting(conn, org_id, crate::place::LABEL_KEY).and_then(|v| v.as_str().map(str::to_string));
-    let host_row = |r: &rusqlite::Row<'_>| -> rusqlite::Result<HostView> {
-        let updated_at: i64 = r.get(7)?;
-        let (stale, dead) = limits_for("host");
-        Ok(HostView {
-            machine: r.get(0)?,
-            cpu_pct: r.get(1)?,
-            mem_used_gb: r.get(2)?,
-            mem_total_gb: r.get(3)?,
-            disk_used_gb: r.get(4)?,
-            disk_total_gb: r.get(5)?,
-            disk_available_gb: r.get(6)?,
-            updated_at,
-            state: reading_state(Some(updated_at), stale, dead, None, now),
-        })
+    // The Linux machine's row comes with the crew's bundle, read every 60 s while the Crew page shows and every 5 minutes
+    // otherwise: stale after twice that, as Hostinger's machine is, never this Mac's 2 minutes.
+    let host_row_within = |(stale, dead): (i64, i64)| {
+        move |r: &rusqlite::Row<'_>| -> rusqlite::Result<HostView> {
+            let updated_at: i64 = r.get(7)?;
+            Ok(HostView {
+                machine: r.get(0)?,
+                cpu_pct: r.get(1)?,
+                mem_used_gb: r.get(2)?,
+                mem_total_gb: r.get(3)?,
+                disk_used_gb: r.get(4)?,
+                disk_total_gb: r.get(5)?,
+                disk_available_gb: r.get(6)?,
+                updated_at,
+                state: reading_state(Some(updated_at), stale, dead, None, now),
+            })
+        }
     };
+    let host_row = host_row_within(limits_for("host"));
+    let linux_limits = (LINUX_HOST_STALE_MS, limits_for("host").1.max(LINUX_HOST_STALE_MS));
     let linux_host = match crate::place::place(conn, org_id) {
         crate::place::Place::Vps { label, .. } => conn
             .prepare(
                 "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, updated_at FROM hosts
                  WHERE org_id = ?1 AND machine = ?2",
             )?
-            .query_map(params![org_id, label], host_row)?
+            .query_map(params![org_id, label], host_row_within(linux_limits))?
             .next()
             .transpose()?,
         crate::place::Place::Mac => None,
@@ -401,6 +409,11 @@ mod tests {
         assert_eq!(snap.host.as_ref().map(|h| h.machine.as_str()), Some("mac-9c2e"));
         let linux = snap.linux_host.unwrap();
         assert_eq!((linux.machine.as_str(), linux.cpu_pct, linux.disk_available_gb, linux.state), ("homelab", None, Some(150.0), ReadingState::Fresh));
+        // Read with the bundle every 5 minutes while the Crew page is hidden: 4 minutes old is fresh there, not here.
+        let later = read_now(&store, dir.path(), Backfill::default(), || NOW + 240_000).unwrap();
+        assert_eq!((later.host.unwrap().state, later.linux_host.unwrap().state), (ReadingState::Stale, ReadingState::Fresh));
+        let much_later = read_now(&store, dir.path(), Backfill::default(), || NOW + 700_000).unwrap();
+        assert_eq!(much_later.linux_host.unwrap().state, ReadingState::Stale);
 
         save(&store.conn(), &org, &Place::Mac).unwrap();
         let snap = read_now(&store, dir.path(), Backfill::default(), || NOW).unwrap();

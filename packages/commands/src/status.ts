@@ -29,6 +29,9 @@ export interface StatusResult {
   linux_host: (HostRow & { state: ReadingState }) | null;
 }
 
+/** The Linux machine's host reading: stale after twice the bundle's slowest cadence (readings.rs). */
+export const LINUX_HOST_STALE_MS = 600_000;
+
 const DEFAULT_LIMITS: Record<string, [number, number]> = {
   "claude-plan": [1_800_000, 43_200_000],
   "ollama-cloud": [600_000, 43_200_000],
@@ -93,7 +96,8 @@ export function statusFromStore(store: StorageAdapter, clock: number | (() => nu
     missing,
     usageToday: store.getUsageDaily(lisbonDay.format(new Date(now))),
     host: hostRow ? { ...hostRow, state: readingState({ updatedAt: hostRow.updated_at, staleAfterMs: hostStale, deadAfterMs: hostDead, now }) } : null,
-    linux_host: linuxRow ? { ...linuxRow, state: readingState({ updatedAt: linuxRow.updated_at, staleAfterMs: hostStale, deadAfterMs: hostDead, now }) } : null,
+    // Read with the crew's bundle, every 5 minutes at the slowest: stale after twice that (readings.rs LINUX_HOST_STALE_MS).
+    linux_host: linuxRow ? { ...linuxRow, state: readingState({ updatedAt: linuxRow.updated_at, staleAfterMs: LINUX_HOST_STALE_MS, deadAfterMs: Math.max(hostDead, LINUX_HOST_STALE_MS), now }) } : null,
   };
 }
 

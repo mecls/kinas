@@ -206,6 +206,13 @@ describe("the companion's reading", () => {
     mkdirSync(w.deps.paths.workers, { recursive: true });
     writeFileSync(launchRecordFile(w.deps.paths.workers, "planted-9c2e"), JSON.stringify({ v: 1, worktree: wt, deny: [], firstmate_local: firstmateLocal(wt) }));
     const row = (id: string, state: string, worktree: string) => ({ id, project: clone, current_state: { state }, paths: { worktree: { path: worktree, present: true } } });
+    // As measured: the worker's own report is the status log's last event while the row still reads the pane as busy.
+    const reportedBusy = (id: string, worktree: string) => ({
+      id,
+      project: clone,
+      current_state: { state: "working", source: "pane", detail: "harness busy (fm-spawn)" },
+      paths: { worktree: { path: worktree, present: true }, status_log: { present: true, kind: "event_history", last_event: { state: "done", note: "ready in branch fm/x" } } },
+    });
     const fleet = (planted: string, landed = false) =>
       JSON.stringify({
         backlog: { records: [{ structured: true, id: "landed-9c2e", state: "done" }, ...(landed ? [{ structured: true, id: "planted-9c2e", state: "done" }] : [])] },
@@ -215,12 +222,14 @@ describe("the companion's reading", () => {
           row("landed-9c2e", "done", wt),
           row("gone-9c2e", "done", join(root, "torn-down")),
           row("odd-9c2e", "done", "relative/wt"),
+          reportedBusy("busy-9c2e", join(root, "torn-down")),
         ],
       });
     let snap = fleet("done");
     w.deps.fm = { run: async (call) => (call.script === "fm-fleet-snapshot.sh" ? { exit: 0, timed_out: false, stdout: snap, stderr_first: null } : { exit: 1, timed_out: false, stdout: "", stderr_first: null }) };
     const r = await readOnce(w.deps, null, 0);
     expect(r.worktrees).toEqual([
+      { task: "busy-9c2e", checked_at: w.now.t, red: [], count: 0, unknown: false },
       { task: "gone-9c2e", checked_at: w.now.t, red: [], count: 0, unknown: false },
       { task: "odd-9c2e", checked_at: w.now.t, red: [], count: 0, unknown: true },
       { task: "planted-9c2e", checked_at: w.now.t, red: ["sub/.mcp.json"], count: 1, unknown: false },
@@ -236,7 +245,7 @@ describe("the companion's reading", () => {
     // Landed: no longer scanned, and gone from the reading.
     snap = fleet("paused", true);
     w.now.t += 60_000;
-    expect((await readOnce(w.deps, later, 0)).worktrees?.map((x) => x.task)).toEqual(["gone-9c2e", "odd-9c2e"]);
+    expect((await readOnce(w.deps, later, 0)).worktrees?.map((x) => x.task)).toEqual(["busy-9c2e", "gone-9c2e", "odd-9c2e"]);
   });
 
   test("tasksOf merges a record and a row as parse_fleet does; duePrs keeps done work's PR only while it was open", () => {

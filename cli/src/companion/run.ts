@@ -125,7 +125,10 @@ interface TaskPr {
   /** The row's `branch` and `project` (its clone): the review flag reads the branch from the clone's git folder. */
   branch?: string | null;
   project?: string | null;
-  /** The row says its worker reported done (`current_state.state` done), and the backlog says it landed (ADR 0028). */
+  /**
+   * The worker reported done: its status log's last event is `done`, or the row's state is (ADR 0028). Measured on the
+   * home lab, 2026-11-25: after the report the row stays `working` while Firstmate reads the pane as busy.
+   */
   reported?: boolean;
   landed?: boolean;
   /** The row's `paths.worktree.path`. */
@@ -140,8 +143,8 @@ export function tasksOf(snapshot: string): TaskPr[] {
   } catch {
     return [];
   }
-  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null; worktree: string | null }>();
-  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null, worktree: null });
+  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null; worktree: string | null; reported: string | null }>();
+  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null, worktree: null, reported: null });
   for (const r of array(root, ["backlog", "records"])) {
     const id = text(r, ["id"]);
     if ((r as { structured?: unknown }).structured !== true || id === null || tasks.has(id)) continue;
@@ -153,7 +156,7 @@ export function tasksOf(snapshot: string): TaskPr[] {
     let t = tasks.get(id);
     if (!t) {
       const b = (row as { backlog?: unknown }).backlog;
-      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null, worktree: null };
+      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null, worktree: null, reported: null };
       tasks.set(id, t);
     }
     t.state = text(row, ["current_state", "state"]);
@@ -161,6 +164,7 @@ export function tasksOf(snapshot: string): TaskPr[] {
     t.branch = text(row, ["branch"]);
     t.project = text(row, ["project"]);
     t.worktree = text(row, ["paths", "worktree", "path"]);
+    t.reported = text(row, ["paths", "status_log", "last_event", "state"]);
   }
   return [...tasks].map(([id, t]) => ({
     id,
@@ -168,7 +172,7 @@ export function tasksOf(snapshot: string): TaskPr[] {
     done: t.backlog === "done" || (t.backlog === null && t.state === "done"),
     ...(t.branch !== null ? { branch: t.branch } : {}),
     ...(t.project !== null ? { project: t.project } : {}),
-    reported: t.state === "done",
+    reported: t.state === "done" || t.reported === "done",
     landed: t.backlog === "done",
     ...(t.worktree !== null ? { worktree: t.worktree } : {}),
   }));

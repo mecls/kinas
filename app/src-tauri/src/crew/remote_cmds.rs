@@ -44,7 +44,7 @@ pub enum MachineState {
     /// The door failed less than `RECONNECTING_MS` ago, after a success; or nothing has been tried yet.
     Reconnecting,
     Unreachable,
-    /// The door works but the companion's run loop has not read for `HEARTBEAT_MS`: `Kinas on the VPS is not running`.
+    /// The door works but the companion's run loop has not read for `HEARTBEAT_MS`: `Kinas on the Linux machine is not running`.
     NotRunning,
 }
 
@@ -112,7 +112,7 @@ pub async fn place_status(app: AppHandle) -> Result<Option<PlaceStatus>, RemoteE
         Ok(Some(status_of(&label, reach.as_ref(), failing_since, now_ms())))
     })
     .await
-    .map_err(|e| RemoteError { message: format!("could not read the VPS's state: {e}") })?
+    .map_err(|e| RemoteError { message: format!("could not read the Linux machine's state: {e}") })?
 }
 
 /// A version as the screen may show it: at most 40 characters of digits, dots and letters.

@@ -69,7 +69,7 @@ export const SETTINGS: readonly SettingEntry[] = [
   { id: "hostinger.machine", section: "hostinger", label: "Machine", description: "The VPS Kinas watches." },
   { id: "place.where", section: "place", label: "Agents run on", description: "This Mac, or one Linux machine you own or rent and reach with ssh." },
   { id: "place.target", section: "place", label: "SSH target", description: "user@host, host, or an ssh alias. Your own key and ssh-agent; Kinas holds none." },
-  { id: "place.label", section: "place", label: "Label", description: "The machine's short name in Kinas, such as vps-1." },
+  { id: "place.label", section: "place", label: "Label", description: "The machine's short name in Kinas, such as homelab." },
   {
     id: "place.reachable",
     section: "place",
@@ -85,7 +85,7 @@ export const SETTINGS: readonly SettingEntry[] = [
   {
     id: "place.setup",
     section: "place",
-    label: "On the VPS",
+    label: "On the Linux machine",
     description: "Each piece Kinas checks there. Install is one yes each, as your own user, never as root.",
   },
   {

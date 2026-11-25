@@ -38,7 +38,7 @@ describe("setup's words in Settings (slice 4.3)", () => {
   test("an install that stops something running takes a second click, with its warning (ADR 0027)", () => {
     expect(secondClick({ adopt: false, restart: false })).toBeNull();
     expect(secondClick({ adopt: true, restart: false })).toBe("This stops Herdr's running server there and every pane in it. Click again to go ahead.");
-    expect(secondClick({ adopt: false, restart: true })).toBe("closes every pane on the VPS: close what's open first");
+    expect(secondClick({ adopt: false, restart: true })).toBe("closes every pane on the Linux machine: close what's open first");
   });
 
   test("the by-hand lines name the target; all green is done", () => {

@@ -98,7 +98,7 @@ function SetupTable({
   return (
     <Table
       className="place-checks"
-      caption="On the VPS"
+      caption="On the Linux machine"
       columns={SETUP_COLUMNS}
       rows={rows}
       rowKey={(r) => String(r.id)}
@@ -196,7 +196,7 @@ export function PlaceSection({ active }: { active: boolean }) {
 
   const onVps = place?.place === "vps";
   const ready = target.trim() !== "" && label.trim() !== "";
-  const useVps = () => save({ place: "vps", target: target.trim(), label: label.trim() }, "Agents run on the VPS");
+  const useVps = () => save({ place: "vps", target: target.trim(), label: label.trim() }, "Agents run on the Linux machine");
 
   return (
     <Block id="place">
@@ -213,7 +213,7 @@ export function PlaceSection({ active }: { active: boolean }) {
               This Mac
             </Button>
             <Button kind={onVps ? "primary" : "secondary"} className="button" aria-pressed={onVps} disabled={busy || place === null || onVps || !ready} onClick={useVps}>
-              VPS
+              Linux machine
             </Button>
           </div>
         </Row>
@@ -240,13 +240,13 @@ export function PlaceSection({ active }: { active: boolean }) {
               className="ui-input field crew-mono"
               autoComplete="off"
               spellCheck={false}
-              aria-label="VPS label"
-              placeholder="vps-1"
+              aria-label="Machine label"
+              placeholder="homelab"
               value={label}
               onChange={(e) => setLabel(e.currentTarget.value)}
             />
             {/* Several buttons on this page say "Save"; this one names what it saves. */}
-            <Button type="submit" kind="primary" className="button" aria-label="Save the VPS" disabled={busy || !ready}>
+            <Button type="submit" kind="primary" className="button" aria-label="Save the Linux machine" disabled={busy || !ready}>
               {busy ? "Saving…" : "Save"}
             </Button>
           </form>
@@ -260,7 +260,7 @@ export function PlaceSection({ active }: { active: boolean }) {
               </Button>
             </div>
           ) : (
-            <span className="crew-quiet-inline">Agents run on this Mac. Sessions on a VPS keep running there, unshown.</span>
+            <span className="crew-quiet-inline">Agents run on this Mac. Sessions on the Linux machine keep running there, unshown.</span>
           )}
         </Row>
         <Row id="place.bootstrap" wide>
@@ -287,7 +287,7 @@ export function PlaceSection({ active }: { active: boolean }) {
               <span className="crew-quiet-inline">Then Check again.</span>
             </div>
           ) : (
-            <span className="crew-quiet-inline">{onVps ? "Kinas answers there." : "Only with a VPS."}</span>
+            <span className="crew-quiet-inline">{onVps ? "Kinas answers there." : "Only with a Linux machine."}</span>
           )}
         </Row>
         <Row id="place.setup" wide>
@@ -296,7 +296,7 @@ export function PlaceSection({ active }: { active: boolean }) {
               <SetupTable checks={hello.checks} busy={installing} armed={armed} onInstall={install} />
             </div>
           ) : (
-            <span className="crew-quiet-inline">{onVps ? "Once Kinas answers there." : "Only with a VPS."}</span>
+            <span className="crew-quiet-inline">{onVps ? "Once Kinas answers there." : "Only with a Linux machine."}</span>
           )}
         </Row>
         <Row id="place.clones" wide>
@@ -320,7 +320,7 @@ export function PlaceSection({ active }: { active: boolean }) {
               </ul>
             )
           ) : (
-            <span className="crew-quiet-inline">{onVps ? "Once Kinas answers there." : "Only with a VPS."}</span>
+            <span className="crew-quiet-inline">{onVps ? "Once Kinas answers there." : "Only with a Linux machine."}</span>
           )}
         </Row>
         <div className="settings-card-foot">

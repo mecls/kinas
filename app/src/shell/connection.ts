@@ -61,7 +61,7 @@ const MACHINE_WORD: Record<MachineState, string> = {
   connected: "connected",
   reconnecting: "reconnecting",
   unreachable: "unreachable",
-  not_running: "Kinas on the VPS is not running",
+  not_running: "Kinas on the Linux machine is not running",
 };
 
 /** The machine part from `place_status`; null while the agents run on this Mac. Times are Lisbon's, as the Usage page's. */

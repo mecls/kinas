@@ -152,10 +152,10 @@ impl ScriptOut {
 pub(crate) fn decode(value: serde_json::Value) -> Result<Bundle, String> {
     match value.get("v").and_then(serde_json::Value::as_u64) {
         Some(v) if v == u64::from(BUNDLE_VERSION) => {}
-        Some(v) => return Err(format!("the VPS answered with reading version {v}; this Kinas reads version {BUNDLE_VERSION}")),
-        None => return Err("the VPS's answer is not a reading".into()),
+        Some(v) => return Err(format!("the Linux machine answered with reading version {v}; this Kinas reads version {BUNDLE_VERSION}")),
+        None => return Err("the Linux machine's answer is not a reading".into()),
     }
-    serde_json::from_value(value).map_err(|_| "the VPS's reading could not be read".into())
+    serde_json::from_value(value).map_err(|_| "the Linux machine's reading could not be read".into())
 }
 
 /// The VPS as the door last reached it (0008's `vps_reachability`): one row, replaced on every attempt; the last success
@@ -205,9 +205,9 @@ mod tests {
     fn another_version_or_shape_is_refused_with_one_line() {
         let mut v2 = fixture();
         v2["v"] = serde_json::json!(2);
-        assert_eq!(decode(v2).unwrap_err(), "the VPS answered with reading version 2; this Kinas reads version 1");
-        assert_eq!(decode(serde_json::json!({"error": "no-reading"})).unwrap_err(), "the VPS's answer is not a reading");
-        assert_eq!(decode(serde_json::json!({"v": 1})).unwrap_err(), "the VPS's reading could not be read");
+        assert_eq!(decode(v2).unwrap_err(), "the Linux machine answered with reading version 2; this Kinas reads version 1");
+        assert_eq!(decode(serde_json::json!({"error": "no-reading"})).unwrap_err(), "the Linux machine's answer is not a reading");
+        assert_eq!(decode(serde_json::json!({"v": 1})).unwrap_err(), "the Linux machine's reading could not be read");
     }
 
     #[test]

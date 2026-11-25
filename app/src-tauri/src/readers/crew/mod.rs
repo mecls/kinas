@@ -478,14 +478,14 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo, sta
             first_answer(app, started_at, first_answer_seen, view.as_ref());
             if !b.installed {
                 let conn = store.conn();
-                let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::NotConfigured("Firstmate isn't installed on the VPS"), now);
+                let _ = write_reader_status(&conn, store.org_id(), Reader::Crew, Outcome::NotConfigured("Firstmate isn't installed on the Linux machine"), now);
                 drop(conn);
                 changed(app);
                 return true;
             }
             let outcome = match &b.snapshot {
                 Some(out) => read(&out.ran()),
-                None => Err("the VPS sent no fleet snapshot".into()),
+                None => Err("the Linux machine sent no fleet snapshot".into()),
             };
             let found = match &outcome {
                 Ok(fleet) => found_remote(&b, fleet, view.as_ref(), memo),

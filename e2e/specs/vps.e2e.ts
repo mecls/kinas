@@ -77,8 +77,8 @@ describe("agents on a VPS", () => {
     expect(await browser.execute(reachable)).toContain("Agents run on this Mac.");
 
     await $('[data-section="place"] input[aria-label="SSH target"]').addValue(TARGET);
-    await $('[data-section="place"] input[aria-label="VPS label"]').addValue(LABEL);
-    await $('[data-section="place"] button[aria-label="Save the VPS"]').click();
+    await $('[data-section="place"] input[aria-label="Machine label"]').addValue(LABEL);
+    await $('[data-section="place"] button[aria-label="Save the Linux machine"]').click();
 
     const row = await waitInPage(reachable, (t) => t.includes("connected"), "the Reachable row never said connected");
     expect(row).toContain("connected · Kinas 0.1.0 there");
@@ -87,7 +87,7 @@ describe("agents on a VPS", () => {
     const pressed = await browser.execute(() =>
       [...document.querySelectorAll('[data-setting="place.where"] button[aria-pressed="true"]')].map((b) => b.textContent?.trim()),
     );
-    expect(pressed).toEqual(["VPS"]);
+    expect(pressed).toEqual(["Linux machine"]);
 
     // Every call went through the door with ADR 0024's argv, word for word; the stub never saw anything else.
     const argvs = readFileSync(calls, "utf8").trim().split("\n");

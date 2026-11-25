@@ -15,7 +15,7 @@ export const CHECK_LABELS: Record<string, string> = {
   "permission-mode": "Workers' permission mode",
   tools: "Crew tools",
   node: "Node",
-  companion: "Kinas on the VPS",
+  companion: "Kinas on the Linux machine",
   linger: "Lingering",
   claude: "Claude Code",
   gh: "gh",
@@ -50,7 +50,7 @@ export function installLabel(check: Pick<SetupCheck, "install" | "adopt" | "rest
 export const ADOPT_WARNING = "This stops Herdr's running server there and every pane in it. Click again to go ahead.";
 
 /** The second click's warning for Restart Herdr (DESIGN.md 1.14, ADR 0027), in --danger words beside the button. */
-export const RESTART_WARNING = "closes every pane on the VPS: close what's open first";
+export const RESTART_WARNING = "closes every pane on the Linux machine: close what's open first";
 
 /** The warning an install's first click shows, or null when one click does it. */
 export function secondClick(check: Pick<SetupCheck, "adopt" | "restart">): string | null {

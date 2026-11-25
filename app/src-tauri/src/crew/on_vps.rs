@@ -84,7 +84,7 @@ pub(crate) fn launch(app: &AppHandle) -> Result<Launched, CrewError> {
         "focused" => Ok(Launched::Focused),
         "run" => Ok(Launched::Run),
         "created" => Ok(Launched::Created),
-        other => Err(CrewError::internal(format!("the VPS answered the launch with {other:?}"))),
+        other => Err(CrewError::internal(format!("the Linux machine answered the launch with {other:?}"))),
     }
 }
 
@@ -103,7 +103,7 @@ pub(crate) fn open(app: &AppHandle, real: &std::path::Path, root: &std::path::Pa
     match act(app, &Request::OpenWorkspace { folder, label: label.to_string() }).map_err(|e| e.message)?.as_str() {
         "focused" => Ok(Opened::Focused),
         "created" => Ok(Opened::Created),
-        other => Err(format!("the VPS answered Open in the terminal with {other:?}")),
+        other => Err(format!("the Linux machine answered Open in the terminal with {other:?}")),
     }
 }
 

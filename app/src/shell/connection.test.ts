@@ -105,7 +105,7 @@ describe("the agents' machine on the bar (DESIGN.md 1.14; build spec §4, Journe
     expect(down?.word).toBe("unreachable");
     expect(down?.detail).toBe(`vps-1 · unreachable since ${at(now - 120_000)} · last reading ${at(now - 135_000)} · can't reach vps-1: not reachable`);
     const stopped = machineOf(status({ state: "not_running" }), now);
-    expect(stopped?.word).toBe("Kinas on the VPS is not running");
+    expect(stopped?.word).toBe("Kinas on the Linux machine is not running");
     expect(stopped?.detail).toBe(`vps-1 · reached, but its reading loop has stopped · last reading ${at(now - 15_000)}`);
     expect(machineOf(status({ state: "reconnecting", last_success_at: null }), now)?.detail).toBe("vps-1 · reconnecting · no reading yet");
   });

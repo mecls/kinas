@@ -45,6 +45,8 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     - `~/.local/share/kinas/first-mate-relay.md`: the first mate's relay instruction, passed at launch.
     - `~/.local/share/kinas/bin/claude`: the workers' wrapper. Its folder is first on `kinas-herdr.service`'s PATH, which takes one restart of Herdr's server, on the captain's second click.
     - `~/.local/state/kinas/workers/<id>.settings.json` (0600): each worker's settings.
+    - `~/.local/state/kinas/workers/<id>.launch.json` (0600, ADR 0028): the worker's worktree, and the sha256 of Firstmate's `.claude/settings.local.json` at launch. The worktree scan reads it.
+    - In each task clone's `.git/info/exclude` (ADR 0028): one root-anchored line for each path Claude Code's sandbox protects that was missing from a worktree at launch (its empty placeholders), under Firstmate's own `.claude/settings.local.json` line. Lines are only added.
     - Workers run in Claude Code's sandbox, which needs `bwrap`, `socat` and `@anthropic-ai/sandbox-runtime` in Node's global folder (the seccomp helper `vendor/seccomp/<arch>/apply-seccomp`).
     - All four files are in Kinas's record. The runtime check reads `/proc` for the user's own processes: environment, command line, PID namespace and seccomp mode.
     - The reserved paths no worker may read: `~/vault`, `~/.config/last30days`, `~/.config/brain`, `~/.config/search.env`, `~/.config/parallel.env`, `~/.config/agentwikis.env`, `~/.local/share/com.vercel.cli`, `~/.now`, `~/.local/share/now`, `~/.config/obsidian-headless` and `~/.local/state/kinas`.

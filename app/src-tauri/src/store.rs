@@ -16,6 +16,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (7, include_str!("../../../migrations/0007_crew_current.sql")),
     (8, include_str!("../../../migrations/0008_cloud_factory.sql")),
     (9, include_str!("../../../migrations/0009_crew_review.sql")),
+    (10, include_str!("../../../migrations/0010_crew_worktree_scan.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -397,6 +398,17 @@ mod tests {
                 "ALTER TABLE crew_tasks ADD COLUMN branch_touches TEXT;",
                 "ALTER TABLE crew_tasks ADD COLUMN branch_checked_at INTEGER;",
             ]
+        );
+    }
+
+    /// The worktree scan (ADR 0028): 0010 only adds two columns.
+    #[test]
+    fn migration_0010_only_adds_two_columns() {
+        let sql = MIGRATIONS.iter().find(|(v, _)| *v == 10).expect("0010 listed").1;
+        let statements: Vec<&str> = sql.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("--")).collect();
+        assert_eq!(
+            statements,
+            ["ALTER TABLE crew_tasks ADD COLUMN worktree_touches TEXT;", "ALTER TABLE crew_tasks ADD COLUMN worktree_checked_at INTEGER;"]
         );
     }
 

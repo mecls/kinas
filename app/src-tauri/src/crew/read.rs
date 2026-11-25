@@ -91,6 +91,9 @@ pub struct TaskRow {
     /// The review flag (the captain's (b); ADR 0027): the PR's or the branch's `.claude/` and `.mcp.json` paths, or that
     /// a reading could not be whole. None when neither found anything.
     pub review: Option<Touches>,
+    /// The worktree scan (ADR 0028): the `.claude` and `.mcp.json` paths in the task's worktree on the VPS that aren't
+    /// the repository's, or that the walk couldn't finish. None when the last scan found nothing, or there was none.
+    pub worktree: Option<Touches>,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,7 +185,7 @@ fn task_select() -> String {
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
            {STORED_COLUMNS},
            EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4 AND w.observed_at <= ?5),
-           dispatched_at, merged_via, pr_touches, branch_touches
+           dispatched_at, merged_via, pr_touches, branch_touches, worktree_touches
          FROM crew_tasks t"
     )
 }
@@ -225,6 +228,7 @@ fn task_row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
             touches_of(r.get::<_, Option<String>>(12 + STORED_LEN)?.as_deref()).as_ref(),
             touches_of(r.get::<_, Option<String>>(13 + STORED_LEN)?.as_deref()).as_ref(),
         ),
+        worktree: touches_of(r.get::<_, Option<String>>(14 + STORED_LEN)?.as_deref()).filter(|t| !t.clear()),
     })
 }
 

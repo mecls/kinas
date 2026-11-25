@@ -27,6 +27,7 @@ import {
   wrapperText,
   type WorkerDeps,
 } from "./worker.ts";
+import { launchRecordFile, readLaunchRecord, EXCLUDE_HEADER } from "./plants.ts";
 import { readWritten } from "./written.ts";
 
 // Firstmate's workers in Claude Code's sandbox (ADR 0027; build spec §12 slices 4.9–4.10).
@@ -37,9 +38,10 @@ const FM_SETTINGS = '{"feedbackDrafts":"off","attribution":{"commit":"","pr":"",
 const FM_ARGV = ["--dangerously-skip-permissions", "--add-dir", "/h/fm/state/operational-inbox", "--settings", FM_SETTINGS, "--append-system-prompt", "You are task t1.\nReport with 'fm-…'.", "the brief"];
 
 describe("the policy (as approved, with the captain's conditions)", () => {
-  const policy = workerPolicy({ home: "/home/claude/.local/share/kinas/firstmate", id: "t1", uid: 1001, tmp: "/tmp" }) as {
+  const DENY = ["/wt/.claude", "/wt/.mcp.json", "/wt/packages/x/.mcp.json"];
+  const policy = workerPolicy({ home: "/home/claude/.local/share/kinas/firstmate", id: "t1", uid: 1001, tmp: "/tmp", deny: DENY }) as {
     permissions: { blockWritesOutsideWorkingDirectories: boolean; deny: string[] };
-    sandbox: { enabled: boolean; failIfUnavailable: boolean; allowUnsandboxedCommands: boolean; filesystem: { allowWrite: string[] }; network: { allowedDomains: string[]; strictAllowlist: boolean } };
+    sandbox: { enabled: boolean; failIfUnavailable: boolean; allowUnsandboxedCommands: boolean; filesystem: { allowWrite: string[]; denyWrite: string[] }; network: { allowedDomains: string[]; strictAllowlist: boolean } };
     env: Record<string, string>;
   };
 
@@ -48,6 +50,8 @@ describe("the policy (as approved, with the captain's conditions)", () => {
     expect(policy.sandbox.failIfUnavailable).toBe(true);
     expect(policy.sandbox.allowUnsandboxedCommands).toBe(false);
     expect(policy.sandbox.filesystem.allowWrite).toEqual(["/home/claude/.local/share/kinas/firstmate/state/t1.status"]);
+    // ADR 0028: the launch's `.claude` and `.mcp.json` paths, denied to every command the worker runs, by exact path.
+    expect(policy.sandbox.filesystem.denyWrite).toEqual(DENY);
     expect(policy.permissions.blockWritesOutsideWorkingDirectories).toBe(true);
   });
 
@@ -144,13 +148,82 @@ describe("worker-launch", () => {
     expect(statSync(out.file).mode & 0o777).toBe(0o600);
     const doc = JSON.parse(text);
     expect(doc.feedbackDrafts).toBe("off");
-    expect(doc.sandbox).toEqual(workerPolicy({ home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp }).sandbox);
-    expect(text).toBe(settingsText({ feedbackDrafts: "off", attribution: { commit: "", pr: "", sessionUrl: false }, ...workerPolicy({ home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp }) }));
+    const deny = [`${cwd}/.claude`, `${cwd}/.mcp.json`];
+    expect(doc.sandbox).toEqual(workerPolicy({ home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp, deny }).sandbox);
+    expect(text).toBe(settingsText({ feedbackDrafts: "off", attribution: { commit: "", pr: "", sessionUrl: false }, ...workerPolicy({ home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp, deny }) }));
+    // The launch record, Kinas's own and out of the worker's reach: the folder, the denies, Firstmate's file (none here).
+    expect(readLaunchRecord(launchRecordFile(paths.workers, "t1"))).toEqual({ v: 1, worktree: cwd, deny, firstmate_local: null });
+    expect(statSync(launchRecordFile(paths.workers, "t1")).mode & 0o777).toBe(0o600);
     expect(statSync(join(paths.home, "state", "t1.status")).isFile()).toBe(true);
     // A status file Firstmate already wrote is appended to, never emptied.
     writeFileSync(join(paths.home, "state", "t1.status"), "working\n");
     expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
     expect(readFileSync(join(paths.home, "state", "t1.status"), "utf8")).toBe("working\n");
+  });
+
+  test("ADR 0028: every .claude and .mcp.json in the folder, at any depth, is denied by path, the root's always", () => {
+    const { paths, d } = world();
+    const cwd = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wt-")));
+    for (const dir of [".claude", "packages/x/.claude/skills", "node_modules/y", "deep/a/b"]) mkdirSync(join(cwd, dir), { recursive: true });
+    writeFileSync(join(cwd, ".claude", "settings.local.json"), '{"hooks":{}}\n');
+    writeFileSync(join(cwd, "packages/x/.claude/skills/SKILL.md"), "x");
+    writeFileSync(join(cwd, "node_modules/y/.mcp.json"), "{}");
+    writeFileSync(join(cwd, "deep/a/b/.mcp.json"), "{}");
+    symlinkSync("/tmp", join(cwd, "deep/a/.claude"));
+    // A repository's own .git folder holds no worktree file: never entered.
+    mkdirSync(join(cwd, ".git", "x", ".claude"), { recursive: true });
+    const out = workerLaunch(d, {}, "t1", cwd, FM_ARGV);
+    if ("refused" in out) throw new Error(out.refused);
+    const doc = JSON.parse(readFileSync(out.file, "utf8"));
+    const want = [".claude", ".mcp.json", "deep/a/.claude", "deep/a/b/.mcp.json", "node_modules/y/.mcp.json", "packages/x/.claude"].map((p) => `${cwd}/${p}`);
+    expect(doc.sandbox.filesystem.denyWrite).toEqual(want);
+    const record = readLaunchRecord(launchRecordFile(paths.workers, "t1"));
+    expect(record?.deny).toEqual(want);
+    // Firstmate's hooks file, as it was when the worker started: the scan accepts exactly that file there later.
+    expect(record?.firstmate_local).toBe(sha256('{"hooks":{}}\n'));
+  });
+
+  test("ADR 0028: a folder the walk can't finish refuses the worker", () => {
+    const { d } = world();
+    const cwd = mkdtempSync(join(tmpdir(), "kinas-wt-"));
+    mkdirSync(join(cwd, "locked"));
+    chmodSync(join(cwd, "locked"), 0o000);
+    try {
+      expect(workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toEqual({ refused: "the worker's folder can't be checked for .claude and .mcp.json (locked can't be read)" });
+    } finally {
+      chmodSync(join(cwd, "locked"), 0o755);
+    }
+  });
+
+  test("ADR 0028: the sandbox's placeholders missing from the worktree go into the clone's info/exclude, once, beside Firstmate's own line", () => {
+    const { paths, d } = world();
+    // A clone under <home>/projects/ and a worktree of it, as Treehouse makes them: the worktree's `.git` is a file.
+    const git = join(paths.home, "projects", "shop", ".git");
+    mkdirSync(join(git, "worktrees", "1"), { recursive: true });
+    mkdirSync(join(git, "info"), { recursive: true });
+    writeFileSync(join(git, "info", "exclude"), "# git's own\n.claude/settings.local.json\n");
+    writeFileSync(join(git, "worktrees", "1", "commondir"), "../..\n");
+    const cwd = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wt-")));
+    writeFileSync(join(cwd, ".git"), `gitdir: ${git}/worktrees/1\n`);
+    mkdirSync(join(cwd, ".claude"));
+    writeFileSync(join(cwd, ".claude", "settings.json"), "{}");
+    writeFileSync(join(cwd, ".bashrc"), "# the repository's own");
+    expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
+    const text = readFileSync(join(git, "info", "exclude"), "utf8");
+    const lines = text.split("\n");
+    expect(lines.slice(0, 3)).toEqual(["# git's own", ".claude/settings.local.json", EXCLUDE_HEADER]);
+    // The paths present are left alone: .claude itself, its settings.json, the repository's .bashrc.
+    for (const l of ["/.claude", "/.claude/settings.json", "/.bashrc"]) expect(lines).not.toContain(l);
+    for (const l of ["/.claude/hooks", "/.claude/skills", "/.mcp.json", "/.zshrc", "/.idea", "/.vscode", "/.gitmodules"]) expect(lines).toContain(l);
+    // Again: nothing added twice.
+    expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
+    expect(readFileSync(join(git, "info", "exclude"), "utf8")).toBe(text);
+    // A `.git` that points outside <home>/projects/ is not followed, and the worker still starts.
+    const other = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wt-")));
+    const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), "kinas-git-")));
+    writeFileSync(join(other, ".git"), `gitdir: ${elsewhere}\n`);
+    expect("refused" in workerLaunch(d, {}, "t2", other, FM_ARGV)).toBe(false);
+    expect(existsSync(join(elsewhere, "info", "exclude"))).toBe(false);
   });
 
   test("refuses, and writes nothing, for each thing that would not hold", () => {
@@ -392,6 +465,27 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
     expect(m.check([server, { ...worker, env: { FM_TASK_ID: "t1", [MARKER]: sha256(extra) } }]).problems).toEqual(["t1: its settings carry hooks"]);
     rmSync(m.out.file);
     expect(m.check([server, worker]).problems).toEqual(["t1: its settings file is gone"]);
+  });
+
+  test("ADR 0028: the denies come from Kinas's launch record, which must be there and match how the worker started", () => {
+    const m = machine();
+    const { worker, server } = m.all;
+    expect(m.check([server, worker]).problems).toEqual([]);
+    const file = launchRecordFile(m.paths.workers, "t1");
+    const record = readLaunchRecord(file)!;
+    // Another folder than the one the wrapper passed as --add-dir.
+    writeFileSync(file, JSON.stringify({ ...record, worktree: "/elsewhere" }));
+    expect(m.check([server, worker]).problems).toEqual(["t1: its launch record doesn't match how it started"]);
+    // Without the root's two denies, or with a path outside the folder.
+    writeFileSync(file, JSON.stringify({ ...record, deny: [`${m.wt}/.claude`] }));
+    expect(m.check([server, worker]).problems).toEqual(["t1: its launch record doesn't match how it started"]);
+    writeFileSync(file, JSON.stringify({ ...record, deny: [...record.deny, `${m.wt}/../x`] }));
+    expect(m.check([server, worker]).problems).toEqual(["t1: its launch record doesn't match how it started"]);
+    // A record with one more deny than the settings file holds: the file is not the policy for that record.
+    writeFileSync(file, JSON.stringify({ ...record, deny: [...record.deny, `${m.wt}/pkg/.mcp.json`] }));
+    expect(m.check([server, worker]).problems).toEqual(["t1: its settings aren't Kinas's policy today"]);
+    rmSync(file);
+    expect(m.check([server, worker]).problems).toEqual(["t1: its launch record is gone"]);
   });
 
   test("any other process with FM_TASK_ID in the host's namespace is a worker Kinas can't see the sandbox of — but not a launch step", () => {

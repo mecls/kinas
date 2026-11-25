@@ -231,6 +231,7 @@ struct Memo {
     pr_checked: HashMap<String, i64>,
     /// When each task's branch was last read for the review flag, by task id — here, or on the VPS by the bundle's stamp.
     branch_checked: HashMap<String, i64>,
+    worktree_checked: HashMap<String, i64>,
     /// When `fm-capacity.sh` last ran — here, or on the VPS by the bundle's stamp.
     capacity_at: Option<i64>,
     /// Refresh readings was asked with the agents on a VPS: the next cycle asks the companion for a reading first.
@@ -397,6 +398,8 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
                 lanes: lanes_due(home, memo, now_ms()),
                 ledger: ledger_read(app, home),
                 branches: branches_of(fleet, home, memo, visible),
+                // The worktree scan is the VPS's (ADR 0028): on the Mac, Kinas doesn't sandbox workers.
+                worktrees: HashMap::new(),
             }
         }
         Err(_) => Found::default(),
@@ -565,7 +568,15 @@ fn found_remote(b: &bundle::Bundle, fleet: &Fleet, view: Option<&View>, memo: &m
         let ran = out.out.ran();
         branches.insert(out.task.clone(), touches::of_branch(matches!(ran.exit, Exit::Code(0)), &out.out.stdout));
     }
-    Found { workers: mirror::workers_of(fleet, view, Some(REMOTE_SESSION)), repos, prs, lanes, ledger: b.ledger.as_ref().map(bundle::ledger_of), branches }
+    // Each worktree the VPS scanned since the last bundle, once (ADR 0028): its red paths, or that it couldn't be read.
+    let mut worktrees = HashMap::new();
+    for out in &b.worktrees {
+        if memo.worktree_checked.insert(out.task.clone(), out.checked_at) == Some(out.checked_at) {
+            continue;
+        }
+        worktrees.insert(out.task.clone(), touches::of_paths(out.red.iter().map(String::as_str), !out.unknown));
+    }
+    Found { workers: mirror::workers_of(fleet, view, Some(REMOTE_SESSION)), repos, prs, lanes, ledger: b.ledger.as_ref().map(bundle::ledger_of), branches, worktrees }
 }
 
 /// A clone's repository, from the memo when it has one; read and remembered otherwise, unless there is none yet.
@@ -833,6 +844,7 @@ mod tests {
             lanes: Some(read_capacity(&Ran { exit: Exit::Code(0), stdout: capacity_json.clone(), first_err: None, last_err: None }, now)),
             ledger: ledger::read_ledger(&home.join(ledger::LEDGER_FILE), ledger::Cursor::default()).unwrap(),
             branches: HashMap::from([("stock-webhook-9c2e".to_string(), touches::of_branch(true, BRANCH_LOG))]),
+            worktrees: HashMap::new(),
         };
 
         // The VPS: the same facts as the companion sends them.
@@ -880,6 +892,49 @@ mod tests {
         // The same bundle again applies no PR or lane answer twice; the ledger chunk is the companion's to advance.
         let again = found_remote(&b, &fleet, Some(&view), &mut remote_memo);
         assert!(again.prs.is_empty() && again.lanes.is_none() && again.branches.is_empty());
+    }
+
+    /// ADR 0028: the VPS's worktree scan arrives in the bundle, is applied once, and reaches the board's row as its own
+    /// field, beside the review flag; a later clear scan clears it; a walk that couldn't finish asks for review.
+    #[test]
+    fn the_worktree_scan_reaches_the_card_once_and_a_clear_scan_clears_it() {
+        let (_dir, home, snapshot) = home_with_clones();
+        let fleet = parse_fleet(&snapshot).unwrap();
+        let now = 1_794_834_000_000;
+        let bundle_with = |worktrees: serde_json::Value| {
+            bundle::decode(serde_json::json!({
+                "v": 1, "at": now, "companion": { "version": "0.1.0", "since": now, "heartbeat_at": now },
+                "installed": true, "home": home, "snapshot": null, "capacity": null, "capacity_at": null,
+                "origins": {}, "herdr_view": null, "herdr_foreground": null, "prs": [], "worktrees": worktrees
+            }))
+            .unwrap()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut memo = Memo::default();
+        let row = |store: &Store| {
+            let snap = crate::crew::read::snapshot_view(&store.conn(), store.org_id(), now, true, true, None).unwrap();
+            snap.tasks.into_iter().find(|t| t.id == "stock-webhook-9c2e").unwrap().worktree
+        };
+
+        let planted = bundle_with(serde_json::json!([{ "task": "stock-webhook-9c2e", "checked_at": now, "red": ["sub/.claude/x", "sub/.mcp.json"], "count": 2, "unknown": false }]));
+        let found = found_remote(&planted, &fleet, None, &mut memo);
+        assert_eq!(found.worktrees["stock-webhook-9c2e"], touches::Touches { paths: vec!["sub/.claude/x".into(), "sub/.mcp.json".into()], unknown: false });
+        mirror::record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &found, now).unwrap();
+        assert_eq!(row(&store), Some(touches::Touches { paths: vec!["sub/.claude/x".into(), "sub/.mcp.json".into()], unknown: false }));
+        // The review flag is its own: the scan doesn't put the task's committed paths in doubt, nor the other way round.
+        let snap = crate::crew::read::snapshot_view(&store.conn(), store.org_id(), now, true, true, None).unwrap();
+        assert_eq!(snap.tasks.iter().find(|t| t.id == "stock-webhook-9c2e").unwrap().review, None);
+
+        // The same bundle again applies nothing; a later scan that found nothing clears the card.
+        assert!(found_remote(&planted, &fleet, None, &mut memo).worktrees.is_empty());
+        let clear = bundle_with(serde_json::json!([{ "task": "stock-webhook-9c2e", "checked_at": now + 60_000, "red": [], "count": 0, "unknown": false }]));
+        mirror::record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &found_remote(&clear, &fleet, None, &mut memo), now + 60_000).unwrap();
+        assert_eq!(row(&store), None);
+
+        let unread = bundle_with(serde_json::json!([{ "task": "stock-webhook-9c2e", "checked_at": now + 120_000, "red": [], "count": 0, "unknown": true }]));
+        mirror::record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &found_remote(&unread, &fleet, None, &mut memo), now + 120_000).unwrap();
+        assert_eq!(row(&store), Some(touches::Touches { paths: vec![], unknown: true }));
     }
 
     /// What `git log --name-only --format= -z` prints for two commits.

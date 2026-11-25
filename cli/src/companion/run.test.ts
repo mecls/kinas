@@ -6,6 +6,7 @@ import { makeFakeHome, writeConfig } from "../../../e2e/fake-firstmate/make.ts";
 import { firstmate, type ScriptOut } from "./firstmate.ts";
 import { companionPaths } from "./paths.ts";
 import { branchArgs, branchExistsArgs, cloneOrigin, duePrs, originUrl, prUrlOk, readOnce, tasksOf, type Deps } from "./run.ts";
+import { firstmateLocal, launchRecordFile } from "./plants.ts";
 
 // The companion's reading (build spec §11.3 B, slice 2.1): the integration half runs the fake Firstmate's scripts for
 // real (e2e/fake-firstmate), each logging its argv, so the tests prove which ran and that nothing else did.
@@ -186,6 +187,56 @@ describe("the companion's reading", () => {
     w.now.t += 1_000;
     expect((await readOnce(w.deps, r, 0)).branches).toEqual(r.branches);
     expect(git.filter((a) => a.includes("log"))).toEqual([branchArgs(join(clone, ".git"), "fm/later")!]);
+  });
+
+  test("ADR 0028: a reported task's worktree is scanned as files until it lands, once a gap, against its clone's checkout and Kinas's launch record", async () => {
+    const w = world();
+    const clone = join(w.home, "projects", "shop-9c2e");
+    mkdirSync(join(clone, ".git"), { recursive: true });
+    mkdirSync(join(clone, ".claude"), { recursive: true });
+    writeFileSync(join(clone, ".claude", "notes.md"), "the repository's own\n");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kinas-th-")));
+    const wt = join(root, "treehouse", "shop-9c2e", "1", "shop-9c2e");
+    mkdirSync(join(wt, ".claude"), { recursive: true });
+    mkdirSync(join(wt, "sub"), { recursive: true });
+    writeFileSync(join(wt, ".claude", "notes.md"), "the repository's own\n");
+    writeFileSync(join(wt, ".claude", "settings.local.json"), '{"hooks":{}}\n');
+    writeFileSync(join(wt, "sub", ".mcp.json"), "{}");
+    // Kinas's launch record names the folder and Firstmate's file as the launch saw them.
+    mkdirSync(w.deps.paths.workers, { recursive: true });
+    writeFileSync(launchRecordFile(w.deps.paths.workers, "planted-9c2e"), JSON.stringify({ v: 1, worktree: wt, deny: [], firstmate_local: firstmateLocal(wt) }));
+    const row = (id: string, state: string, worktree: string) => ({ id, project: clone, current_state: { state }, paths: { worktree: { path: worktree, present: true } } });
+    const fleet = (planted: string, landed = false) =>
+      JSON.stringify({
+        backlog: { records: [{ structured: true, id: "landed-9c2e", state: "done" }, ...(landed ? [{ structured: true, id: "planted-9c2e", state: "done" }] : [])] },
+        tasks: [
+          row("planted-9c2e", planted, "/the/row/says/elsewhere"),
+          row("working-9c2e", "working", wt),
+          row("landed-9c2e", "done", wt),
+          row("gone-9c2e", "done", join(root, "torn-down")),
+          row("odd-9c2e", "done", "relative/wt"),
+        ],
+      });
+    let snap = fleet("done");
+    w.deps.fm = { run: async (call) => (call.script === "fm-fleet-snapshot.sh" ? { exit: 0, timed_out: false, stdout: snap, stderr_first: null } : { exit: 1, timed_out: false, stdout: "", stderr_first: null }) };
+    const r = await readOnce(w.deps, null, 0);
+    expect(r.worktrees).toEqual([
+      { task: "gone-9c2e", checked_at: w.now.t, red: [], count: 0, unknown: false },
+      { task: "odd-9c2e", checked_at: w.now.t, red: [], count: 0, unknown: true },
+      { task: "planted-9c2e", checked_at: w.now.t, red: ["sub/.mcp.json"], count: 1, unknown: false },
+    ]);
+    // Within the gap the last answer stands; after it, scanned again even once the row has moved on from done.
+    writeFileSync(join(wt, ".claude", "skills.md"), "planted after the report");
+    w.now.t += 1_000;
+    expect((await readOnce(w.deps, r, 0)).worktrees).toEqual(r.worktrees);
+    snap = fleet("paused");
+    w.now.t += 60_000;
+    const later = await readOnce(w.deps, r, 0);
+    expect(later.worktrees?.find((x) => x.task === "planted-9c2e")?.red).toEqual([".claude/skills.md", "sub/.mcp.json"]);
+    // Landed: no longer scanned, and gone from the reading.
+    snap = fleet("paused", true);
+    w.now.t += 60_000;
+    expect((await readOnce(w.deps, later, 0)).worktrees?.map((x) => x.task)).toEqual(["gone-9c2e", "odd-9c2e"]);
   });
 
   test("tasksOf merges a record and a row as parse_fleet does; duePrs keeps done work's PR only while it was open", () => {

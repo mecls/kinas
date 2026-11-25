@@ -48,6 +48,20 @@ pub(crate) struct Bundle {
     /// Each task branch's `git log --name-only` (the review flag, `touches.rs`), verbatim, with when it was read there.
     #[serde(default)]
     pub branches: Vec<BranchOut>,
+    /// Each worktree scan on the VPS (ADR 0028, `cli/src/companion/plants.ts`): the red paths and whether the walk
+    /// finished, with when it was scanned there.
+    #[serde(default)]
+    pub worktrees: Vec<WorktreeOut>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WorktreeOut {
+    pub task: String,
+    pub checked_at: i64,
+    #[serde(default)]
+    pub red: Vec<String>,
+    #[serde(default)]
+    pub unknown: bool,
 }
 
 #[derive(Debug, Deserialize)]

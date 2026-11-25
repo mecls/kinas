@@ -4,7 +4,8 @@
 // beyond picking which PRs to ask `gh` about.
 //
 // It runs only what firstmate.ts lists, herdr.ts's `api snapshot` and `pane process-info` on the captain's session, and
-// `gh pr view <url> --json <fields>` for a URL that passed the Mac's own check. Nothing it runs changes anything.
+// `gh pr view <url> --json <fields>` for a URL that passed the Mac's own check. Nothing it runs changes anything. It
+// also walks the worktree of each task whose worker reported done, as files (ADR 0028, `plants.ts` `scanWorktree`).
 
 import { run } from "@kinas/context";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
@@ -12,6 +13,7 @@ import { join } from "node:path";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
+import { launchRecordFile, readLaunchRecord, scanWorktree, worktreeState, type Scan } from "./plants.ts";
 
 export const READING_VERSION = 1;
 export const READ_EVERY_MS = 15_000;
@@ -61,6 +63,16 @@ export interface Reading {
    * not read this time keeps its last answer while its task is not done. A branch not made yet has no entry.
    */
   branches?: BranchOut[];
+  /**
+   * Each worktree scan (ADR 0028): from the reading in which a task's row first says its worker reported done, until
+   * the backlog says it landed, at most once a gap. A task not scanned this time keeps its last answer.
+   */
+  worktrees?: WorktreeOut[];
+}
+
+export interface WorktreeOut extends Scan {
+  task: string;
+  checked_at: number;
 }
 
 export interface BranchOut {
@@ -113,6 +125,11 @@ interface TaskPr {
   /** The row's `branch` and `project` (its clone): the review flag reads the branch from the clone's git folder. */
   branch?: string | null;
   project?: string | null;
+  /** The row says its worker reported done (`current_state.state` done), and the backlog says it landed (ADR 0028). */
+  reported?: boolean;
+  landed?: boolean;
+  /** The row's `paths.worktree.path`. */
+  worktree?: string | null;
 }
 
 /** Each task's PR and whether it is done, merged as `snapshot::parse_fleet` merges a record and a row. */
@@ -123,8 +140,8 @@ export function tasksOf(snapshot: string): TaskPr[] {
   } catch {
     return [];
   }
-  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null }>();
-  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null });
+  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null; worktree: string | null }>();
+  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null, worktree: null });
   for (const r of array(root, ["backlog", "records"])) {
     const id = text(r, ["id"]);
     if ((r as { structured?: unknown }).structured !== true || id === null || tasks.has(id)) continue;
@@ -136,13 +153,14 @@ export function tasksOf(snapshot: string): TaskPr[] {
     let t = tasks.get(id);
     if (!t) {
       const b = (row as { backlog?: unknown }).backlog;
-      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null };
+      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null, worktree: null };
       tasks.set(id, t);
     }
     t.state = text(row, ["current_state", "state"]);
     t.pr = text(row, ["pr", "url"]) ?? t.pr;
     t.branch = text(row, ["branch"]);
     t.project = text(row, ["project"]);
+    t.worktree = text(row, ["paths", "worktree", "path"]);
   }
   return [...tasks].map(([id, t]) => ({
     id,
@@ -150,6 +168,9 @@ export function tasksOf(snapshot: string): TaskPr[] {
     done: t.backlog === "done" || (t.backlog === null && t.state === "done"),
     ...(t.branch !== null ? { branch: t.branch } : {}),
     ...(t.project !== null ? { project: t.project } : {}),
+    reported: t.state === "done",
+    landed: t.backlog === "done",
+    ...(t.worktree !== null ? { worktree: t.worktree } : {}),
   }));
 }
 
@@ -245,6 +266,36 @@ async function branchesNow(deps: Deps, tasks: TaskPr[], last: BranchOut[], at: n
     const o = await gitDefault(deps, log);
     if (!ran(o) && !ran(await gitDefault(deps, exists))) continue;
     out.push({ task: t.id, checked_at: at, out: o });
+  }
+  return out.sort((a, b) => a.task.localeCompare(b.task));
+}
+
+// ---- the worktree scan (ADR 0028) ----
+
+/**
+ * Each task whose worker reported done and that hasn't landed, scanned at most once a gap: the folder from Kinas's
+ * launch record when there is one, else the row's; compared with its clone's checkout. A folder that is gone has
+ * nothing left in it; one that isn't a plain folder can't be checked.
+ */
+export function worktreesNow(deps: Deps, tasks: TaskPr[], last: WorktreeOut[], at: number): WorktreeOut[] {
+  const lastOf = new Map(last.map((w) => [w.task, w]));
+  const out: WorktreeOut[] = [];
+  for (const t of tasks) {
+    const prior = lastOf.get(t.id);
+    if (t.landed || (!t.reported && !prior)) continue;
+    if (prior && at - prior.checked_at >= 0 && at - prior.checked_at < PR_GAP_MS) {
+      out.push(prior);
+      continue;
+    }
+    const record = readLaunchRecord(launchRecordFile(deps.paths.workers, t.id));
+    const folder = record?.worktree ?? t.worktree ?? null;
+    const state = folder === null ? "refused" : worktreeState(folder);
+    if (state !== "ok") {
+      out.push({ task: t.id, checked_at: at, red: [], count: 0, unknown: state === "refused" });
+      continue;
+    }
+    const clone = t.project && cloneGitDir(deps.paths.home, t.project) ? t.project : null;
+    out.push({ task: t.id, checked_at: at, ...scanWorktree(folder!, clone, record?.firstmate_local ?? null) });
   }
   return out.sort((a, b) => a.task.localeCompare(b.task));
 }
@@ -444,6 +495,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   const kept = (prev?.prs ?? []).filter((p) => named.has(p.url) && !due.includes(p.url));
   if (due.length > 0) deps.log(`companion: gh ${due.length} PRs`);
   const branches = await branchesNow(deps, tasks, prev?.branches ?? [], at);
+  const worktrees = worktreesNow(deps, tasks, prev?.worktrees ?? [], at);
 
   const reading: Reading = {
     ...base,
@@ -458,6 +510,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
     herdr_foreground: foreground,
     prs: [...kept, ...asked].sort((a, b) => a.url.localeCompare(b.url)),
     branches,
+    worktrees,
   };
   writeReading(paths, reading);
   return reading;

@@ -36,7 +36,7 @@ const task = (id: string, word: CrewWord, at: number, extra: Partial<CrewTask> =
   dispatched_at: null,
   merged_at: null,
   merged_via: null,
-    review: null,
+    review: null, worktree: null,
   ...extra,
 });
 

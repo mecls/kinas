@@ -142,6 +142,42 @@ mod tests {
         }
     }
 
+    /// ADR 0028, the captain's (2): nested paths match through both readings, not only the root's, and a committed
+    /// `.claude/` file is flagged even when it is empty (the sandbox's placeholders, should one ever be committed).
+    #[test]
+    fn nested_paths_match_through_the_pr_and_the_branch_and_an_empty_placeholder_is_still_flagged() {
+        let nested = [
+            "sub/.claude/x",
+            "sub/.mcp.json",
+            "a/b/c/d/e/.claude/skills/s/SKILL.md",
+            "packages/x/.claude",
+            "deep/a/b/.mcp.json",
+            "apps/web/.claude/settings.local.json",
+        ];
+        let plain = ["src/a.ts", "sub/claude.md", "sub/.claude-notes", "sub/mcp.json", "sub/.mcp.json.bak", "x/.mcp.json/readme"];
+        for p in nested {
+            assert!(sensitive(p), "{p}");
+        }
+        for p in plain {
+            assert!(!sensitive(p), "{p}");
+        }
+        let all: Vec<&str> = nested.iter().chain(plain.iter()).copied().collect();
+        let mut want: Vec<String> = nested.iter().map(|p| p.to_string()).collect();
+        want.sort();
+
+        // The branch: `git log --name-only --format= -z` over two commits.
+        let log = format!("\0{}\0\0{}\0", all[..6].join("\0"), all[6..].join("\0"));
+        assert_eq!(of_branch(true, &log), Touches { paths: want.clone(), unknown: false });
+        // The PR: `gh pr view --json files,changedFiles`.
+        let files: Vec<serde_json::Value> = all.iter().map(|p| json!({ "path": p })).collect();
+        assert_eq!(of_pr(&json!({ "files": files, "changedFiles": all.len() })), Touches { paths: want, unknown: false });
+
+        // A path only: an empty placeholder committed at the root is flagged like any other file there.
+        for p in [".claude/hooks", ".claude/settings.json", ".claude", ".mcp.json"] {
+            assert_eq!(of_branch(true, &format!("\0{p}\0")).paths, [p], "{p}");
+        }
+    }
+
     #[test]
     fn the_pr_s_files_and_whether_the_list_is_whole() {
         let pr = json!({"files": [{"path": "src/a.ts"}, {"path": ".claude/settings.json"}, {"path": ".mcp.json"}], "changedFiles": 3});

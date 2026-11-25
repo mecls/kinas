@@ -165,6 +165,11 @@ export interface CrewTask {
    * reading could not see every path. Null when neither found anything.
    */
   review: CrewReview | null;
+  /**
+   * The worktree scan (ADR 0028), the VPS's: the `.claude` and `.mcp.json` paths in the task's worktree that aren't the
+   * repository's, or that the walk couldn't finish. Null when the last scan found nothing, or there was none.
+   */
+  worktree: CrewReview | null;
 }
 export interface CrewReview {
   paths: string[];

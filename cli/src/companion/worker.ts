@@ -1,10 +1,12 @@
-// Firstmate's workers in Claude Code's sandbox (ADR 0027; build spec §12 slices 4.9–4.10; answer-path-design.md).
+// Firstmate's workers in Claude Code's sandbox (ADRs 0027 and 0028; build spec §12 slices 4.9–4.10; answer-path-design.md).
 //
 // - `workerPolicy`: what every worker's settings hold, the captain's list of denied paths and hosts in full.
 // - `workerLaunch` (`kinas companion worker-launch <id> <cwd> <claude's argv…>`): run by Kinas's wrapper before a worker
-//   starts. It checks the task id and Firstmate's arguments and the machine's sandbox pieces, creates the task's status
-//   file, and writes the worker's settings file: Firstmate's own settings, only the keys Kinas lets through, with the
-//   policy over them. It prints the file's SHA-256 and its path; any refusal stops the worker.
+//   starts. It checks the task id and Firstmate's arguments and the machine's sandbox pieces, walks the worker's folder
+//   for `.claude` and `.mcp.json` (ADR 0028, `plants.ts`), creates the task's status file, and writes the worker's
+//   launch record and settings file: Firstmate's own settings, only the keys Kinas lets through, with the policy over
+//   them, its `denyWrite` the walk's. It adds the sandbox's placeholders to the clone's exclude. It prints the settings
+//   file's SHA-256 and its path; any refusal stops the worker.
 // - `wrapperText`: the wrapper itself, a POSIX sh script Kinas writes at ~/.local/share/kinas/bin/claude.
 // - `workerCheck`: the captain's condition 1, read from /proc. Every worker must run under the policy, proven: the
 //   wrapper's marker, the exact flags, its settings file unchanged and equal to today's policy, and every tool command
@@ -17,6 +19,7 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Paths } from "./paths.ts";
+import { addExcludeLines, cloneExcludeFile, denyCoversRoot, firstmateLocal, launchDenies, launchRecordFile, placeholderLines, readLaunchRecord, walkClaude, type LaunchRecord } from "./plants.ts";
 import { childrenOf, descendants, ownPidNs, readProcs, type Proc } from "./proc.ts";
 import { archOf, claudeExe, cloned, HERDR_UNIT, readText, UNIT_HEADER, type Check, type SetupDeps } from "./setup.ts";
 import { isKinasCopy, writeWhole } from "./written.ts";
@@ -110,6 +113,8 @@ export interface PolicyOf {
   uid: number;
   /** `/tmp` on a machine. */
   tmp: string;
+  /** The worker's `denyWrite` (ADR 0028, `plants.ts` `launchDenies`): absolute paths, as its launch record holds them. */
+  deny: readonly string[];
 }
 
 /** The policy, as answer-path-design.md "The policy each worker gets" with the captain's conditions. */
@@ -135,7 +140,7 @@ export function workerPolicy(o: PolicyOf): Record<string, unknown> {
       enabled: true,
       failIfUnavailable: true,
       allowUnsandboxedCommands: false,
-      filesystem: { allowWrite: [`${o.home}/state/${o.id}.status`] },
+      filesystem: { allowWrite: [`${o.home}/state/${o.id}.status`], denyWrite: [...o.deny] },
       network: { allowedDomains: [...WORKER_HOSTS], strictAllowlist: true },
     },
     // Each package manager's cache in the worker's own folder: the shared ones are read-only in the sandbox, and a
@@ -221,7 +226,11 @@ export function workerLaunch(d: WorkerDeps, env: Record<string, string | undefin
   if ("refused" in arg) return arg;
   const missing = missingPieces(d);
   if (missing.length > 0) return { refused: `${missing.join(", ")} missing: the sandbox would not hold` };
-  const merged = mergeSettings(arg.value, workerPolicy({ home, id, uid: d.uid, tmp: d.paths.tmp }));
+  // ADR 0028: every `.claude` and `.mcp.json` in the worker's folder is denied by path; one the walk can't see can't be.
+  const walk = walkClaude(cwd);
+  if ("unfinished" in walk) return { refused: `the worker's folder can't be checked for .claude and .mcp.json (${walk.unfinished})` };
+  const deny = launchDenies(cwd, walk.found);
+  const merged = mergeSettings(arg.value, workerPolicy({ home, id, uid: d.uid, tmp: d.paths.tmp, deny }));
   if ("refused" in merged) return merged;
   // On Linux a sandbox can only allow writing a file that exists: the task's status file is made before the start.
   const state = join(home, "state");
@@ -232,11 +241,21 @@ export function workerLaunch(d: WorkerDeps, env: Record<string, string | undefin
     return { refused: "the task's status file can't be made" };
   }
   const text = settingsText(merged.settings);
+  const record: LaunchRecord = { v: 1, worktree: cwd, deny, firstmate_local: firstmateLocal(cwd) };
   try {
     mkdirSync(d.paths.workers, { recursive: true, mode: 0o700 });
+    writeWhole(launchRecordFile(d.paths.workers, id), `${JSON.stringify(record, null, 2)}\n`, 0o600);
     writeWhole(settingsFile(d.paths, id), text, 0o600);
   } catch {
     return { refused: "the worker's settings file can't be written" };
+  }
+  // The sandbox's placeholders, out of `git add` (ADR 0028). Hygiene, not the sandbox: a failure here starts the worker
+  // anyway, and a placeholder that gets committed turns the review flag red.
+  try {
+    const exclude = cloneExcludeFile(home, cwd);
+    if (exclude !== null) addExcludeLines(exclude, placeholderLines(cwd));
+  } catch {
+    // Left as it was.
   }
   return { file: settingsFile(d.paths, id), sha256: sha256(text) };
 }
@@ -361,7 +380,11 @@ function judgeWorker(d: WorkerDeps, p: Proc, id: string): string | null {
     return `${id}: its settings file is not JSON`;
   }
   if (typeof doc !== "object" || doc === null || Array.isArray(doc)) return `${id}: its settings file is not a JSON object`;
-  const policy = workerPolicy({ home: d.paths.home, id, uid: d.uid, tmp: d.paths.tmp });
+  // The denies are the launch's (ADR 0028): read from Kinas's own record, for the folder the wrapper passed.
+  const record = readLaunchRecord(launchRecordFile(d.paths.workers, id));
+  if (record === null) return `${id}: its launch record is gone`;
+  if (record.worktree !== p.cmdline[5] || !denyCoversRoot(record)) return `${id}: its launch record doesn't match how it started`;
+  const policy = workerPolicy({ home: d.paths.home, id, uid: d.uid, tmp: d.paths.tmp, deny: record.deny });
   for (const k of Object.keys(doc)) {
     if (!(k in policy) && !(FIRSTMATE_KEYS as readonly string[]).includes(k)) return `${id}: its settings carry ${k}`;
   }

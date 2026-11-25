@@ -123,7 +123,7 @@ describe("the Crew section on Usage", () => {
     dispatched_at: null,
     merged_at: null,
     merged_via: null,
-    review: null,
+    review: null, worktree: null,
   });
   const crew = { now: NOW, generated: new Date(NOW).toISOString(), reader: reader("crew"), page: "running", blocked: null, tasks: [task("a-9c2e")], decisions: [], reconcile: [], waiting: 0, overnight_since: NOW, crew_repos: [] } as CrewSnapshot;
 

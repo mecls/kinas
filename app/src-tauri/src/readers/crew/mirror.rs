@@ -91,6 +91,8 @@ pub(crate) struct Found {
     pub ledger: Option<super::ledger::LedgerRead>,
     /// Each task's branch read this cycle (the review flag, `touches.rs`), by task id; a task not read keeps its last.
     pub branches: HashMap<String, Touches>,
+    /// Each task's worktree scanned this cycle on the VPS (ADR 0028), by task id; a task not scanned keeps its last.
+    pub worktrees: HashMap<String, Touches>,
 }
 
 /// What the cycle has to say beside a good snapshot (Firstmate, current): one line per source that failed, for the
@@ -267,6 +269,12 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
         if let Some(touches) = found.branches.get(&facts.id) {
             tx.execute(
                 "UPDATE crew_tasks SET branch_touches = ?3, branch_checked_at = ?4 WHERE org_id = ?1 AND id = ?2",
+                params![org, facts.id, touches_json(touches), now],
+            )?;
+        }
+        if let Some(touches) = found.worktrees.get(&facts.id) {
+            tx.execute(
+                "UPDATE crew_tasks SET worktree_touches = ?3, worktree_checked_at = ?4 WHERE org_id = ?1 AND id = ?2",
                 params![org, facts.id, touches_json(touches), now],
             )?;
         }

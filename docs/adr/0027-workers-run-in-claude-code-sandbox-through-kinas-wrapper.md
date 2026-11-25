@@ -1,7 +1,7 @@
 # 0027 · On a VPS, Firstmate's workers run in Claude Code's sandbox through a wrapper Kinas owns; the first mate does not
 
 Date: 2026-11-25
-Status: accepted
+Status: superseded by 0028
 
 ## Context
 

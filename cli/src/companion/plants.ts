@@ -126,7 +126,7 @@ function smallText(path: string, cap = 64 * 1024): string | null {
 }
 
 /** A regular file's bytes, at most `cap`, or null: opened without following a link and without blocking. */
-function regularBytes(path: string, cap: number): Buffer | null {
+export function regularBytes(path: string, cap: number): Buffer | null {
   let fd: number;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);

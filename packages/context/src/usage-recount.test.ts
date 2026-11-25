@@ -2,10 +2,10 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import expected from "../fixtures/transcripts/expected.json";
+import expected from "../../../fixtures/transcripts/expected.json";
 import { lisbonDate, recount } from "./usage-recount.ts";
 
-const fixtures = join(import.meta.dir, "../fixtures/transcripts");
+const fixtures = join(import.meta.dir, "../../../fixtures/transcripts");
 
 test("recount of the fixture transcripts matches the hand-derived totals", () => {
   expect(recount(join(fixtures, "claude"), join(fixtures, "pi"))).toEqual(expected.rows as never);

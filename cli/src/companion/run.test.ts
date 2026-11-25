@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { makeFakeHome, writeConfig } from "../../../e2e/fake-firstmate/make.ts";
 import { firstmate, type ScriptOut } from "./firstmate.ts";
 import { companionPaths } from "./paths.ts";
@@ -285,3 +285,43 @@ describe("the companion's reading", () => {
   });
 });
 
+
+describe("this machine's own readings (slice 5.1)", () => {
+  test("the plan hand-off, the host and the token counts ride in the reading, with Firstmate there or not", async () => {
+    const w = world();
+    const { paths } = w.deps;
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+    };
+    const session = "0f3a9c2e-1b2c-4d5e-8f90-123456789abc";
+    const handoff = JSON.stringify({ rate_limits: { five_hour: { used_percentage: 12 } }, session_id: session, captured_at: w.now.t });
+    put(join(paths.state, "claude-rate-limits.json"), handoff);
+    const line = (ts: string) =>
+      JSON.stringify({ type: "assistant", timestamp: ts, message: { id: "m1", model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 2 } } });
+    put(join(paths.claudeHome, "projects", "-home-claude-projects-shop", `${session}.jsonl`), `${line(new Date(w.now.t - 60_000).toISOString())}\n`);
+    put(join(paths.proc, "stat"), "cpu  100 0 100 700 100 0 0 0 0 0\n");
+    put(join(paths.proc, "meminfo"), "MemTotal:       8192000 kB\nMemAvailable:   2048000 kB\n");
+
+    const first = await readOnce(w.deps, null, 0);
+    expect(first.plan).toEqual({ text: handoff, file_at: expect.any(Number), last_assistant_at: w.now.t - 60_000 });
+    expect(first.host?.cpu_pct).toBeNull();
+    expect(first.host?.mem_total_gb).toBeCloseTo(8192000 / 1024 / 1024, 6);
+    expect(first.usage?.rows.map((r) => [r.model, r.messages])).toEqual([["claude-opus-5-5", 1]]);
+    expect(w.lines.some((l) => /^companion: recount 1 rows in \d+ ms$/.test(l))).toBe(true);
+
+    // The next reading compares CPU counters with this one's, and keeps the count within its gap.
+    put(join(paths.proc, "stat"), "cpu  150 0 150 750 100 0 0 0 0 0\n");
+    w.now.t += 15_000;
+    const second = await readOnce(w.deps, first, 0);
+    expect(second.host?.cpu_pct).toBe(66.7);
+    expect(second.usage).toEqual(first.usage);
+
+    // Without Firstmate the readings are still there.
+    rmSync(join(w.home, "bin"), { recursive: true, force: true });
+    const bare = await readOnce(w.deps, second, 0);
+    expect(bare.installed).toBe(false);
+    expect(bare.plan?.text).toBe(handoff);
+    expect(bare.usage).toEqual(first.usage);
+  });
+});

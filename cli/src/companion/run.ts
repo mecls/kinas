@@ -9,11 +9,12 @@
 
 import { run } from "@kinas/context";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
 import { launchRecordFile, readLaunchRecord, scanWorktree, worktreeState, type Scan } from "./plants.ts";
+import { type CpuSample, type HostOut, hostNow, planNow, type PlanOut, type UsageOut, usageNow } from "./machine.ts";
 
 export const READING_VERSION = 1;
 export const READ_EVERY_MS = 15_000;
@@ -68,6 +69,14 @@ export interface Reading {
    * the backlog says it landed, at most once a gap. A task not scanned this time keeps its last answer.
    */
   worktrees?: WorktreeOut[];
+  /** Slice 5.1: Claude Code's plan hand-off on this machine, verbatim, with the two times freshness is decided from. */
+  plan?: PlanOut | null;
+  /** Slice 5.1: this machine's CPU, memory and disk, as the Mac's `hosts` row has them. */
+  host?: HostOut | null;
+  /** Slice 5.1: the last `/proc/stat` sample, for the next reading's CPU share. */
+  cpu?: CpuSample | null;
+  /** Slice 5.1: token counts by day and model from this machine's transcripts, recounted at most every 5 minutes. */
+  usage?: UsageOut | null;
 }
 
 export interface WorktreeOut extends Scan {
@@ -440,7 +449,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   const { fm, paths } = deps;
   const home = paths.home;
   const at = deps.clock();
-  const base = { v: READING_VERSION, at, companion: { version: deps.version, since, heartbeat_at: at }, home } as const;
+  const base = { v: READING_VERSION, at, companion: { version: deps.version, since, heartbeat_at: at }, home, ...machineOf(deps, prev, at) } as const;
 
   // Herdr's view is read whether or not Firstmate is there: the Mac's chrome wants the first mate's pane.
   const view = await herdrDefault(deps, HERDR.snapshot());
@@ -518,6 +527,22 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   };
   writeReading(paths, reading);
   return reading;
+}
+
+/** This machine's own readings (slice 5.1), whether or not Firstmate is there: Usage wants them either way. */
+function machineOf(deps: Deps, prev: Reading | null, at: number): Pick<Reading, "plan" | "host" | "cpu" | "usage"> {
+  const { paths } = deps;
+  const host = hostNow(paths.proc, dirname(paths.claudeHome), prev?.cpu ?? null);
+  let usage = prev?.usage ?? null;
+  try {
+    const started = Date.now();
+    const next = usageNow(paths.claudeHome, usage, at);
+    if (next !== usage) deps.log(`companion: recount ${next.rows.length} rows in ${Date.now() - started} ms`);
+    usage = next;
+  } catch {
+    deps.log("companion: recount failed");
+  }
+  return { plan: planNow(paths.state, paths.claudeHome), host: host.out, cpu: host.cpu, usage };
 }
 
 /** `reading.json`, replaced whole: written beside it and renamed, so `rpc bundle` never reads half a reading. */

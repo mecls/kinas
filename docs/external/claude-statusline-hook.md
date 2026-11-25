@@ -24,3 +24,13 @@ Nothing beyond writing that one file with a `jq` projection of the status-line i
 - Kinas writing under `~/.claude`: the hook is installed by the captain, by hand.
 
 Amended 2026-11-17 (the factory in the cloud): with a VPS set, Claude Code runs there, so the hook is installed on the VPS by the captain, writing `~/.local/state/kinas/claude-rate-limits.json`; `kinas companion` passes the file's contents to the Mac verbatim, and the rules above hold on that machine.
+
+Amended 2026-11-25 (slice 5.1; the place is now "a Linux machine you own or rent", ADR 0024):
+- **The companion passes the hand-off verbatim,** with the file's modification time and the session transcript's last
+  assistant time, both read on that machine (`cli/src/companion/machine.ts`). The Mac's `claude_plan.rs` decides
+  freshness from them as it does here.
+- **The captain's rule for anything Kinas has run by Claude Code there** (2026-11-25): it exits at once in a worker
+  (`FM_TASK_ID` set), because usage comes from the transcript recount. Its code treats every input as data: no
+  `eval`, no shell interpolation. Status-line commands and hooks run outside the sandbox.
+- **So the status-line lines on the Linux machine** start with `[ -n "${FM_TASK_ID-}" ] && exit 0`. The gauge comes
+  from the first mate's and the captain's own sessions.

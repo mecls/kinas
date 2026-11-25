@@ -60,6 +60,15 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
 - `app/src-tauri/src/pty.rs` — the Work page: `herdr --remote <target> --session default`.
 - `cli/src/companion/` — on the VPS: Firstmate's listed commands (ADR 0022), Herdr's API, `gh pr view`, the statusline
   hand-off, transcript token counts, `/proc` for the host reading.
+  - As built, slice 5.1 (2026-11-25), `cli/src/companion/machine.ts`, at each reading:
+    - the hand-off `~/.local/state/kinas/claude-rate-limits.json`, verbatim (64 KiB at most, never through a link),
+      with its modification time;
+    - the last assistant line's time in the last 512 KiB of `~/.claude/projects/*/<session_id>.jsonl`, for the
+      session the hand-off names;
+    - `/proc/stat`, `/proc/meminfo` and `statfs` of the home folder.
+
+    At most every 5 minutes, it recounts tokens by day and model over `~/.claude/projects` (the last 31 days). Only
+    the counts and the hand-off cross; a transcript's text never does.
 
 ## What it can do
 

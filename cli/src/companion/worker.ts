@@ -371,6 +371,16 @@ function judgeWorker(d: WorkerDeps, p: Proc, id: string): string | null {
   return null;
 }
 
+/**
+ * A tool command: the shell Claude Code starts to run one, `<shell> -c <script that sources its shell snapshot>`. The
+ * sandbox's own launch steps carry that script further along their arguments (the `/bin/sh -c { … }` launcher at its
+ * fifth, `bwrap` at its last) and stay in the host's namespace by design: they are not tool commands. Measured on the
+ * home lab, 2026-11-25, during the acceptance run.
+ */
+export function isToolCommand(cmdline: readonly string[] | null): boolean {
+  return cmdline !== null && cmdline[1] === "-c" && (cmdline[2] ?? "").includes(SNAPSHOT_MARK);
+}
+
 /** Every worker on the machine now, proven or not, and the machine's own pieces. Synchronous: it runs before a note. */
 export function workerCheck(d: WorkerDeps): Verdict {
   const problems: string[] = [];
@@ -412,14 +422,10 @@ export function workerCheck(d: WorkerDeps): Verdict {
   // must not.
   const ownedBy = new Map<number, number>();
   for (const [pid, id] of proven) {
-    for (const c of descendants(pid, kids)) {
-      ownedBy.set(c.pid, pid);
-      const tool = c.exe !== null && !isClaude(c.exe) && (c.cmdline ?? []).join(" ").includes(SNAPSHOT_MARK);
-      if (tool && (c.pidNs === null || c.pidNs === ns || c.seccomp !== 2 || c.noNewPrivs !== 1)) {
-        problems.push(`${id}: a tool command ran outside the sandbox`);
-        break;
-      }
-    }
+    const own = descendants(pid, kids);
+    for (const c of own) ownedBy.set(c.pid, pid);
+    const outside = own.some((c) => c.exe !== null && !isClaude(c.exe) && isToolCommand(c.cmdline) && (c.pidNs === null || c.pidNs === ns || c.seccomp !== 2 || c.noNewPrivs !== 1));
+    if (outside) problems.push(`${id}: a tool command ran outside the sandbox`);
   }
 
   // Every other process with FM_TASK_ID in the host's namespace: a proven worker's own, or a launch step on its way to

@@ -10,6 +10,7 @@ import { checks, HERDR_UNIT, UNIT_HEADER, type Check, type SetupDeps } from "./s
 import {
   answersMayFlow,
   crewHarness,
+  isToolCommand,
   launchedByWrapper,
   looseningKeys,
   MARKER,
@@ -290,12 +291,22 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
       seccomp: 2,
       noNewPrivs: 1,
     };
-    const bwrap: FakeProc = { pid: 101, ppid: 100, exe: "/usr/bin/bwrap", cmdline: ["bwrap", "--new-session"], env: { FM_TASK_ID: "t1" }, noNewPrivs: 1 };
+    // The sandbox's launch chain as measured on the home lab (2026-11-25, the acceptance run): a `/bin/sh -c { … }`
+    // launcher and `bwrap`, both in the host's namespace, each carrying the tool command's script among its arguments.
+    const script = tool.cmdline[2]!;
+    const launcher: FakeProc = {
+      pid: 104,
+      ppid: 100,
+      exe: "/usr/bin/dash",
+      cmdline: ["/bin/sh", "-c", '{\n  set +euvx\n  unset TMOUT\n  read -r line <&7\n} 2>/dev/null &\nif eval "$1"; then set -- "$2" 0; fi', "/bin/sh", `bwrap --new-session --die-with-parent -- /bin/bash -c '${script}'`],
+      env: { FM_TASK_ID: "t1" },
+    };
+    const bwrap: FakeProc = { pid: 101, ppid: 104, exe: "/usr/bin/bwrap", cmdline: ["bwrap", "--new-session", "--die-with-parent", "--", "/bin/bash", "-c", script], env: { FM_TASK_ID: "t1" }, noNewPrivs: 1 };
     const helper: FakeProc = { pid: 103, ppid: 100, exe: "/usr/bin/gh", cmdline: ["gh", "auth", "token"], env: { FM_TASK_ID: "t1" } };
     // Herdr's server binary must be there for its path to resolve as itself.
     mkdirSync(dirname(paths.herdr), { recursive: true });
     writeFileSync(paths.herdr, "");
-    const all = { worker, pane, server, tool, bwrap, helper };
+    const all = { worker, pane, server, launcher, tool, bwrap, helper };
     const check = (procs: FakeProc[]) => {
       fakeProc(paths.proc, procs);
       return workerCheck(d);
@@ -311,6 +322,17 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
     expect(answersMayFlow(m.d)).toEqual({ ok: true });
   });
 
+  test("the sandbox's own launcher and bwrap, which carry the tool command's script in the host's namespace, are not tool commands", () => {
+    expect(isToolCommand(["/usr/bin/bash", "-c", "source /h/.claude/shell-snapshots/snapshot-bash-1.sh && eval x"])).toBe(true);
+    expect(isToolCommand(["/bin/sh", "-c", "{ read -r line <&7; }", "/bin/sh", "bwrap -- /bin/bash -c 'source /h/.claude/shell-snapshots/snapshot-bash-1.sh'"])).toBe(false);
+    expect(isToolCommand(["bwrap", "--new-session", "/bin/bash", "-c", "source /h/.claude/shell-snapshots/snapshot-bash-1.sh"])).toBe(false);
+    expect(isToolCommand(["bash", "/h/fm/bin/fm-captain-hold.sh", "complete", "t1", "--none"])).toBe(false);
+    expect(isToolCommand(null)).toBe(false);
+    // A long-running command, its whole launch chain alive: answers still flow.
+    const m = machine();
+    expect(m.check(Object.values(m.all)).problems).toEqual([]);
+  });
+
   test("a process with no FM_TASK_ID (the first mate, the captain's own panes) is not a worker; another user's is not read", () => {
     const m = machine();
     const mate: FakeProc = { pid: 300, ppid: 50, exe: m.exe, cmdline: ["claude", "--append-system-prompt-file", "/x.md"], env: {} };
@@ -320,7 +342,7 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
 
   test("each way a worker is not proven sandboxed turns the check red with the task and the reason", () => {
     const m = machine();
-    const { worker, server, tool, bwrap } = m.all;
+    const { worker, server, tool, bwrap, launcher } = m.all;
     const red = (procs: FakeProc[]) => m.check(procs).problems;
     expect(red([server, { ...worker, env: { FM_TASK_ID: "t1" } }])).toEqual(["t1: started outside Kinas's sandbox"]);
     expect(red([server, { ...worker, cmdline: [m.paths.realClaude, ...FM_ARGV.map((a) => (a === FM_SETTINGS ? m.out.file : a))] }])).toEqual(["t1: started outside Kinas's sandbox"]);
@@ -328,9 +350,13 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
     expect(red([server, { ...worker, cmdline: [...worker.cmdline, "--mcp-config", "x.json"] }])).toEqual(["t1: started outside Kinas's sandbox"]);
     expect(red([server, { ...worker, env: { FM_TASK_ID: "t1", [MARKER]: "0".repeat(64) } }])).toEqual(["t1: its settings file changed since it started"]);
     // The tool command in the host's namespace, or without the seccomp filter.
-    expect(red([server, worker, bwrap, { ...tool, ns: HOST_NS }])).toEqual(["t1: a tool command ran outside the sandbox"]);
-    expect(red([server, worker, bwrap, { ...tool, seccomp: 0 }])).toEqual(["t1: a tool command ran outside the sandbox"]);
-    expect(red([server, worker, bwrap, { ...tool, noNewPrivs: 0 }])).toEqual(["t1: a tool command ran outside the sandbox"]);
+    expect(red([server, worker, launcher, bwrap, { ...tool, ns: HOST_NS }])).toEqual(["t1: a tool command ran outside the sandbox"]);
+    expect(red([server, worker, launcher, bwrap, { ...tool, seccomp: 0 }])).toEqual(["t1: a tool command ran outside the sandbox"]);
+    expect(red([server, worker, launcher, bwrap, { ...tool, noNewPrivs: 0 }])).toEqual(["t1: a tool command ran outside the sandbox"]);
+    // Unsandboxed, Claude Code starts the tool shell itself, straight under the worker in the host's namespace.
+    expect(red([server, worker, { ...tool, ppid: 100, ns: HOST_NS, seccomp: 0, noNewPrivs: 0 }])).toEqual(["t1: a tool command ran outside the sandbox"]);
+    // A worker's other processes are its own even after one of them fails: no second line for the same worker.
+    expect(red([server, worker, launcher, bwrap, { ...tool, ns: HOST_NS }, { ...tool, pid: 105, ns: HOST_NS }])).toEqual(["t1: a tool command ran outside the sandbox"]);
     // A Claude Code process that can't be read is not taken on trust.
     expect(red([server, { ...worker, noEnviron: true }])).toEqual(["a Claude Code process (pid 100) can't be read"]);
   });

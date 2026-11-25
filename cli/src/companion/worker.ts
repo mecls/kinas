@@ -372,13 +372,19 @@ function judgeWorker(d: WorkerDeps, p: Proc, id: string): string | null {
 }
 
 /**
- * A tool command: the shell Claude Code starts to run one, `<shell> -c <script that sources its shell snapshot>`. The
- * sandbox's own launch steps carry that script further along their arguments (the `/bin/sh -c { … }` launcher at its
- * fifth, `bwrap` at its last) and stay in the host's namespace by design: they are not tool commands. Measured on the
- * home lab, 2026-11-25, during the acceptance run.
+ * A tool command: the shell Claude Code starts to run one, `<shell> -c <script>` whose own script sources the shell
+ * snapshot (`exec 3<&- || exit 126; source ~/.claude/shell-snapshots/snapshot-…`). The sandbox's own steps carry that
+ * script without running it: the `/bin/sh -c { … }` launcher at its fifth argument and `bwrap` at its last, both in the
+ * host's namespace; and inside, the network bridge (`{ socat … }`, no seccomp filter by design), nested in its own
+ * `/proc/self/fd/3 /bin/bash -c '…'`. None of them is a tool command. Should the bridge ever exec the tool's script
+ * itself, that process is one, and without the filter it is red. Measured on the home lab, 2026-11-25, in the
+ * acceptance run.
  */
 export function isToolCommand(cmdline: readonly string[] | null): boolean {
-  return cmdline !== null && cmdline[1] === "-c" && (cmdline[2] ?? "").includes(SNAPSHOT_MARK);
+  if (cmdline === null || cmdline[1] !== "-c") return false;
+  const script = cmdline[2] ?? "";
+  const at = script.indexOf(SNAPSHOT_MARK);
+  return at >= 0 && !/\s-c\s/.test(script.slice(0, at));
 }
 
 /** Every worker on the machine now, proven or not, and the machine's own pieces. Synchronous: it runs before a note. */

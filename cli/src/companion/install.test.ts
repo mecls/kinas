@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fakeMachine, fakeReleases } from "./fake-machine.ts";
 import { install, keeps } from "./install.ts";
 import { readWritten } from "./written.ts";
-import { COMPANION_UNIT, HERDR_UNIT, OWNER_LINE, OWNER_MARKER, relayEntries, REPLACING_MARKER, UNIT_HEADER } from "./setup.ts";
+import { COMPANION_UNIT, HERDR_UNIT, legacyRelayEntries, OWNER_LINE, OWNER_MARKER, relayEntries, REPLACING_MARKER, UNIT_HEADER } from "./setup.ts";
 
 // Setup's installs on the VPS (build spec §12 slices 4.2 and 4.5; §17 2026-11-24 #2–#3, 2026-11-25 #4–#7; ADR 0025).
 
@@ -202,7 +202,7 @@ describe("Firstmate's home", () => {
   });
 });
 
-describe("the relay rule (ADR 0025, slice 4.5)", () => {
+describe("the relay rule (ADR 0026, slices 4.5 and 4.7)", () => {
   function withHome() {
     const m = fakeMachine();
     mkdirSync(join(m.deps.paths.home, ".git"), { recursive: true });
@@ -211,9 +211,9 @@ describe("the relay rule (ADR 0025, slice 4.5)", () => {
   }
   const settingsFile = (m: ReturnType<typeof withHome>) => join(m.deps.paths.home, ".claude", "settings.local.json");
 
-  test("relay_rule_added_keeping_the_rest: the four entries appended; every other key and entry as it was; the old file kept beside", async () => {
+  test("relay_rule_added_keeping_the_rest: the eight entries appended; every other key and entry as it was; the old file kept beside", async () => {
     const m = withHome();
-    const before = { model: "opus", permissions: { allow: ["Bash(git status)", `Bash(${m.deps.paths.home}/bin/fm-send.sh *)`], deny: ["Bash(rm *)"] }, hooks: { Stop: [] } };
+    const before = { model: "opus", permissions: { allow: ["Bash(git status)", relayEntries(m.deps.paths.home)[2]!], deny: ["Bash(rm *)"] }, hooks: { Stop: [] } };
     writeFileSync(settingsFile(m), JSON.stringify(before));
     expect(await install({ item: "relay-rule" }, m.deps)).toEqual({ done: true });
     const after = JSON.parse(readFileSync(settingsFile(m), "utf8"));
@@ -221,13 +221,26 @@ describe("the relay rule (ADR 0025, slice 4.5)", () => {
     expect(after.hooks).toEqual({ Stop: [] });
     expect(after.permissions.deny).toEqual(["Bash(rm *)"]);
     const entries = relayEntries(m.deps.paths.home);
-    expect(after.permissions.allow).toEqual(["Bash(git status)", `Bash(${m.deps.paths.home}/bin/fm-send.sh *)`, entries[0], entries[2], entries[3]]);
+    expect(after.permissions.allow).toEqual(["Bash(git status)", entries[2], ...entries.filter((_, i) => i !== 2)]);
+    expect(after.permissions.ask).toBeUndefined();
     const backups = readdirSync(join(m.deps.paths.home, ".claude")).filter((n) => n.includes("kinas-backup"));
     expect(backups).toEqual(["settings.local.json.kinas-backup-1795000000000"]);
     expect(JSON.parse(readFileSync(join(m.deps.paths.home, ".claude", backups[0]!), "utf8"))).toEqual(before);
     // Once more: nothing to add, nothing written.
     expect(await install({ item: "relay-rule" }, m.deps)).toEqual({ done: true });
     expect(readdirSync(join(m.deps.paths.home, ".claude")).filter((n) => n.includes("kinas-backup"))).toHaveLength(1);
+  });
+
+  test("relay_rule_swaps_kinas_old_four: ADR 0025's four entries go, exactly those strings; the captain's own fm-send rule stays", async () => {
+    const m = withHome();
+    const home = m.deps.paths.home;
+    const old = legacyRelayEntries(home);
+    const mine = "Bash(bin/fm-send.sh --help)";
+    writeFileSync(settingsFile(m), JSON.stringify({ permissions: { allow: [old[0], mine, old[1], old[2], old[3]] } }));
+    expect(await install({ item: "relay-rule" }, m.deps)).toEqual({ done: true });
+    const allow = JSON.parse(readFileSync(settingsFile(m), "utf8")).permissions.allow as string[];
+    expect(allow).toEqual([mine, ...relayEntries(home)]);
+    for (const e of old) expect(allow).not.toContain(e);
   });
 
   test("no file yet: it is made with the rule alone", async () => {
@@ -255,6 +268,10 @@ describe("the relay rule (ADR 0025, slice 4.5)", () => {
     expect(keeps(before, { permissions: { allow: ["x", "z"], deny: ["y"] } })).toBe(false);
     expect(keeps(before, { a: 1, permissions: { allow: ["z"], deny: ["y"] } })).toBe(false);
     expect(keeps(before, { a: 1, permissions: { allow: ["x"] } })).toBe(false);
+    // Removing exactly the named entries is allowed; removing any other is not.
+    const two = { permissions: { allow: ["old", "x"] } };
+    expect(keeps(two, { permissions: { allow: ["x", "z"] } }, new Set(["old"]))).toBe(true);
+    expect(keeps(two, { permissions: { allow: ["z"] } }, new Set(["old"]))).toBe(false);
   });
 
   test("with no Firstmate home, nothing is written", async () => {

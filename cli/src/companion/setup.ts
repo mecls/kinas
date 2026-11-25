@@ -1,4 +1,4 @@
-// Setup on the VPS (build spec §12 slice 4.2; §17 2026-11-24 #1–#4 and 2026-11-25 #3–#7; ADRs 0024, 0025): what
+// Setup on the VPS (build spec §12 slice 4.2; §17 2026-11-24 #1–#4 and 2026-11-25 #3–#7; ADRs 0024, 0026, 0027): what
 // `hello` reports as checks, one row per piece in a fixed order, and what install.ts may put there. A row is facts and
 // fixed words: the Mac caps and filters them, and offers Install only for the items named here.
 //
@@ -115,26 +115,44 @@ export const OWNER_LINE = `systemd user unit ${HERDR_UNIT}`;
 export const SESSION = "default";
 
 const SHORT_PIN = FIRSTMATE_PIN.slice(0, 7);
+const RELAY_COUNT = 8;
 const PROBE_MS = 5_000;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Pure readings, each tested on its own.
 
-/** The four entries of ADR 0025's rule, for the home at `home` (absolute): relative and absolute, with and without FM_HOME. */
+/**
+ * ADR 0026's eight entries for the home at `home` (absolute): the answer, the note's and the wake's acknowledgements, and
+ * the hold's release, each bare and with `FM_HOME=<home>` — the forms measured on the home lab (2026-11-25).
+ */
 export function relayEntries(home: string): string[] {
+  return [
+    `Bash(FM_HOME=${home} bin/fm-send.sh * --resolve-key *)`,
+    `Bash(FM_HOME=${home} ${home}/bin/fm-send.sh * --resolve-key *)`,
+    `Bash(bin/fm-inbox.sh drain --ack *)`,
+    `Bash(FM_HOME=${home} bin/fm-inbox.sh drain --ack *)`,
+    `Bash(bin/fm-wake-drain.sh --ack-through * --recovery-generation *)`,
+    `Bash(FM_HOME=${home} bin/fm-wake-drain.sh --ack-through * --recovery-generation *)`,
+    `Bash(bin/fm-captain-hold.sh answer * --decision-file * --release)`,
+    `Bash(FM_HOME=${home} bin/fm-captain-hold.sh answer * --decision-file * --release)`,
+  ];
+}
+
+/** ADR 0025's four entries, which let any `fm-send` text through: removed by Install, exactly these strings. */
+export function legacyRelayEntries(home: string): string[] {
   return [`Bash(bin/fm-send.sh *)`, `Bash(${home}/bin/fm-send.sh *)`, `Bash(FM_HOME=${home} bin/fm-send.sh *)`, `Bash(FM_HOME=${home} ${home}/bin/fm-send.sh *)`];
 }
 
 export type RelayState =
   | { kind: "ok" }
-  | { kind: "missing"; missing: string[]; settings: Record<string, unknown> | null }
+  | { kind: "missing"; missing: string[]; legacy: string[]; settings: Record<string, unknown> | null }
   | { kind: "not-json" }
   | { kind: "not-list" };
 
 /** What the home's `.claude/settings.local.json` holds of the rule. `text` null: the file is not there. */
 export function relayState(text: string | null, home: string): RelayState {
   const want = relayEntries(home);
-  if (text === null) return { kind: "missing", missing: want, settings: null };
+  if (text === null) return { kind: "missing", missing: want, legacy: [], settings: null };
   let settings: unknown;
   try {
     settings = JSON.parse(text);
@@ -148,7 +166,8 @@ export function relayState(text: string | null, home: string): RelayState {
   if (allow !== undefined && (!Array.isArray(allow) || allow.some((e) => typeof e !== "string"))) return { kind: "not-list" };
   const have = new Set((allow as string[] | undefined) ?? []);
   const missing = want.filter((e) => !have.has(e));
-  return missing.length === 0 ? { kind: "ok" } : { kind: "missing", missing, settings: settings as Record<string, unknown> };
+  const legacy = legacyRelayEntries(home).filter((e) => have.has(e));
+  return missing.length === 0 && legacy.length === 0 ? { kind: "ok" } : { kind: "missing", missing, legacy, settings: settings as Record<string, unknown> };
 }
 
 /** `config/claude-permission-mode`, as fm-spawn.sh reads it (whitespace removed); null when the file is not there. */
@@ -288,8 +307,11 @@ async function relayRule(d: SetupDeps): Promise<Check> {
   switch (state.kind) {
     case "ok":
       return row("relay-rule", "ok", "the first mate may pass your answers on");
-    case "missing":
-      return row("relay-rule", "bad", `${4 - state.missing.length} of 4 entries: the first mate can't pass your answers on`, { install: "relay-rule" });
+    case "missing": {
+      const n = RELAY_COUNT - state.missing.length;
+      if (state.missing.length === 0) return row("relay-rule", "bad", `${n} of ${RELAY_COUNT} entries, and Kinas's older, wider ones are still there`, { install: "relay-rule" });
+      return row("relay-rule", "bad", `${n} of ${RELAY_COUNT} entries: the first mate can't pass your answers on`, { install: "relay-rule" });
+    }
     case "not-json":
       return row("relay-rule", "bad", ".claude/settings.local.json isn't a JSON object: Kinas leaves it as it is");
     case "not-list":

@@ -20,16 +20,20 @@ function scriptsNamed(text: string): string[] {
 }
 
 /**
- * ADR 0025's one exception: setup.ts writes the relay rule, whose four entries name the home's `bin/fm-send.sh` as
- * permission text the first mate's Claude Code reads — the companion never runs it. Only those four exact template
- * literals are set aside; any other mention of a script there is judged as everywhere else.
+ * ADRs 0025–0026's one exception: setup.ts writes the relay rule and the first mate's relay instruction. Their entries
+ * name Firstmate's scripts as permission text and as words the first mate's Claude Code reads; the companion never
+ * runs them. Only these are set aside, in setup.ts alone: the `Bash(...)` template literals, and the one template
+ * literal `relayInstruction` returns. Any other mention of a script there is judged as everywhere else.
  */
-const RELAY_ENTRY = /`Bash\((?:FM_HOME=\$\{home\} )?(?:\$\{home\}\/)?bin\/fm-send\.sh \*\)`/g;
+const RELAY_SCRIPTS = /(?:\$\{home\}\/)?bin\/fm-(?:send|inbox|wake-drain|captain-hold)\.sh/g;
+const RELAY_ENTRY = /`Bash\((?:FM_HOME=\$\{home\} )?(?:\$\{home\}\/)?bin\/fm-(?:send|inbox|wake-drain|captain-hold)\.sh[^`\n]*\)`/g;
+const RELAY_INSTRUCTION = /export function relayInstruction\(home: string\): string \{\n  return `[^`]*`;\n\}/;
 
 function violations(files: Record<string, string>): string[] {
   const out: string[] = [];
   for (const [file, raw] of Object.entries(files)) {
-    const text = file === "setup.ts" ? raw.replace(RELAY_ENTRY, "``") : raw;
+    // The instruction keeps its text but for the four relay scripts' names: any other script in it is still found.
+    const text = file === "setup.ts" ? raw.replace(RELAY_INSTRUCTION, (m) => m.replace(RELAY_SCRIPTS, "")).replace(RELAY_ENTRY, "``") : raw;
     for (const s of scriptsNamed(text)) {
       if (!ALLOWED.has(s)) out.push(`${file}: names ${s}, which the companion never runs`);
       else if (file !== "firstmate.ts") out.push(`${file}: names ${s} outside firstmate.ts`);
@@ -51,10 +55,14 @@ describe("the companion's Firstmate list", () => {
     expect(violations({ "firstmate.ts": '{ script: "fm-park.sh" }' })).toHaveLength(1);
     expect(violations({ "run.ts": 'const s = "fm-fleet-snapshot.sh";' })).toHaveLength(1);
     expect(violations({ "firstmate.ts": '// never fm-send.sh\nconst a = "fm-inbox.sh";' })).toEqual([]);
-    // The relay rule's four entries are text setup.ts writes, not runs; anything else there is judged as anywhere.
-    const rule = "return [`Bash(bin/fm-send.sh *)`, `Bash(${home}/bin/fm-send.sh *)`, `Bash(FM_HOME=${home} bin/fm-send.sh *)`, `Bash(FM_HOME=${home} ${home}/bin/fm-send.sh *)`];";
+    // The relay rule's entries and the instruction are text setup.ts writes, not runs; anything else there is judged as anywhere.
+    const rule = "return [`Bash(bin/fm-send.sh *)`, `Bash(FM_HOME=${home} bin/fm-wake-drain.sh --ack-through * --recovery-generation *)`];";
     expect(violations({ "setup.ts": rule })).toEqual([]);
-    expect(violations({ "install.ts": rule })).toHaveLength(4);
+    expect(violations({ "install.ts": rule })).toHaveLength(2);
+    const instruction = "export function relayInstruction(home: string): string {\n  return `run bin/fm-send.sh, then bin/fm-wake-drain.sh`;\n}";
+    expect(violations({ "setup.ts": instruction })).toEqual([]);
+    expect(violations({ "setup.ts": instruction.replace("relayInstruction", "otherText") })).toHaveLength(2);
+    expect(violations({ "setup.ts": instruction.replace("bin/fm-send.sh", "bin/fm-park.sh") })).toEqual(["setup.ts: names fm-park.sh, which the companion never runs"]);
     expect(violations({ "setup.ts": 'run(["bash", join(home, "bin/fm-send.sh"), task]);' })).toEqual(["setup.ts: names fm-send.sh, which the companion never runs"]);
     expect(violations({ "setup.ts": "const r = `Bash(bin/fm-park.sh *)`;" })).toEqual(["setup.ts: names fm-park.sh, which the companion never runs"]);
   });

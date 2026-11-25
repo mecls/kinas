@@ -347,7 +347,10 @@ function keepBeside(d: SetupDeps, file: string): void {
   if (existsSync(file)) copyFileSync(file, `${file}.kinas-backup-${d.now()}`, constants.COPYFILE_EXCL);
 }
 
-/** ADR 0025's rule: the missing entries appended to `permissions.allow`; every other key and entry kept as it was. */
+/**
+ * ADR 0026's rule: Kinas's own ADR 0025 entries removed (exactly those strings), the missing ones appended; every other
+ * key and entry kept as it was.
+ */
 async function relayRule(d: SetupDeps): Promise<Outcome> {
   const home = d.paths.home;
   if (!cloned(home)) return cannot("no-firstmate");
@@ -359,19 +362,23 @@ async function relayRule(d: SetupDeps): Promise<Outcome> {
   if (state.kind === "not-list") return cannot("not-list");
   const settings: Record<string, unknown> = state.settings ?? {};
   const permissions = (settings.permissions as Record<string, unknown> | undefined) ?? {};
-  const allow = [...((permissions.allow as string[] | undefined) ?? []), ...state.missing];
+  const removed = new Set(state.legacy);
+  const allow = [...((permissions.allow as string[] | undefined) ?? []).filter((e) => !removed.has(e)), ...state.missing];
   const next = { ...settings, permissions: { ...permissions, allow } };
   const text = `${JSON.stringify(next, null, 2)}\n`;
-  // Read back what will be written: every key and every old entry is still there, and the rule is whole.
-  if (!keeps(state.settings, JSON.parse(text) as Record<string, unknown>) || relayState(text, home).kind !== "ok") return cannot("not-json");
+  // Read back what will be written: every key and every old entry but the removed ones is still there, and the rule is whole.
+  if (!keeps(state.settings, JSON.parse(text) as Record<string, unknown>, removed) || relayState(text, home).kind !== "ok") return cannot("not-json");
   mkdirSync(dirname(file), { recursive: true });
   keepBeside(d, file);
   writeWhole(file, text);
   return relayState(readText(file), home).kind === "ok" ? DONE : cannot("not-json");
 }
 
-/** `after` holds every top-level key of `before` with the same value, but for `permissions.allow`, which only grew. */
-export function keeps(before: Record<string, unknown> | null, after: Record<string, unknown>): boolean {
+/**
+ * `after` holds every top-level key of `before` with the same value, but for `permissions.allow`: its old entries, less
+ * exactly `removed`, come first and in order.
+ */
+export function keeps(before: Record<string, unknown> | null, after: Record<string, unknown>, removed: ReadonlySet<string> = new Set()): boolean {
   if (before === null) return true;
   for (const [k, v] of Object.entries(before)) {
     if (k === "permissions") continue;
@@ -383,7 +390,7 @@ export function keeps(before: Record<string, unknown> | null, after: Record<stri
     if (k === "allow") continue;
     if (JSON.stringify(p1[k]) !== JSON.stringify(v)) return false;
   }
-  const a0 = (p0.allow as string[] | undefined) ?? [];
+  const a0 = ((p0.allow as string[] | undefined) ?? []).filter((e) => !removed.has(e));
   const a1 = (p1.allow as string[] | undefined) ?? [];
   return a0.every((e, i) => a1[i] === e);
 }

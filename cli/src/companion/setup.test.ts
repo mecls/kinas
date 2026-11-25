@@ -12,6 +12,7 @@ import {
   HERDR_UNIT,
   namesOf,
   permissionModeOf,
+  legacyRelayEntries,
   relayEntries,
   relayState,
   systemLine,
@@ -174,18 +175,31 @@ describe("AC-8: whether ANTHROPIC_API_KEY is set, never its value (invariant 3)"
 describe("pure readings", () => {
   test("relayState: missing entries, or why the file is left alone", () => {
     const home = "/h/fm";
-    expect(relayState(null, home)).toEqual({ kind: "missing", missing: relayEntries(home), settings: null });
+    expect(relayState(null, home)).toEqual({ kind: "missing", missing: relayEntries(home), legacy: [], settings: null });
     expect(relayState(JSON.stringify({ permissions: { allow: relayEntries(home) } }), home)).toEqual({ kind: "ok" });
     expect(relayState("not json", home)).toEqual({ kind: "not-json" });
     expect(relayState("[1]", home)).toEqual({ kind: "not-json" });
     expect(relayState('{"permissions":[]}', home)).toEqual({ kind: "not-list" });
     expect(relayState('{"permissions":{"allow":[1]}}', home)).toEqual({ kind: "not-list" });
     expect(relayEntries(home)).toEqual([
+      "Bash(FM_HOME=/h/fm bin/fm-send.sh * --resolve-key *)",
+      "Bash(FM_HOME=/h/fm /h/fm/bin/fm-send.sh * --resolve-key *)",
+      "Bash(bin/fm-inbox.sh drain --ack *)",
+      "Bash(FM_HOME=/h/fm bin/fm-inbox.sh drain --ack *)",
+      "Bash(bin/fm-wake-drain.sh --ack-through * --recovery-generation *)",
+      "Bash(FM_HOME=/h/fm bin/fm-wake-drain.sh --ack-through * --recovery-generation *)",
+      "Bash(bin/fm-captain-hold.sh answer * --decision-file * --release)",
+      "Bash(FM_HOME=/h/fm bin/fm-captain-hold.sh answer * --decision-file * --release)",
+    ]);
+    expect(legacyRelayEntries(home)).toEqual([
       "Bash(bin/fm-send.sh *)",
       "Bash(/h/fm/bin/fm-send.sh *)",
       "Bash(FM_HOME=/h/fm bin/fm-send.sh *)",
       "Bash(FM_HOME=/h/fm /h/fm/bin/fm-send.sh *)",
     ]);
+    // All eight but one of ADR 0025's wider entries still there: not ok, and the old entry is named for removal.
+    const both = JSON.stringify({ permissions: { allow: [...relayEntries(home), "Bash(bin/fm-send.sh *)"] } });
+    expect(relayState(both, home)).toMatchObject({ kind: "missing", missing: [], legacy: ["Bash(bin/fm-send.sh *)"] });
   });
 
   test("permissionModeOf reads the token as fm-spawn.sh does", () => {

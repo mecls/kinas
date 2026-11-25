@@ -29,8 +29,11 @@
   - 5.3 done (`3ab74bc`): `kinas context --agent` on the Linux machine reads the companion's folders. The session
     hook exits at once in workers and takes its input as data only. The captain installs it by hand, as the status
     line.
-  - Left before the slice is checked: the 5.3 companion deployed, the captain's two scripts installed, the 5.2 Mac
-    build installed, and the gauge and Usage section seen from the home lab.
+  - 5.3 amended by the captain: the Linux machine's projects folders are a setting that takes more than one (`roots`),
+    read by the check, `kinas context` and the hook, and Kinas never makes one (`2b3a0bf`). Deployed to the home lab.
+    The 5.2 Mac build is installed.
+  - Left before the slice is checked: the captain's two scripts installed, and the gauge, the Linux machine section
+    and the packet seen from the home lab.
 - [ ] Slice 5b · worker isolation: a per-task GitHub token scoped to the task's repository, with the shared SSH key and `gh`'s credentials denied to workers so they push only with that token; and a temporary folder per worker — APPROVED 2026-11-25, after slice 5 and before slice 6 (build spec §12)
 - [ ] Slice 6 · answers from the Mac, as inbox notes → ship point 1
 - [ ] Slice 7 · the cloud store: the companion writes summaries

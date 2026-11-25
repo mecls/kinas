@@ -4,7 +4,7 @@ import type { SeatedFolder } from "../shell/folders.ts";
 import type { KeyboardEvent } from "react";
 import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
-import { BADGE_OF, lanesOf } from "./board.ts";
+import { BADGE_OF, lanesOf, reviewLine } from "./board.ts";
 import { bareHead, checksOf, detailFailure, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
 import { ageText, copiedText } from "./inbox.ts";
 
@@ -74,6 +74,7 @@ export function TaskDetail({
   const gone = shown?.task.word === "gone";
   const heldPr = shown && !gone ? shown.held_pr_number : null;
   const pr = shown ? prDetail(shown) : null;
+  const review = shown ? reviewLine(shown.task.review) : null;
   const worktree = shown ? worktreeWord(shown) : null;
   /** The footer acts on the newest open decision — of the task selected, never of the one shown before it. */
   const decision = view.current && shown && !gone ? (shown.decisions[0] ?? null) : null;
@@ -155,10 +156,25 @@ export function TaskDetail({
             </Button>
           )}
 
-          {(shown.task.kind !== "scout" || pr || heldPr !== null) && (
+          {(shown.task.kind !== "scout" || pr || heldPr !== null || review) && (
             <>
               <h4>PR</h4>
               {pr ? <p className="crew-pr" data-testid="crew-detail-pr">{pr}</p> : heldPr === null && <p className="ui-ink2">No PR yet</p>}
+              {/* 1.14, the captain's (b): what a merged hook or MCP server would run from, path by path. */}
+              {review && (
+                <>
+                  <p className="crew-review" data-testid="crew-detail-review">
+                    {review}
+                  </p>
+                  {shown.task.review!.paths.length > 0 && (
+                    <ul className="crew-review-paths">
+                      {shown.task.review!.paths.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
               {/* 1.12: the PR a held task names, opened by its task id — the URL stays in Rust. */}
               {heldPr !== null && shown.task.pr?.number !== heldPr && (
                 <p className="crew-pr" data-testid="crew-detail-held-pr">

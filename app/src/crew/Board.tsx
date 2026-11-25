@@ -2,7 +2,7 @@ import type { KeyboardEvent } from "react";
 import type { CrewTask } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import { Button, Card, Lane, StatusBadge } from "../ui/index.ts";
-import { BADGE_OF, lanesOf, metaLine, prLine } from "./board.ts";
+import { BADGE_OF, lanesOf, metaLine, prLine, reviewLine } from "./board.ts";
 
 // The Crew board (build spec §4 Crew page; mockup board.html): composition only. The rules are board.ts's; the lanes,
 // cards and badges are the library's; crew.css says where they sit.
@@ -22,6 +22,7 @@ function TaskCard({
 }) {
   const title = task.title ?? task.id;
   const pr = prLine(task.pr);
+  const review = reviewLine(task.review);
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
     e.preventDefault();
@@ -45,6 +46,11 @@ function TaskCard({
         <span className="crew-meta">{metaLine(task, now)}</span>
       </div>
       {pr && <div className="crew-pr">{pr}</div>}
+      {review && (
+        <div className="crew-review" data-testid="crew-review">
+          {review}
+        </div>
+      )}
       {task.has_pane && (
         <div className="crew-row">
           <Button

@@ -45,11 +45,21 @@ pub(crate) struct Bundle {
     /// The fleet ledger's complete lines since the Mac's cursor; None while there is no ledger file.
     #[serde(default)]
     pub ledger: Option<LedgerChunk>,
+    /// Each task branch's `git log --name-only` (the review flag, `touches.rs`), verbatim, with when it was read there.
+    #[serde(default)]
+    pub branches: Vec<BranchOut>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct PrOut {
     pub url: String,
+    pub checked_at: i64,
+    pub out: ScriptOut,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct BranchOut {
+    pub task: String,
     pub checked_at: i64,
     pub out: ScriptOut,
 }

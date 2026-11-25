@@ -15,6 +15,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (6, include_str!("../../../migrations/0006_crew_seen.sql")),
     (7, include_str!("../../../migrations/0007_crew_current.sql")),
     (8, include_str!("../../../migrations/0008_cloud_factory.sql")),
+    (9, include_str!("../../../migrations/0009_crew_review.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -385,6 +386,20 @@ mod tests {
 
     /// Firstmate, current (build spec §6.9, §11.4): 0007 only adds — no word in it drops, renames, deletes or
     /// rewrites — and a store at v6 with rows in every crew table migrates to v7 with every row of every table kept.
+    #[test]
+    fn migration_0009_only_adds_three_columns() {
+        let sql = MIGRATIONS.iter().find(|(v, _)| *v == 9).expect("0009 listed").1;
+        let statements: Vec<&str> = sql.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("--")).collect();
+        assert_eq!(
+            statements,
+            [
+                "ALTER TABLE crew_tasks ADD COLUMN pr_touches TEXT;",
+                "ALTER TABLE crew_tasks ADD COLUMN branch_touches TEXT;",
+                "ALTER TABLE crew_tasks ADD COLUMN branch_checked_at INTEGER;",
+            ]
+        );
+    }
+
     #[test]
     fn migration_0007_only_adds() {
         let sql = MIGRATIONS.iter().find(|(v, _)| *v == 7).expect("0007 listed").1;

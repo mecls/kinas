@@ -1,7 +1,8 @@
 //! The crew's read side (build spec §11.2), under one guard the caller takes: the Crew page's snapshot. Words are
 //! derived here, at read time, from the mirror's columns (§7) — never stored.
 
-use crate::readers::crew::mirror::{stored_of, STORED_COLUMNS, STORED_LEN};
+use crate::readers::crew::mirror::{stored_of, touches_of, STORED_COLUMNS, STORED_LEN};
+use crate::readers::crew::touches::Touches;
 use crate::readers::crew::word::{finished, word_of, word_without_gone};
 use crate::readings::ReaderView;
 use crate::redact::{Reader, DEAD_AFTER_MS};
@@ -87,6 +88,9 @@ pub struct TaskRow {
     pub dispatched_at: Option<i64>,
     pub merged_at: Option<i64>,
     pub merged_via: Option<String>,
+    /// The review flag (the captain's (b); ADR 0027): the PR's or the branch's `.claude/` and `.mcp.json` paths, or that
+    /// a reading could not be whole. None when neither found anything.
+    pub review: Option<Touches>,
 }
 
 #[derive(Debug, Serialize)]
@@ -178,7 +182,7 @@ fn task_select() -> String {
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
            {STORED_COLUMNS},
            EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4 AND w.observed_at <= ?5),
-           dispatched_at, merged_via
+           dispatched_at, merged_via, pr_touches, branch_touches
          FROM crew_tasks t"
     )
 }
@@ -217,6 +221,10 @@ fn task_row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
         dispatched_at: r.get(10 + STORED_LEN)?,
         merged_at: stored.merged_at,
         merged_via: r.get(11 + STORED_LEN)?,
+        review: Touches::union(
+            touches_of(r.get::<_, Option<String>>(12 + STORED_LEN)?.as_deref()).as_ref(),
+            touches_of(r.get::<_, Option<String>>(13 + STORED_LEN)?.as_deref()).as_ref(),
+        ),
     })
 }
 

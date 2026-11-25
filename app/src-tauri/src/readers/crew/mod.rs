@@ -11,6 +11,7 @@ pub mod ledger;
 pub mod mirror;
 pub mod schedule;
 pub mod snapshot;
+pub mod touches;
 pub mod word;
 
 use super::runtime::{watch_with, ReaderControl, CREW_CHANGED};
@@ -18,7 +19,9 @@ use crate::crew::pin::WORKSPACE_LABEL;
 use crate::crew::config::{lane_config, LaneConfig};
 use crate::crew::{firstmate, home, repo};
 use crate::herdr::{self, View};
-use crate::proc::{Exit, Ran};
+use crate::crew::tools::which;
+use crate::login_path::login_path;
+use crate::proc::{self, Exit, Ran, Run};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use crate::store::{now_ms, Store};
 use schedule::{CrewWake, Schedule};
@@ -48,6 +51,8 @@ const START_FOCUS_MS: i64 = 10_000;
 /// A PR is asked of `gh` again once its last check is this old: 60 s while the Crew page shows, 300 s otherwise.
 const PR_FRESH_VISIBLE_MS: i64 = 60_000;
 const PR_FRESH_HIDDEN_MS: i64 = 300_000;
+/// `git log` over one branch's own commits, for the review flag.
+const GIT_LIMIT: Duration = Duration::from_secs(10);
 /// The lane reading runs at most this often, Firstmate's own publish interval (build spec §11.5 decision 4).
 const CAPACITY_GAP_MS: i64 = 30_000;
 /// Herdr's session the crew runs in on the VPS (ADR 0024): the workers' endpoints are read against it.
@@ -224,6 +229,8 @@ struct Memo {
     /// remembered: it is asked again next cycle, so a clone that appears is read without a restart.
     repos: HashMap<String, String>,
     pr_checked: HashMap<String, i64>,
+    /// When each task's branch was last read for the review flag, by task id — here, or on the VPS by the bundle's stamp.
+    branch_checked: HashMap<String, i64>,
     /// When `fm-capacity.sh` last ran — here, or on the VPS by the bundle's stamp.
     capacity_at: Option<i64>,
     /// Refresh readings was asked with the agents on a VPS: the next cycle asks the companion for a reading first.
@@ -389,6 +396,7 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
                 prs: prs_of(app, fleet, memo, visible, &open),
                 lanes: lanes_due(home, memo, now_ms()),
                 ledger: ledger_read(app, home),
+                branches: branches_of(fleet, home, memo, visible),
             }
         }
         Err(_) => Found::default(),
@@ -548,7 +556,16 @@ fn found_remote(b: &bundle::Bundle, fleet: &Fleet, view: Option<&View>, memo: &m
         }
         _ => None,
     };
-    Found { workers: mirror::workers_of(fleet, view, Some(REMOTE_SESSION)), repos, prs, lanes, ledger: b.ledger.as_ref().map(bundle::ledger_of) }
+    // Each branch the VPS read since the last bundle, once (the review flag): its `git log` answer, verbatim.
+    let mut branches = HashMap::new();
+    for out in &b.branches {
+        if memo.branch_checked.insert(out.task.clone(), out.checked_at) == Some(out.checked_at) {
+            continue;
+        }
+        let ran = out.out.ran();
+        branches.insert(out.task.clone(), touches::of_branch(matches!(ran.exit, Exit::Code(0)), &out.out.stdout));
+    }
+    Found { workers: mirror::workers_of(fleet, view, Some(REMOTE_SESSION)), repos, prs, lanes, ledger: b.ledger.as_ref().map(bundle::ledger_of), branches }
 }
 
 /// A clone's repository, from the memo when it has one; read and remembered otherwise, unless there is none yet.
@@ -611,6 +628,37 @@ fn prs_of(app: &AppHandle, fleet: &Fleet, memo: &mut Memo, visible: bool, open: 
         checks.insert(pr.url.clone(), pr.checks.clone());
     }
     prs
+}
+
+/// Each task's branch for the review flag (the captain's (b)): every task not done with a branch and a clone under
+/// `<home>/projects/`, not read within the PRs' gap — `git log` from the clone's own git folder, 10 s, with no guard
+/// held. A branch not made yet is not read; one that is there but cannot be read asks for review.
+fn branches_of(fleet: &Fleet, home: &Path, memo: &mut Memo, visible: bool) -> HashMap<String, touches::Touches> {
+    let gap = if visible { PR_FRESH_VISIBLE_MS } else { PR_FRESH_HIDDEN_MS };
+    let now = now_ms();
+    let path = login_path();
+    let Some(git) = which("git", path) else { return HashMap::new() };
+    let mut out = HashMap::new();
+    for t in fleet.tasks.iter().filter(|t| !mirror::done_now(t)) {
+        let Some(branch) = t.branch.as_deref() else { continue };
+        if memo.branch_checked.get(&t.id).is_some_and(|at| (0..gap).contains(&(now - at))) {
+            continue;
+        }
+        let Some(git_dir) = mirror::clone_path(t, home).and_then(|c| touches::clone_git_dir(home, &c)) else { continue };
+        let (Some(log), Some(exists)) = (touches::branch_args(&git_dir, branch), touches::branch_exists_args(&git_dir, branch)) else { continue };
+        memo.branch_checked.insert(t.id.clone(), now);
+        let run = |args: &[String]| {
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            proc::run(&Run { program: &git, args: &args, cwd: None, set: &[("PATH", path), ("GIT_OPTIONAL_LOCKS", "0"), ("GIT_TERMINAL_PROMPT", "0")], limit: GIT_LIMIT }).ok()
+        };
+        let Some(ran) = run(&log) else { continue };
+        let ok = matches!(ran.exit, Exit::Code(0));
+        if !ok && run(&exists).is_some_and(|r| !matches!(r.exit, Exit::Code(0))) {
+            continue;
+        }
+        out.insert(t.id.clone(), touches::of_branch(ok, &ran.stdout));
+    }
+    out
 }
 
 /// The PRs due a reading: the PR of every task not done, and of a done task whose last reading was open (done work
@@ -784,6 +832,7 @@ mod tests {
             prs: vec![gh::parse(pr, &gh_json).unwrap()],
             lanes: Some(read_capacity(&Ran { exit: Exit::Code(0), stdout: capacity_json.clone(), first_err: None, last_err: None }, now)),
             ledger: ledger::read_ledger(&home.join(ledger::LEDGER_FILE), ledger::Cursor::default()).unwrap(),
+            branches: HashMap::from([("stock-webhook-9c2e".to_string(), touches::of_branch(true, BRANCH_LOG))]),
         };
 
         // The VPS: the same facts as the companion sends them.
@@ -801,6 +850,7 @@ mod tests {
             },
             "herdr_view": view_json, "herdr_foreground": null,
             "prs": [{ "url": pr, "checked_at": now, "out": out(&gh_json) }],
+            "branches": [{ "task": "stock-webhook-9c2e", "checked_at": now, "out": out(BRANCH_LOG) }],
             "ledger": { "epoch": "x", "dev": meta.dev(), "ino": meta.ino(), "from": 0, "to": text.len(), "text": text }
         }))
         .unwrap();
@@ -813,6 +863,8 @@ mod tests {
         assert_eq!(remote.prs, local.prs);
         assert_eq!(remote.lanes, local.lanes);
         assert_eq!(remote.ledger, local.ledger);
+        assert_eq!(remote.branches, local.branches);
+        assert_eq!(remote.branches["stock-webhook-9c2e"].paths, [".claude/settings.json"]);
 
         let write = |found: &Found| {
             let dir = tempfile::tempdir().unwrap();
@@ -827,7 +879,64 @@ mod tests {
 
         // The same bundle again applies no PR or lane answer twice; the ledger chunk is the companion's to advance.
         let again = found_remote(&b, &fleet, Some(&view), &mut remote_memo);
-        assert!(again.prs.is_empty() && again.lanes.is_none());
+        assert!(again.prs.is_empty() && again.lanes.is_none() && again.branches.is_empty());
+    }
+
+    /// What `git log --name-only --format= -z` prints for two commits.
+    const BRANCH_LOG: &str = "\0src/stock.ts\0.claude/settings.json\0\0README.md\0";
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .args(["-c", "user.email=t@example.invalid", "-c", "user.name=t", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .output()
+            .unwrap();
+        assert!(ok.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&ok.stderr));
+    }
+
+    /// The review flag on this Mac (the captain's (b)): a real clone, a branch with a commit that adds a hook, read from
+    /// the clone's git folder; a branch not made yet is not read, and one read is not read again within the gap.
+    #[test]
+    fn a_branch_that_adds_a_claude_file_is_flagged_and_one_not_made_yet_is_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("firstmate");
+        let clone = home.join("projects").join("shop");
+        std::fs::create_dir_all(&clone).unwrap();
+        git(&clone, &["init", "-q", "-b", "main"]);
+        std::fs::write(clone.join("README.md"), "shop\n").unwrap();
+        git(&clone, &["add", "-A"]);
+        git(&clone, &["commit", "-q", "-m", "base"]);
+        git(&clone, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&clone, &["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+        git(&clone, &["checkout", "-q", "-b", "fm/hook"]);
+        std::fs::create_dir_all(clone.join(".claude")).unwrap();
+        std::fs::write(clone.join(".claude/settings.json"), "{}\n").unwrap();
+        std::fs::write(clone.join("src.ts"), "x\n").unwrap();
+        git(&clone, &["add", "-A"]);
+        git(&clone, &["commit", "-q", "-m", "work"]);
+        git(&clone, &["checkout", "-q", "main"]);
+
+        let task = |id: &str, branch: &str| snapshot::TaskFacts {
+            id: id.into(),
+            branch: Some(branch.into()),
+            project: Some(clone.display().to_string()),
+            state: Some("working".into()),
+            ..Default::default()
+        };
+        let fleet = Fleet { tasks: vec![task("hook-9c2e", "fm/hook"), task("later-9c2e", "fm/not-yet"), task("bad-9c2e", "--all")], ..Default::default() };
+        let mut memo = Memo::default();
+        let read = branches_of(&fleet, &home, &mut memo, true);
+        assert_eq!(read.get("hook-9c2e"), Some(&touches::Touches { paths: vec![".claude/settings.json".into()], unknown: false }));
+        assert!(!read.contains_key("later-9c2e"), "a branch not made yet has nothing to review");
+        assert!(!read.contains_key("bad-9c2e"), "a name that is not a branch is never passed to git");
+        assert!(branches_of(&fleet, &home, &mut memo, true).is_empty(), "not again within the gap");
+
+        // A clone whose origin/HEAD is not set cannot be read whole: it asks for review.
+        git(&clone, &["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"]);
+        let read = branches_of(&fleet, &home, &mut Memo::default(), true);
+        assert_eq!(read.get("hook-9c2e"), Some(&touches::Touches { paths: vec![], unknown: true }));
     }
 
     /// Build spec §12 slice 2.5, ADR 0004: a bundle that does not come, or is not one, writes no crew row and moves no

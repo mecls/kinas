@@ -160,6 +160,15 @@ export interface CrewTask {
   dispatched_at: number | null;
   merged_at: number | null;
   merged_via: "pr" | "local" | null;
+  /**
+   * The review flag (the captain's (b); ADR 0027): the PR's or branch's `.claude/` and `.mcp.json` paths, or that a
+   * reading could not see every path. Null when neither found anything.
+   */
+  review: CrewReview | null;
+}
+export interface CrewReview {
+  paths: string[];
+  unknown: boolean;
 }
 export interface CrewDecision {
   task_id: string;

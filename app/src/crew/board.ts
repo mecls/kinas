@@ -1,4 +1,4 @@
-import type { CrewPage, CrewPr, CrewSurface, CrewTask, CrewWord } from "../api.ts";
+import type { CrewPage, CrewPr, CrewReview, CrewSurface, CrewTask, CrewWord } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { BadgeState } from "../ui/StatusBadge.tsx";
 import type { Category } from "../ui/Dot.tsx";
@@ -233,6 +233,18 @@ export function prLine(pr: CrewPr | null): string | null {
   else if (pr.draft) parts.push("draft");
   else if (pr.mergeable === "MERGEABLE") parts.push("mergeable");
   return parts.join(" · ");
+}
+
+/**
+ * The review flag's line (the captain's (b); DESIGN.md 1.14): what the PR or branch changes that a merged hook or MCP
+ * server would run from, in the captain's own sessions. Null when there is nothing to review.
+ */
+export function reviewLine(review: CrewReview | null): string | null {
+  if (!review || (review.paths.length === 0 && !review.unknown)) return null;
+  const claude = review.paths.some((p) => p.split("/").includes(".claude"));
+  const mcp = review.paths.some((p) => p.split("/").pop() === ".mcp.json");
+  const what = claude && mcp ? ".claude/ and .mcp.json" : claude ? ".claude/" : mcp ? ".mcp.json" : null;
+  return what ? `touches ${what} — review before merging` : "too many files to check — review before merging";
 }
 
 /** The card's quiet line: "ship · claude · working 12 min", without the parts it does not know. */

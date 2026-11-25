@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { makeFakeHome, writeConfig } from "../../../e2e/fake-firstmate/make.ts";
 import { firstmate, type ScriptOut } from "./firstmate.ts";
 import { companionPaths } from "./paths.ts";
-import { cloneOrigin, duePrs, originUrl, prUrlOk, readOnce, tasksOf, type Deps } from "./run.ts";
+import { branchArgs, branchExistsArgs, cloneOrigin, duePrs, originUrl, prUrlOk, readOnce, tasksOf, type Deps } from "./run.ts";
 
 // The companion's reading (build spec §11.3 B, slice 2.1): the integration half runs the fake Firstmate's scripts for
 // real (e2e/fake-firstmate), each logging its argv, so the tests prove which ran and that nothing else did.
@@ -133,9 +133,64 @@ describe("the companion's reading", () => {
     expect(w.gh).toEqual([]);
   });
 
+  test("the review flag's git argv is the Mac's touches.rs, argv for argv; a name that is not a branch is never passed", () => {
+    expect(branchArgs("/h/fm/projects/shop/.git", "fm/fix-login")).toEqual([
+      "-c",
+      "core.fsmonitor=false",
+      "-c",
+      "core.hooksPath=/dev/null",
+      "--git-dir=/h/fm/projects/shop/.git",
+      "log",
+      "--no-renames",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--name-only",
+      "--format=",
+      "-z",
+      "refs/heads/fm/fix-login",
+      "--not",
+      "refs/remotes/origin/HEAD",
+      "--",
+    ]);
+    expect(branchExistsArgs("/g/.git", "fm/x")).toEqual(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "--git-dir=/g/.git", "rev-parse", "--verify", "--quiet", "refs/heads/fm/x^{commit}"]);
+    for (const bad of ["", "-x", "--output=/tmp/x", "a..b", "/abs", "a//b", "a b", "a;b", "fm/x.", "fm/x/"]) expect(branchArgs("/g", bad)).toBeNull();
+    expect(branchArgs("relative/.git", "fm/x")).toBeNull();
+  });
+
+  test("a task's branch is read from its clone's git folder: once a gap, kept while not done, and not while not made", async () => {
+    const w = world();
+    const clone = join(w.home, "projects", "shop-9c2e");
+    mkdirSync(join(clone, ".git"), { recursive: true });
+    const snap = JSON.stringify({
+      backlog: { records: [] },
+      tasks: [
+        { id: "hook-9c2e", branch: "fm/hook", project: clone, current_state: { state: "working" } },
+        { id: "later-9c2e", branch: "fm/later", project: clone, current_state: { state: "working" } },
+        { id: "away-9c2e", branch: "fm/away", project: "/elsewhere/shop", current_state: { state: "working" } },
+        { id: "bad-9c2e", branch: "--all", project: clone, current_state: { state: "working" } },
+      ],
+    });
+    writeFileSync(join(w.home, "state", "snapshot.json"), snap);
+    const git: string[][] = [];
+    w.deps.fm = { run: async (call) => (call.script === "fm-fleet-snapshot.sh" ? { exit: 0, timed_out: false, stdout: snap, stderr_first: null } : { exit: 1, timed_out: false, stdout: "", stderr_first: null }) };
+    w.deps.git = async (args) => {
+      git.push(args);
+      const hook = args.some((a) => a.startsWith("refs/heads/fm/hook"));
+      return hook ? { exit: 0, timed_out: false, stdout: "\0.claude/settings.json\0", stderr_first: null } : { exit: 128, timed_out: false, stdout: "", stderr_first: "fatal" };
+    };
+    const r = await readOnce(w.deps, null, 0);
+    expect(r.branches).toEqual([{ task: "hook-9c2e", checked_at: w.now.t, out: { exit: 0, timed_out: false, stdout: "\0.claude/settings.json\0", stderr_first: null } }]);
+    // The clone's git folder, never the worktree; only the two names that are branches under the projects folder.
+    expect(git.map((a) => a[4])).toEqual([`--git-dir=${join(clone, ".git")}`, `--git-dir=${join(clone, ".git")}`, `--git-dir=${join(clone, ".git")}`]);
+    git.length = 0;
+    w.now.t += 1_000;
+    expect((await readOnce(w.deps, r, 0)).branches).toEqual(r.branches);
+    expect(git.filter((a) => a.includes("log"))).toEqual([branchArgs(join(clone, ".git"), "fm/later")!]);
+  });
+
   test("tasksOf merges a record and a row as parse_fleet does; duePrs keeps done work's PR only while it was open", () => {
     const tasks = tasksOf(readFileSync(join(FIXTURES, "firstmate-fleet-snapshot.current.synthetic.json"), "utf8"));
-    expect(tasks.filter((t) => t.pr)).toEqual([
+    expect(tasks.filter((t) => t.pr).map(({ id, pr, done }) => ({ id, pr, done }))).toEqual([
       { id: "stock-webhook-9c2e", pr: PR_91, done: false },
       { id: "harbor-review-9c2e", pr: PR_90, done: false },
     ]);

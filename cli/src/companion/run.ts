@@ -7,7 +7,7 @@
 // `gh pr view <url> --json <fields>` for a URL that passed the Mac's own check. Nothing it runs changes anything.
 
 import { run } from "@kinas/context";
-import { closeSync, fstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
@@ -18,8 +18,9 @@ export const READ_EVERY_MS = 15_000;
 /** As the Mac's collector: capacity at most every 30 s, a PR at most every 60 s (the page's visible gap). */
 export const CAPACITY_GAP_MS = 30_000;
 export const PR_GAP_MS = 60_000;
-/** `gh pr view`'s fields: the Mac's `gh.rs` FIELDS, never a title or body. */
-export const GH_FIELDS = "number,state,isDraft,mergeable,reviewDecision,statusCheckRollup";
+/** `gh pr view`'s fields: the Mac's `gh.rs` FIELDS, never a title or body; `files` are paths only (the review flag). */
+export const GH_FIELDS = "number,state,isDraft,mergeable,reviewDecision,statusCheckRollup,files,changedFiles";
+const GIT_LIMIT_MS = 10_000;
 const GH_LIMIT_MS = 10_000;
 /** The most of the ledger one bundle carries, as the Mac's `ledger::READ_CAP`. */
 export const LEDGER_CAP = 4 * 1024 * 1024;
@@ -55,6 +56,17 @@ export interface Reading {
   herdr_foreground: string | null;
   /** The latest `gh pr view` of each PR still due; a PR not asked this time keeps its last answer. */
   prs: PrOut[];
+  /**
+   * Each task branch's `git log --name-only` (the review flag; the Mac's `touches.rs`), read at most once a gap; a branch
+   * not read this time keeps its last answer while its task is not done. A branch not made yet has no entry.
+   */
+  branches?: BranchOut[];
+}
+
+export interface BranchOut {
+  task: string;
+  checked_at: number;
+  out: ScriptOut;
 }
 
 export interface Deps {
@@ -69,6 +81,8 @@ export interface Deps {
   log: (line: string) => void;
   /** `gh` by the companion's PATH; replaced in tests. */
   gh?: (url: string) => Promise<ScriptOut>;
+  /** `git` by the companion's PATH, with the review flag's fixed arguments; replaced in tests. */
+  git?: (args: string[]) => Promise<ScriptOut>;
   /** herdr.ts's runner on `session`; replaced in tests. */
   herdr?: Herdr;
 }
@@ -96,6 +110,9 @@ interface TaskPr {
   id: string;
   pr: string | null;
   done: boolean;
+  /** The row's `branch` and `project` (its clone): the review flag reads the branch from the clone's git folder. */
+  branch?: string | null;
+  project?: string | null;
 }
 
 /** Each task's PR and whether it is done, merged as `snapshot::parse_fleet` merges a record and a row. */
@@ -106,8 +123,8 @@ export function tasksOf(snapshot: string): TaskPr[] {
   } catch {
     return [];
   }
-  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null }>();
-  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null });
+  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null }>();
+  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null });
   for (const r of array(root, ["backlog", "records"])) {
     const id = text(r, ["id"]);
     if ((r as { structured?: unknown }).structured !== true || id === null || tasks.has(id)) continue;
@@ -119,13 +136,21 @@ export function tasksOf(snapshot: string): TaskPr[] {
     let t = tasks.get(id);
     if (!t) {
       const b = (row as { backlog?: unknown }).backlog;
-      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null };
+      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null };
       tasks.set(id, t);
     }
     t.state = text(row, ["current_state", "state"]);
     t.pr = text(row, ["pr", "url"]) ?? t.pr;
+    t.branch = text(row, ["branch"]);
+    t.project = text(row, ["project"]);
   }
-  return [...tasks].map(([id, t]) => ({ id, pr: t.pr, done: t.backlog === "done" || (t.backlog === null && t.state === "done") }));
+  return [...tasks].map(([id, t]) => ({
+    id,
+    pr: t.pr,
+    done: t.backlog === "done" || (t.backlog === null && t.state === "done"),
+    ...(t.branch !== null ? { branch: t.branch } : {}),
+    ...(t.project !== null ? { project: t.project } : {}),
+  }));
 }
 
 /**
@@ -150,6 +175,78 @@ export function duePrs(tasks: TaskPr[], last: PrOut[], now: number, gap = PR_GAP
       return at === undefined || !(now - at >= 0 && now - at < gap);
     });
   return [...new Set(urls)].sort();
+}
+
+// ---- the review flag: a task branch's changed names (the Mac's `touches.rs`, argv for argv) ----
+
+/** A branch name git and Firstmate both accept here (`touches::branch_ok`): never an option, never `..`. */
+export function branchOk(branch: string): boolean {
+  return (
+    branch.length > 0 &&
+    branch.length <= 200 &&
+    !/^[-/]/.test(branch) &&
+    !/[/.]$/.test(branch) &&
+    !branch.includes("..") &&
+    !branch.includes("//") &&
+    /^[A-Za-z0-9/_.-]+$/.test(branch)
+  );
+}
+
+const GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"];
+
+/** `touches::branch_args`: the branch's own commits' names, from the clone's git folder only. */
+export function branchArgs(gitDir: string, branch: string): string[] | null {
+  if (!branchOk(branch) || !gitDir.startsWith("/")) return null;
+  return [...GIT_SAFE, `--git-dir=${gitDir}`, "log", "--no-renames", "--no-ext-diff", "--no-textconv", "--name-only", "--format=", "-z", `refs/heads/${branch}`, "--not", "refs/remotes/origin/HEAD", "--"];
+}
+
+/** `touches::branch_exists_args`. */
+export function branchExistsArgs(gitDir: string, branch: string): string[] | null {
+  if (!branchOk(branch) || !gitDir.startsWith("/")) return null;
+  return [...GIT_SAFE, `--git-dir=${gitDir}`, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`];
+}
+
+/** `touches::clone_git_dir`: a clone lexically under `<home>/projects/`, its `.git` a real folder. */
+export function cloneGitDir(home: string, clone: string): string | null {
+  if (!clone.startsWith("/") || clone.split("/").some((p) => p === ".." || p === ".")) return null;
+  const root = `${join(home, "projects")}/`;
+  if (!clone.startsWith(root) || clone.length === root.length) return null;
+  const git = join(clone, ".git");
+  try {
+    const st = lstatSync(git);
+    return st.isDirectory() && !st.isSymbolicLink() ? git : null;
+  } catch {
+    return null;
+  }
+}
+
+async function gitDefault(deps: Deps, args: string[]): Promise<ScriptOut> {
+  if (deps.git) return deps.git(args);
+  const env: Record<string, string> = { PATH: deps.path, HOME: process.env.HOME ?? "", GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" };
+  const r = await run(["git", ...args], { env, timeoutMs: GIT_LIMIT_MS });
+  return { exit: r.timedOut ? null : r.code, timed_out: r.timedOut, stdout: r.stdout, stderr_first: r.stderr.split("\n").find((l) => l.trim() !== "") ?? null };
+}
+
+/** Each task not done with a branch and a clone, not read within the gap: its log, or nothing while the branch is not made. */
+async function branchesNow(deps: Deps, tasks: TaskPr[], last: BranchOut[], at: number): Promise<BranchOut[]> {
+  const lastOf = new Map(last.map((b) => [b.task, b]));
+  const live = tasks.filter((t) => !t.done && t.branch);
+  const out: BranchOut[] = [];
+  for (const t of live) {
+    const prior = lastOf.get(t.id);
+    if (prior && at - prior.checked_at >= 0 && at - prior.checked_at < PR_GAP_MS) {
+      out.push(prior);
+      continue;
+    }
+    const gitDir = t.project ? cloneGitDir(deps.paths.home, t.project) : null;
+    const log = gitDir ? branchArgs(gitDir, t.branch!) : null;
+    const exists = gitDir ? branchExistsArgs(gitDir, t.branch!) : null;
+    if (log === null || exists === null) continue;
+    const o = await gitDefault(deps, log);
+    if (!ran(o) && !ran(await gitDefault(deps, exists))) continue;
+    out.push({ task: t.id, checked_at: at, out: o });
+  }
+  return out.sort((a, b) => a.task.localeCompare(b.task));
 }
 
 // ---- files read as files ----
@@ -346,6 +443,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   const asked = await Promise.all(due.map(async (url) => ({ url, checked_at: at, out: await ghDefault(deps, url) })));
   const kept = (prev?.prs ?? []).filter((p) => named.has(p.url) && !due.includes(p.url));
   if (due.length > 0) deps.log(`companion: gh ${due.length} PRs`);
+  const branches = await branchesNow(deps, tasks, prev?.branches ?? [], at);
 
   const reading: Reading = {
     ...base,
@@ -359,6 +457,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
     herdr_view: view,
     herdr_foreground: foreground,
     prs: [...kept, ...asked].sort((a, b) => a.url.localeCompare(b.url)),
+    branches,
   };
   writeReading(paths, reading);
   return reading;

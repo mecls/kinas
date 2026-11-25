@@ -4,6 +4,7 @@
 //! asked for.
 
 use super::snapshot::pr_url_ok;
+use super::touches::{self, Touches};
 use crate::crew::tools::which;
 use crate::login_path::login_path;
 use crate::proc::{self, Exit, Run};
@@ -11,7 +12,8 @@ use serde_json::Value;
 use std::time::Duration;
 
 const GH_LIMIT: Duration = Duration::from_secs(10);
-const FIELDS: &str = "number,state,isDraft,mergeable,reviewDecision,statusCheckRollup";
+/// `files` and `changedFiles` (2026-11-25, the captain's (b)): paths only, for the review flag (`touches.rs`).
+const FIELDS: &str = "number,state,isDraft,mergeable,reviewDecision,statusCheckRollup,files,changedFiles";
 
 /// Conclusions that fail a check, as GitHub's own checks list counts them.
 const FAILING: [&str; 5] = ["FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"];
@@ -29,6 +31,8 @@ pub(crate) struct PrFacts {
     pub review: Option<String>,
     /// (name, conclusion): SUCCESS, FAILURE, PENDING, NEUTRAL, SKIPPED, … — a running check is PENDING.
     pub checks: Vec<(String, String)>,
+    /// The PR's `.claude/` and `.mcp.json` paths, or that its list was not whole.
+    pub touches: Touches,
 }
 
 impl PrFacts {
@@ -96,6 +100,7 @@ pub(crate) fn parse(url: &str, json: &str) -> Result<PrFacts, String> {
         mergeable: text("mergeable").unwrap_or_else(|| "UNKNOWN".into()),
         review: text("reviewDecision"),
         checks,
+        touches: touches::of_pr(&v),
     })
 }
 

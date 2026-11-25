@@ -179,11 +179,11 @@ export function TaskDetail({
               {/* ADR 0028: what the worktree holds that isn't the repository's, path by path — before landing. */}
               {planted && (
                 <>
-                  <p className="crew-review" data-testid="crew-detail-worktree">
+                  <p className="crew-review" data-testid="crew-detail-scan">
                     {planted}
                   </p>
                   {shown.task.worktree!.paths.length > 0 && (
-                    <ul className="crew-review-paths">
+                    <ul className="crew-review-paths" data-testid="crew-detail-scan-paths">
                       {shown.task.worktree!.paths.map((p) => (
                         <li key={p}>{p}</li>
                       ))}

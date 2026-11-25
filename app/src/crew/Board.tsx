@@ -53,7 +53,7 @@ function TaskCard({
         </div>
       )}
       {worktree && (
-        <div className="crew-review" data-testid="crew-worktree">
+        <div className="crew-review" data-testid="crew-scan">
           {worktree}
         </div>
       )}

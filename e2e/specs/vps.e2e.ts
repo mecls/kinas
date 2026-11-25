@@ -1,6 +1,8 @@
 import { $, browser, expect } from "@wdio/globals";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeSnapshot } from "../fake-firstmate/make.ts";
 import { LABEL, plantHerdrRelease, setCompanion, setDown, TARGET } from "../fake-vps/make.ts";
 import { APP_LOG, herdr, herdrSnapshot } from "../helpers.ts";
 import { VPS_SESSION } from "./vps.setup.ts";
@@ -19,6 +21,9 @@ import { VPS_SESSION } from "./vps.setup.ts";
 // Case 4, slice 4.4: setup — with no companion there, Settings gives the bootstrap (no Linux build of this version is
 // published yet, so the two steps by hand, with the target in them); with it back, the checks table, and Install Herdr
 // puts the fake VPS's pinned stand-in in place (its SHA-256 checked) and the row turns green.
+// Case 5, slice 4.14 (ADR 0028): a worker on the VPS reports done with a `.claude` and a `.mcp.json` planted in its
+// worktree. This build's own companion scans the folder as files, the bundle carries the scan, and the card and the task
+// detail say so in red — while the repository's own `.claude` file, the same in the clone, is not named.
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const calls = join(dataDir, "fake-vps", "calls.log");
@@ -275,5 +280,116 @@ describe("agents on a VPS", () => {
     expect(log).toMatch(/setup: install herdr on vps-e2e/);
     expect(log).toMatch(/remote: install ok in \d+ ms/);
     expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
+  });
+
+  it("says before landing that a worker's worktree holds a .claude and a .mcp.json that aren't the repository's (slice 4.14)", async () => {
+    const TASK = "scan-plant-9c2e";
+    const fmHome = join(dataDir, "fake-vps", "companion", "firstmate");
+    const clone = join(fmHome, "projects", "shop-9c2e");
+    const worktree = join(dataDir, "fake-vps", "treehouse", "shop-9c2e-1", "shop-9c2e");
+    const put = (root: string, path: string, text: string) => {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), text);
+    };
+    // The repository's own `.claude/notes.md`, in its clone and in the worktree alike; then the worker's plants.
+    put(clone, ".claude/notes.md", "the repository's own\n");
+    put(worktree, ".claude/notes.md", "the repository's own\n");
+    put(worktree, "sub/.claude/x", "x\n");
+    put(worktree, "sub/.mcp.json", "{}\n");
+    // The row as Firstmate prints it once the worker has reported (measured on the home lab, 2026-11-25): its status
+    // log's last event is `done` while the row still reads the pane as busy. No branch and no PR: only the scan speaks.
+    writeSnapshot(
+      fmHome,
+      JSON.stringify({
+        schema: "fm-fleet-snapshot.v1",
+        generated: new Date().toISOString(),
+        backlog: {
+          records: [
+            { structured: true, id: TASK, title: "Plant a .claude 9c2e", kind: "ship", state: "in_flight", repo: "shop-9c2e", pr_url: null, body_excerpt: `Delivery: direct-pr ${TASK}.`, captain_actionable: false },
+          ],
+        },
+        tasks: [
+          {
+            id: TASK,
+            kind: "ship",
+            harness: "claude",
+            mode: "direct-pr",
+            yolo: "off",
+            project: "__FM_HOME__/projects/shop-9c2e",
+            backend: "herdr",
+            paths: {
+              worktree: { path: worktree, present: true },
+              report: { path: null, present: false },
+              status_log: { path: `__FM_HOME__/state/${TASK}.status`, present: true, kind: "event_history", last_event: { state: "done", note: `ready in branch fm/${TASK}`, raw: `done: ready in branch fm/${TASK}`, age_seconds: 5 } },
+            },
+            current_state: { state: "working", source: "pane", detail: "harness busy (fm-spawn)", observed_at: new Date().toISOString() },
+            pr: { url: null },
+            hints: { pending_decision: false, blocked_event: false, open_decisions: [] },
+          },
+        ],
+        main_inventory: { orphan_in_flight: [] },
+      }),
+    );
+
+    await go("Crew");
+    const refreshed = await browser.execute(() =>
+      (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("refresh_readings").then(
+        () => "ok",
+        (e: unknown) => String(e),
+      ),
+    );
+    expect(refreshed).toBe("ok");
+
+    // The card: the scan's line, in the review flag's red text, and no review-flag line of its own (nothing committed).
+    const lines = await waitInPage(
+      () => {
+        const c = document.querySelector('section[data-page="crew"] article.crew-card[data-task="scan-plant-9c2e"]');
+        return c ? JSON.stringify({ scan: c.querySelector('[data-testid="crew-scan"]')?.textContent ?? null, review: c.querySelector('[data-testid="crew-review"]')?.textContent ?? null }) : null;
+      },
+      (v) => v !== null && JSON.parse(v).scan !== null,
+      "the card never said what the worktree holds",
+      60000,
+    );
+    expect(JSON.parse(lines!)).toEqual({ scan: "worktree holds .claude/ and .mcp.json that aren't the repository's — review before landing", review: null });
+    // Red: the line's computed colour is the one `var(--danger)` gives in the same card.
+    const colours = await browser.execute(() => {
+      const card = document.querySelector('article.crew-card[data-task="scan-plant-9c2e"]')!;
+      const line = card.querySelector('[data-testid="crew-scan"]')!;
+      const probe = document.createElement("span");
+      probe.style.color = "var(--danger)";
+      card.appendChild(probe);
+      const out = JSON.stringify({ line: getComputedStyle(line).color, danger: getComputedStyle(probe).color });
+      probe.remove();
+      return out;
+    });
+    const { line: lineColour, danger } = JSON.parse(colours) as { line: string; danger: string };
+    expect(danger).not.toBe("");
+    expect(lineColour).toBe(danger);
+
+    // The detail: the same line, and the paths, each one; the repository's own file is not among them.
+    await browser.execute(() => (document.querySelector('article.crew-card[data-task="scan-plant-9c2e"]') as HTMLElement).click());
+    const detail = await waitInPage(
+      () => {
+        const d = document.querySelector('aside.shell-panel[data-occupant="task"]:not([hidden]) .crew-detail[data-task="scan-plant-9c2e"]');
+        return d
+          ? JSON.stringify({
+              line: d.querySelector('[data-testid="crew-detail-scan"]')?.textContent ?? null,
+              paths: [...d.querySelectorAll('[data-testid="crew-detail-scan-paths"] li')].map((li) => li.textContent),
+            })
+          : null;
+      },
+      (v) => v !== null && JSON.parse(v).line !== null,
+      "the detail never showed the scan",
+    );
+    expect(JSON.parse(detail!)).toEqual({
+      line: "worktree holds .claude/ and .mcp.json that aren't the repository's — review before landing",
+      paths: ["sub/.claude", "sub/.claude/x", "sub/.mcp.json"],
+    });
+
+    // What the companion sent and the Mac kept: the scan in the reading on the VPS, the same paths in the store's row.
+    const reading = JSON.parse(readFileSync(join(dataDir, "fake-vps", "companion", "state", "reading.json"), "utf8")) as { worktrees?: { task: string; red: string[] }[] };
+    expect(reading.worktrees?.find((w) => w.task === TASK)?.red).toEqual(["sub/.claude", "sub/.claude/x", "sub/.mcp.json"]);
+    const stored = execFileSync("/usr/bin/sqlite3", [join(dataDir, "kinas.sqlite"), `SELECT worktree_touches FROM crew_tasks WHERE id = '${TASK}'`], { encoding: "utf8" }).trim();
+    expect(JSON.parse(stored)).toEqual({ paths: ["sub/.claude", "sub/.claude/x", "sub/.mcp.json"], unknown: false });
   });
 });

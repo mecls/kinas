@@ -5,8 +5,9 @@
 // - `launch-first-mate`, the Mac's launcher (app/src-tauri/src/crew/launch.rs) rule for rule: the workspace labelled
 //   `firstmate` is focused, and the first mate's program is typed into its pane only when that pane's foreground is a
 //   shell and nothing else and the launcher has not typed into it in the last 30 s; with no such workspace one is made
-//   in Firstmate's home and the program typed there. The command is exactly the program — never a sentence, never a
-//   shell string from the request.
+//   in Firstmate's home and the program typed there. The command is exactly the program and, since ADR 0026, its one
+//   flag `--append-system-prompt-file <Kinas's relay instruction>` — never a sentence, never a shell string from the
+//   request. Without Kinas's own copy of the instruction there is no launch (`no-instruction`).
 // - `focus`, a workspace the Mac read from the bundle (a worker's pane, the palette's list).
 // - `open-workspace`, Open in the terminal: a Mac folder's twin under the VPS's projects folder, found again by its
 //   label or made there; a folder that is not there is said, never made.
@@ -18,6 +19,7 @@ import { join, sep } from "node:path";
 import { installed } from "./firstmate.ts";
 import { foregroundOf, HERDR, paneOf, parseView, rootPane, workspaceWithLabel, type Herdr, type View } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
+import { isKinasCopy } from "./written.ts";
 
 /** Firstmate's own label for the first mate's workspace (the Mac's `crew::pin::WORKSPACE_LABEL`). */
 export const WORKSPACE_LABEL = "firstmate";
@@ -27,7 +29,7 @@ export const STARTING_MS = 30_000;
 const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh"]);
 const TYPED_FILE = "launcher-typed.json";
 
-export type Cannot = "not-installed" | "herdr-not-running" | "no-workspace" | "not-there" | "herdr-failed";
+export type Cannot = "not-installed" | "no-instruction" | "herdr-not-running" | "no-workspace" | "not-there" | "herdr-failed";
 export type Outcome<T extends string> = { done: T } | { cannot: Cannot };
 
 export interface ActionDeps {
@@ -48,6 +50,11 @@ export function existing(foreground: string[] | null, typedRecently: boolean): "
 /** The pane's whole command (`launch::pane_command` with no sentence): the program, quoted unless it is plain. */
 export function paneCommand(program: string): string {
   return /^[A-Za-z0-9/._-]+$/.test(program) ? program : `'${program.replace(/'/g, `'\\''`)}'`;
+}
+
+/** The first mate's whole command (ADR 0026): the program and the instruction file, each quoted unless it is plain. */
+export function firstMateCommand(program: string, instruction: string): string {
+  return [paneCommand(program), "--append-system-prompt-file", paneCommand(instruction)].join(" ");
 }
 
 /** The pane the launcher last typed into, and when — kept in the companion's state folder across one-shot calls. */
@@ -93,9 +100,10 @@ export async function viewNow(d: ActionDeps): Promise<{ herdr_view: string | nul
 
 export async function launchFirstMate(d: ActionDeps): Promise<Outcome<"focused" | "run" | "created">> {
   if (!installed(d.paths.home)) return { cannot: "not-installed" };
+  if (!(await isKinasCopy(d.paths, d.paths.relayInstruction))) return { cannot: "no-instruction" };
   const v = await view(d.herdr);
   if (v === null) return { cannot: "herdr-not-running" };
-  const command = paneCommand(d.paths.claude);
+  const command = firstMateCommand(d.paths.claude, d.paths.relayInstruction);
   const ws = workspaceWithLabel(v, WORKSPACE_LABEL);
   if (ws !== null) {
     const pane = paneOf(v, ws);

@@ -41,6 +41,13 @@ describe("kinas companion rpc (slice 1)", () => {
       osRelease: "/r/os-release",
       releases: "/r/releases",
       root: "/r",
+      relayInstruction: "/r/share/first-mate-relay.md",
+      wrapperDir: "/r/share/bin",
+      realClaude: "/r/bin/claude",
+      proc: "/r/proc",
+      managedSettings: "/r/etc/claude-code/managed-settings.json",
+      tmp: "/r/tmp",
+      workers: "/r/state/workers",
     });
     expect(companionPaths({}, "/home/captain")).toEqual({
       state: "/home/captain/.local/state/kinas",
@@ -58,6 +65,13 @@ describe("kinas companion rpc (slice 1)", () => {
       osRelease: "/etc/os-release",
       releases: null,
       root: null,
+      relayInstruction: "/home/captain/.local/share/kinas/first-mate-relay.md",
+      wrapperDir: "/home/captain/.local/share/kinas/bin",
+      realClaude: "/home/captain/.local/bin/claude",
+      proc: "/proc",
+      managedSettings: "/etc/claude-code/managed-settings.json",
+      tmp: "/tmp",
+      workers: "/home/captain/.local/state/kinas/workers",
     });
   });
 

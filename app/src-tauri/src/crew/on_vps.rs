@@ -46,6 +46,8 @@ pub(crate) fn answer_of(reply: &serde_json::Value) -> Result<Answer, Unreachable
 pub(crate) fn cannot_words(code: &str, label: &str) -> (&'static str, String) {
     match code {
         "not-installed" => ("not_installed", format!("Firstmate isn't installed on {label} — Settings → Where agents run")),
+        // ADR 0026: the first mate is launched only with Kinas's relay instruction, which Settings installs.
+        "no-instruction" => ("not_installed", format!("Kinas's relay instruction isn't on {label} — Settings → Where agents run")),
         "herdr-not-running" => ("herdr_not_running", format!("Herdr isn't running on {label}")),
         "no-workspace" => ("no_task", "That task has no pane in this session".into()),
         "not-there" => ("not_there", format!("That folder isn't in {label}'s projects folder")),
@@ -154,6 +156,10 @@ mod tests {
         assert_eq!(cannot_words("herdr-not-running", "vps-1"), ("herdr_not_running", "Herdr isn't running on vps-1".to_string()));
         assert_eq!(cannot_words("not-there", "vps-1").1, "That folder isn't in vps-1's projects folder");
         assert_eq!(cannot_words("no-workspace", "vps-1").0, "no_task");
+        assert_eq!(
+            cannot_words("no-instruction", "vps-1"),
+            ("not_installed", "Kinas's relay instruction isn't on vps-1 — Settings → Where agents run".to_string())
+        );
         assert_eq!(cannot_words("something-new", "vps-1").0, "herdr_failed");
     }
 

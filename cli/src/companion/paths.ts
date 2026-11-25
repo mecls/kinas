@@ -39,6 +39,21 @@ export interface Paths {
   releases: string | null;
   /** The test root itself, so a write that would leave it is refused; null on a machine. */
   root: string | null;
+  // The answer path (ADRs 0026–0027). Under a test root each is inside it.
+  /** The first mate's relay instruction, passed at launch: ~/.local/share/kinas/first-mate-relay.md. */
+  relayInstruction: string;
+  /** The workers' wrapper's folder, first on Herdr's unit PATH: ~/.local/share/kinas/bin (it holds `claude` only). */
+  wrapperDir: string;
+  /** Each worker's settings file: ~/.local/state/kinas/workers/<id>.settings.json. */
+  workers: string;
+  /** Claude Code itself, as its installer puts it: ~/.local/bin/claude (a link into its versions folder). */
+  realClaude: string;
+  /** Linux's /proc, read for the user's own processes. */
+  proc: string;
+  /** Claude Code's managed settings, read only. */
+  managedSettings: string;
+  /** Where Claude Code's per-user temporary folder lives (`/tmp/claude-<uid>`). */
+  tmp: string;
 }
 
 export function companionPaths(env: Record<string, string | undefined> = process.env, home = homedir()): Paths {
@@ -71,7 +86,24 @@ export function companionPaths(env: Record<string, string | undefined> = process
         releases: null,
         root: null,
       };
-  return { state, home: fm, reading: join(state, "reading.json"), herdr, projects, claude, ...setup };
+  const answerPath = root
+    ? {
+        relayInstruction: join(root, "share", "first-mate-relay.md"),
+        wrapperDir: join(root, "share", "bin"),
+        realClaude: join(root, "bin", "claude"),
+        proc: join(root, "proc"),
+        managedSettings: join(root, "etc", "claude-code", "managed-settings.json"),
+        tmp: join(root, "tmp"),
+      }
+    : {
+        relayInstruction: join(home, ".local", "share", "kinas", "first-mate-relay.md"),
+        wrapperDir: join(home, ".local", "share", "kinas", "bin"),
+        realClaude: join(home, ".local", "bin", "claude"),
+        proc: "/proc",
+        managedSettings: "/etc/claude-code/managed-settings.json",
+        tmp: "/tmp",
+      };
+  return { state, home: fm, reading: join(state, "reading.json"), herdr, projects, claude, ...setup, ...answerPath, workers: join(state, "workers") };
 }
 
 /**

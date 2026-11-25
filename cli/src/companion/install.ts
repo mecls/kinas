@@ -29,6 +29,7 @@ import {
   permissionModeOf,
   pinFor,
   readText,
+  relayInstruction,
   relayState,
   REPLACING_MARKER,
   serverNow,
@@ -102,6 +103,8 @@ export async function install(req: InstallRequest, d: SetupDeps): Promise<Outcom
       return firstmate(d);
     case "relay-rule":
       return relayRule(d);
+    case "relay-instruction":
+      return relayInstructionFile(d);
     case "permission-mode":
       return permissionMode(d);
     case "crew-tools":
@@ -393,6 +396,27 @@ export function keeps(before: Record<string, unknown> | null, after: Record<stri
   const a0 = ((p0.allow as string[] | undefined) ?? []).filter((e) => !removed.has(e));
   const a1 = (p1.allow as string[] | undefined) ?? [];
   return a0.every((e, i) => a1[i] === e);
+}
+
+/**
+ * ADR 0026's instruction file, outside Firstmate's tree: written where none is, or over Kinas's own unchanged copy, and
+ * recorded as Kinas's.
+ */
+async function relayInstructionFile(d: SetupDeps): Promise<Outcome> {
+  if (!cloned(d.paths.home)) return cannot("no-firstmate");
+  const file = d.paths.relayInstruction;
+  if (existsSync(file) && !(await isKinasCopy(d.paths, file))) return cannot("foreign");
+  const text = relayInstruction(d.paths.home);
+  mkdirSync(dirname(file), { recursive: true });
+  writeWhole(file, text);
+  const sum = await sha256Of(file);
+  if (sum === null) return cannot("record");
+  try {
+    recordWritten(d.paths, file, { item: "relay-instruction", version: "1", sha256: sum, at: d.now() }, d.now());
+  } catch {
+    return cannot("record");
+  }
+  return readText(file) === text ? DONE : cannot("record");
 }
 
 /** `config/claude-permission-mode` set to `auto`, only over nothing or `bypass` (§19 #4; Firstmate's own setting). */

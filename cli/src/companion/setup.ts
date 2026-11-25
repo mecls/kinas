@@ -8,11 +8,12 @@
 // credentials file exists; nothing is read from it or written to it.
 
 import { atLeast, FIRSTMATE_PIN, TOOLS, versionOf, type Arch, type LinuxRelease } from "@kinas/commands/crew-tools";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import { packageVersion } from "../crew-setup.ts";
 import { HERDR, serverOf, type Herdr } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
+import { ownPidNs, readProcs } from "./proc.ts";
 import { isKinasCopy, sha256Of } from "./written.ts";
 
 export { isKinasCopy, sha256Of };
@@ -23,6 +24,8 @@ export const CHECK_IDS = [
   "herdr-server",
   "firstmate",
   "relay-rule",
+  "relay-instruction",
+  "first-mate-launch",
   "permission-mode",
   "tools",
   "node",
@@ -43,6 +46,7 @@ export const INSTALL_ITEMS = [
   "herdr-service",
   "firstmate",
   "relay-rule",
+  "relay-instruction",
   "permission-mode",
   "crew-tools",
   "companion-service",
@@ -168,6 +172,42 @@ export function relayState(text: string | null, home: string): RelayState {
   const missing = want.filter((e) => !have.has(e));
   const legacy = legacyRelayEntries(home).filter((e) => have.has(e));
   return missing.length === 0 && legacy.length === 0 ? { kind: "ok" } : { kind: "missing", missing, legacy, settings: settings as Record<string, unknown> };
+}
+
+/**
+ * The first mate's relay instruction (ADR 0026), passed with `--append-system-prompt-file`: four calls in exactly the
+ * forms the rule names, each its own Bash call. It grants nothing; the rule decides.
+ */
+export function relayInstruction(home: string): string {
+  return `# Kinas: passing on the captain's answers
+
+The captain's answers reach you from Kinas as notes in your inbox whose request id starts with \`kinas-\`. Each note reads
+\`On <task> (<key>): <answer>\`, or \`On <task>: <answer>\` when the question had no key.
+
+To pass one on, run each step below as its own Bash call, from ${home}, in exactly this form. Nothing goes before or after
+a step: no \`cd\`, no \`;\`, \`&&\` or \`|\`, no \`2>&1 | tail\`, no heredoc, no interpreter. Read each step's output as it is.
+
+1. When the note names a key: \`FM_HOME=${home} bin/fm-send.sh <task> --resolve-key <key> '<answer>'\`
+2. Only if the task is still held: write the answer, word for word, to a file with the Write tool, then
+   \`bin/fm-captain-hold.sh answer <task> --decision-file <that file> --release\`
+3. \`bin/fm-inbox.sh drain --ack <note id>\`
+4. The exact \`bin/fm-wake-drain.sh --ack-through <N> --recovery-generation <generation>\` line the drain printed.
+`;
+}
+
+/** Claude Code's own executable: the installer's link's target, or another version beside it in its versions folder. */
+export function claudeExe(realClaude: string): (exe: string | null) => boolean {
+  let target: string | null = null;
+  try {
+    target = realpathSync(realClaude);
+  } catch {
+    target = null;
+  }
+  return (exe) => {
+    if (exe === null || target === null) return false;
+    if (exe === target) return true;
+    return basename(dirname(target)) === "versions" && dirname(exe) === dirname(target);
+  };
 }
 
 /** `config/claude-permission-mode`, as fm-spawn.sh reads it (whitespace removed); null when the file is not there. */
@@ -319,6 +359,42 @@ async function relayRule(d: SetupDeps): Promise<Check> {
   }
 }
 
+async function relayInstructionRow(d: SetupDeps): Promise<Check> {
+  if (!cloned(d.paths.home)) return row("relay-instruction", "later", "after Firstmate");
+  const file = d.paths.relayInstruction;
+  const text = readText(file);
+  if (text === null) return row("relay-instruction", "bad", "not written: the first mate isn't told how to pass your answers on", { install: "relay-instruction" });
+  if (!(await isKinasCopy(d.paths, file))) return row("relay-instruction", "bad", "a file Kinas didn't write is there: Kinas leaves it as it is");
+  if (text !== relayInstruction(d.paths.home)) return row("relay-instruction", "warn", "Kinas's older words: Install writes today's", { install: "relay-instruction" });
+  return row("relay-instruction", "ok", "written: passed to the first mate at launch");
+}
+
+/** The first mates running now: Claude Code in Firstmate's home, of this user, in the host's namespace, not a worker. */
+export function firstMates(d: Pick<SetupDeps, "paths" | "uid">): { pid: number; flagged: boolean }[] {
+  const isClaude = claudeExe(d.paths.realClaude);
+  const ns = ownPidNs(d.paths.proc);
+  let home = d.paths.home;
+  try {
+    home = realpathSync(home);
+  } catch {
+    // The home as named.
+  }
+  return readProcs(d.paths.proc, d.uid)
+    .filter((p) => isClaude(p.exe) && p.pidNs === ns && p.cwd === home && !(p.environ?.has("FM_TASK_ID") ?? false))
+    .map((p) => {
+      const at = p.cmdline?.indexOf("--append-system-prompt-file") ?? -1;
+      return { pid: p.pid, flagged: at >= 0 && p.cmdline?.[at + 1] === d.paths.relayInstruction };
+    });
+}
+
+async function firstMateLaunch(d: SetupDeps): Promise<Check> {
+  if (!cloned(d.paths.home)) return row("first-mate-launch", "later", "after Firstmate");
+  const mates = firstMates(d);
+  if (mates.length === 0) return row("first-mate-launch", "ok", "no first mate running now");
+  if (mates.some((m) => !m.flagged)) return row("first-mate-launch", "warn", "started without Kinas's relay instruction: launch it from the Work page");
+  return row("first-mate-launch", "ok", "started with Kinas's relay instruction");
+}
+
 async function permissionMode(d: SetupDeps): Promise<Check> {
   if (!cloned(d.paths.home)) return row("permission-mode", "later", "after Firstmate");
   const mode = permissionModeOf(readText(join(d.paths.home, "config", "claude-permission-mode")));
@@ -408,6 +484,8 @@ const ROWS: Record<CheckId, (d: SetupDeps) => Promise<Check>> = {
   "herdr-server": herdrServer,
   firstmate,
   "relay-rule": relayRule,
+  "relay-instruction": relayInstructionRow,
+  "first-mate-launch": firstMateLaunch,
   "permission-mode": permissionMode,
   tools,
   node,

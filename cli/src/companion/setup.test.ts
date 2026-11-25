@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { FIRSTMATE_PIN } from "@kinas/commands/crew-tools";
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fakeMachine, fakeReleases } from "./fake-machine.ts";
+import { fakeProc, SANDBOX_NS, type FakeProc } from "./fake-proc.ts";
+import { readWritten } from "./written.ts";
 import { install } from "./install.ts";
 import { rpc } from "./rpc.ts";
 import {
@@ -14,6 +16,7 @@ import {
   permissionModeOf,
   legacyRelayEntries,
   relayEntries,
+  relayInstruction,
   relayState,
   systemLine,
   type Check,
@@ -34,6 +37,8 @@ describe("the rows", () => {
     expect(r["herdr-server"]).toEqual({ id: "herdr-server", state: "later", detail: "after Herdr" });
     expect(r.firstmate).toEqual({ id: "firstmate", state: "bad", detail: "not cloned", install: "firstmate" });
     expect(r["relay-rule"]?.state).toBe("later");
+    expect(r["relay-instruction"]).toEqual({ id: "relay-instruction", state: "later", detail: "after Firstmate" });
+    expect(r["first-mate-launch"]).toEqual({ id: "first-mate-launch", state: "later", detail: "after Firstmate" });
     expect(r["permission-mode"]?.state).toBe("later");
     expect(r.tools).toEqual({ id: "tools", state: "later", detail: "0 of 7 · after Node" });
     expect(r.node).toEqual({ id: "node", state: "bad", detail: "Node is not where Kinas looks: fnm's default alias or Volta" });
@@ -66,6 +71,10 @@ describe("the rows", () => {
     expect(r["herdr-server"]).toEqual({ id: "herdr-server", state: "ok", detail: "running under systemd" });
     expect(r.firstmate).toEqual({ id: "firstmate", state: "ok", detail: `${FIRSTMATE_PIN.slice(0, 7)} (pinned)` });
     expect(r["relay-rule"]?.state).toBe("ok");
+    expect(r["relay-instruction"]?.state).toBe("bad");
+    expect(await install({ item: "relay-instruction" }, m.deps)).toEqual({ done: true });
+    expect(byId(await checks(m.deps))["relay-instruction"]).toEqual({ id: "relay-instruction", state: "ok", detail: "written: passed to the first mate at launch" });
+    expect(r["first-mate-launch"]).toEqual({ id: "first-mate-launch", state: "ok", detail: "no first mate running now" });
     expect(r["permission-mode"]).toEqual({ id: "permission-mode", state: "ok", detail: "auto" });
     expect(r.node).toEqual({ id: "node", state: "ok", detail: "~/.local/share/fnm/aliases/default/bin" });
     expect(r.companion?.state).toBe("ok");
@@ -119,6 +128,73 @@ describe("the rows", () => {
     const m = fakeMachine({ systemd: false });
     const r = byId(await checks(m.deps));
     expect(r.companion).toEqual({ id: "companion", state: "bad", detail: "systemd's user manager does not answer: Kinas keeps services with it" });
+  });
+});
+
+describe("the relay instruction and the first mate's launch (ADR 0026, slice 4.8)", () => {
+  function withHome() {
+    const m = fakeMachine();
+    mkdirSync(join(m.deps.paths.home, ".git"), { recursive: true });
+    return m;
+  }
+
+  test("Install writes Kinas's words and records them; a file Kinas did not write is left, and so said", async () => {
+    const m = withHome();
+    const file = m.deps.paths.relayInstruction;
+    expect(byId(await checks(m.deps))["relay-instruction"]).toEqual({
+      id: "relay-instruction",
+      state: "bad",
+      detail: "not written: the first mate isn't told how to pass your answers on",
+      install: "relay-instruction",
+    });
+    expect(await install({ item: "relay-instruction" }, m.deps)).toEqual({ done: true });
+    expect(readFileSync(file, "utf8")).toBe(relayInstruction(m.deps.paths.home));
+    expect(readWritten(m.deps.paths)[file]?.item).toBe("relay-instruction");
+    // Kinas's own copy, changed by hand since: no longer Kinas's.
+    writeFileSync(file, "the captain's own words\n");
+    expect(byId(await checks(m.deps))["relay-instruction"]?.state).toBe("bad");
+    expect(await install({ item: "relay-instruction" }, m.deps)).toEqual({ cannot: "foreign" });
+    expect(readFileSync(file, "utf8")).toBe("the captain's own words\n");
+  });
+
+  test("the words name the four calls in exactly the rule's forms, with the home filled in", () => {
+    const text = relayInstruction("/h/fm");
+    expect(text).toContain("`FM_HOME=/h/fm bin/fm-send.sh <task> --resolve-key <key> '<answer>'`");
+    expect(text).toContain("`bin/fm-captain-hold.sh answer <task> --decision-file <that file> --release`");
+    expect(text).toContain("`bin/fm-inbox.sh drain --ack <note id>`");
+    expect(text).toContain("`bin/fm-wake-drain.sh --ack-through <N> --recovery-generation <generation>`");
+    expect(text).toContain("no `cd`, no `;`, `&&` or `|`");
+  });
+
+  test("the first mate's row reads each running first mate's command line for the flag", async () => {
+    const m = withHome();
+    const { paths } = m.deps;
+    const home = realpathSync(paths.home);
+    const versions = join(m.root, "share-claude", "versions");
+    mkdirSync(versions, { recursive: true });
+    writeFileSync(join(versions, "2.1.332"), "#!/bin/sh\n");
+    mkdirSync(dirname(paths.realClaude), { recursive: true });
+    rmSync(paths.realClaude, { force: true });
+    symlinkSync(join(versions, "2.1.332"), paths.realClaude);
+    const exe = join(realpathSync(versions), "2.1.332");
+    const mate = (flag: boolean): FakeProc => ({ pid: 10, ppid: 1, exe, cwd: home, cmdline: ["claude", ...(flag ? ["--append-system-prompt-file", paths.relayInstruction] : [])] });
+    const row = async () => byId(await checks(m.deps))["first-mate-launch"];
+
+    fakeProc(paths.proc, [mate(true)]);
+    expect(await row()).toEqual({ id: "first-mate-launch", state: "ok", detail: "started with Kinas's relay instruction" });
+    fakeProc(paths.proc, [mate(false)]);
+    expect(await row()).toEqual({ id: "first-mate-launch", state: "warn", detail: "started without Kinas's relay instruction: launch it from the Work page" });
+    // A worker, another folder, another binary, another namespace or another user is not a first mate.
+    for (const p of [
+      { ...mate(false), env: { FM_TASK_ID: "t1" } },
+      { ...mate(false), cwd: "/elsewhere" },
+      { ...mate(false), exe: "/usr/bin/node" },
+      { ...mate(false), ns: SANDBOX_NS },
+      { ...mate(false), uid: 1002 },
+    ]) {
+      fakeProc(paths.proc, [p]);
+      expect((await row())?.detail).toBe("no first mate running now");
+    }
   });
 });
 

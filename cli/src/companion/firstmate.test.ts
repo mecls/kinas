@@ -27,7 +27,7 @@ function scriptsNamed(text: string): string[] {
  */
 const RELAY_SCRIPTS = /(?:\$\{home\}\/)?bin\/fm-(?:send|inbox|wake-drain|captain-hold)\.sh/g;
 const RELAY_ENTRY = /`Bash\((?:FM_HOME=\$\{home\} )?(?:\$\{home\}\/)?bin\/fm-(?:send|inbox|wake-drain|captain-hold)\.sh[^`\n]*\)`/g;
-const RELAY_INSTRUCTION = /export function relayInstruction\(home: string\): string \{\n  return `[^`]*`;\n\}/;
+const RELAY_INSTRUCTION = /export function relayInstruction\(home: string\): string \{\n  return `(?:[^`\\]|\\.)*`;\n\}/;
 
 function violations(files: Record<string, string>): string[] {
   const out: string[] = [];
@@ -63,6 +63,9 @@ describe("the companion's Firstmate list", () => {
     expect(violations({ "setup.ts": instruction })).toEqual([]);
     expect(violations({ "setup.ts": instruction.replace("relayInstruction", "otherText") })).toHaveLength(2);
     expect(violations({ "setup.ts": instruction.replace("bin/fm-send.sh", "bin/fm-park.sh") })).toEqual(["setup.ts: names fm-park.sh, which the companion never runs"]);
+    // An escaped backtick inside the instruction does not end it.
+    const escaped = "export function relayInstruction(home: string): string {\n  return `run \\`bin/fm-send.sh\\` then bin/fm-park.sh`;\n}";
+    expect(violations({ "setup.ts": escaped })).toEqual(["setup.ts: names fm-park.sh, which the companion never runs"]);
     expect(violations({ "setup.ts": 'run(["bash", join(home, "bin/fm-send.sh"), task]);' })).toEqual(["setup.ts: names fm-send.sh, which the companion never runs"]);
     expect(violations({ "setup.ts": "const r = `Bash(bin/fm-park.sh *)`;" })).toEqual(["setup.ts: names fm-park.sh, which the companion never runs"]);
   });

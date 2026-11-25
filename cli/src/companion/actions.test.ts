@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { existing, focusWorkspace, launchFirstMate, openWorkspace, paneCommand, STARTING_MS, twinOf, viewNow, WORKSPACE_LABEL, type ActionDeps } from "./actions.ts";
+import { dirname, join } from "node:path";
+import { existing, firstMateCommand, focusWorkspace, launchFirstMate, openWorkspace, paneCommand, STARTING_MS, twinOf, viewNow, WORKSPACE_LABEL, type ActionDeps } from "./actions.ts";
+import { relayInstruction } from "./setup.ts";
+import { recordWritten } from "./written.ts";
 import type { HerdrCall, HerdrOut } from "./herdr.ts";
 import { companionPaths } from "./paths.ts";
 
@@ -63,12 +65,21 @@ function fakeHerdr(workspaces: Ws[], opts: { down?: boolean } = {}) {
   return { herdr, calls, workspaces };
 }
 
-function world(workspaces: Ws[], opts: { down?: boolean; installed?: boolean } = {}) {
+function world(workspaces: Ws[], opts: { down?: boolean; installed?: boolean; instruction?: "kinas" | "foreign" | "none" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "kinas-actions-")));
   const paths = companionPaths({ KINAS_COMPANION_ROOT: root });
   if (opts.installed ?? true) {
     mkdirSync(join(paths.home, "bin"), { recursive: true });
     writeFileSync(join(paths.home, "bin", "fm-fleet-snapshot.sh"), "#!/bin/sh\n");
+  }
+  const instruction = opts.instruction ?? "kinas";
+  if (instruction !== "none") {
+    mkdirSync(dirname(paths.relayInstruction), { recursive: true });
+    writeFileSync(paths.relayInstruction, relayInstruction(paths.home));
+    if (instruction === "kinas") {
+      const sha256 = new Bun.CryptoHasher("sha256").update(relayInstruction(paths.home)).digest("hex");
+      recordWritten(paths, paths.relayInstruction, { item: "relay-instruction", version: "1", sha256, at: 1 }, 1);
+    }
   }
   mkdirSync(paths.projects, { recursive: true });
   const fake = fakeHerdr(workspaces, opts);
@@ -87,6 +98,21 @@ describe("launch-first-mate: the Mac's launcher, on the VPS", () => {
     expect(w.calls).toEqual([]);
   });
 
+  test("no-instruction: without Kinas's own copy of the relay instruction, nothing is asked of Herdr", async () => {
+    for (const instruction of ["none", "foreign"] as const) {
+      const w = world([other()], { instruction });
+      expect(await launchFirstMate(w.deps)).toEqual({ cannot: "no-instruction" });
+      expect(w.calls).toEqual([]);
+    }
+  });
+
+  test("the first mate's command: the program and the one flag, quoted where needed", () => {
+    expect(firstMateCommand("claude", "/home/c/.local/share/kinas/first-mate-relay.md")).toBe(
+      "claude --append-system-prompt-file /home/c/.local/share/kinas/first-mate-relay.md",
+    );
+    expect(firstMateCommand("claude", "/a b/x.md")).toBe("claude --append-system-prompt-file '/a b/x.md'");
+  });
+
   test("Herdr not answering is said, and nothing else is tried", async () => {
     const w = world([], { down: true });
     expect(await launchFirstMate(w.deps)).toEqual({ cannot: "herdr-not-running" });
@@ -99,7 +125,7 @@ describe("launch-first-mate: the Mac's launcher, on the VPS", () => {
     expect(w.calls).toEqual([
       ["api", "snapshot"],
       ["workspace", "create", "--cwd", w.paths.home, "--label", "firstmate", "--focus"],
-      ["pane", "run", "w2:p1", w.paths.claude],
+      ["pane", "run", "w2:p1", firstMateCommand(w.paths.claude, w.paths.relayInstruction)],
     ]);
     expect(JSON.parse(readFileSync(join(w.paths.state, "launcher-typed.json"), "utf8"))).toEqual({ pane: "w2:p1", at: 1_794_834_000_000 });
   });
@@ -114,7 +140,7 @@ describe("launch-first-mate: the Mac's launcher, on the VPS", () => {
   test("an idle shell is typed into once; a second launch within 30 s leaves it, and after 30 s types again", async () => {
     const w = world([firstMate(["-zsh"]), other()]);
     expect(await launchFirstMate(w.deps)).toEqual({ done: "run" });
-    expect(w.calls.at(-1)).toEqual(["pane", "run", "w1:p1", w.paths.claude]);
+    expect(w.calls.at(-1)).toEqual(["pane", "run", "w1:p1", firstMateCommand(w.paths.claude, w.paths.relayInstruction)]);
     w.calls.length = 0;
     w.tick(STARTING_MS - 1);
     expect(await launchFirstMate(w.deps)).toEqual({ done: "focused" });

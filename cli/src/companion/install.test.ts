@@ -340,7 +340,7 @@ describe("the crew's tools and the client folders", () => {
 describe("never as root", () => {
   test("every item answers root, and nothing runs", async () => {
     const m = fakeMachine({}, { uid: 0, releases: fakeReleases({ herdr: HERDR_BYTES }) });
-    for (const item of ["herdr", "herdr-service", "firstmate", "relay-rule", "permission-mode", "crew-tools", "companion-service"] as const) {
+    for (const item of ["herdr", "herdr-service", "firstmate", "relay-rule", "relay-instruction", "permission-mode", "crew-tools", "companion-service"] as const) {
       expect(await install({ item }, m.deps)).toEqual({ cannot: "root" });
     }
     expect(await install({ item: "clone", folder: "shop", repo: "acme/shop" }, m.deps)).toEqual({ cannot: "root" });

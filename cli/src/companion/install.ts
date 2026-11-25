@@ -14,7 +14,7 @@
 //   is written before the unit starts, so Firstmate never starts a second server beside it.
 
 import { FIRSTMATE_REPO, FIRSTMATE_PIN, TOOLS, releaseUrl, type LinuxRelease } from "@kinas/commands/crew-tools";
-import { chmodSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { HERDR, herdrUnit } from "./herdr.ts";
 import { unitPath } from "./paths.ts";
@@ -42,6 +42,7 @@ import {
   type SetupDeps,
 } from "./setup.ts";
 import { validFolder, validRepo } from "./validate.ts";
+import { recordWritten, writeWhole } from "./written.ts";
 
 export type Cannot =
   | "root"
@@ -70,6 +71,7 @@ export type Cannot =
   | "no-node"
   | "npm"
   | "clone"
+  | "record"
   | "bad-request";
 
 export type Outcome = { done: true } | { cannot: Cannot };
@@ -127,7 +129,7 @@ export async function installRelease(d: SetupDeps, name: string): Promise<Outcom
   if (arch === null) return cannot("arch");
   if (pin === null) return cannot("no-pin");
   const target = join(d.paths.bin, name);
-  if (existsSync(target) && !(await isKinasCopy(d.releases, name, target))) return cannot("foreign");
+  if (existsSync(target) && !(await isKinasCopy(d.paths, target))) return cannot("foreign");
   const { asset, sha256 } = pin.assets[arch];
   mkdirSync(d.paths.bin, { recursive: true });
   const work = mkdtempSync(join(d.paths.bin, `.kinas-${name}-`));
@@ -147,7 +149,15 @@ export async function installRelease(d: SetupDeps, name: string): Promise<Outcom
     const next = `${target}.kinas-new`;
     copyFileSync(binary, next);
     chmodSync(next, 0o755);
+    const written = await sha256Of(next);
+    if (written === null) return cannot("record");
     renameSync(next, target);
+    // Recorded once it is in place: a copy Kinas cannot record is not Kinas's, so it is never replaced later.
+    try {
+      recordWritten(d.paths, target, { item: name, version: pin.version, sha256: written, at: d.now() }, d.now());
+    } catch {
+      return cannot("record");
+    }
     return DONE;
   } finally {
     rmSync(work, { recursive: true, force: true });
@@ -426,14 +436,3 @@ async function clone(d: SetupDeps, folder: string, repo: string): Promise<Outcom
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** Write a whole file by rename from a temporary one beside it; never through a link (O_NOFOLLOW on the temporary). */
-function writeWhole(file: string, text: string): void {
-  const next = `${file}.kinas-new`;
-  rmSync(next, { force: true });
-  const fd = openSync(next, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
-  try {
-    writeFileSync(fd, text);
-  } finally {
-    closeSync(fd);
-  }
-  renameSync(next, file);
-}

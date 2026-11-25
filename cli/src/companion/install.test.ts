@@ -5,6 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { join } from "node:path";
 import { fakeMachine, fakeReleases } from "./fake-machine.ts";
 import { install, keeps } from "./install.ts";
+import { readWritten } from "./written.ts";
 import { COMPANION_UNIT, HERDR_UNIT, OWNER_LINE, OWNER_MARKER, relayEntries, REPLACING_MARKER, UNIT_HEADER } from "./setup.ts";
 
 // Setup's installs on the VPS (build spec §12 slices 4.2 and 4.5; §17 2026-11-24 #2–#3, 2026-11-25 #4–#7; ADR 0025).
@@ -33,11 +34,31 @@ describe("install herdr", () => {
     expect((m.deps.releases as ReturnType<typeof fakeReleases>).fetched).toEqual([]);
   });
 
-  test("Kinas's own copy, by its pinned SHA-256, is replaced", async () => {
+  test("the captain's copy byte for byte the pinned release is still theirs: Kinas did not write it, so it stays", async () => {
+    // The home lab's case (run 2026-11-25): the captain's own Herdr 0.9.5 has the release's SHA-256.
     const m = withHerdrRelease();
     mkdirSync(m.deps.paths.bin, { recursive: true });
     writeFileSync(join(m.deps.paths.bin, "herdr"), HERDR_BYTES);
+    expect(await install({ item: "herdr" }, m.deps)).toEqual({ cannot: "foreign" });
+    expect((m.deps.releases as ReturnType<typeof fakeReleases>).fetched).toEqual([]);
+  });
+
+  test("Kinas records what it wrote, and replaces its own copy by that record", async () => {
+    const m = withHerdrRelease();
     expect(await install({ item: "herdr" }, m.deps)).toEqual({ done: true });
+    const herdr = join(m.deps.paths.bin, "herdr");
+    expect(readWritten(m.deps.paths)).toEqual({
+      [herdr]: { item: "herdr", version: "0.9.5", sha256: new Bun.CryptoHasher("sha256").update(HERDR_BYTES).digest("hex"), at: m.deps.now() },
+    });
+    expect(await install({ item: "herdr" }, m.deps)).toEqual({ done: true });
+  });
+
+  test("a copy Kinas wrote that the captain has since replaced is theirs", async () => {
+    const m = withHerdrRelease();
+    expect(await install({ item: "herdr" }, m.deps)).toEqual({ done: true });
+    writeFileSync(join(m.deps.paths.bin, "herdr"), "the captain's own build");
+    expect(await install({ item: "herdr" }, m.deps)).toEqual({ cannot: "foreign" });
+    expect(readFileSync(join(m.deps.paths.bin, "herdr"), "utf8")).toBe("the captain's own build");
   });
 
   test("a download whose SHA-256 is not the pinned one is dropped, and nothing lands", async () => {
@@ -65,6 +86,8 @@ describe("install herdr", () => {
     const { installRelease } = await import("./install.ts");
     expect(await installRelease(m.deps, "treehouse")).toEqual({ done: true });
     expect(readFileSync(join(m.deps.paths.bin, "treehouse"), "utf8")).toContain("v2.3.0");
+    // The pin is the archive's SHA-256, never the binary's: only the record lets Kinas know its own copy again.
+    expect(await installRelease(m.deps, "treehouse")).toEqual({ done: true });
   });
 
   test("not on Linux without a test root, or an architecture with no asset: nothing is fetched", async () => {

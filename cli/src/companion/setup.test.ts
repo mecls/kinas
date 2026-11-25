@@ -3,6 +3,7 @@ import { FIRSTMATE_PIN } from "@kinas/commands/crew-tools";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeMachine, fakeReleases } from "./fake-machine.ts";
+import { install } from "./install.ts";
 import { rpc } from "./rpc.ts";
 import {
   CHECK_IDS,
@@ -45,10 +46,8 @@ describe("the rows", () => {
 
   test("a ready machine reads green", async () => {
     const m = fakeMachine({ server: { running: true, startsWithUnit: true, stops: true }, units: { [HERDR_UNIT]: "active", [COMPANION_UNIT]: "active" } });
-    const herdrBytes = "#!/bin/sh\n";
-    m.deps.releases = fakeReleases({ herdr: herdrBytes });
-    mkdirSync(m.deps.paths.bin, { recursive: true });
-    writeFileSync(m.deps.paths.herdr, herdrBytes);
+    m.deps.releases = fakeReleases({ herdr: "#!/bin/sh\n" });
+    expect(await install({ item: "herdr" }, m.deps)).toEqual({ done: true });
     const home = m.deps.paths.home;
     mkdirSync(join(home, ".git"), { recursive: true });
     mkdirSync(join(home, "config"), { recursive: true });
@@ -72,6 +71,14 @@ describe("the rows", () => {
     expect(r.claude).toEqual({ id: "claude", state: "ok", detail: "signed in" });
     expect(r.gh).toEqual({ id: "gh", state: "ok", detail: "signed in" });
     expect(r.projects).toEqual({ id: "projects", state: "ok", detail: "~/projects · 1 folder" });
+  });
+
+  test("a Herdr byte for byte the pinned release that Kinas did not write is the captain's", async () => {
+    const m = fakeMachine();
+    m.deps.releases = fakeReleases({ herdr: "the release" });
+    mkdirSync(m.deps.paths.bin, { recursive: true });
+    writeFileSync(m.deps.paths.herdr, "the release");
+    expect(byId(await checks(m.deps)).herdr).toEqual({ id: "herdr", state: "ok", detail: "0.9.5 · yours: Kinas leaves it as it is" });
   });
 
   test("the captain's own Herdr is green and never offered Install; a server outside the unit offers to adopt it", async () => {

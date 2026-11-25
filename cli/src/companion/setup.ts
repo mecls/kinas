@@ -13,6 +13,9 @@ import { dirname, join, relative } from "node:path";
 import { packageVersion } from "../crew-setup.ts";
 import { HERDR, serverOf, type Herdr } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
+import { isKinasCopy, sha256Of } from "./written.ts";
+
+export { isKinasCopy, sha256Of };
 
 export const CHECK_IDS = [
   "system",
@@ -179,15 +182,6 @@ export function namesOf(envZero: string): Set<string> {
 }
 
 /** A file's SHA-256, hex; null when it cannot be read. */
-export async function sha256Of(path: string): Promise<string | null> {
-  try {
-    const hasher = new Bun.CryptoHasher("sha256");
-    hasher.update(await Bun.file(path).arrayBuffer());
-    return hasher.digest("hex");
-  } catch {
-    return null;
-  }
-}
 
 /** The release pinned for `name`, and whether `arch` is one Kinas has assets for. */
 export function pinFor(releases: Releases, name: string): LinuxRelease | null {
@@ -198,13 +192,6 @@ export function archOf(arch: string): Arch | null {
   return arch === "x64" || arch === "arm64" ? arch : null;
 }
 
-/** Whether the file at `path` is a copy Kinas installed: its SHA-256 is one pinned for `name`, either architecture. */
-export async function isKinasCopy(releases: Releases, name: string, path: string): Promise<boolean> {
-  const pin = pinFor(releases, name);
-  if (pin === null) return false;
-  const sum = await sha256Of(path);
-  return sum !== null && (sum === pin.assets.x64.sha256 || sum === pin.assets.arm64.sha256);
-}
 
 export function readText(path: string): string | null {
   try {
@@ -264,7 +251,7 @@ async function herdr(d: SetupDeps): Promise<Check> {
   if (!existsSync(d.paths.herdr)) return row("herdr", "bad", "not installed", { install: "herdr" });
   const r = await d.run([d.paths.herdr, "--version"], { timeoutMs: PROBE_MS });
   const version = r.ok ? versionOf(r.stdout.slice(0, 200)) : null;
-  const ours = await isKinasCopy(d.releases, "herdr", d.paths.herdr);
+  const ours = await isKinasCopy(d.paths, d.paths.herdr);
   const pin = pinFor(d.releases, "herdr");
   if (version === null) return row("herdr", "bad", ours ? "Kinas's copy does not run" : "yours, and it does not run: Kinas leaves it as it is", ours ? { install: "herdr" } : {});
   if (!ours) return row("herdr", "ok", `${version} · yours: Kinas leaves it as it is`);

@@ -29,7 +29,10 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     reported, never overwritten, and moved under `kinas-herdr.service` only on the captain's click (ADR 0024).
   - Amended 2026-11-25 (setup, slice 4): `hello` reports setup's checks, one row per piece; each Install is one item
     (`kinas companion rpc` `install`), refused as root. A binary in `~/.local/bin` is written only where none is or over
-    a copy whose SHA-256 is pinned (Kinas's own); a unit only where none is or over one whose first line is Kinas's
+    a copy Kinas wrote and that is unchanged since (amended the same day: Kinas's record of what it wrote,
+    `~/.local/state/kinas/written.json`, mode 0600 — path, release, version and the SHA-256 of the bytes it put there —
+    replaces the pinned-SHA-256 test, which took the captain's own byte-identical Herdr for Kinas's and could never
+    recognise an unpacked archive's binary; a copy the record does not name, or that has changed, is the captain's); a unit only where none is or over one whose first line is Kinas's
     header. `kinas-herdr.service` runs `HERDR_SESSION=default ~/.local/bin/herdr server --session default` (Firstmate's own start), and both units set `PATH=~/.local/bin:~/.local/share/fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin` (the captain, 2026-11-25); before it
     starts, the companion writes Firstmate's `firstmate-server-owner` marker (`systemd user unit kinas-herdr.service`)
     beside the session's socket, so Firstmate never starts a second server; adopting a running server also writes

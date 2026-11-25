@@ -269,6 +269,7 @@ pub fn cannot_words(code: &str, label: &str) -> String {
         "no-node" => "Node is not where Kinas looks: fnm's default alias or Volta".to_string(),
         "npm" => "npm could not install a crew tool".to_string(),
         "clone" => "gh could not clone it: is gh signed in there?".to_string(),
+        "record" => "Kinas could not keep its record of what it wrote, so it will treat that copy as yours".to_string(),
         _ => format!("Kinas on {label} could not do it"),
     };
     format!("Not installed: {why}")
@@ -367,7 +368,7 @@ mod tests {
 
     #[test]
     fn every_code_has_its_own_words() {
-        for code in ["root", "foreign", "checksum", "herdr-running", "not-json", "no-node", "clone", "exists"] {
+        for code in ["root", "foreign", "checksum", "herdr-running", "not-json", "no-node", "clone", "exists", "record"] {
             let words = cannot_words(code, "vps-1");
             assert!(words.starts_with("Not installed: "), "{code}");
             assert!(!words.contains("could not do it"), "{code} fell through");

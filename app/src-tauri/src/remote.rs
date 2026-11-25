@@ -123,6 +123,9 @@ pub(crate) enum Request {
         repo: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         adopt: Option<bool>,
+        /// The workers' sandbox only (ADR 0027): restart Herdr's server, the captain's second click.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        restart: Option<bool>,
     },
 }
 
@@ -134,6 +137,8 @@ pub enum InstallItem {
     HerdrService,
     Firstmate,
     RelayRule,
+    RelayInstruction,
+    WorkerSandbox,
     PermissionMode,
     CrewTools,
     CompanionService,
@@ -348,13 +353,15 @@ mod tests {
     #[test]
     fn install_is_the_companion_s_shape_and_waits_longer() {
         let json = |r: &Request| serde_json::to_string(r).unwrap();
-        let plain = Request::Install { item: InstallItem::Herdr, folder: None, repo: None, adopt: None };
+        let plain = Request::Install { item: InstallItem::Herdr, folder: None, repo: None, adopt: None, restart: None };
         assert_eq!(json(&plain), r#"{"verb":"install","item":"herdr"}"#);
-        let adopt = Request::Install { item: InstallItem::HerdrService, folder: None, repo: None, adopt: Some(true) };
+        let adopt = Request::Install { item: InstallItem::HerdrService, folder: None, repo: None, adopt: Some(true), restart: None };
         assert_eq!(json(&adopt), r#"{"verb":"install","item":"herdr-service","adopt":true}"#);
-        let clone = Request::Install { item: InstallItem::Clone, folder: Some("shop".into()), repo: Some("acme/shop".into()), adopt: None };
+        let clone = Request::Install { item: InstallItem::Clone, folder: Some("shop".into()), repo: Some("acme/shop".into()), adopt: None, restart: None };
         assert_eq!(json(&clone), r#"{"verb":"install","item":"clone","folder":"shop","repo":"acme/shop"}"#);
-        assert_eq!(json(&Request::Install { item: InstallItem::RelayRule, folder: None, repo: None, adopt: None }), r#"{"verb":"install","item":"relay-rule"}"#);
+        assert_eq!(json(&Request::Install { item: InstallItem::RelayRule, folder: None, repo: None, adopt: None, restart: None }), r#"{"verb":"install","item":"relay-rule"}"#);
+        let restart = Request::Install { item: InstallItem::WorkerSandbox, folder: None, repo: None, adopt: None, restart: Some(true) };
+        assert_eq!(json(&restart), r#"{"verb":"install","item":"worker-sandbox","restart":true}"#);
         assert_eq!(plain.name(), "install");
         assert_eq!(plain.limit(), INSTALL_LIMIT);
         assert_eq!(Request::Hello.limit(), RPC_LIMIT);

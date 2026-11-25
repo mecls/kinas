@@ -13,12 +13,15 @@ use serde::Serialize;
 use std::path::Path;
 
 /// The rows' ids, in the order the companion sends and Settings draws them (`setup.ts` CHECK_IDS).
-pub const CHECK_IDS: [&str; 14] = [
+pub const CHECK_IDS: [&str; 17] = [
     "system",
     "herdr",
     "herdr-server",
     "firstmate",
     "relay-rule",
+    "relay-instruction",
+    "first-mate-launch",
+    "worker-sandbox",
     "permission-mode",
     "tools",
     "node",
@@ -47,6 +50,9 @@ pub struct Check {
     pub install: Option<InstallItem>,
     /// Install stops something running (Herdr's server outside the unit): Settings says so on the button.
     pub adopt: bool,
+    /// Install restarts Herdr's server so new panes start with Kinas's wrapper (ADR 0027): it closes every pane there,
+    /// and Settings says so before the second click.
+    pub restart: bool,
     /// A command for the captain to run there, from the fixed shapes only.
     pub run: Option<String>,
 }
@@ -66,9 +72,10 @@ fn login(user: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }
 
-/// Only `claude`, `gh auth login`, and `sudo loginctl enable-linger <login>` (§17 2026-11-25 #3).
+/// Only `claude`, `gh auth login`, `sudo loginctl enable-linger <login>` (§17 2026-11-25 #3), and the sandbox's two
+/// packages (ADR 0027).
 fn run_shape(run: &str) -> Option<String> {
-    if run == "claude" || run == "gh auth login" {
+    if ["claude", "gh auth login", "sudo apt install bubblewrap socat", "sudo apt install bubblewrap", "sudo apt install socat"].contains(&run) {
         return Some(run.to_string());
     }
     let user = run.strip_prefix("sudo loginctl enable-linger ")?;
@@ -99,6 +106,7 @@ pub fn checks_of(reply: &serde_json::Value) -> Vec<Check> {
             detail: clean(row.get("detail").and_then(|d| d.as_str()).unwrap_or("")),
             install,
             adopt: install == Some(InstallItem::HerdrService) && row.get("adopt") == Some(&serde_json::Value::Bool(true)),
+            restart: install == Some(InstallItem::WorkerSandbox) && row.get("restart") == Some(&serde_json::Value::Bool(true)),
             run: row.get("run").and_then(|r| r.as_str()).and_then(run_shape),
         });
     }
@@ -270,6 +278,10 @@ pub fn cannot_words(code: &str, label: &str) -> String {
         "npm" => "npm could not install a crew tool".to_string(),
         "clone" => "gh could not clone it: is gh signed in there?".to_string(),
         "record" => "Kinas could not keep its record of what it wrote, so it will treat that copy as yours".to_string(),
+        "sandbox-tools" => format!("bubblewrap and socat must be installed on {label} first"),
+        "no-unit" => "Herdr's server is not under Kinas's unit yet: start it under systemd first".to_string(),
+        "not-ready" => "the wrapper and Herdr's unit are not in place yet: Sandbox workers first".to_string(),
+        "herdr-restart" => "Herdr's server did not come back under systemd".to_string(),
         _ => format!("Kinas on {label} could not do it"),
     };
     format!("Not installed: {why}")
@@ -279,6 +291,24 @@ pub fn cannot_words(code: &str, label: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn the_answer_path_s_rows_and_the_restart_only_on_the_workers_sandbox() {
+        let reply = json!({ "checks": [
+            { "id": "worker-sandbox", "state": "bad", "detail": "Herdr's server started without Kinas's wrapper", "install": "worker-sandbox", "restart": true },
+            { "id": "first-mate-launch", "state": "warn", "detail": "started without", "install": "worker-sandbox", "restart": true },
+            { "id": "relay-instruction", "state": "bad", "detail": "not written", "install": "relay-instruction" },
+            { "id": "relay-rule", "state": "bad", "detail": "x", "run": "sudo apt install bubblewrap socat" }
+        ]});
+        let rows = checks_of(&reply);
+        assert_eq!(rows.iter().map(|r| r.id).collect::<Vec<_>>(), ["relay-rule", "relay-instruction", "first-mate-launch", "worker-sandbox"]);
+        assert_eq!(rows[0].run.as_deref(), Some("sudo apt install bubblewrap socat"));
+        assert_eq!(rows[1].install, Some(InstallItem::RelayInstruction));
+        assert!(rows[3].restart && rows[3].install == Some(InstallItem::WorkerSandbox));
+        assert!(rows[2].restart, "the restart rides on the workers' sandbox item, whichever row offers it");
+        assert_eq!(run_shape("sudo apt install bubblewrap socat curl"), None);
+        assert_eq!(cannot_words("not-ready", "vps-1"), "Not installed: the wrapper and Herdr's unit are not in place yet: Sandbox workers first");
+    }
 
     #[test]
     fn rows_are_filtered_capped_and_kept_in_order() {
@@ -299,6 +329,7 @@ mod tests {
         assert_eq!(rows[0].install, Some(InstallItem::Herdr));
         assert_eq!(rows[1].detail, "running[31m");
         assert!(rows[1].adopt);
+        assert!(!rows[1].restart, "restart is for the workers' sandbox only");
         assert_eq!(rows[2].detail.chars().count(), 160);
         assert_eq!(rows[2].install, None);
         assert_eq!(rows[3].run.as_deref(), Some("sudo loginctl enable-linger captain"));

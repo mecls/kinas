@@ -36,7 +36,9 @@ Shared by the Rust tests, the TypeScript tests, the e2e suite and `scripts/check
   - `crew-gh-{1,2}.json` (added 2026-09-25, the first mate) — `gh pr view <url> --json
     number,state,isDraft,mergeable,reviewDecision,statusCheckRollup` in the shape `gh` prints it: PR #123 with four
     checks, three check runs and one commit status, first with `test` failing, then all green and approved. The
-    e2e stub `gh` prints one of them.
+    e2e stub `gh` prints one of them. On 2026-11-25 (the review flag, ADR 0027) all three gained `files` and
+    `changedFiles`, in the shape gh 2.92.0 prints them (captured from this repository's merged PR #47): the first
+    PR adds `.claude/settings.json`, the others touch nothing the captain reviews.
   - `firstmate-fleet-snapshot.current.synthetic.json` (added 2026-11-16, Firstmate, current) — the shape of
     `fm-fleet-snapshot.sh --json` at Firstmate `427056c`, built from its header and the slice-0 probe's captures of
     2026-11-16 (which were not kept: their paths are scratch paths): `tasks[].branch`, `contributions.captain[]` (two

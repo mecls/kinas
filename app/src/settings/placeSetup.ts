@@ -9,6 +9,9 @@ export const CHECK_LABELS: Record<string, string> = {
   "herdr-server": "Herdr's server",
   firstmate: "Firstmate",
   "relay-rule": "Relay rule",
+  "relay-instruction": "Relay instruction",
+  "first-mate-launch": "First mate's launch",
+  "worker-sandbox": "Workers sandboxed",
   "permission-mode": "Workers' permission mode",
   tools: "Crew tools",
   node: "Node",
@@ -28,20 +31,32 @@ const INSTALL_WORDS: Record<InstallItem, string> = {
   "herdr-service": "Start under systemd",
   firstmate: "Install Firstmate",
   "relay-rule": "Add the rule",
+  "relay-instruction": "Install",
+  "worker-sandbox": "Sandbox workers",
   "permission-mode": "Set to auto",
   "crew-tools": "Install the tools",
   "companion-service": "Start under systemd",
   clone: "Clone",
 };
 
-/** What a row's Install button says; adopting Herdr's running server says so in its own words. */
-export function installLabel(check: Pick<SetupCheck, "install" | "adopt">): string | null {
+/** What a row's Install button says; adopting Herdr's running server, and restarting it, say so in their own words. */
+export function installLabel(check: Pick<SetupCheck, "install" | "adopt" | "restart">): string | null {
   if (check.install === null) return null;
+  if (check.restart) return "Restart Herdr";
   return check.adopt ? "Run Herdr under systemd" : INSTALL_WORDS[check.install];
 }
 
 /** The second click's warning, for an install that stops something running (§17 2026-11-24 #2). */
 export const ADOPT_WARNING = "This stops Herdr's running server there and every pane in it. Click again to go ahead.";
+
+/** The second click's warning for Restart Herdr (DESIGN.md 1.14, ADR 0027), in --danger words beside the button. */
+export const RESTART_WARNING = "closes every pane on the VPS: close what's open first";
+
+/** The warning an install's first click shows, or null when one click does it. */
+export function secondClick(check: Pick<SetupCheck, "adopt" | "restart">): string | null {
+  if (check.restart) return RESTART_WARNING;
+  return check.adopt ? ADOPT_WARNING : null;
+}
 
 /** The by-hand lines with the SSH target in place of `<target>`. */
 export function byHand(lines: string[], target: string): string[] {

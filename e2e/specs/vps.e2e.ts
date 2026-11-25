@@ -187,14 +187,15 @@ describe("agents on a VPS", () => {
       { timeout: 30000, interval: 500, timeoutMsg: "the Crew page never offered Launch the first mate" },
     );
     await browser.waitUntil(() => runs().length === 1, { timeout: 20000, timeoutMsg: "the stand-in never ran on the VPS" });
-    expect(runs()).toEqual(["0"]);
+    // ADR 0026: the program with Kinas's relay instruction, its one flag and the file.
+    expect(runs()).toEqual(["2 --append-system-prompt-file"]);
     const made = firstMates();
     expect(made.length).toBe(1);
     expect(focusedLabel()).toBe("firstmate");
     const pane = herdrSnapshot(VPS_SESSION).panes.find((p) => p.workspace_id === made[0]!.workspace_id)!;
     const asked = readFileSync(herdrCalls, "utf8").trim().split("\n");
     expect(asked).toContain(`workspace create --cwd ${join(root, "firstmate")} --label firstmate --focus`);
-    expect(asked).toContain(`pane run ${pane.pane_id} ${join(root, "bin", "claude")}`);
+    expect(asked).toContain(`pane run ${pane.pane_id} ${join(root, "bin", "claude")} --append-system-prompt-file ${join(root, "share", "first-mate-relay.md")}`);
     // Only the companion's seven calls ever reached the "VPS's" Herdr: the five actions, and setup's status read.
     expect(
       asked.filter((a) => !/^(api snapshot|pane process-info --pane \S+|workspace focus \S+|workspace create --cwd .+ --label .+ --focus|pane run \S+ .+|status --json)$/.test(a)),
@@ -217,7 +218,7 @@ describe("agents on a VPS", () => {
     expect(again).toBe("focused");
     expect(focusedLabel()).toBe("firstmate");
     expect(firstMates().length).toBe(1);
-    expect(runs()).toEqual(["0"]);
+    expect(runs()).toEqual(["2 --append-system-prompt-file"]);
 
     const log = logSinceStart();
     expect(log).toMatch(/remote: launch-first-mate ok in \d+ ms/);

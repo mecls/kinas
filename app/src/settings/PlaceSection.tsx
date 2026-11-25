@@ -3,7 +3,7 @@ import { crewErrorOf, getPlace, remoteHello, remoteInstall, setPlace, type Insta
 import { clock } from "../crew/detail.ts";
 import { writeClipboard } from "../terminal/clipboard.ts";
 import { Button, Card, Dot, Table } from "../ui/index.ts";
-import { ADOPT_WARNING, allOk, byHand, CHECK_LABELS, installLabel, TONE } from "./placeSetup.ts";
+import { allOk, byHand, CHECK_LABELS, installLabel, secondClick, TONE } from "./placeSetup.ts";
 import { Block, Row } from "./Row.tsx";
 
 // Settings → Where agents run (the factory in the cloud, build spec §12 slice 1.4; DESIGN.md 1.14; ADR 0024): this Mac,
@@ -85,7 +85,7 @@ function SetupTable({
       action:
         c.install !== null && words !== null ? (
           <span className="place-action">
-            {armed === c.install && <span className="crew-problem-inline">{ADOPT_WARNING}</span>}
+            {armed === c.install && secondClick(c) !== null && <span className="crew-problem-inline">{secondClick(c)}</span>}
             <Button className="button" disabled={busy !== null} onClick={() => onInstall(c)}>
               {busy === c.install ? "Installing…" : words}
             </Button>
@@ -163,14 +163,14 @@ export function PlaceSection({ active }: { active: boolean }) {
   /** One item, the captain's click; an install that stops something running takes a second click. */
   const install = (c: SetupCheck) => {
     if (c.install === null) return;
-    if (c.adopt && armed !== c.install) {
+    if (secondClick(c) !== null && armed !== c.install) {
       setArmed(c.install);
       return;
     }
     setArmed(null);
     setInstalling(c.install);
     setMessage(null);
-    remoteInstall(c.install, { adopt: c.adopt || undefined })
+    remoteInstall(c.install, { adopt: c.adopt || undefined, restart: c.restart || undefined })
       .then((h) => {
         setHello(h);
         setMessage({ text: `${CHECK_LABELS[c.id] ?? c.id}: done`, problem: false });

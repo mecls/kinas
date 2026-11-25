@@ -196,7 +196,7 @@ fn hello_now(app: &AppHandle, target: &str, label: &str) -> Hello {
 /// clone — its repository is read here from the Mac's own folder, never taken from the webview. `adopt` is the captain's
 /// "Run Herdr under systemd", which stops the server already running there.
 #[tauri::command]
-pub async fn remote_install(app: AppHandle, item: InstallItem, folder: Option<String>, adopt: Option<bool>) -> Result<Hello, RemoteError> {
+pub async fn remote_install(app: AppHandle, item: InstallItem, folder: Option<String>, adopt: Option<bool>, restart: Option<bool>) -> Result<Hello, RemoteError> {
     tauri::async_runtime::spawn_blocking(move || {
         let chosen = {
             let store = app.state::<Store>();
@@ -206,7 +206,7 @@ pub async fn remote_install(app: AppHandle, item: InstallItem, folder: Option<St
         let Place::Vps { target, label } = chosen else {
             return Err(RemoteError { message: "Agents run on this Mac.".into() });
         };
-        let request = install_request(&app, item, folder, adopt)?;
+        let request = install_request(&app, item, folder, adopt, restart)?;
         let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
         log::info!("setup: install {} on {label}", serde_json::to_value(item).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default());
         match remote::call(&target, &data_dir, &request) {
@@ -221,16 +221,18 @@ pub async fn remote_install(app: AppHandle, item: InstallItem, folder: Option<St
     .map_err(|e| RemoteError { message: format!("the install did not finish: {e}") })?
 }
 
-fn install_request(app: &AppHandle, item: InstallItem, folder: Option<String>, adopt: Option<bool>) -> Result<Request, RemoteError> {
+fn install_request(app: &AppHandle, item: InstallItem, folder: Option<String>, adopt: Option<bool>, restart: Option<bool>) -> Result<Request, RemoteError> {
     match item {
         InstallItem::Clone => {
             let folder = folder.ok_or_else(|| RemoteError { message: "Which folder?".into() })?;
             let root = crate::paths::projects_root_of(&app.state::<Store>());
             let repo = setup::repo_for(&root, &folder).ok_or_else(|| RemoteError { message: format!("{folder} has no GitHub origin on this Mac") })?;
-            Ok(Request::Install { item, folder: Some(folder), repo: Some(repo), adopt: None })
+            Ok(Request::Install { item, folder: Some(folder), repo: Some(repo), adopt: None, restart: None })
         }
-        InstallItem::HerdrService => Ok(Request::Install { item, folder: None, repo: None, adopt: adopt.filter(|a| *a) }),
-        _ => Ok(Request::Install { item, folder: None, repo: None, adopt: None }),
+        InstallItem::HerdrService => Ok(Request::Install { item, folder: None, repo: None, adopt: adopt.filter(|a| *a), restart: None }),
+        // ADR 0027: the restart that closes every pane there is only ever the captain's second click.
+        InstallItem::WorkerSandbox => Ok(Request::Install { item, folder: None, repo: None, adopt: None, restart: restart.filter(|r| *r) }),
+        _ => Ok(Request::Install { item, folder: None, repo: None, adopt: None, restart: None }),
     }
 }
 

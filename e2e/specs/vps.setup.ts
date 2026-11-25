@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeFakeVps } from "../fake-vps/make.ts";
@@ -19,6 +20,16 @@ export function setup(dataDir: string): Record<string, string> {
   startHerdrServer(VPS_SESSION, config);
   const vps = makeFakeVps(dataDir, { herdrSession: VPS_SESSION });
   makeStandIn(join(vps.root, "bin"));
+  // ADR 0026: the launch needs Kinas's own copy of the relay instruction there. The companion's install writes and
+  // records it, exactly as Settings' Install would — run directly, so the stub ssh's calls.log holds only the app's calls.
+  const home = join(dataDir, "fake-vps", "home");
+  const installed = spawnSync(join(home, ".local", "bin", "kinas"), ["companion", "rpc"], {
+    cwd: home,
+    env: { ...process.env, HOME: home, KINAS_COMPANION_ROOT: vps.root },
+    input: '{"verb":"install","item":"relay-instruction"}\n',
+    encoding: "utf8",
+  });
+  if (installed.status !== 0 || !/"done":true/.test(installed.stdout)) throw new Error(`the relay instruction was not installed: ${installed.stdout}${installed.stderr}`);
   const tools = makeStubTools(join(dataDir, "tools"));
   return {
     KINAS_E2E_SSH: vps.ssh,

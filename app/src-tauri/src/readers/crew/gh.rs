@@ -147,6 +147,13 @@ mod tests {
         assert_eq!((green.checks_total(), green.checks_failed()), (4, 0));
         assert_eq!(checks_text(4, 0).as_deref(), Some("checks 4/4"));
         assert_eq!(green.review.as_deref(), Some("APPROVED"));
+
+        // The review flag (ADR 0027): the first PR adds a Claude Code settings file; the second touches none.
+        assert_eq!(red.touches, Touches { paths: vec![".claude/settings.json".into()], unknown: false });
+        assert!(green.touches.clear());
+        // An answer without `files` — an older gh, or a field it did not send — cannot be read whole: review it.
+        let bare = parse(URL, r#"{"number":7,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","reviewDecision":"","statusCheckRollup":[]}"#).unwrap();
+        assert!(bare.touches.unknown);
     }
 
     /// First mate rule 20: **ready** is "at least one check, all green", and a check still running is not green. Until

@@ -2,14 +2,17 @@
 // exception to the CLI's read-only rule besides `kinas crew setup`: it keeps its own state folder, and later writes a
 // note into Firstmate's inbox (ADR 0022) and summaries to the cloud store (ADR 0023). On the Mac it is never run.
 
+import { LINUX_RELEASES } from "@kinas/commands/crew-tools";
 import { run } from "@kinas/context";
-import { accessSync, constants } from "node:fs";
-import { homedir } from "node:os";
+import { accessSync, constants, statfsSync } from "node:fs";
+import { cpus, homedir, totalmem, userInfo } from "node:os";
 import { firstmate } from "./firstmate.ts";
-import { herdrAt } from "./herdr.ts";
-import { companionPath, companionPaths, type Paths } from "./paths.ts";
+import { herdrAt, herdrEnv, type Herdr } from "./herdr.ts";
+import { githubReleases, rootReleases } from "./install.ts";
+import { companionPath, companionPaths, nodeDir, type Paths } from "./paths.ts";
 import { MAX_REQUEST_BYTES, rpc, versionIn } from "./rpc.ts";
 import { lastReading, loop, readOnce, type Deps } from "./run.ts";
+import type { SetupDeps } from "./setup.ts";
 
 export const COMPANION_USAGE = [
   "  companion run       (on the VPS) read Firstmate's home every 15 s into the companion's reading",
@@ -39,6 +42,40 @@ function runDeps(paths: Paths): Deps {
     clock: Date.now,
     // One line per event, never a fleet's words: journald keeps it.
     log: (line) => process.stderr.write(`${line}\n`),
+  };
+}
+
+/** What setup's checks and installs run with (slice 4): this machine, its login, and the companion's own PATH. */
+function setupDeps(paths: Paths, herdr: Herdr): SetupDeps {
+  const home = homedir();
+  const path = companionPath(home, executable);
+  const env = herdrEnv(process.env, path);
+  return {
+    paths,
+    home,
+    user: userInfo().username,
+    uid: process.getuid?.() ?? -1,
+    platform: process.platform,
+    arch: process.arch,
+    env: process.env,
+    path,
+    node: nodeDir(home, executable),
+    run: (argv, o) => run(argv, { timeoutMs: o.timeoutMs, cwd: o.cwd, env }),
+    herdr,
+    releases: paths.releases === null ? githubReleases(LINUX_RELEASES) : rootReleases(paths.releases),
+    which: (name) => Bun.which(name, { PATH: path }),
+    machine: () => {
+      let freeBytes: number | null = null;
+      try {
+        const s = statfsSync(home);
+        freeBytes = s.bavail * s.bsize;
+      } catch {
+        freeBytes = null;
+      }
+      return { cores: cpus().length, memBytes: totalmem(), freeBytes };
+    },
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    now: Date.now,
   };
 }
 
@@ -78,7 +115,7 @@ export async function companion(args: string[]): Promise<number> {
       await readOnce(runDeps(paths), prev, prev?.companion.since ?? Date.now());
     };
     const herdr = herdrAt(paths.herdr, SESSION, companionPath(homedir(), executable));
-    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr };
+    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr, setup: setupDeps(paths, herdr) };
     const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;

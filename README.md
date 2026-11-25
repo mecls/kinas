@@ -260,7 +260,7 @@ pane that paints its own 24-bit dark theme does not follow; Claude Code, for one
 | `KINAS_E2E_CREW_COMMAND=<path>` | debug | The launcher runs this program in the first mate's pane instead of `claude`, with the same arguments — a stand-in that records them (added 2026-09-24, the first mate) |
 | `KINAS_E2E_CLIPBOARD_FILE=<path>` | debug | Text Kinas puts on the clipboard — the pane's copies and the Inbox's answer lines — is written to this file instead, and the Mac's clipboard is left alone (added 2026-09-25, the first mate) |
 | `KINAS_E2E_TOOL_DIR=<path>` | debug | The crew's tools are looked for only there and in the system's own folders (`/usr/bin`, `/bin`, …), never on the login shell's `PATH` — stub tools for the crew specs (added 2026-09-24, the first mate) |
-| `KINAS_COMPANION_ROOT=<path>` | all (companion) | Where `kinas companion` keeps its state and finds Firstmate's home and Herdr — `<path>/state`, `<path>/firstmate`, `<path>/bin/herdr` — instead of `~/.local/state/kinas`, `~/.local/share/kinas/firstmate` and `~/.local/bin/herdr` (added 2026-11-17, the factory in the cloud; Herdr 2026-11-24) |
+| `KINAS_COMPANION_ROOT=<path>` | all (companion) | Where `kinas companion` keeps its state and finds Firstmate's home and Herdr — `<path>/state`, `<path>/firstmate`, `<path>/bin/herdr` — instead of `~/.local/state/kinas`, `~/.local/share/kinas/firstmate` and `~/.local/bin/herdr` (added 2026-11-17, the factory in the cloud; Herdr 2026-11-24). Since 2026-11-25 (setup, slice 4) setup's places too — `<path>/bin` for installs, `<path>/systemd/user` for units, stand-ins `<path>/bin/{systemctl,loginctl,gh}`, `<path>/os-release` — and the releases Install takes come from `<path>/releases/<asset>`, pinned by `<path>/releases/pins.json`, never from GitHub: for tests and the e2e's fake VPS only |
 | `KINAS_COMPANION_CLOUD=file:<path>` | all (companion) | The companion writes its cloud calls to that file instead of Convex — a local fake (added 2026-11-17) |
 | `KINAS_E2E_SSH=<path>` | debug | The door runs this program instead of `/usr/bin/ssh`, with the same argv and stdin — a stub that runs the companion locally (added 2026-11-17) |
 | `KINAS_E2E_HERDR_REMOTE=local` | debug | With a VPS set, the Work page attaches the throwaway session `KINAS_HERDR_SESSION` on this Mac instead of `herdr --remote`, or a plain shell when none is set. `KINAS_PANE_SHELL_ONLY=1`, every spec's default, still gives a plain shell first, so no spec runs a real ssh (added 2026-11-17; as built 2026-11-24) |
@@ -278,6 +278,7 @@ app/src/ui/          the component library — one file per DESIGN.md component,
 app/src/styles/      tokens.css (every colour, size and space), the page sheets, the guard and contrast tests
 app/src/assets/fonts/ Inter, JetBrains Mono, Bricolage Grotesque as woff2, with their OFL licences
 cli/                 the kinas CLI (Clack, Ink for the launch screen), compiled by scripts/build-cli.ts
+                     (--target bun-linux-x64 or bun-linux-arm64 for a VPS's companion, into dist/)
 packages/store/      staleness, quota line, StorageAdapter, the CLI's read-only SQLite adapter
 packages/commands/   the command registry shared by the CLI and the palette, and the shared theme
 packages/context/    the context packet: sources, CLI cache, activity log, agent and operator renderers

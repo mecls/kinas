@@ -3,13 +3,17 @@
 // the run loop left it plus the fleet ledger since the Mac's cursor; `refresh`, a reading now; `view`, Herdr's view now;
 // and the Herdr actions
 // (actions.ts) — `launch-first-mate`, `focus`, `open-workspace` — whose outcome is `{ done }` or `{ cannot }`, exit 0
-// either way: "not there" is an answer the Mac puts in words, and a non-zero exit would lose it at the door.
+// either way: "not there" is an answer the Mac puts in words, and a non-zero exit would lose it at the door. Since
+// slice 4, `hello` carries setup's checks (setup.ts) and the client folders already cloned, and `install` (install.ts)
+// answers the same way.
 
 import { readFile } from "node:fs/promises";
 import { focusWorkspace, launchFirstMate, openWorkspace, viewNow } from "./actions.ts";
 import type { Herdr } from "./herdr.ts";
+import { install } from "./install.ts";
 import type { Paths } from "./paths.ts";
 import { ledgerSince } from "./run.ts";
+import { checks, folders, type SetupDeps } from "./setup.ts";
 import { validate, type Cursor, type Request } from "./validate.ts";
 
 export const RPC_VERSION = 1;
@@ -26,6 +30,8 @@ export interface RpcDeps {
   now: () => number;
   /** herdr.ts's runner on the `default` session, for the actions. */
   herdr: Herdr;
+  /** What setup's checks and installs run with (slice 4). */
+  setup: SetupDeps;
 }
 
 /** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
@@ -55,8 +61,20 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
   switch (request.verb) {
     case "hello": {
       // The machine's Herdr beside the Mac's (build spec §17, 2026-11-24 #4): the Reachable row says when they differ.
-      const herdr = await deps.herdrVersion();
-      return { reply: { v: RPC_VERSION, companion: { version: deps.version }, herdr: herdr === null ? null : { version: herdr } }, exit: 0 };
+      const [herdr, rows] = await Promise.all([deps.herdrVersion(), checks(deps.setup)]);
+      return {
+        reply: {
+          v: RPC_VERSION,
+          companion: { version: deps.version },
+          herdr: herdr === null ? null : { version: herdr },
+          // Slice 4: the rows, the client folders already under ~/projects (names only), and the login's name for the
+          // linger command the captain runs.
+          checks: rows,
+          folders: folders(deps.paths.projects),
+          user: deps.setup.user,
+        },
+        exit: 0,
+      };
     }
     case "bundle":
       return bundle(deps, request.cursor);
@@ -75,6 +93,10 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
       return { reply: { v: RPC_VERSION, ...(await focusWorkspace(deps, request.workspace)) }, exit: 0 };
     case "open-workspace":
       return { reply: { v: RPC_VERSION, ...(await openWorkspace(deps, request.folder, request.label)) }, exit: 0 };
+    case "install": {
+      const { verb: _, ...req } = request;
+      return { reply: { v: RPC_VERSION, ...(await install(req, deps.setup)) }, exit: 0 };
+    }
   }
 }
 

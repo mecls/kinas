@@ -15,6 +15,7 @@ pub(crate) mod read;
 pub(crate) mod remote_cmds;
 pub(crate) mod repo;
 pub(crate) mod seen;
+pub(crate) mod setup;
 pub(crate) mod tools;
 
 use crate::readers::crew::{CrewLive, HERDR_FRESH_MS};

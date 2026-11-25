@@ -27,6 +27,17 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     alias, then Volta) for its children, because neither the door's non-interactive ssh nor systemd reads `.bashrc`;
   - a Herdr the captain installed (`~/.local/bin/herdr`) or a `default` server already running is the captain's: it is
     reported, never overwritten, and moved under `kinas-herdr.service` only on the captain's click (ADR 0024).
+  - Amended 2026-11-25 (setup, slice 4): `hello` reports setup's checks, one row per piece; each Install is one item
+    (`kinas companion rpc` `install`), refused as root. A binary in `~/.local/bin` is written only where none is or over
+    a copy whose SHA-256 is pinned (Kinas's own); a unit only where none is or over one whose first line is Kinas's
+    header. `kinas-herdr.service` runs `HERDR_SESSION=default ~/.local/bin/herdr server --session default` (Firstmate's own start); before it
+    starts, the companion writes Firstmate's `firstmate-server-owner` marker (`systemd user unit kinas-herdr.service`)
+    beside the session's socket, so Firstmate never starts a second server; adopting a running server also writes
+    `firstmate-server-replacing` for the change and runs `herdr --session default server stop`. Firstmate is cloned
+    beside its home and renamed in. Client folders are cloned with `gh repo clone <owner/repo> ~/projects/<folder>`,
+    the repository read from the Mac's own folder's origin. Kinas's own Linux binary comes from the release of the
+    installed version (`kinas-linux-x64`, `kinas-linux-arm64`); until one is published, Settings gives the two steps by
+    hand.
 - **Claude Code** at `~/.local/bin/claude`, signed in by the captain, in the VPS's terminal, with their own
   subscription. `ANTHROPIC_API_KEY` must not be set there: its presence (never its value) is checked.
 

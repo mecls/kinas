@@ -1,4 +1,5 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,4 +96,32 @@ export function setDown(dataDir: string, down: boolean): void {
   const flag = join(dataDir, "fake-vps", "down");
   if (down) writeFileSync(flag, "");
   else rmSync(flag, { force: true });
+}
+
+/**
+ * Slice 4.4: the machine without its companion (`present` false: `.local/bin/kinas` moved aside, so the door's ssh runs
+ * and `kinas` is not found, exit 127), or with it again.
+ */
+export function setCompanion(dataDir: string, present: boolean): void {
+  const bin = join(dataDir, "fake-vps", "home", ".local", "bin");
+  if (present && existsSync(join(bin, "kinas.away"))) renameSync(join(bin, "kinas.away"), join(bin, "kinas"));
+  if (!present && existsSync(join(bin, "kinas"))) renameSync(join(bin, "kinas"), join(bin, "kinas.away"));
+}
+
+/** The stand-in Herdr setup installs on the fake VPS: it says 0.9.5 and nothing else. */
+export const HERDR_STAND_IN = `#!/bin/sh\n[ "$1" = "--version" ] || exit 1\necho "herdr 0.9.5"\n`;
+
+/**
+ * Slice 4.4 (build spec §17 2026-11-25 #8): Herdr not installed on the fake VPS yet, and its pinned release a stand-in
+ * in the companion root's `releases/`, pinned at its own SHA-256 by `releases/pins.json` — so Install Herdr downloads
+ * nothing and still checks the SHA-256 it is given.
+ */
+export function plantHerdrRelease(root: string): void {
+  const dir = join(root, "releases");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "herdr-stand-in"), HERDR_STAND_IN);
+  const sha256 = createHash("sha256").update(HERDR_STAND_IN).digest("hex");
+  const asset = { asset: "herdr-stand-in", sha256 };
+  writeFileSync(join(dir, "pins.json"), JSON.stringify([{ name: "herdr", version: "0.9.5", repo: "fake/herdr", kind: "raw", assets: { x64: asset, arm64: asset } }]));
+  rmSync(join(root, "bin", "herdr"), { force: true });
 }

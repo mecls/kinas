@@ -3,14 +3,24 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { companionPaths } from "./paths.ts";
+import { fakeMachine } from "./fake-machine.ts";
 import { rpc, versionIn } from "./rpc.ts";
+import { CHECK_IDS } from "./setup.ts";
 
 const FIXTURE = join(import.meta.dir, "..", "..", "..", "fixtures", "companion-bundle.synthetic.json");
 
 function deps() {
-  const root = mkdtempSync(join(tmpdir(), "kinas-companion-"));
-  const paths = companionPaths({ KINAS_COMPANION_ROOT: root });
-  return { paths, version: "0.1.0", herdrVersion: async (): Promise<string | null> => "0.9.5", readNow: async () => {}, now: () => 1_794_834_015_000, herdr: async () => ({ ok: false, stdout: "" }) };
+  const m = fakeMachine();
+  const paths = m.deps.paths;
+  return {
+    paths,
+    version: "0.1.0",
+    herdrVersion: async (): Promise<string | null> => "0.9.5",
+    readNow: async () => {},
+    now: () => 1_794_834_015_000,
+    herdr: async () => ({ ok: false, stdout: "" }),
+    setup: m.deps,
+  };
 }
 
 describe("kinas companion rpc (slice 1)", () => {
@@ -22,6 +32,15 @@ describe("kinas companion rpc (slice 1)", () => {
       herdr: "/r/bin/herdr",
       projects: "/r/projects",
       claude: "/r/bin/claude",
+      bin: "/r/bin",
+      units: "/r/systemd/user",
+      systemctl: "/r/bin/systemctl",
+      loginctl: "/r/bin/loginctl",
+      gh: "/r/bin/gh",
+      claudeHome: "/r/claude-home",
+      osRelease: "/r/os-release",
+      releases: "/r/releases",
+      root: "/r",
     });
     expect(companionPaths({}, "/home/captain")).toEqual({
       state: "/home/captain/.local/state/kinas",
@@ -30,13 +49,26 @@ describe("kinas companion rpc (slice 1)", () => {
       herdr: "/home/captain/.local/bin/herdr",
       projects: "/home/captain/projects",
       claude: "claude",
+      bin: "/home/captain/.local/bin",
+      units: "/home/captain/.config/systemd/user",
+      systemctl: "/usr/bin/systemctl",
+      loginctl: "/usr/bin/loginctl",
+      gh: "gh",
+      claudeHome: "/home/captain/.claude",
+      osRelease: "/etc/os-release",
+      releases: null,
+      root: null,
     });
   });
 
   test("hello answers its version and the machine's Herdr, or null for Herdr when there is none", async () => {
-    expect(await rpc('{"verb":"hello"}\n', deps())).toEqual({ reply: { v: 1, companion: { version: "0.1.0" }, herdr: { version: "0.9.5" } }, exit: 0 });
+    const said = await rpc('{"verb":"hello"}\n', deps());
+    expect(said.exit).toBe(0);
+    expect(said.reply).toMatchObject({ v: 1, companion: { version: "0.1.0" }, herdr: { version: "0.9.5" }, folders: [], user: "captain" });
+    // Slice 4: setup's rows ride along, every id once.
+    expect((said.reply as { checks: { id: string }[] }).checks.map((c) => c.id)).toEqual([...CHECK_IDS]);
     const none = { ...deps(), herdrVersion: async () => null };
-    expect(await rpc('{"verb":"hello"}', none)).toEqual({ reply: { v: 1, companion: { version: "0.1.0" }, herdr: null }, exit: 0 });
+    expect((await rpc('{"verb":"hello"}', none)).reply).toMatchObject({ v: 1, companion: { version: "0.1.0" }, herdr: null });
   });
 
   test("a version is the first x.y.z in what the tool printed", () => {
@@ -97,5 +129,12 @@ describe("kinas companion rpc (slice 1)", () => {
     expect((await rpc("not json", deps())).exit).toBe(2);
     expect((await rpc('{"verb":"install","item":"x"}', deps())).exit).toBe(2);
     expect((await rpc("x".repeat(70_000), deps())).reply).toEqual({ v: 1, error: "refused", why: "the request is too large" });
+  });
+
+  test("install answers done or cannot with exit 0, as the actions do (slice 4)", async () => {
+    const d = deps();
+    expect(await rpc('{"verb":"install","item":"relay-rule"}', d)).toEqual({ reply: { v: 1, cannot: "no-firstmate" }, exit: 0 });
+    expect(await rpc('{"verb":"install","item":"companion-service"}', d)).toEqual({ reply: { v: 1, done: true }, exit: 0 });
+    expect((await rpc('{"verb":"install","item":"anything"}', d)).exit).toBe(2);
   });
 });

@@ -49,3 +49,49 @@ export function atLeast(version: string, floor: string): boolean {
   for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i]! > b[i]!;
   return true;
 }
+
+// The factory in the cloud (build spec §12 slice 4.1, §17 2026-11-25 #1): what `kinas companion install` puts in
+// ~/.local/bin on a Linux machine, per architecture as Bun's `process.arch` names it, with the SHA-256 GitHub publishes
+// for each asset (checked against the two darwin pins above, computed from downloads: equal). Herdr is the VPS's pin
+// (0.9.5, ADR 0024), not the Mac's. treehouse and no-mistakes are the versions TOOLS pins.
+
+export type Arch = "x64" | "arm64";
+
+export interface LinuxRelease {
+  /** The binary's name in ~/.local/bin, and inside a `tar.gz`. */
+  name: string;
+  version: string;
+  repo: string;
+  /** `raw`: the asset is the binary; `tar.gz`: an archive holding one file named `name`. */
+  kind: "raw" | "tar.gz";
+  assets: Record<Arch, { asset: string; sha256: string }>;
+}
+
+// prettier-ignore
+export const LINUX_RELEASES: readonly LinuxRelease[] = [
+  { name: "herdr",       version: "0.9.5",  repo: "herdrdev/herdr",          kind: "raw",    assets: {
+    x64:   { asset: "herdr-linux-x86_64",                     sha256: "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d" },
+    arm64: { asset: "herdr-linux-aarch64",                    sha256: "17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c" } } },
+  { name: "treehouse",   version: "2.3.0",  repo: "kunchenguid/treehouse",   kind: "tar.gz", assets: {
+    x64:   { asset: "treehouse-v2.3.0-linux-amd64.tar.gz",    sha256: "94fd2b2c20c35aac1ddc2941317890ad82c9916f5ccecbac4a50cda783eed10f" },
+    arm64: { asset: "treehouse-v2.3.0-linux-arm64.tar.gz",    sha256: "408589ba72b58d5e942071ed863a83fd96566cfd1e514945daa59defde528bbb" } } },
+  { name: "no-mistakes", version: "1.79.0", repo: "kunchenguid/no-mistakes", kind: "tar.gz", assets: {
+    x64:   { asset: "no-mistakes-v1.79.0-linux-amd64.tar.gz", sha256: "d178c8a5134763b8e5f6d82545a3a76285fbbcdc13d09020d1091ec80a3f8da6" },
+    arm64: { asset: "no-mistakes-v1.79.0-linux-arm64.tar.gz", sha256: "eac3f8e494c7d2487594b7eb513e605e59588be4ce147390b8fd184a7e6a8b05" } } },
+];
+
+/**
+ * Kinas's own Linux CLI, the companion, as the release attaches it (§16): `sha256` is null until the release step builds
+ * `bun scripts/build-cli.ts --target bun-linux-x64` for this version and pins what it uploaded. Settings prints the
+ * bootstrap command only for a pinned version.
+ */
+export const KINAS_LINUX: { repo: string; version: string; assets: Record<Arch, { asset: string; sha256: string | null }> } = {
+  repo: "mecls/kinas",
+  version: "0.1.0",
+  assets: { x64: { asset: "kinas-linux-x64", sha256: null }, arm64: { asset: "kinas-linux-arm64", sha256: null } },
+};
+
+/** A GitHub release asset's download URL; every release here is tagged `v<version>`. */
+export function releaseUrl(repo: string, version: string, asset: string): string {
+  return `https://github.com/${repo}/releases/download/v${version}/${asset}`;
+}

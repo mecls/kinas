@@ -304,6 +304,31 @@ export const getPlace = () => invoke<Place>("get_place");
 /** Refused with the reason in `message` (a target that is not `user@host`, `host` or an alias; a label not `[a-z0-9-]`). */
 export const setPlace = (place: Place) => invoke<Place>("set_place", { place });
 /** The Reachable row (`crew/remote_cmds.rs` `Hello`): one call through the door, and Herdr's version on both sides. */
+/** Setup on the VPS (build spec §12 slice 4; crew/setup.rs): one row per piece, in a fixed order. */
+export type CheckState = "ok" | "warn" | "bad" | "later";
+export type InstallItem = "herdr" | "herdr-service" | "firstmate" | "relay-rule" | "permission-mode" | "crew-tools" | "companion-service" | "clone";
+export interface SetupCheck {
+  id: string;
+  state: CheckState;
+  detail: string;
+  install: InstallItem | null;
+  /** Install stops Herdr's server already running there: the button says so first. */
+  adopt: boolean;
+  /** A command for the captain to run there themselves. */
+  run: string | null;
+}
+export interface CloneOffer {
+  folder: string;
+  repo: string;
+  cloned: boolean;
+}
+export interface Bootstrap {
+  version: string;
+  /** One per architecture once this version's Linux build is published; empty until then. */
+  lines: { arch: string; command: string; sha256: string }[];
+  /** Until then: building and copying it by hand. `<target>` stands for the SSH target. */
+  by_hand: string[];
+}
 export interface RemoteHello {
   reachable: boolean;
   problem: string | null;
@@ -311,8 +336,15 @@ export interface RemoteHello {
   herdr_there: string | null;
   herdr_here: string | null;
   checked_at: number;
+  companion_missing: boolean;
+  checks: SetupCheck[];
+  clones: CloneOffer[];
+  bootstrap: Bootstrap;
 }
 export const remoteHello = () => invoke<RemoteHello>("remote_hello");
+/** One setup item, the captain's click; the checks again after. A refusal comes back as the command's error, in words. */
+export const remoteInstall = (item: InstallItem, opts: { folder?: string; adopt?: boolean } = {}) =>
+  invoke<RemoteHello>("remote_install", { item, folder: opts.folder ?? null, adopt: opts.adopt ?? null });
 
 /** The status bar's VPS part (DESIGN.md 1.14): the agents' machine, as the crew's readings last found it. */
 export type MachineState = "connected" | "reconnecting" | "unreachable" | "not_running";

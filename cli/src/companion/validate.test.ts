@@ -42,4 +42,20 @@ describe("the companion's request validator (ADR 0024)", () => {
     const long = validate({ verb: "hello", ["k".repeat(500)]: 1 }) as { refused: string };
     expect(long.refused.length).toBeLessThan(80);
   });
+
+  test("install (slice 4): one item; clone names a folder and a repo; adopt is for Herdr's service only", () => {
+    expect(validate({ verb: "install", item: "herdr" })).toEqual({ verb: "install", item: "herdr" });
+    expect(validate({ verb: "install", item: "herdr-service", adopt: true })).toEqual({ verb: "install", item: "herdr-service", adopt: true });
+    expect(validate({ verb: "install", item: "clone", folder: "shop", repo: "acme/shop" })).toEqual({ verb: "install", item: "clone", folder: "shop", repo: "acme/shop" });
+    expect(validate({ verb: "install", item: "sudo" })).toEqual({ refused: "item is not one Kinas installs" });
+    expect(validate({ verb: "install", item: "herdr", adopt: true })).toEqual({ refused: "adopt is for Herdr's service only" });
+    expect(validate({ verb: "install", item: "herdr-service", adopt: "yes" })).toEqual({ refused: "adopt is for Herdr's service only" });
+    expect(validate({ verb: "install", item: "herdr", folder: "x" })).toEqual({ refused: "folder and repo are for clone only" });
+    expect(validate({ verb: "install", item: "clone", folder: "../etc", repo: "acme/shop" })).toEqual({ refused: "folder is not a folder name" });
+    expect(validate({ verb: "install", item: "clone", folder: "..", repo: "acme/shop" })).toEqual({ refused: "folder is not a folder name" });
+    expect(validate({ verb: "install", item: "clone", folder: "shop", repo: "acme/shop; rm -rf ~" })).toEqual({ refused: "repo is not a GitHub owner/repo" });
+    expect(validate({ verb: "install", item: "clone", folder: "shop", repo: "https://github.com/acme/shop" })).toEqual({ refused: "repo is not a GitHub owner/repo" });
+    expect(validate({ verb: "install", item: "clone", folder: "shop" })).toEqual({ refused: "repo is not a GitHub owner/repo" });
+    expect(validate({ verb: "install", item: "herdr", url: "https://x" })).toEqual({ refused: 'unknown field "url"' });
+  });
 });

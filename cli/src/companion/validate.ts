@@ -2,6 +2,8 @@
 // document on stdin; anything that is not exactly one of these shapes — an unknown verb, an extra field, a field of the
 // wrong type, a string too long — is refused, and nothing runs. Verbs join as their slices land (§11.2).
 
+import { INSTALL_ITEMS, type InstallItem } from "./setup.ts";
+
 export interface Cursor {
   epoch: string;
   offset: number;
@@ -15,7 +17,8 @@ export type Request =
   | { verb: "view" }
   | { verb: "launch-first-mate" }
   | { verb: "focus"; workspace: string }
-  | { verb: "open-workspace"; folder: string; label: string };
+  | { verb: "open-workspace"; folder: string; label: string }
+  | { verb: "install"; item: InstallItem; folder?: string; repo?: string; adopt?: boolean };
 
 export type Validated = Request | { refused: string };
 
@@ -37,6 +40,14 @@ export function relativeFolder(v: unknown): v is string {
   return !v.startsWith("/") && v.split("/").every((part) => part !== "" && part !== "." && part !== "..");
 }
 
+/** A client folder's name under ~/projects, for `install clone`: one segment of plain characters. */
+export function validFolder(v: unknown): v is string {
+  return typeof v === "string" && /^[A-Za-z0-9._-]{1,100}$/.test(v) && v !== "." && v !== "..";
+}
+/** GitHub's `owner/repo`, as the Mac reads it from a folder's origin. */
+export function validRepo(v: unknown): v is string {
+  return typeof v === "string" && /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(v) && !v.endsWith("/..") && !v.endsWith("/.");
+}
 /** A workspace label: 1–80 characters and no control character. */
 export function label(v: unknown): v is string {
   return typeof v === "string" && v.length > 0 && [...v].length <= MAX_LABEL_CHARS && !/[\u0000-\u001f\u007f]/.test(v);
@@ -90,6 +101,25 @@ export function validate(input: unknown): Validated {
       if (!relativeFolder(input.folder)) return { refused: "folder is not a folder under the projects folder" };
       if (!label(input.label)) return { refused: "label is not a workspace label" };
       return { verb: "open-workspace", folder: input.folder, label: input.label };
+    }
+    case "install": {
+      // Slice 4 (§17 2026-11-25 #4): one item; `clone` names its folder and repository, `adopt` only Herdr's service.
+      const extra = onlyKeys(input, ["verb", "item", "folder", "repo", "adopt"]);
+      if (extra) return { refused: extra };
+      if (typeof input.item !== "string" || !(INSTALL_ITEMS as readonly string[]).includes(input.item)) return { refused: "item is not one Kinas installs" };
+      const item = input.item as InstallItem;
+      if (item === "clone") {
+        if (!validFolder(input.folder)) return { refused: "folder is not a folder name" };
+        if (!validRepo(input.repo)) return { refused: "repo is not a GitHub owner/repo" };
+        if (input.adopt !== undefined) return { refused: "adopt is for Herdr's service only" };
+        return { verb: "install", item, folder: input.folder, repo: input.repo };
+      }
+      if (input.folder !== undefined || input.repo !== undefined) return { refused: "folder and repo are for clone only" };
+      if (input.adopt !== undefined) {
+        if (item !== "herdr-service" || typeof input.adopt !== "boolean") return { refused: "adopt is for Herdr's service only" };
+        return { verb: "install", item, adopt: input.adopt };
+      }
+      return { verb: "install", item };
     }
     default:
       return { refused: "unknown verb" };

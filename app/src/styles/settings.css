@@ -367,3 +367,45 @@
 .place-herdr {
   color: var(--ink-2);
 }
+
+/* Slice 4 (DESIGN.md 1.14): setup — the checks table's state cell (a dot and the row's words), its Install or the
+   captain's command, the bootstrap command in mono with Copy, and the client folders to clone. */
+.place-check {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.place-action,
+.place-command {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.place-command code {
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
+}
+.place-bootstrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.place-bootstrap-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.place-setup {
+  min-width: 0;
+}
+.place-clones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

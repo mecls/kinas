@@ -1,10 +1,14 @@
 //! Settings → Where agents run (build spec §4, §11.2): what the webview asks of the VPS, each through the one door
 //! (ADR 0024), off the main thread and with no store guard held across the call. Slice 1: the Reachable row. Slice 2:
 //! the status bar's VPS part, read from what the crew's readings left (`vps_reachability`), never a call of its own.
+//! Slice 4: setup — `hello` carries the companion's checks (crew/setup.rs filters them), the client folders to clone and
+//! the bootstrap command; `remote_install` runs one item and checks again.
 
+use crate::crew::setup::{self, Bootstrap, Check, CloneOffer};
 use crate::place::{place, Place};
 use crate::readers::runtime::ReaderControl;
-use crate::remote::{self, Request};
+use crate::remote::{self, InstallItem, Request};
+use std::path::Path;
 use crate::store::{now_ms, Store};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -22,6 +26,14 @@ pub struct Hello {
     /// This Mac's Herdr.
     pub herdr_here: Option<String>,
     pub checked_at: i64,
+    /// Slice 4: no companion answered there (ssh ran, `kinas` did not) — Settings shows the bootstrap.
+    pub companion_missing: bool,
+    /// Setup's rows, as crew/setup.rs lets them through; empty when the VPS was not reached.
+    pub checks: Vec<Check>,
+    /// The Mac's client folders with a GitHub origin, and whether the VPS has each.
+    pub clones: Vec<CloneOffer>,
+    /// The command that puts the companion there, for this app's version.
+    pub bootstrap: Bootstrap,
 }
 
 /// The status bar's VPS part (DESIGN.md 1.14): the agents' machine in four states.
@@ -113,14 +125,25 @@ pub struct RemoteError {
     message: String,
 }
 
-fn hello_of(label: &str, reply: Result<serde_json::Value, remote::Unreachable>, here: Option<String>, now: i64) -> Hello {
+/// What the Mac adds to a hello: its projects root (for the clone offers) and its own version (for the bootstrap).
+pub(crate) struct Here<'a> {
+    pub herdr: Option<String>,
+    pub root: Option<&'a Path>,
+    pub version: &'a str,
+}
+
+fn hello_of(label: &str, reply: Result<serde_json::Value, remote::Unreachable>, here: Here, now: i64) -> Hello {
     let down = |why: remote::Unreachable| Hello {
         reachable: false,
         problem: Some(why.words(label)),
         companion_version: None,
         herdr_there: None,
-        herdr_here: here.clone(),
+        herdr_here: here.herdr.clone(),
         checked_at: now,
+        companion_missing: why == remote::Unreachable::CompanionMissing,
+        checks: Vec::new(),
+        clones: Vec::new(),
+        bootstrap: setup::bootstrap(here.version),
     };
     match reply {
         Ok(v) => match v.pointer("/companion/version").and_then(short_version) {
@@ -129,8 +152,12 @@ fn hello_of(label: &str, reply: Result<serde_json::Value, remote::Unreachable>, 
                 problem: None,
                 companion_version: Some(version),
                 herdr_there: v.pointer("/herdr/version").and_then(short_version),
-                herdr_here: here.clone(),
+                herdr_here: here.herdr.clone(),
                 checked_at: now,
+                companion_missing: false,
+                checks: setup::checks_of(&v),
+                clones: here.root.map(|r| setup::clone_offers(r, &setup::folders_there(&v))).unwrap_or_default(),
+                bootstrap: setup::bootstrap(here.version),
             },
             None => down(remote::Unreachable::BadReply),
         },
@@ -149,12 +176,70 @@ pub async fn remote_hello(app: AppHandle) -> Result<Hello, RemoteError> {
         let Place::Vps { target, label } = chosen else {
             return Err(RemoteError { message: "Agents run on this Mac.".into() });
         };
-        let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
-        let reply = remote::call(&target, &data_dir, &Request::Hello);
-        Ok(hello_of(&label, reply, crate::crew::tools::herdr_version_here(), now_ms()))
+        Ok(hello_now(&app, &target, &label))
     })
     .await
     .map_err(|e| RemoteError { message: format!("the check did not finish: {e}") })?
+}
+
+/// `hello` through the door, with the Mac's half added. No store guard is held across the call (ADR 0005).
+fn hello_now(app: &AppHandle, target: &str, label: &str) -> Hello {
+    let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
+    let root = crate::paths::projects_root_of(&app.state::<Store>());
+    let reply = remote::call(target, &data_dir, &Request::Hello);
+    let version = app.package_info().version.to_string();
+    let here = Here { herdr: crate::crew::tools::herdr_version_here(), root: Some(&root), version: &version };
+    hello_of(label, reply, here, now_ms())
+}
+
+/// One setup item on the VPS, the captain's click (slice 4.3); then the checks again. `folder` names a client folder to
+/// clone — its repository is read here from the Mac's own folder, never taken from the webview. `adopt` is the captain's
+/// "Run Herdr under systemd", which stops the server already running there.
+#[tauri::command]
+pub async fn remote_install(app: AppHandle, item: InstallItem, folder: Option<String>, adopt: Option<bool>) -> Result<Hello, RemoteError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = {
+            let store = app.state::<Store>();
+            let conn = store.conn();
+            place(&conn, store.org_id())
+        };
+        let Place::Vps { target, label } = chosen else {
+            return Err(RemoteError { message: "Agents run on this Mac.".into() });
+        };
+        let request = install_request(&app, item, folder, adopt)?;
+        let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
+        log::info!("setup: install {} on {label}", serde_json::to_value(item).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default());
+        match remote::call(&target, &data_dir, &request) {
+            Ok(reply) => match install_answer(&reply) {
+                Ok(()) => Ok(hello_now(&app, &target, &label)),
+                Err(code) => Err(RemoteError { message: setup::cannot_words(&code, &label) }),
+            },
+            Err(why) => Err(RemoteError { message: why.words(&label) }),
+        }
+    })
+    .await
+    .map_err(|e| RemoteError { message: format!("the install did not finish: {e}") })?
+}
+
+fn install_request(app: &AppHandle, item: InstallItem, folder: Option<String>, adopt: Option<bool>) -> Result<Request, RemoteError> {
+    match item {
+        InstallItem::Clone => {
+            let folder = folder.ok_or_else(|| RemoteError { message: "Which folder?".into() })?;
+            let root = crate::paths::projects_root_of(&app.state::<Store>());
+            let repo = setup::repo_for(&root, &folder).ok_or_else(|| RemoteError { message: format!("{folder} has no GitHub origin on this Mac") })?;
+            Ok(Request::Install { item, folder: Some(folder), repo: Some(repo), adopt: None })
+        }
+        InstallItem::HerdrService => Ok(Request::Install { item, folder: None, repo: None, adopt: adopt.filter(|a| *a) }),
+        _ => Ok(Request::Install { item, folder: None, repo: None, adopt: None }),
+    }
+}
+
+/// `{ done: true }`, or the companion's `cannot` code; anything else reads as a reply that could not be read.
+fn install_answer(reply: &serde_json::Value) -> Result<(), String> {
+    if reply.get("done") == Some(&serde_json::Value::Bool(true)) {
+        return Ok(());
+    }
+    Err(reply.get("cannot").and_then(|c| c.as_str()).filter(|c| c.len() <= 40).unwrap_or("bad-reply").to_string())
 }
 
 #[cfg(test)]
@@ -190,7 +275,8 @@ mod tests {
 
     #[test]
     fn hello_reads_the_versions_or_says_why_in_fixed_words() {
-        let here = || Some("0.9.0".to_string());
+        let herdr = || Some("0.9.0".to_string());
+        let here = || Here { herdr: herdr(), root: None, version: "0.1.0" };
         let ok = hello_of("vps-1", Ok(serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": {"version": "0.9.5"}})), here(), 5);
         assert_eq!(
             ok,
@@ -199,18 +285,38 @@ mod tests {
                 problem: None,
                 companion_version: Some("0.1.0".into()),
                 herdr_there: Some("0.9.5".into()),
-                herdr_here: here(),
-                checked_at: 5
+                herdr_here: herdr(),
+                checked_at: 5,
+                companion_missing: false,
+                checks: Vec::new(),
+                clones: Vec::new(),
+                bootstrap: setup::bootstrap("0.1.0"),
             }
         );
-        let no_herdr = hello_of("vps-1", Ok(serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": null})), None, 5);
+        let none = || Here { herdr: None, root: None, version: "0.1.0" };
+        let no_herdr = hello_of("vps-1", Ok(serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": null})), none(), 5);
         assert_eq!((no_herdr.reachable, no_herdr.herdr_there, no_herdr.herdr_here), (true, None, None));
         let down = hello_of("vps-1", Err(remote::Unreachable::CompanionMissing), here(), 5);
         assert_eq!(down.problem.as_deref(), Some("can't reach vps-1: Kinas is not installed there"));
-        assert_eq!(down.herdr_here, here(), "the Mac's own version shows even when the VPS cannot be reached");
+        assert!(down.companion_missing, "the bootstrap shows only when ssh ran and kinas did not");
+        assert_eq!(down.herdr_here, herdr(), "the Mac's own version shows even when the VPS cannot be reached");
+        assert!(!hello_of("vps-1", Err(remote::Unreachable::TimedOut), here(), 5).companion_missing);
         let odd = hello_of("vps-1", Ok(serde_json::json!({"v": 1})), here(), 5);
         assert_eq!(odd.problem.as_deref(), Some("can't reach vps-1: the answer could not be read"));
-        let sly = hello_of("vps-1", Ok(serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": {"version": "<b>9</b> /etc/passwd"}})), None, 5);
+        let sly = hello_of("vps-1", Ok(serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": {"version": "<b>9</b> /etc/passwd"}})), none(), 5);
         assert_eq!(sly.herdr_there.as_deref(), Some("b9betcpasswd"), "only digits, letters, dots and dashes reach the screen");
+    }
+
+    #[test]
+    fn hello_carries_the_rows_and_the_install_answer_reads_done_or_its_code() {
+        let reply = serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": null,
+            "checks": [{"id": "herdr", "state": "bad", "detail": "not installed", "install": "herdr"}], "folders": []});
+        let hello = hello_of("vps-1", Ok(reply), Here { herdr: None, root: None, version: "0.1.0" }, 5);
+        assert_eq!(hello.checks.len(), 1);
+        assert_eq!(hello.checks[0].install, Some(InstallItem::Herdr));
+        assert_eq!(install_answer(&serde_json::json!({"v": 1, "done": true})), Ok(()));
+        assert_eq!(install_answer(&serde_json::json!({"v": 1, "cannot": "foreign"})), Err("foreign".into()));
+        assert_eq!(install_answer(&serde_json::json!({"v": 1})), Err("bad-reply".into()));
+        assert_eq!(install_answer(&serde_json::json!({"v": 1, "cannot": "x".repeat(80)})), Err("bad-reply".into()));
     }
 }

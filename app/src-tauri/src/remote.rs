@@ -17,6 +17,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 pub(crate) const RPC_LIMIT: Duration = Duration::from_secs(20);
+/// Setup's `install` (slice 4): a download, a clone or an npm install on the VPS takes minutes, not seconds.
+pub(crate) const INSTALL_LIMIT: Duration = Duration::from_secs(300);
 pub(crate) const RPC_CAP: usize = 8 * 1024 * 1024;
 /// Run in the login directory, so the path needs no `~`: `kinas` as setup installs it.
 pub(crate) const REMOTE_COMMAND: [&str; 3] = [".local/bin/kinas", "companion", "rpc"];
@@ -111,6 +113,31 @@ pub(crate) enum Request {
     Focus { workspace: String },
     /// Open in the terminal: a Mac folder's twin under the VPS's projects folder, by its relative path and label.
     OpenWorkspace { folder: String, label: String },
+    /// Setup (slice 4, §17 2026-11-25 #4): one item, each the captain's click. `folder` and `repo` only for `clone`,
+    /// `adopt` only for Herdr's service; an absent one is left out of the JSON, as the companion's validator wants.
+    Install {
+        item: InstallItem,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        folder: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        repo: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        adopt: Option<bool>,
+    },
+}
+
+/// What setup installs on the VPS, as the companion names it (`cli/src/companion/setup.ts` INSTALL_ITEMS).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum InstallItem {
+    Herdr,
+    HerdrService,
+    Firstmate,
+    RelayRule,
+    PermissionMode,
+    CrewTools,
+    CompanionService,
+    Clone,
 }
 
 impl Request {
@@ -123,6 +150,15 @@ impl Request {
             Request::LaunchFirstMate => "launch-first-mate",
             Request::Focus { .. } => "focus",
             Request::OpenWorkspace { .. } => "open-workspace",
+            Request::Install { .. } => "install",
+        }
+    }
+
+    /// How long the door waits for this one: `install` may download, clone or run npm.
+    pub fn limit(&self) -> Duration {
+        match self {
+            Request::Install { .. } => INSTALL_LIMIT,
+            _ => RPC_LIMIT,
         }
     }
 }
@@ -220,7 +256,7 @@ pub(crate) fn call_with(
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let mut input = serde_json::to_vec(request).map_err(|_| Unreachable::BadReply)?;
     input.push(b'\n');
-    let run = Run { program: &program, args: &args, cwd: Some(cwd.unwrap_or(Path::new("/"))), set: &[], limit: RPC_LIMIT };
+    let run = Run { program: &program, args: &args, cwd: Some(cwd.unwrap_or(Path::new("/"))), set: &[], limit: request.limit() };
     let (ran, cut) = runner(&run, &input).map_err(|_| Unreachable::NotReachable)?;
     if cut {
         return Err(Unreachable::ReplyTooLarge);
@@ -307,6 +343,27 @@ mod tests {
         assert_eq!(json(&Request::Focus { workspace: "w3".into() }), r#"{"verb":"focus","workspace":"w3"}"#);
         assert_eq!(json(&Request::OpenWorkspace { folder: "kinas/docs".into(), label: "kinas/docs".into() }), r#"{"verb":"open-workspace","folder":"kinas/docs","label":"kinas/docs"}"#);
         assert_eq!(Request::OpenWorkspace { folder: String::new(), label: String::new() }.name(), "open-workspace");
+    }
+
+    #[test]
+    fn install_is_the_companion_s_shape_and_waits_longer() {
+        let json = |r: &Request| serde_json::to_string(r).unwrap();
+        let plain = Request::Install { item: InstallItem::Herdr, folder: None, repo: None, adopt: None };
+        assert_eq!(json(&plain), r#"{"verb":"install","item":"herdr"}"#);
+        let adopt = Request::Install { item: InstallItem::HerdrService, folder: None, repo: None, adopt: Some(true) };
+        assert_eq!(json(&adopt), r#"{"verb":"install","item":"herdr-service","adopt":true}"#);
+        let clone = Request::Install { item: InstallItem::Clone, folder: Some("shop".into()), repo: Some("acme/shop".into()), adopt: None };
+        assert_eq!(json(&clone), r#"{"verb":"install","item":"clone","folder":"shop","repo":"acme/shop"}"#);
+        assert_eq!(json(&Request::Install { item: InstallItem::RelayRule, folder: None, repo: None, adopt: None }), r#"{"verb":"install","item":"relay-rule"}"#);
+        assert_eq!(plain.name(), "install");
+        assert_eq!(plain.limit(), INSTALL_LIMIT);
+        assert_eq!(Request::Hello.limit(), RPC_LIMIT);
+        let seen = RefCell::new(Duration::ZERO);
+        let _ = call_with("captain@vps", &plain, None, |run, _| {
+            *seen.borrow_mut() = run.limit;
+            Ok((ran(Exit::Code(0), "{}", None, None), false))
+        });
+        assert_eq!(*seen.borrow(), INSTALL_LIMIT);
     }
 
     #[test]

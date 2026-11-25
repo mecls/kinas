@@ -2,8 +2,10 @@
 // call but the Work page's attach runs on the VPS through `kinas companion`, with the Mac's fixed argv —
 // app/src-tauri/src/herdr.rs). The list is a type: the session's snapshot, a pane's process info, focusing a
 // workspace, making one in a folder with a label, and `pane run` — which types the launcher's one command at a pane's
-// shell prompt (crew/launch.rs) and nothing else. Never `server`, `session`, `pane close`, `workspace close`, `update`
-// or `machine`; herdr.test.ts holds the guard.
+// shell prompt (crew/launch.rs) and nothing else. Since slice 4 (§17 2026-11-25 #6), setup's two: `status --json`, to
+// know whether the session's server runs and where its socket is, and `server stop`, run only when the captain clicks
+// "Run Herdr under systemd". Never `session`, `pane close`, `workspace close`, `update` or `machine`; herdr.test.ts
+// holds the guard. Herdr's systemd unit is written here too, so no other file names a Herdr verb.
 //
 // Each runs as `<paths.herdr> --session <session> <args>`, by path, with the companion's PATH and HOME and no inherited
 // HERDR_* (a companion started from a Herdr pane would be refused as nested), stdin closed, killed at 5 s.
@@ -15,7 +17,9 @@ export type HerdrCall =
   | { args: readonly ["pane", "process-info", "--pane", string] }
   | { args: readonly ["workspace", "focus", string] }
   | { args: readonly ["workspace", "create", "--cwd", string, "--label", string, "--focus"] }
-  | { args: readonly ["pane", "run", string, string] };
+  | { args: readonly ["pane", "run", string, string] }
+  | { args: readonly ["status", "--json"] }
+  | { args: readonly ["server", "stop"] };
 
 /** The calls, by what they are for: the only way the rest of the companion names one. */
 export const HERDR = {
@@ -24,7 +28,45 @@ export const HERDR = {
   focus: (workspace: string): HerdrCall => ({ args: ["workspace", "focus", workspace] }),
   create: (cwd: string, label: string): HerdrCall => ({ args: ["workspace", "create", "--cwd", cwd, "--label", label, "--focus"] }),
   run: (pane: string, command: string): HerdrCall => ({ args: ["pane", "run", pane, command] }),
+  status: (): HerdrCall => ({ args: ["status", "--json"] }),
+  serverStop: (): HerdrCall => ({ args: ["server", "stop"] }),
 } as const;
+
+/** What `status --json` says of the session's server, as Firstmate reads it (`.server.running`, `.server.socket`). */
+export function serverOf(json: string): { running: boolean; socket: string | null } | null {
+  try {
+    const server = (JSON.parse(json) as { server?: { running?: unknown; socket?: unknown } }).server;
+    if (typeof server !== "object" || server === null) return null;
+    return { running: server.running === true, socket: typeof server.socket === "string" && server.socket.startsWith("/") ? server.socket : null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The unit that keeps the session's server (§17 2026-11-25 #6): Firstmate's own start word for word —
+ * `HERDR_SESSION=<s> herdr server --session <s>` (`fm_backend_herdr_cli`, bin/backends/herdr.sh:395-396 at the pin,
+ * which Firstmate runs against 0.9.5) — by path, with the companion's PATH. `default` is the session plain `herdr`
+ * attaches: its socket is ~/.config/herdr/herdr.sock (Firstmate's docs/verification/runtime-backends.md).
+ */
+export function herdrUnit(herdr: string, session: string, path: string, header: string): string {
+  return [
+    header,
+    "[Unit]",
+    `Description=Herdr's ${session} session, kept by Kinas`,
+    "",
+    "[Service]",
+    `ExecStart=${herdr} server --session ${session}`,
+    `Environment=HERDR_SESSION=${session}`,
+    "Restart=always",
+    "RestartSec=5",
+    `Environment=PATH=${path}`,
+    "",
+    "[Install]",
+    "WantedBy=default.target",
+    "",
+  ].join("\n");
+}
 
 export const HERDR_LIMIT_MS = 5_000;
 

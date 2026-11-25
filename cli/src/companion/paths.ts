@@ -20,6 +20,25 @@ export interface Paths {
   projects: string;
   /** The first mate's program, as the launcher types it into a pane: `claude`, or a test root's stand-in. */
   claude: string;
+  // Setup (build spec §12 slice 4.2). Under a test root each of these is inside it, so no test writes a unit, a marker
+  // or a binary anywhere else, and none runs the machine's own systemctl or gh.
+  /** Where setup installs binaries: ~/.local/bin (Herdr, the crew's release tools, Kinas itself). */
+  bin: string;
+  /** systemd's folder for the captain's own units: ~/.config/systemd/user. */
+  units: string;
+  /** systemd's two programs, by path: /usr/bin/systemctl and /usr/bin/loginctl. */
+  systemctl: string;
+  loginctl: string;
+  /** GitHub's CLI: `gh`, found on the companion's PATH; a test root's stand-in. */
+  gh: string;
+  /** Claude Code's folder, only ever looked at: whether its credentials file exists. Never written. */
+  claudeHome: string;
+  /** The machine's /etc/os-release, for the System row. */
+  osRelease: string;
+  /** Under a test root only (§17 2026-11-25 #8): release files and their pins, so no test downloads. Null on a machine. */
+  releases: string | null;
+  /** The test root itself, so a write that would leave it is refused; null on a machine. */
+  root: string | null;
 }
 
 export function companionPaths(env: Record<string, string | undefined> = process.env, home = homedir()): Paths {
@@ -29,7 +48,30 @@ export function companionPaths(env: Record<string, string | undefined> = process
   const herdr = root ? join(root, "bin", "herdr") : join(home, ".local", "bin", "herdr");
   const projects = root ? join(root, "projects") : join(home, "projects");
   const claude = root ? join(root, "bin", "claude") : "claude";
-  return { state, home: fm, reading: join(state, "reading.json"), herdr, projects, claude };
+  const setup = root
+    ? {
+        bin: join(root, "bin"),
+        units: join(root, "systemd", "user"),
+        systemctl: join(root, "bin", "systemctl"),
+        loginctl: join(root, "bin", "loginctl"),
+        gh: join(root, "bin", "gh"),
+        claudeHome: join(root, "claude-home"),
+        osRelease: join(root, "os-release"),
+        releases: join(root, "releases"),
+        root,
+      }
+    : {
+        bin: join(home, ".local", "bin"),
+        units: join(home, ".config", "systemd", "user"),
+        systemctl: "/usr/bin/systemctl",
+        loginctl: "/usr/bin/loginctl",
+        gh: "gh",
+        claudeHome: join(home, ".claude"),
+        osRelease: "/etc/os-release",
+        releases: null,
+        root: null,
+      };
+  return { state, home: fm, reading: join(state, "reading.json"), herdr, projects, claude, ...setup };
 }
 
 /**

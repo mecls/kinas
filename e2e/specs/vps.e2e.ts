@@ -1,7 +1,7 @@
 import { $, browser, expect } from "@wdio/globals";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LABEL, setDown, TARGET } from "../fake-vps/make.ts";
+import { LABEL, plantHerdrRelease, setCompanion, setDown, TARGET } from "../fake-vps/make.ts";
 import { APP_LOG, herdr, herdrSnapshot } from "../helpers.ts";
 import { VPS_SESSION } from "./vps.setup.ts";
 
@@ -16,6 +16,9 @@ import { VPS_SESSION } from "./vps.setup.ts";
 // KINAS_E2E_HERDR_REMOTE=local — its chrome naming the place first, and Launch the first mate runs the launcher there
 // through the companion: the workspace made in Firstmate's home on that side, the stand-in `claude` typed exactly, and
 // a second launch focusing it without typing again.
+// Case 4, slice 4.4: setup — with no companion there, Settings gives the bootstrap (no Linux build of this version is
+// published yet, so the two steps by hand, with the target in them); with it back, the checks table, and Install Herdr
+// puts the fake VPS's pinned stand-in in place (its SHA-256 checked) and the row turns green.
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const calls = join(dataDir, "fake-vps", "calls.log");
@@ -192,8 +195,11 @@ describe("agents on a VPS", () => {
     const asked = readFileSync(herdrCalls, "utf8").trim().split("\n");
     expect(asked).toContain(`workspace create --cwd ${join(root, "firstmate")} --label firstmate --focus`);
     expect(asked).toContain(`pane run ${pane.pane_id} ${join(root, "bin", "claude")}`);
-    // Only the companion's five calls ever reached the "VPS's" Herdr.
-    expect(asked.filter((a) => !/^(api snapshot|pane process-info --pane \S+|workspace focus \S+|workspace create --cwd .+ --label .+ --focus|pane run \S+ .+)$/.test(a))).toEqual([]);
+    // Only the companion's seven calls ever reached the "VPS's" Herdr: the five actions, and setup's status read.
+    expect(
+      asked.filter((a) => !/^(api snapshot|pane process-info --pane \S+|workspace focus \S+|workspace create --cwd .+ --label .+ --focus|pane run \S+ .+|status --json)$/.test(a)),
+    ).toEqual([]);
+    expect(asked).not.toContain("server stop");
 
     // The chrome reads the VPS's focused workspace.
     await go("Work");
@@ -217,6 +223,56 @@ describe("agents on a VPS", () => {
     expect(log).toMatch(/remote: launch-first-mate ok in \d+ ms/);
     expect(log).toMatch(/crew: launched \(created\) in \d+ ms/);
     expect(log).toMatch(/crew: launched \(focused\) in \d+ ms/);
+    expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
+  });
+
+  it("sets the VPS up: the bootstrap while no companion answers, then Install Herdr turns its row green (slice 4.4)", async () => {
+    const setup = () => document.querySelector('section[data-page="settings"] [data-setting="place.setup"]')?.textContent ?? "";
+    const bootstrap = () => document.querySelector('section[data-page="settings"] [data-setting="place.bootstrap"]')?.textContent ?? "";
+    const herdrRow = () => {
+      const r = document.querySelector('section[data-page="settings"] tr[data-check="herdr"]');
+      return r ? { text: r.textContent ?? "", state: r.querySelector(".place-check")?.getAttribute("data-state") ?? null } : null;
+    };
+    /** Check again, once the last check has finished (while one runs the button says Checking…). */
+    const checkAgain = async () => {
+      const button = () => [...document.querySelectorAll<HTMLButtonElement>('[data-setting="place.reachable"] button')].some((b) => b.textContent === "Check again" && !b.disabled);
+      await waitInPage(button, (v) => v, "Check again never came back");
+      await browser.execute(() => [...document.querySelectorAll<HTMLButtonElement>('[data-setting="place.reachable"] button')].find((b) => b.textContent === "Check again")!.click());
+    };
+
+    // No companion there: ssh runs, `kinas` is not found, and Settings gives the bootstrap.
+    setCompanion(dataDir, false);
+    await go("Settings");
+    await waitInPage(reachable, (t) => t.includes("connected") || t.includes("can't reach"), "Settings never checked the VPS");
+    await checkAgain();
+    await waitInPage(reachable, (t) => t.includes("Kinas is not installed there"), "the Reachable row never said the companion is missing");
+    const words = await waitInPage(bootstrap, (t) => t.includes("published yet"), "the bootstrap never showed");
+    expect(words).toContain("No Linux build of Kinas 0.1.0 is published yet");
+    expect(words).toContain("bun scripts/build-cli.ts --target bun-linux-x64");
+    expect(words).toContain(`scp dist/kinas-linux-x64 ${TARGET}:.local/bin/kinas`);
+    expect(await browser.execute(setup)).toContain("Once Kinas answers there.");
+
+    // The companion back, and Herdr not yet installed there: its row offers Install.
+    setCompanion(dataDir, true);
+    plantHerdrRelease(join(dataDir, "fake-vps", "companion"));
+    await checkAgain();
+    const before = await waitInPage(herdrRow, (r) => r !== null && r.text.includes("not installed"), "the Herdr row never said not installed");
+    expect(before!.state).toBe("bad");
+    expect(before!.text).toContain("Install Herdr");
+    expect(await browser.execute(bootstrap)).toContain("Kinas answers there.");
+    // Kinas never reads the key's value; here it is not set.
+    expect(await browser.execute(setup)).toContain("ANTHROPIC_API_KEYnot set");
+
+    await browser.execute(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('tr[data-check="herdr"] button')].find((b) => b.textContent === "Install Herdr")!.click(),
+    );
+    const after = await waitInPage(herdrRow, (r) => r !== null && r.state === "ok", "the Herdr row never turned green after Install", 60000);
+    expect(after!.text).toContain("0.9.5 · installed by Kinas");
+    expect(readFileSync(join(dataDir, "fake-vps", "companion", "bin", "herdr"), "utf8")).toContain("herdr 0.9.5");
+
+    const log = logSinceStart();
+    expect(log).toMatch(/setup: install herdr on vps-e2e/);
+    expect(log).toMatch(/remote: install ok in \d+ ms/);
     expect(log.includes(TARGET) || log.includes("fake-vps")).toBe(false);
   });
 });

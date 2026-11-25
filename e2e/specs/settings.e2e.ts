@@ -287,8 +287,8 @@ describe("Settings' section list and search", () => {
         desc: r.querySelector(".ui-setting-desc")?.textContent ?? "",
       })),
     );
-    // Where agents run's four rows (place.where, place.target, place.label, place.reachable) among them.
-    expect(rows).toHaveLength(31);
+    // Where agents run's seven rows (where, target, label, reachable; since slice 4 bootstrap, setup, clones) among them.
+    expect(rows).toHaveLength(34);
     expect(rows.every((r) => r.label !== "" && r.desc !== "")).toBe(true);
     // Rule 35: the connection is never seen here, so the three lines are open, not folded.
     const lines = await browser.execute(() => ({

@@ -147,7 +147,8 @@ export function twinOf(projects: string, folder: string): string | null {
 }
 
 export async function openWorkspace(d: ActionDeps, folder: string, label: string): Promise<Outcome<"focused" | "created">> {
-  const dir = twinOf(d.paths.projects, folder);
+  // The first projects folder that has it (slice 5.3: the Linux machine's `roots`).
+  const dir = d.paths.projectRoots.map((r) => twinOf(r, folder)).find((x) => x !== null) ?? null;
   if (dir === null) return { cannot: "not-there" };
   const v = await view(d.herdr);
   if (v === null) return { cannot: "herdr-not-running" };

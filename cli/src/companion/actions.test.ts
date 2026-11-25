@@ -81,7 +81,7 @@ function world(workspaces: Ws[], opts: { down?: boolean; installed?: boolean; in
       recordWritten(paths, paths.relayInstruction, { item: "relay-instruction", version: "1", sha256, at: 1 }, 1);
     }
   }
-  mkdirSync(paths.projects, { recursive: true });
+  mkdirSync(paths.projectRoots[0]!, { recursive: true });
   const fake = fakeHerdr(workspaces, opts);
   let now = 1_794_834_000_000;
   const deps: ActionDeps = { paths, herdr: fake.herdr, now: () => now };
@@ -198,22 +198,34 @@ describe("view, focus and open-workspace", () => {
 
   test("open-workspace: the twin is made once with its label, then found again by it", async () => {
     const w = world([other()]);
-    mkdirSync(join(w.paths.projects, "kinas", "docs"), { recursive: true });
+    mkdirSync(join(w.paths.projectRoots[0]!, "kinas", "docs"), { recursive: true });
     expect(await openWorkspace(w.deps, "kinas/docs", "kinas/docs")).toEqual({ done: "created" });
-    expect(w.calls.at(-1)).toEqual(["workspace", "create", "--cwd", join(w.paths.projects, "kinas", "docs"), "--label", "kinas/docs", "--focus"]);
+    expect(w.calls.at(-1)).toEqual(["workspace", "create", "--cwd", join(w.paths.projectRoots[0]!, "kinas", "docs"), "--label", "kinas/docs", "--focus"]);
     expect(await openWorkspace(w.deps, "kinas/docs", "kinas/docs")).toEqual({ done: "focused" });
     expect(w.workspaces.filter((x) => x.label === "kinas/docs")).toHaveLength(1);
+  });
+
+  test("with two projects folders, the twin is found in the first that has it (slice 5.3)", async () => {
+    const w = world([other()]);
+    const second = realpathSync(mkdtempSync(join(tmpdir(), "kinas-second-")));
+    w.paths.projectRoots.push(second);
+    mkdirSync(join(second, "notes"));
+    expect(await openWorkspace(w.deps, "notes", "notes")).toEqual({ done: "created" });
+    expect(w.calls.at(-1)).toEqual(["workspace", "create", "--cwd", join(second, "notes"), "--label", "notes", "--focus"]);
+    mkdirSync(join(w.paths.projectRoots[0]!, "notes"));
+    expect(await openWorkspace(w.deps, "notes", "notes-2")).toEqual({ done: "created" });
+    expect(w.calls.at(-1)).toEqual(["workspace", "create", "--cwd", join(w.paths.projectRoots[0]!, "notes"), "--label", "notes-2", "--focus"]);
   });
 
   test("a folder not under the projects folder is not there, and Herdr is never asked", async () => {
     const w = world([other()]);
     const outside = realpathSync(mkdtempSync(join(tmpdir(), "kinas-outside-")));
-    symlinkSync(outside, join(w.paths.projects, "escape"));
-    writeFileSync(join(w.paths.projects, "a-file"), "");
+    symlinkSync(outside, join(w.paths.projectRoots[0]!, "escape"));
+    writeFileSync(join(w.paths.projectRoots[0]!, "a-file"), "");
     for (const folder of ["missing", "escape", "a-file"]) expect(await openWorkspace(w.deps, folder, folder)).toEqual({ cannot: "not-there" });
     expect(w.calls).toEqual([]);
-    expect(twinOf(w.paths.projects, "")).toBe(w.paths.projects);
+    expect(twinOf(w.paths.projectRoots[0]!, "")).toBe(w.paths.projectRoots[0]!);
     mkdirSync(join(outside, "x"));
-    expect(twinOf(w.paths.projects, "escape/x")).toBeNull();
+    expect(twinOf(w.paths.projectRoots[0]!, "escape/x")).toBeNull();
   });
 });

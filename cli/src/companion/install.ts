@@ -55,6 +55,7 @@ export type Cannot =
   | "checksum"
   | "archive"
   | "foreign"
+  | "no-projects"
   | "foreign-unit"
   | "herdr-missing"
   | "herdr-status"
@@ -516,11 +517,23 @@ async function crewTools(d: SetupDeps): Promise<Outcome> {
   return DONE;
 }
 
+const isDir = (path: string) => {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
 async function clone(d: SetupDeps, folder: string, repo: string): Promise<Outcome> {
   if (!validFolder(folder) || !validRepo(repo)) return cannot("bad-request");
-  const target = join(d.paths.projects, folder);
-  if (existsSync(target)) return cannot("exists");
-  mkdirSync(d.paths.projects, { recursive: true });
+  // Into the first projects folder. A folder the captain named is never made by Kinas (the captain, 2026-11-25); only
+  // the default ~/projects is, by the first clone.
+  const first = d.paths.projectRoots[0]!;
+  if (d.paths.projectsNamed && !isDir(first)) return cannot("no-projects");
+  if (d.paths.projectRoots.some((r) => existsSync(join(r, folder)))) return cannot("exists");
+  const target = join(first, folder);
+  if (!d.paths.projectsNamed) mkdirSync(first, { recursive: true });
   const program = d.paths.root !== null ? d.paths.gh : (d.which("gh") ?? "gh");
   const r = await d.run([program, "repo", "clone", repo, target, "--", "--quiet"], { timeoutMs: GIT_MS * 2 });
   return r.ok && cloned(target) ? DONE : cannot("clone");

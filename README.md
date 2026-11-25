@@ -84,6 +84,11 @@ Where each section comes from — every source is read-only, and one that cannot
 ```
 
 `hub` is relative to `root`. Without `harness`, the launch screen shows the agent most live Herdr sessions run.
+Amended 2026-11-25 (the factory in the cloud, slice 5.3): on the Linux machine the projects can live in more than one
+folder, `"roots": ["~/miraside", "~/personal"]`, each an absolute or `~/` path, none inside another. `kinas context`,
+the session hook and the companion's setup check, Clone and Open in the terminal read it. Clone puts a folder in the
+first one, and Kinas never makes a folder named there. Without it the Linux machine's root is `~/projects`. On the Mac
+`roots` is not read: the root is Settings → Projects folder.
 Amended 2026-09-25 (the first mate): without `firstmate_home` or `FM_HOME`, Firstmate's home is Kinas's own clone,
 `<data dir>/firstmate` — the example's value.
 

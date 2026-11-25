@@ -269,6 +269,7 @@ pub fn cannot_words(code: &str, label: &str) -> String {
         "outside-root" => "the server's folder is outside the test machine".to_string(),
         "systemd" => format!("systemd's user manager on {label} did not do it"),
         "exists" => "a folder of that name is already there, so nothing was written over it".to_string(),
+        "no-projects" => "the first projects folder you named there isn't there, and Kinas makes no folder you named".to_string(),
         "git" => "the clone of Firstmate at Kinas's pin failed".to_string(),
         "no-firstmate" => "Firstmate is not cloned yet".to_string(),
         "not-json" => "Firstmate's .claude/settings.local.json is not a JSON object, so it was left as it is".to_string(),
@@ -405,5 +406,19 @@ mod tests {
             assert!(!words.contains("could not do it"), "{code} fell through");
         }
         assert_eq!(cannot_words("weird", "vps-1"), "Not installed: Kinas on vps-1 could not do it");
+    }
+
+    /// Every refusal the companion can send (`install.ts` `Cannot`) has words here, so a new one is never "could not do
+    /// it" by accident. `bad-request` is a Mac bug, never the captain's to act on, and keeps the plain line.
+    #[test]
+    fn every_code_the_companion_sends_has_words() {
+        let ts = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../cli/src/companion/install.ts")).unwrap();
+        let start = ts.find("export type Cannot =").unwrap();
+        let union = &ts[start..start + ts[start..].find(';').unwrap()];
+        let codes: Vec<&str> = union.split('"').skip(1).step_by(2).collect();
+        assert!(codes.contains(&"no-projects") && codes.len() > 20, "{codes:?}");
+        for code in codes.into_iter().filter(|c| *c != "bad-request") {
+            assert!(!cannot_words(code, "vps-1").contains("could not do it"), "{code} has no words on the Mac");
+        }
     }
 }

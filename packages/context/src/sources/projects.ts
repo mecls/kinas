@@ -197,10 +197,26 @@ export function namesFor(root: string, repos: readonly string[]): string[] {
   return repos.map((r) => ((byBase.get(basename(r)) ?? 0) > 1 ? relative(root, r) || basename(r) : basename(r)));
 }
 
-export async function readProjects(root: string): Promise<ProjectsReading> {
-  if (!existsSync(root)) throw new SourceError(`no projects folder at ${root}`);
-  const repos = await discoverRepos(root);
-  const names = namesFor(root, repos);
+/**
+ * Each folder's repositories. With more than one folder (the Linux machine's `roots`), a name two of them share is
+ * the folder's own name before it: `personal/notes` beside `miraside/notes`. A folder that isn't there is skipped; none
+ * there at all is the section's one line.
+ */
+export async function readProjects(rootOrRoots: string | readonly string[]): Promise<ProjectsReading> {
+  const roots = typeof rootOrRoots === "string" ? [rootOrRoots] : [...rootOrRoots];
+  const there = roots.filter((r) => existsSync(r));
+  if (there.length === 0) throw new SourceError(`no projects folder at ${roots.join(" or ")}`);
+  const found = await Promise.all(there.map(async (root) => ({ root, repos: await discoverRepos(root) })));
+  const repos = found.flatMap((f) => f.repos);
+  const names =
+    found.length === 1
+      ? namesFor(found[0]!.root, repos)
+      : (() => {
+          const all = found.flatMap((f) => namesFor(f.root, f.repos).map((name, i) => ({ name, root: f.root, repo: f.repos[i]! })));
+          const count = new Map<string, number>();
+          for (const a of all) count.set(a.name, (count.get(a.name) ?? 0) + 1);
+          return all.map((a) => ((count.get(a.name) ?? 0) > 1 ? `${basename(a.root)}/${a.name}` : a.name));
+        })();
 
   const readings = await Promise.all(repos.map((r, i) => readRepo(r, names[i]!)));
   return {

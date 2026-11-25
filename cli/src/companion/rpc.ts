@@ -67,10 +67,10 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
           v: RPC_VERSION,
           companion: { version: deps.version },
           herdr: herdr === null ? null : { version: herdr },
-          // Slice 4: the rows, the client folders already under ~/projects (names only), and the login's name for the
+          // Slice 4: the rows, the client folders already in the projects folders (names only), and the login's name for the
           // linger command the captain runs.
           checks: rows,
-          folders: folders(deps.paths.projects),
+          folders: [...new Set(deps.paths.projectRoots.flatMap((r) => folders(r)))].sort(),
           user: deps.setup.user,
         },
         exit: 0,

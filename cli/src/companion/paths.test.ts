@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "@kinas/context";
 import { companionPath, companionPaths, nodeDir } from "./paths.ts";
@@ -52,7 +52,20 @@ describe("the companion's PATH", () => {
 });
 
 test("kinas context on the Linux machine reads the companion's own folders (slice 5.3)", () => {
-  const paths = companionPaths({});
-  const config = loadConfig({ KINAS_CONFIG: join(tmpdir(), `kinas-none-${process.pid}.json`) }, "linux");
-  expect([config.root, config.firstmateHome, config.dataDir]).toEqual([paths.projects, paths.home, paths.state]);
+  const none = { KINAS_CONFIG: join(tmpdir(), `kinas-none-${process.pid}.json`) };
+  const paths = companionPaths(none);
+  const config = loadConfig(none, "linux");
+  expect([config.roots, config.firstmateHome, config.dataDir]).toEqual([paths.projectRoots, paths.home, paths.state]);
+  expect([paths.projectsNamed, paths.projectsProblem]).toEqual([false, null]);
+});
+
+test("the projects folders the captain names are the companion's and kinas context's alike, and never ~/projects (slice 5.3)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kinas-roots-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ roots: ["~/miraside", "~/personal"] }));
+  const paths = companionPaths({ KINAS_CONFIG: file });
+  const config = loadConfig({ KINAS_CONFIG: file }, "linux");
+  expect(paths.projectRoots).toEqual([join(homedir(), "miraside"), join(homedir(), "personal")]);
+  expect(config.roots).toEqual(paths.projectRoots);
+  expect([paths.projectsNamed, paths.projectsProblem]).toEqual([true, null]);
 });

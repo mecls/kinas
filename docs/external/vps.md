@@ -20,7 +20,10 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
   - `~/.local/share/kinas/firstmate` — Firstmate's home at the pin (`FM_HOME`; see `firstmate-home.md`);
   - `~/.local/bin/herdr` — Herdr, run by that path (never looked up on a PATH); `hello` reports its version, which
     Settings shows beside the Mac's;
-  - `~/projects/` — the client repositories' working copies (`KINAS_ROOT` there);
+  - `~/projects/` — the client repositories' working copies (`KINAS_ROOT` there). Amended 2026-11-25 (slice 5.3, the
+    captain's word): the projects folders are the `roots` list in `~/.config/kinas/config.json` when it is set (the
+    captain's: `~/miraside` and `~/personal`). `kinas context`, the session hook and the companion's check, Clone and
+    Open in the terminal read it, and Kinas never makes a folder named there. Without it, `~/projects`;
   - systemd user units `kinas-herdr.service` (`herdr server --session default`) and `kinas-companion.service`
     (`kinas companion run`), with lingering enabled by the captain (`loginctl enable-linger`, which needs root). Each
     unit sets `PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin`; the companion adds Node's directory (fnm's `default`
@@ -37,7 +40,7 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     starts, the companion writes Firstmate's `firstmate-server-owner` marker (`systemd user unit kinas-herdr.service`)
     beside the session's socket, so Firstmate never starts a second server; adopting a running server also writes
     `firstmate-server-replacing` for the change and runs `herdr --session default server stop`. Firstmate is cloned
-    beside its home and renamed in. Client folders are cloned with `gh repo clone <owner/repo> ~/projects/<folder>`,
+    beside its home and renamed in. Client folders are cloned with `gh repo clone <owner/repo> <first projects folder>/<folder>`,
     the repository read from the Mac's own folder's origin. Kinas's own Linux binary comes from the release of the
     installed version (`kinas-linux-x64`, `kinas-linux-arm64`); until one is published, Settings gives the two steps by
     hand.

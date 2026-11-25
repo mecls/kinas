@@ -49,7 +49,8 @@ so the script:
 
 **On the Linux machine** the same script runs, installed by the captain by hand, as the status line is. Kinas never
 writes under `~/.claude`. There `kinas context --agent` keeps no store and uses the companion's folders:
-- the projects root is `~/projects`, where client folders are cloned;
+- the projects folders are the `roots` setting in `~/.config/kinas/config.json`, for example
+  `{"roots": ["~/miraside", "~/personal"]}`, else `~/projects`. A session in any of them gets the packet;
 - the crew is Firstmate's home under `~/.local/share/kinas/firstmate`;
 - the context cache is in `~/.local/state/kinas`.
 

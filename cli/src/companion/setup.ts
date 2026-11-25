@@ -477,10 +477,27 @@ export function folders(projects: string): string[] {
   }
 }
 
+/** A folder as the captain writes it: `~/…` under the home. */
+function tilde(path: string, home: string): string {
+  return path === home ? "~" : path.startsWith(`${home}/`) ? `~/${path.slice(home.length + 1)}` : path;
+}
+
+/** Each projects folder and its count (slice 5.3: the `roots` setting); a named folder that isn't there is a warn. */
 async function projects(d: SetupDeps): Promise<Check> {
-  if (!existsSync(d.paths.projects)) return row("projects", "warn", "~/projects is not there yet: the first clone makes it");
-  const n = folders(d.paths.projects).length;
-  return row("projects", "ok", `~/projects · ${n} folder${n === 1 ? "" : "s"}`);
+  // Under a test root the root stands in for the home, as its folders do (paths.ts).
+  const home = d.paths.root ?? d.home;
+  const roots = d.paths.projectRoots;
+  if (!d.paths.projectsNamed && !existsSync(roots[0]!)) {
+    return row("projects", "warn", `${tilde(roots[0]!, home)} is not there yet: the first clone makes it`);
+  }
+  const parts = roots.map((r) => {
+    if (!existsSync(r)) return `${tilde(r, home)} is not there`;
+    const n = folders(r).length;
+    return `${tilde(r, home)} · ${n} folder${n === 1 ? "" : "s"}`;
+  });
+  const missing = roots.some((r) => !existsSync(r));
+  const problem = d.paths.projectsProblem ? ` · ${d.paths.projectsProblem}` : "";
+  return row("projects", missing || problem ? "warn" : "ok", `${parts.join(" · ")}${problem}`);
 }
 
 const ROWS: Record<CheckId, (d: SetupDeps) => Promise<Check>> = {

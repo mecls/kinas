@@ -65,7 +65,7 @@ describe("the rows", () => {
     mkdirSync(m.deps.paths.claudeHome, { recursive: true });
     writeFileSync(join(m.deps.paths.claudeHome, ".credentials.json"), "{}");
     writeFileSync(m.deps.paths.gh, "#!/bin/sh\n");
-    mkdirSync(join(m.deps.paths.projects, "shop"), { recursive: true });
+    mkdirSync(join(m.deps.paths.projectRoots[0]!, "shop"), { recursive: true });
     const r = byId(await checks({ ...m.deps, node: `${m.deps.home}/.local/share/fnm/aliases/default/bin` }));
     expect(r.herdr).toEqual({ id: "herdr", state: "ok", detail: "0.9.5 · installed by Kinas" });
     expect(r["herdr-server"]).toEqual({ id: "herdr-server", state: "ok", detail: "running under systemd" });
@@ -290,5 +290,55 @@ describe("pure readings", () => {
     const os = 'NAME="Debian GNU/Linux"\nPRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nID=debian\n';
     expect(systemLine(os, "x64", { cores: 8, memBytes: 15 * 1024 ** 3, freeBytes: 296 * 1024 ** 3 })).toBe("Debian GNU/Linux 13 (trixie) · x86_64 · 8 cores · 15 GB · 296 GB free");
     expect(systemLine(null, "arm64", { cores: 4, memBytes: 8 * 1024 ** 3, freeBytes: null })).toBe("Linux · aarch64 · 4 cores · 8 GB");
+  });
+});
+
+describe("the projects folders the captain names (slice 5.3)", () => {
+  /** A machine whose `roots` setting names two folders under the test root, the second not made yet. */
+  function named() {
+    const m = fakeMachine();
+    const root = m.deps.paths.root!;
+    m.deps.paths.projectRoots = [join(root, "miraside"), join(root, "personal")];
+    m.deps.paths.projectsNamed = true;
+    mkdirSync(join(root, "miraside", "portal"), { recursive: true });
+    mkdirSync(join(root, "miraside", "site"), { recursive: true });
+    return m;
+  }
+
+  test("the row counts each folder; one not there is a warn, and nothing makes it", async () => {
+    const m = named();
+    expect(byId(await checks(m.deps)).projects).toEqual({ id: "projects", state: "warn", detail: "~/miraside · 2 folders · ~/personal is not there" });
+    mkdirSync(join(m.deps.paths.root!, "personal", "notes"), { recursive: true });
+    expect(byId(await checks(m.deps)).projects).toEqual({ id: "projects", state: "ok", detail: "~/miraside · 2 folders · ~/personal · 1 folder" });
+    expect(readdirSync(m.deps.paths.root!)).not.toContain("projects");
+  });
+
+  test("a setting that could not all be used says so on the row", async () => {
+    const m = named();
+    mkdirSync(join(m.deps.paths.root!, "personal"));
+    m.deps.paths.projectsProblem = 'roots: left out "relative" (not an absolute or ~/ folder, or inside another)';
+    expect(byId(await checks(m.deps)).projects?.state).toBe("warn");
+    expect(byId(await checks(m.deps)).projects?.detail).toContain('left out "relative"');
+  });
+
+  test("Clone goes into the first folder, never over a folder of that name in any of them, and never makes a named one", async () => {
+    const m = named();
+    expect(await install({ item: "clone", folder: "shop", repo: "acme/shop" }, m.deps)).toEqual({ done: true });
+    expect(m.ran.find((a) => a[0] === m.deps.paths.gh && a[1] === "repo")).toEqual([m.deps.paths.gh, "repo", "clone", "acme/shop", join(m.deps.paths.root!, "miraside", "shop"), "--", "--quiet"]);
+    mkdirSync(join(m.deps.paths.root!, "personal", "notes"), { recursive: true });
+    expect(await install({ item: "clone", folder: "notes", repo: "acme/notes" }, m.deps)).toEqual({ cannot: "exists" });
+    const gone = named();
+    rmSync(join(gone.deps.paths.root!, "miraside"), { recursive: true });
+    expect(await install({ item: "clone", folder: "shop", repo: "acme/shop" }, gone.deps)).toEqual({ cannot: "no-projects" });
+    expect(readdirSync(gone.deps.paths.root!)).not.toContain("miraside");
+  });
+
+  test("hello lists the folders of every projects folder, each name once", async () => {
+    const m = named();
+    mkdirSync(join(m.deps.paths.root!, "personal", "notes"), { recursive: true });
+    mkdirSync(join(m.deps.paths.root!, "personal", "site"), { recursive: true });
+    const deps = { paths: m.deps.paths, version: "0.1.0", herdrVersion: async () => null, readNow: async () => {}, now: () => 1, herdr: m.deps.herdr, setup: m.deps };
+    const said = await rpc('{"verb":"hello"}', deps);
+    expect((said.reply as { folders: string[] }).folders).toEqual(["notes", "portal", "site"]);
   });
 });

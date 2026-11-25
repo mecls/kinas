@@ -1,11 +1,12 @@
 // Where `kinas companion` keeps its state and finds Firstmate's home, Herdr, the client folders and the first mate's
 // program on the VPS (docs/external/vps.md): ~/.local/state/kinas, ~/.local/share/kinas/firstmate, ~/.local/bin/herdr,
-// ~/projects and `claude` (found by the pane's own login shell there), or under <KINAS_COMPANION_ROOT> when that is set
+// the projects folders (the `roots` setting, else ~/projects) and `claude` (found by the pane's own login shell there), or under <KINAS_COMPANION_ROOT> when that is set
 // (tests, the e2e's fake VPS): state/, firstmate/, bin/herdr, projects/ and bin/claude, a stand-in that records its
 // arguments — so no test on this Mac ever types the real `claude` into a pane.
 
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { loadConfig } from "@kinas/context";
 
 export interface Paths {
   /** The companion's own folder: the latest reading, its event log and its cursors. */
@@ -16,8 +17,16 @@ export interface Paths {
   reading: string;
   /** Herdr where setup puts it and the captain's own install already is: run by this path, never looked up on a PATH. */
   herdr: string;
-  /** The client folders' working copies (`KINAS_ROOT` there): Open in the terminal's folders live under it. */
-  projects: string;
+  /**
+   * The projects folders (the factory in the cloud, slice 5.3): the `roots` setting in `~/.config/kinas/config.json`,
+   * as `kinas context` reads it, else `~/projects`. Open in the terminal finds a folder's twin in the first that has
+   * it; Clone puts a folder in the first; the setup check counts each.
+   */
+  projectRoots: string[];
+  /** True when the folders were named (the setting): Kinas then makes none of them, and Clone needs the first there. */
+  projectsNamed: boolean;
+  /** The setting's one line when part of it could not be used. */
+  projectsProblem: string | null;
   /** The first mate's program, as the launcher types it into a pane: `claude`, or a test root's stand-in. */
   claude: string;
   // Setup (build spec §12 slice 4.2). Under a test root each of these is inside it, so no test writes a unit, a marker
@@ -61,7 +70,11 @@ export function companionPaths(env: Record<string, string | undefined> = process
   const state = root ? join(root, "state") : join(home, ".local", "state", "kinas");
   const fm = root ? join(root, "firstmate") : join(home, ".local", "share", "kinas", "firstmate");
   const herdr = root ? join(root, "bin", "herdr") : join(home, ".local", "bin", "herdr");
-  const projects = root ? join(root, "projects") : join(home, "projects");
+  // A test root has one folder; on the machine, the setting as `kinas context` reads it (one reader, so the two agree).
+  const config = root ? null : loadConfig(env, "linux");
+  const fallback = root ? join(root, "projects") : join(home, "projects");
+  const named = config !== null && !(config.roots.length === 1 && config.roots[0] === join(homedir(), "projects"));
+  const projectRoots = named ? config!.roots : [fallback];
   const claude = root ? join(root, "bin", "claude") : "claude";
   const setup = root
     ? {
@@ -103,7 +116,8 @@ export function companionPaths(env: Record<string, string | undefined> = process
         managedSettings: "/etc/claude-code/managed-settings.json",
         tmp: "/tmp",
       };
-  return { state, home: fm, reading: join(state, "reading.json"), herdr, projects, claude, ...setup, ...answerPath, workers: join(state, "workers") };
+  const projectsProblem = config?.problem ?? null;
+  return { state, home: fm, reading: join(state, "reading.json"), herdr, projectRoots, projectsNamed: named, projectsProblem, claude, ...setup, ...answerPath, workers: join(state, "workers") };
 }
 
 /**

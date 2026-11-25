@@ -331,7 +331,7 @@ describe("the crew's tools and the client folders", () => {
   test("clone: gh repo clone into ~/projects/<folder>, never over a folder already there", async () => {
     const m = fakeMachine();
     expect(await install({ item: "clone", folder: "shop", repo: "acme/shop" }, m.deps)).toEqual({ done: true });
-    expect(m.ran.find((a) => a[0] === m.deps.paths.gh && a[1] === "repo")).toEqual([m.deps.paths.gh, "repo", "clone", "acme/shop", join(m.deps.paths.projects, "shop"), "--", "--quiet"]);
+    expect(m.ran.find((a) => a[0] === m.deps.paths.gh && a[1] === "repo")).toEqual([m.deps.paths.gh, "repo", "clone", "acme/shop", join(m.deps.paths.projectRoots[0]!, "shop"), "--", "--quiet"]);
     expect(await install({ item: "clone", folder: "shop", repo: "acme/shop" }, m.deps)).toEqual({ cannot: "exists" });
     expect(await install({ item: "clone", folder: "..", repo: "acme/shop" }, m.deps)).toEqual({ cannot: "bad-request" });
   });

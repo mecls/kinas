@@ -6,6 +6,11 @@
 //
 // Environment variables win over the file: KINAS_ROOT, FM_HOME, HERDR_SOCKET_PATH, CODEX_HOME, PI_CODING_AGENT_DIR,
 // CLAUDE_CONFIG_DIR.
+//
+// On the Linux machine (the factory in the cloud, slice 5.3, the captain's word 2026-11-25) the projects can live in
+// more than one folder: `"roots": ["~/miraside", "~/personal"]`. `kinas context`, the session hook and the companion's
+// setup check, Clone and Open in the terminal all read it. On the Mac the root stays one folder, the app's Settings →
+// Projects folder (paths.rs reads the same), and `roots` is not read there.
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -15,8 +20,10 @@ import { dataDir, readSetting } from "@kinas/store/sqlite-readonly";
 export interface KinasConfig {
   org: string;
   instance: string;
-  /** The folder holding every project. */
+  /** The folder holding every project; on the Linux machine, the first of `roots`. */
   root: string;
+  /** Every projects folder: the root alone on the Mac; on the Linux machine, the `roots` setting, at least one. */
+  roots: string[];
   /** Where the org-level conventions live: AGENTS.md and con-*.md. Defaults to the root. */
   hub: string;
   firstmateHome: string;
@@ -80,11 +87,19 @@ export function loadConfig(env: Env = process.env, platform: string = process.pl
   const saved = readSetting(dataDir(env, platform), "projects_root");
   const savedRoot = typeof saved === "string" && saved.trim() !== "" ? saved.trim() : undefined;
   // Trimmed, and blank is unset, as the app reads it (paths.rs `projects_root_with`): the two judge the same root.
-  const root = expand(env.KINAS_ROOT?.trim() || savedRoot || text("root") || (linux ? "~/projects" : "~/Documents/Projects/SintraLabs"));
+  const single = env.KINAS_ROOT?.trim() || savedRoot || undefined;
+  const listed = linux && !single ? rootsOf(raw.roots) : null;
+  if (listed?.problem) problem ??= `${path}: ${listed.problem}`;
+  const roots =
+    listed && listed.roots.length > 0
+      ? listed.roots
+      : [expand(single || text("root") || (linux ? "~/projects" : "~/Documents/Projects/SintraLabs"))];
+  const root = roots[0]!;
   return {
     org: text("org") ?? "SintraLabs",
     instance: text("instance") ?? "operations",
     root,
+    roots,
     hub: expand(text("hub") ?? ".", root),
     // Kinas's own clone of Firstmate (the first mate, 2026-09-25): `kinas crew setup` puts it in the data folder.
     firstmateHome: expand(env.FM_HOME || text("firstmate_home") || (linux ? "~/.local/share/kinas/firstmate" : join(dataDir(env, platform), "firstmate"))),
@@ -112,6 +127,31 @@ function real(path: string): string {
 const under = (p: string, root: string): boolean => p === root || p.startsWith(`${root}/`);
 
 /**
+ * The `roots` setting: absolute paths or `~/…`, each once, none inside another (its projects would be read twice). An
+ * entry that isn't one is left out with one line; a value that isn't a list is no setting at all.
+ */
+export function rootsOf(value: unknown): { roots: string[]; problem: string | null } | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return { roots: [], problem: "roots is not a list of folders; using the default" };
+  const out: string[] = [];
+  const left: string[] = [];
+  for (const v of value) {
+    const s = typeof v === "string" ? v.trim() : "";
+    if (s === "" || !(s === "~" || s.startsWith("~/") || isAbsolute(s))) {
+      left.push(JSON.stringify(v));
+      continue;
+    }
+    const r = resolve(expand(s));
+    if (out.some((o) => under(r, o) || under(o, r))) {
+      left.push(JSON.stringify(v));
+      continue;
+    }
+    out.push(r);
+  }
+  return { roots: out, problem: left.length > 0 ? `roots: left out ${left.join(", ")} (not an absolute or ~/ folder, or inside another)` : null };
+}
+
+/**
  * True when `path` is the root or inside it. Both are judged as written and as they are on disk (`resolve` drops a
  * trailing slash and `..`; `realpath` follows a symlinked root or a symlinked folder), so a hook started in a real
  * path under a root written through a link still gets its packet. Either side is enough here: a session's folder is
@@ -119,6 +159,8 @@ const under = (p: string, root: string): boolean => p === root || p.startsWith(`
  * root (open.ts `at`) — because that path is handed to the app.
  */
 export function insideRoot(config: KinasConfig, path: string): boolean {
-  const root = resolve(config.root);
-  return under(resolve(path), root) || under(real(path), real(root));
+  return config.roots.some((r) => {
+    const root = resolve(r);
+    return under(resolve(path), root) || under(real(path), real(root));
+  });
 }

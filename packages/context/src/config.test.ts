@@ -72,3 +72,20 @@ describe("Firstmate's home", () => {
     expect(loadConfig({ ...withFile("fm-env.json", '{"firstmate_home":"/from/file"}'), FM_HOME: "/from/env" }).firstmateHome).toBe("/from/env");
   });
 });
+
+describe("on the Linux machine (the factory in the cloud, slice 5.3)", () => {
+  test("the defaults are the companion's folders, and what is set still wins", () => {
+    const env = { KINAS_CONFIG: join(dir, "linux-none.json") };
+    const linux = loadConfig(env, "linux");
+    expect([linux.root, linux.firstmateHome, linux.dataDir]).toEqual([
+      join(homedir(), "projects"),
+      join(homedir(), ".local/share/kinas/firstmate"),
+      join(homedir(), ".local/state/kinas"),
+    ]);
+    const set = loadConfig({ ...env, KINAS_ROOT: "/srv/clients", FM_HOME: "/srv/fm", KINAS_DATA_DIR: noStore }, "linux");
+    expect([set.root, set.firstmateHome, set.dataDir]).toEqual(["/srv/clients", "/srv/fm", noStore]);
+    // On the Mac, unchanged.
+    const mac = loadConfig({ ...env, KINAS_DATA_DIR: noStore }, "darwin");
+    expect([mac.root, mac.firstmateHome]).toEqual([join(homedir(), "Documents/Projects/SintraLabs"), join(noStore, "firstmate")]);
+  });
+});

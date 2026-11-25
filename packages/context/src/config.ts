@@ -47,7 +47,12 @@ function expand(path: string, base: string = homedir()): string {
   return isAbsolute(path) ? path : resolve(base, path);
 }
 
-export function loadConfig(env: Env = process.env): KinasConfig {
+/**
+ * On the Linux machine (slice 5.3) the defaults are the companion's: the client folders it clones into `~/projects`, and
+ * Firstmate's home under `~/.local/share/kinas` (`cli/src/companion/paths.ts`; a test there holds the two equal).
+ */
+export function loadConfig(env: Env = process.env, platform: string = process.platform): KinasConfig {
+  const linux = platform === "linux";
   const path = configPath(env);
   let raw: Record<string, unknown> = {};
   let file: string | null = null;
@@ -72,24 +77,24 @@ export function loadConfig(env: Env = process.env): KinasConfig {
 
   // The projects folder: KINAS_ROOT, then what the app's Settings page saved (read from the store, read-only, so it
 // works with Kinas quit), then this file's `root`, then the default (reader R1, amended 2026-09-16).
-  const saved = readSetting(dataDir(env), "projects_root");
+  const saved = readSetting(dataDir(env, platform), "projects_root");
   const savedRoot = typeof saved === "string" && saved.trim() !== "" ? saved.trim() : undefined;
   // Trimmed, and blank is unset, as the app reads it (paths.rs `projects_root_with`): the two judge the same root.
-  const root = expand(env.KINAS_ROOT?.trim() || savedRoot || text("root") || "~/Documents/Projects/SintraLabs");
+  const root = expand(env.KINAS_ROOT?.trim() || savedRoot || text("root") || (linux ? "~/projects" : "~/Documents/Projects/SintraLabs"));
   return {
     org: text("org") ?? "SintraLabs",
     instance: text("instance") ?? "operations",
     root,
     hub: expand(text("hub") ?? ".", root),
     // Kinas's own clone of Firstmate (the first mate, 2026-09-25): `kinas crew setup` puts it in the data folder.
-    firstmateHome: expand(env.FM_HOME || text("firstmate_home") || join(dataDir(env), "firstmate")),
+    firstmateHome: expand(env.FM_HOME || text("firstmate_home") || (linux ? "~/.local/share/kinas/firstmate" : join(dataDir(env, platform), "firstmate"))),
     herdrSocket: expand(env.HERDR_SOCKET_PATH || text("herdr_socket") || "~/.config/herdr/herdr.sock"),
     codexHome: expand(env.CODEX_HOME || text("codex_home") || "~/.codex"),
     piAgentDir: expand(env.PI_CODING_AGENT_DIR || text("pi_agent_dir") || "~/.pi/agent"),
     claudeDir: expand(env.CLAUDE_CONFIG_DIR || text("claude_dir") || "~/.claude"),
     harness: text("harness") ?? null,
     model: text("model") ?? null,
-    dataDir: dataDir(env),
+    dataDir: dataDir(env, platform),
     file,
     problem,
   };

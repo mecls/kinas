@@ -52,6 +52,13 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     - The reserved paths no worker may read: `~/vault`, `~/.config/last30days`, `~/.config/brain`, `~/.config/search.env`, `~/.config/parallel.env`, `~/.config/agentwikis.env`, `~/.local/share/com.vercel.cli`, `~/.now`, `~/.local/share/now`, `~/.config/obsidian-headless` and `~/.local/state/kinas`.
 - **Claude Code** at `~/.local/bin/claude`, signed in by the captain, in the VPS's terminal, with their own
   subscription. `ANTHROPIC_API_KEY` must not be set there: its presence (never its value) is checked.
+  - Amended 2026-11-25 (slices 5.1 and 5.3). The captain installs two scripts there by hand, each staged by Kinas
+    in the home folder with its sha256 and tested there first. Kinas never writes under `~/.claude`.
+    - The status line writes `~/.local/state/kinas/claude-rate-limits.json`.
+    - The `SessionStart` hook is `integrations/claude-code/kinas-context.sh`, the Mac's own.
+
+    Both exit at once in a worker and treat their input as data only. Both sit outside every worktree, where a
+    sandboxed worker can't write (ADR 0028).
 
 ## Who reads it
 

@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { companionPath, nodeDir } from "./paths.ts";
+import { loadConfig } from "@kinas/context";
+import { companionPath, companionPaths, nodeDir } from "./paths.ts";
 
 // The companion's PATH (build spec §12 slice 2.0; §17 2026-11-24 #1): the home lab showed that neither a
 // non-interactive ssh nor a Herdr server started outside a login shell has ~/.local/bin or Node on its PATH.
@@ -48,4 +49,10 @@ describe("the companion's PATH", () => {
     writeFileSync(join(home, ".volta/bin/node"), "");
     expect(nodeDir(home, runs)).toBeNull();
   });
+});
+
+test("kinas context on the Linux machine reads the companion's own folders (slice 5.3)", () => {
+  const paths = companionPaths({});
+  const config = loadConfig({ KINAS_CONFIG: join(tmpdir(), `kinas-none-${process.pid}.json`) }, "linux");
+  expect([config.root, config.firstmateHome, config.dataDir]).toEqual([paths.projects, paths.home, paths.state]);
 });

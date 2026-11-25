@@ -115,3 +115,9 @@ test("this Mac's host is never the Linux machine's row, which is its own while t
     rmSync(d, { recursive: true, force: true });
   }
 });
+
+test("the data folder is the app's on the Mac and the companion's state folder on the Linux machine (slice 5.3)", () => {
+  expect(dataDir({}, "darwin")).toBe(join(homedir(), "Library/Application Support/ai.sintralabs.kinas"));
+  expect(dataDir({}, "linux")).toBe(join(homedir(), ".local/state/kinas"));
+  expect(dataDir({ KINAS_DATA_DIR: "/srv/kinas" }, "linux")).toBe("/srv/kinas");
+});

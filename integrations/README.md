@@ -38,6 +38,23 @@ hooks already in `~/.claude/settings.json`:
 
 It finds `kinas` on `PATH`, then at `~/.local/bin/kinas` (where the app links it); `KINAS_BIN` overrides both.
 
+Amended 2026-11-25 (the factory in the cloud, slice 5.3; the captain's rule). Hooks run outside Claude Code's sandbox,
+so the script:
+- exits at once in a Firstmate worker (`FM_TASK_ID` set), before it reads anything. A worker's usage comes from the
+  transcript recount, and its brief carries what it needs.
+- treats its input as data only. The hook's JSON is read and dropped. The project folder reaches `kinas` as one
+  argument and must be an absolute path. Nothing is run through the shell: no `eval`, no command built from input.
+
+`kinas-context.test.ts` proves both, and that a missing or failing `kinas` never fails a session.
+
+**On the Linux machine** the same script runs, installed by the captain by hand, as the status line is. Kinas never
+writes under `~/.claude`. There `kinas context --agent` keeps no store and uses the companion's folders:
+- the projects root is `~/projects`, where client folders are cloned;
+- the crew is Firstmate's home under `~/.local/share/kinas/firstmate`;
+- the context cache is in `~/.local/state/kinas`.
+
+The plan rows say they are read by the app on the Mac.
+
 ## The brief convention
 
 A brief Kinas composes for the crew begins with the packet's `## Conventions` and `## Projects` sections

@@ -17,6 +17,7 @@ import { FIRSTMATE_REPO, FIRSTMATE_PIN, TOOLS, releaseUrl, type LinuxRelease } f
 import { chmodSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { HERDR, herdrUnit } from "./herdr.ts";
+import { unitPath } from "./paths.ts";
 import {
   archOf,
   cloned,
@@ -231,7 +232,7 @@ async function companionService(d: SetupDeps): Promise<Outcome> {
     `ExecStart=${join(d.paths.bin, "kinas")} companion run`,
     "Restart=always",
     "RestartSec=5",
-    `Environment=PATH=${d.path}`,
+    `Environment=PATH=${unitPath(d.home)}`,
     "",
     "[Install]",
     "WantedBy=default.target",
@@ -289,7 +290,7 @@ async function herdrService(d: SetupDeps, adopt: boolean): Promise<Outcome> {
       return cannot("herdr-stop");
     }
   }
-  const started = await startUnit(d, HERDR_UNIT, herdrUnit(d.paths.herdr, SESSION, d.path, UNIT_HEADER));
+  const started = await startUnit(d, HERDR_UNIT, herdrUnit(d.paths.herdr, SESSION, unitPath(d.home), UNIT_HEADER));
   if ("cannot" in started) {
     undo();
     return started;

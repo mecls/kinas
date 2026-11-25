@@ -96,3 +96,11 @@ export function companionPath(home: string, executable: (path: string) => boolea
   const node = nodeDir(home, executable);
   return [join(home, ".local", "bin"), ...(node ? [node] : []), ...SYSTEM_PATH].join(":");
 }
+
+/**
+ * The PATH both systemd units set (the captain, 2026-11-25; build spec §17): ~/.local/bin, then fnm's default alias,
+ * then the system's — fixed, whether or not Node is there yet, so a pane under Herdr's unit finds claude, node and herdr.
+ */
+export function unitPath(home: string): string {
+  return [join(home, ".local", "bin"), join(home, NODE_DIRS[0]!), ...SYSTEM_PATH].join(":");
+}

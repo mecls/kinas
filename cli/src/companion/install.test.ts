@@ -90,7 +90,10 @@ describe("install herdr-service (§17 2026-11-24 #2, 2026-11-25 #6)", () => {
     const unit = readFileSync(join(m.deps.paths.units, HERDR_UNIT), "utf8");
     expect(unit.startsWith(UNIT_HEADER)).toBe(true);
     expect(unit).toContain(`ExecStart=${m.deps.paths.herdr} server --session default`);
-    expect(unit).toContain(`Environment=PATH=${m.deps.path}`);
+    // The captain's PATH (2026-11-25): ~/.local/bin, fnm's default alias, the system's — even with no Node found.
+    const home = m.deps.home;
+    expect(m.deps.node).toBeNull();
+    expect(unit).toContain(`Environment=PATH=${home}/.local/bin:${home}/.local/share/fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin`);
     expect(m.state.units[HERDR_UNIT]).toBe("active");
     expect(m.herdrCalls.map((c) => c.join(" "))).not.toContain("server stop");
   });
@@ -152,6 +155,7 @@ describe("the companion's own unit", () => {
     const unit = readFileSync(join(m.deps.paths.units, COMPANION_UNIT), "utf8");
     expect(unit).toContain(`ExecStart=${join(m.deps.paths.bin, "kinas")} companion run`);
     expect(unit).toContain("Restart=always");
+    expect(unit).toContain(`Environment=PATH=${m.deps.home}/.local/bin:${m.deps.home}/.local/share/fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin`);
     expect(m.state.units[COMPANION_UNIT]).toBe("active");
   });
 });

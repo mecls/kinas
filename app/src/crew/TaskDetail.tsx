@@ -4,7 +4,7 @@ import type { SeatedFolder } from "../shell/folders.ts";
 import type { KeyboardEvent } from "react";
 import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
-import { BADGE_OF, lanesOf, reviewLine, worktreeLine } from "./board.ts";
+import { BADGE_OF, lanesOf, localMovedLine, reviewLine, shortCommit, worktreeLine } from "./board.ts";
 import { bareHead, checksOf, detailFailure, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
 import { ageText, copiedText } from "./inbox.ts";
 
@@ -76,6 +76,7 @@ export function TaskDetail({
   const pr = shown ? prDetail(shown) : null;
   const review = shown ? reviewLine(shown.task.review) : null;
   const planted = shown ? worktreeLine(shown.task.worktree) : null;
+  const moved = shown ? shown.task.local_moved : null;
   const worktree = shown ? worktreeWord(shown) : null;
   /** The footer acts on the newest open decision — of the task selected, never of the one shown before it. */
   const decision = view.current && shown && !gone ? (shown.decisions[0] ?? null) : null;
@@ -189,6 +190,18 @@ export function TaskDetail({
                       ))}
                     </ul>
                   )}
+                </>
+              )}
+              {/* ADR 0029: a local-only task's local default branch moved since launch — both commits, before landing. */}
+              {moved && (
+                <>
+                  <p className="crew-review" data-testid="crew-detail-local-moved">
+                    {localMovedLine(moved)}
+                  </p>
+                  <ul className="crew-review-paths" data-testid="crew-detail-local-moved-commits">
+                    <li>at launch {shortCommit(moved.was)}</li>
+                    <li>now {shortCommit(moved.now)}</li>
+                  </ul>
                 </>
               )}
               {/* 1.12: the PR a held task names, opened by its task id — the URL stays in Rust. */}

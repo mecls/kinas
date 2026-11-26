@@ -11,6 +11,7 @@ use super::snapshot::{pr_number, Fleet, TaskFacts};
 use super::word::{word_of, word_without_gone, PrWordInput, WordInput};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// The last good lane reading (`capacity::Lanes`), in `settings`.
@@ -93,6 +94,34 @@ pub(crate) struct Found {
     pub branches: HashMap<String, Touches>,
     /// Each task's worktree scanned this cycle on the VPS (ADR 0028), by task id; a task not scanned keeps its last.
     pub worktrees: HashMap<String, Touches>,
+    /// ADR 0029: the Linux machine's local-only tasks whose local default branch moved since launch, the whole set this
+    /// cycle, by task id. None on the Mac, or from a companion that doesn't say: every task keeps what it had.
+    pub local_moved: Option<HashMap<String, LocalMoved>>,
+}
+
+/// A local-only task's clone's local default branch, at its launch and now (ADR 0029).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalMoved {
+    pub branch: String,
+    pub was: String,
+    pub now: Option<String>,
+}
+
+fn commit_ok(s: &str) -> bool {
+    s.len() == 40 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+impl LocalMoved {
+    /// Only a branch name `touches::branch_ok` accepts and full commits: anything else from the VPS is dropped.
+    pub fn checked(branch: &str, was: &str, now: Option<&str>) -> Option<LocalMoved> {
+        (super::touches::branch_ok(branch) && commit_ok(was) && now.is_none_or(commit_ok)).then(|| LocalMoved { branch: branch.to_string(), was: was.to_string(), now: now.map(str::to_string) })
+    }
+}
+
+/// The stored column's JSON back as a value; anything that doesn't read is none.
+pub(crate) fn local_moved_of(json: Option<&str>) -> Option<LocalMoved> {
+    let m: LocalMoved = serde_json::from_str(json?).ok()?;
+    LocalMoved::checked(&m.branch, &m.was, m.now.as_deref())
 }
 
 /// What the cycle has to say beside a good snapshot (Firstmate, current): one line per source that failed, for the
@@ -277,6 +306,10 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
                 "UPDATE crew_tasks SET worktree_touches = ?3, worktree_checked_at = ?4 WHERE org_id = ?1 AND id = ?2",
                 params![org, facts.id, touches_json(touches), now],
             )?;
+        }
+        if let Some(moved) = &found.local_moved {
+            let json = moved.get(&facts.id).map(|m| serde_json::to_string(m).expect("a LocalMoved serializes"));
+            tx.execute("UPDATE crew_tasks SET local_moved = ?3 WHERE org_id = ?1 AND id = ?2", params![org, facts.id, json])?;
         }
 
         let after = priors_one(tx, org, &facts.id)?.expect("the row was just written");

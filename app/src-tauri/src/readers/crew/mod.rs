@@ -403,6 +403,8 @@ fn cycle(app: &AppHandle, home: &Path, started_at: i64, first_answer_seen: &mut 
                 branches: branches_of(fleet, home, memo, visible),
                 // The worktree scan is the VPS's (ADR 0028): on the Mac, Kinas doesn't sandbox workers.
                 worktrees: HashMap::new(),
+                // So is the local-only check (ADR 0029): on the Mac, no launch is recorded.
+                local_moved: None,
             }
         }
         Err(_) => Found::default(),
@@ -584,7 +586,11 @@ fn found_remote(b: &bundle::Bundle, fleet: &Fleet, view: Option<&View>, memo: &m
         }
         worktrees.insert(out.task.clone(), touches::of_paths(out.red.iter().map(String::as_str), !out.unknown));
     }
-    Found { workers: mirror::workers_of(fleet, view, Some(REMOTE_SESSION)), repos, prs, lanes, ledger: b.ledger.as_ref().map(bundle::ledger_of), branches, worktrees }
+    // ADR 0029: the whole set of local-only tasks whose local default branch moved, each reading; none from an older companion.
+    let local_moved = b.local_moved.as_ref().map(|all| {
+        all.iter().filter_map(|m| mirror::LocalMoved::checked(&m.branch, &m.was, m.now.as_deref()).map(|v| (m.task.clone(), v))).collect()
+    });
+    Found { workers: mirror::workers_of(fleet, view, Some(REMOTE_SESSION)), repos, prs, lanes, ledger: b.ledger.as_ref().map(bundle::ledger_of), branches, worktrees, local_moved }
 }
 
 /// A clone's repository, from the memo when it has one; read and remembered otherwise, unless there is none yet.
@@ -853,6 +859,7 @@ mod tests {
             ledger: ledger::read_ledger(&home.join(ledger::LEDGER_FILE), ledger::Cursor::default()).unwrap(),
             branches: HashMap::from([("stock-webhook-9c2e".to_string(), touches::of_branch(true, BRANCH_LOG))]),
             worktrees: HashMap::new(),
+            local_moved: None,
         };
 
         // The VPS: the same facts as the companion sends them.
@@ -943,6 +950,53 @@ mod tests {
         let unread = bundle_with(serde_json::json!([{ "task": "stock-webhook-9c2e", "checked_at": now + 120_000, "red": [], "count": 0, "unknown": true }]));
         mirror::record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &found_remote(&unread, &fleet, None, &mut memo), now + 120_000).unwrap();
         assert_eq!(row(&store), Some(touches::Touches { paths: vec![], unknown: true }));
+    }
+
+    /// ADR 0029: the Linux machine's local-only check reaches the card whole each reading, a clear reading clears it,
+    /// anything that isn't a branch and two commits is dropped, and a companion that doesn't say leaves the card as it was.
+    #[test]
+    fn a_local_only_task_s_moved_main_reaches_the_card_and_clears_with_the_reading() {
+        let (_dir, home, snapshot) = home_with_clones();
+        let fleet = parse_fleet(&snapshot).unwrap();
+        let now = 1_794_834_000_000;
+        let bundle_with = |moved: Option<serde_json::Value>| {
+            let mut doc = serde_json::json!({
+                "v": 1, "at": now, "companion": { "version": "0.1.0", "since": now, "heartbeat_at": now },
+                "installed": true, "home": home, "snapshot": null, "capacity": null, "capacity_at": null,
+                "origins": {}, "herdr_view": null, "herdr_foreground": null, "prs": []
+            });
+            if let Some(m) = moved {
+                doc["local_moved"] = m;
+            }
+            bundle::decode(doc).unwrap()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut memo = Memo::default();
+        let row = |store: &Store| {
+            let snap = crate::crew::read::snapshot_view(&store.conn(), store.org_id(), now, true, true, None).unwrap();
+            snap.tasks.into_iter().find(|t| t.id == "stock-webhook-9c2e").unwrap().local_moved
+        };
+        let (was, moved_to) = ("b".repeat(40), "d".repeat(40));
+        let record = |b: &bundle::Bundle, memo: &mut Memo| mirror::record(&mut store.conn(), store.org_id(), &Ok(fleet.clone()), &found_remote(b, &fleet, None, memo), now).unwrap();
+
+        let moved = bundle_with(Some(serde_json::json!([
+            { "task": "stock-webhook-9c2e", "branch": "main", "was": was, "now": moved_to },
+            { "task": "other-9c2e", "branch": "--all", "was": was, "now": null }
+        ])));
+        let found = found_remote(&moved, &fleet, None, &mut memo);
+        assert_eq!(found.local_moved.as_ref().map(|m| m.len()), Some(1));
+        record(&moved, &mut memo);
+        assert_eq!(row(&store), Some(mirror::LocalMoved { branch: "main".into(), was: was.clone(), now: Some(moved_to.clone()) }));
+        // A companion that doesn't say: kept.
+        record(&bundle_with(None), &mut memo);
+        assert!(row(&store).is_some());
+        // A reading that lists nothing: cleared.
+        record(&bundle_with(Some(serde_json::json!([]))), &mut memo);
+        assert_eq!(row(&store), None);
+        // A commit that isn't one is dropped, never stored.
+        record(&bundle_with(Some(serde_json::json!([{ "task": "stock-webhook-9c2e", "branch": "main", "was": "HEAD", "now": null }]))), &mut memo);
+        assert_eq!(row(&store), None);
     }
 
     /// What `git log --name-only --format= -z` prints for two commits.

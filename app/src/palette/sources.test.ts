@@ -41,7 +41,7 @@ const task = (id: string, over: Partial<CrewTask> = {}): CrewTask => ({
   dispatched_at: null,
   merged_at: null,
   merged_via: null,
-    review: null, worktree: null,
+    review: null, worktree: null, local_moved: null,
   ...over,
 });
 

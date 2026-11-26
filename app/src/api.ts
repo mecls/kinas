@@ -173,6 +173,11 @@ export interface CrewTask {
    * repository's, or that the walk couldn't finish. Null when the last scan found nothing, or there was none.
    */
   worktree: CrewReview | null;
+  /**
+   * ADR 0029, the Linux machine's: a local-only task whose clone's local default branch is not the commit it was at the
+   * task's launch, from the reading in which its worker reported done until it landed. Null while nothing moved.
+   */
+  local_moved: { branch: string; was: string; now: string | null } | null;
 }
 export interface CrewReview {
   paths: string[];

@@ -247,6 +247,14 @@ export function reviewLine(review: CrewReview | null): string | null {
   return what ? `touches ${what} — review before merging` : "too many files to check — review before merging";
 }
 
+/** ADR 0029 (DESIGN.md 1.14, as built 5b): a local-only task's clone's local default branch moved since its launch. */
+export function localMovedLine(moved: { branch: string } | null): string | null {
+  return moved ? `local ${moved.branch} moved since this task started — check before landing` : null;
+}
+
+/** A commit as the task detail shows it: its first seven characters, or `unreadable`. */
+export const shortCommit = (sha: string | null) => (sha ? sha.slice(0, 7) : "unreadable");
+
 /**
  * The worktree scan's line (ADR 0028; DESIGN.md 1.14, as built 4.14): what the task's worktree on the VPS holds that
  * isn't the repository's and would be read by Claude Code there. Null when there is nothing to review.

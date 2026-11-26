@@ -17,6 +17,7 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (8, include_str!("../../../migrations/0008_cloud_factory.sql")),
     (9, include_str!("../../../migrations/0009_crew_review.sql")),
     (10, include_str!("../../../migrations/0010_crew_worktree_scan.sql")),
+    (11, include_str!("../../../migrations/0011_crew_local_moved.sql")),
 ];
 
 pub const DB_FILE: &str = "kinas.sqlite";
@@ -410,6 +411,14 @@ mod tests {
             statements,
             ["ALTER TABLE crew_tasks ADD COLUMN worktree_touches TEXT;", "ALTER TABLE crew_tasks ADD COLUMN worktree_checked_at INTEGER;"]
         );
+    }
+
+    /// The local-only landing's check (ADR 0029): 0011 only adds one column.
+    #[test]
+    fn migration_0011_only_adds_one_column() {
+        let sql = MIGRATIONS.iter().find(|(v, _)| *v == 11).expect("0011 listed").1;
+        let statements: Vec<&str> = sql.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("--")).collect();
+        assert_eq!(statements, ["ALTER TABLE crew_tasks ADD COLUMN local_moved TEXT;"]);
     }
 
     #[test]

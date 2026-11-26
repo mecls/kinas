@@ -156,6 +156,37 @@ describe("the companion's reading", () => {
     expect(branchExistsArgs("/g/.git", "fm/x")).toEqual(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "--git-dir=/g/.git", "rev-parse", "--verify", "--quiet", "refs/heads/fm/x^{commit}"]);
     for (const bad of ["", "-x", "--output=/tmp/x", "a..b", "/abs", "a//b", "a b", "a;b", "fm/x.", "fm/x/"]) expect(branchArgs("/g", bad)).toBeNull();
     expect(branchArgs("relative/.git", "fm/x")).toBeNull();
+    // ADR 0029: on the VPS the base is the commit origin/HEAD named at launch, from Kinas's record; only a full commit.
+    expect(branchArgs("/g/.git", "fm/x", "c".repeat(40))?.slice(-3)).toEqual(["--not", "c".repeat(40), "--"]);
+    for (const bad of ["HEAD", "--all", "c".repeat(39), "C".repeat(40)]) expect(branchArgs("/g/.git", "fm/x", bad)).toBeNull();
+  });
+
+  test("ADR 0029: a local-only task's clone whose local default branch moved since launch is listed, until it lands", async () => {
+    const w = world();
+    const clone = join(w.home, "projects", "shop");
+    const git = join(clone, ".git");
+    mkdirSync(join(git, "refs", "heads"), { recursive: true });
+    const at = (sha: string) => writeFileSync(join(git, "refs", "heads", "main"), `${sha}\n`);
+    at("b".repeat(40));
+    mkdirSync(w.deps.paths.workers, { recursive: true });
+    const record = (id: string) =>
+      writeFileSync(launchRecordFile(w.deps.paths.workers, id), JSON.stringify({ v: 1, worktree: "/wt", deny: [], firstmate_local: null, base: "a".repeat(40), local_branch: "main", local_commit: "b".repeat(40) }));
+    for (const id of ["solo-9c2e", "pr-9c2e", "early-9c2e"]) record(id);
+    const row = (id: string, mode: string, state: string) => ({ id, project: clone, mode, current_state: { state } });
+    const fleet = (landed: boolean) =>
+      JSON.stringify({
+        backlog: { records: landed ? [{ structured: true, id: "solo-9c2e", state: "done" }] : [] },
+        tasks: [row("solo-9c2e", "local-only", "done"), row("pr-9c2e", "direct-PR", "done"), row("early-9c2e", "local-only", "working")],
+      });
+    let snap = fleet(false);
+    w.deps.fm = { run: async (call) => (call.script === "fm-fleet-snapshot.sh" ? { exit: 0, timed_out: false, stdout: snap, stderr_first: null } : { exit: 1, timed_out: false, stdout: "", stderr_first: null }) };
+    expect((await readOnce(w.deps, null, 0)).local_moved).toEqual([]);
+    // Something moved local main (another landing, or a worker): the done local-only task is listed; the PR one and the
+    // one still working are not.
+    at("d".repeat(40));
+    expect((await readOnce(w.deps, null, 0)).local_moved).toEqual([{ task: "solo-9c2e", branch: "main", was: "b".repeat(40), now: "d".repeat(40) }]);
+    snap = fleet(true);
+    expect((await readOnce(w.deps, null, 0)).local_moved).toEqual([]);
   });
 
   test("a task's branch is read from its clone's git folder: once a gap, kept while not done, and not while not made", async () => {

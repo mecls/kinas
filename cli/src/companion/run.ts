@@ -13,7 +13,7 @@ import { join, dirname } from "node:path";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
-import { launchRecordFile, readLaunchRecord, scanWorktree, worktreeState, type Scan } from "./plants.ts";
+import { launchRecordFile, readLaunchRecord, readRef, scanWorktree, worktreeState, type Scan } from "./plants.ts";
 import { type CpuSample, type HostOut, hostNow, planNow, type PlanOut, type UsageOut, usageNow } from "./machine.ts";
 import { liveTaskIds, tendTokens, type TokenDeps } from "./tokens.ts";
 
@@ -70,6 +70,8 @@ export interface Reading {
    * the backlog says it landed, at most once a gap. A task not scanned this time keeps its last answer.
    */
   worktrees?: WorktreeOut[];
+  /** ADR 0029: local-only tasks whose clone's local default branch moved since their launch. */
+  local_moved?: LocalMovedOut[];
   /** Slice 5.1: Claude Code's plan hand-off on this machine, verbatim, with the two times freshness is decided from. */
   plan?: PlanOut | null;
   /** Slice 5.1: this machine's CPU, memory and disk, as the Mac's `hosts` row has them. */
@@ -89,6 +91,15 @@ export interface BranchOut {
   task: string;
   checked_at: number;
   out: ScriptOut;
+}
+
+/** A local-only task whose clone's local default branch is not the commit it was at launch (ADR 0029). */
+export interface LocalMovedOut {
+  task: string;
+  branch: string;
+  was: string;
+  /** Null when the branch can't be read now. */
+  now: string | null;
 }
 
 export interface Deps {
@@ -238,10 +249,14 @@ export function branchOk(branch: string): boolean {
 
 const GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"];
 
-/** `touches::branch_args`: the branch's own commits' names, from the clone's git folder only. */
-export function branchArgs(gitDir: string, branch: string): string[] | null {
+/**
+ * `touches::branch_args`: the branch's own commits' names, from the clone's git folder only. On the VPS the base is the
+ * commit `origin/HEAD` named at the worker's launch (ADR 0029): a worker can repoint the ref, never Kinas's record.
+ */
+export function branchArgs(gitDir: string, branch: string, base: string | null = null): string[] | null {
   if (!branchOk(branch) || !gitDir.startsWith("/")) return null;
-  return [...GIT_SAFE, `--git-dir=${gitDir}`, "log", "--no-renames", "--no-ext-diff", "--no-textconv", "--name-only", "--format=", "-z", `refs/heads/${branch}`, "--not", "refs/remotes/origin/HEAD", "--"];
+  if (base !== null && !/^[0-9a-f]{40}$/.test(base)) return null;
+  return [...GIT_SAFE, `--git-dir=${gitDir}`, "log", "--no-renames", "--no-ext-diff", "--no-textconv", "--name-only", "--format=", "-z", `refs/heads/${branch}`, "--not", base ?? "refs/remotes/origin/HEAD", "--"];
 }
 
 /** `touches::branch_exists_args`. */
@@ -283,12 +298,35 @@ async function branchesNow(deps: Deps, tasks: TaskPr[], last: BranchOut[], at: n
       continue;
     }
     const gitDir = t.project ? cloneGitDir(deps.paths.home, t.project) : null;
-    const log = gitDir ? branchArgs(gitDir, t.branch!) : null;
+    const base = readLaunchRecord(launchRecordFile(deps.paths.workers, t.id))?.base ?? null;
+    const log = gitDir ? branchArgs(gitDir, t.branch!, base) : null;
     const exists = gitDir ? branchExistsArgs(gitDir, t.branch!) : null;
     if (log === null || exists === null) continue;
     const o = await gitDefault(deps, log);
     if (!ran(o) && !ran(await gitDefault(deps, exists))) continue;
     out.push({ task: t.id, checked_at: at, out: o });
+  }
+  return out.sort((a, b) => a.task.localeCompare(b.task));
+}
+
+// ---- the local-only landing's check (ADR 0029) ----
+
+/**
+ * Each local-only task that reported done and hasn't landed, whose clone's local default branch is not the commit Kinas
+ * recorded at its launch. Read as files, never by running git. A task without a record, or one whose record has no
+ * local branch, is not listed: there is nothing to compare.
+ */
+export function localMovedNow(deps: Deps, tasks: TaskPr[]): LocalMovedOut[] {
+  const out: LocalMovedOut[] = [];
+  for (const t of tasks) {
+    if (t.mode !== "local-only" || !t.reported || t.landed || !t.project) continue;
+    const record = readLaunchRecord(launchRecordFile(deps.paths.workers, t.id));
+    const branch = record?.local_branch ?? null;
+    const was = record?.local_commit ?? null;
+    const gitDir = cloneGitDir(deps.paths.home, t.project);
+    if (branch === null || was === null || gitDir === null || !branchOk(branch)) continue;
+    const now = readRef(gitDir, `refs/heads/${branch}`)?.commit ?? null;
+    if (now !== was) out.push({ task: t.id, branch, was, now });
   }
   return out.sort((a, b) => a.task.localeCompare(b.task));
 }
@@ -519,6 +557,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   if (due.length > 0) deps.log(`companion: gh ${due.length} PRs`);
   const branches = await branchesNow(deps, tasks, prev?.branches ?? [], at);
   const worktrees = worktreesNow(deps, tasks, prev?.worktrees ?? [], at);
+  const localMoved = localMovedNow(deps, tasks);
   // ADR 0029: the workers' tokens, renewed or ended. A snapshot that didn't run lists no task: nothing ends then.
   if (deps.tokens && ran(snapshot)) {
     try {
@@ -542,6 +581,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
     prs: [...kept, ...asked].sort((a, b) => a.url.localeCompare(b.url)),
     branches,
     worktrees,
+    local_moved: localMoved,
   };
   writeReading(paths, reading);
   return reading;

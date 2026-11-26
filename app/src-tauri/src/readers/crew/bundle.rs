@@ -52,6 +52,10 @@ pub(crate) struct Bundle {
     /// finished, with when it was scanned there.
     #[serde(default)]
     pub worktrees: Vec<WorktreeOut>,
+    /// ADR 0029: every local-only task whose clone's local default branch moved since launch, whole each reading. None
+    /// from a companion older than 5b, which says nothing either way.
+    #[serde(default)]
+    pub local_moved: Option<Vec<LocalMovedOut>>,
     /// The Linux machine's own readings (slice 5.2, `machine.rs`): the plan hand-off, the host and the token counts. Kept
     /// raw here, so one that does not decode is dropped alone and never the crew's reading with it.
     #[serde(default)]
@@ -60,6 +64,16 @@ pub(crate) struct Bundle {
     pub host: Option<serde_json::Value>,
     #[serde(default)]
     pub usage: Option<serde_json::Value>,
+}
+
+/// A local-only task whose clone's local default branch moved since its launch (ADR 0029, `run.ts` `localMovedNow`).
+#[derive(Debug, Deserialize)]
+pub(crate) struct LocalMovedOut {
+    pub task: String,
+    pub branch: String,
+    pub was: String,
+    #[serde(default)]
+    pub now: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

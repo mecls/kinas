@@ -1,7 +1,7 @@
 //! The crew's read side (build spec §11.2), under one guard the caller takes: the Crew page's snapshot. Words are
 //! derived here, at read time, from the mirror's columns (§7) — never stored.
 
-use crate::readers::crew::mirror::{stored_of, touches_of, STORED_COLUMNS, STORED_LEN};
+use crate::readers::crew::mirror::{local_moved_of, stored_of, touches_of, LocalMoved, STORED_COLUMNS, STORED_LEN};
 use crate::readers::crew::touches::Touches;
 use crate::readers::crew::word::{finished, word_of, word_without_gone};
 use crate::readings::ReaderView;
@@ -94,6 +94,8 @@ pub struct TaskRow {
     /// The worktree scan (ADR 0028): the `.claude` and `.mcp.json` paths in the task's worktree on the VPS that aren't
     /// the repository's, or that the walk couldn't finish. None when the last scan found nothing, or there was none.
     pub worktree: Option<Touches>,
+    /// ADR 0029: a local-only task whose clone's local default branch on the Linux machine moved since its launch.
+    pub local_moved: Option<LocalMoved>,
 }
 
 #[derive(Debug, Serialize)]
@@ -185,7 +187,7 @@ fn task_select() -> String {
            WHERE e.org_id = t.org_id AND e.task_id = t.id AND e.kind != 'order' ORDER BY e.at DESC, e.id DESC LIMIT 1),
            {STORED_COLUMNS},
            EXISTS (SELECT 1 FROM crew_workers w WHERE w.org_id = t.org_id AND w.task_id = t.id AND w.observed_at > ?4 AND w.observed_at <= ?5),
-           dispatched_at, merged_via, pr_touches, branch_touches, worktree_touches
+           dispatched_at, merged_via, pr_touches, branch_touches, worktree_touches, local_moved
          FROM crew_tasks t"
     )
 }
@@ -229,6 +231,7 @@ fn task_row(r: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
             touches_of(r.get::<_, Option<String>>(13 + STORED_LEN)?.as_deref()).as_ref(),
         ),
         worktree: touches_of(r.get::<_, Option<String>>(14 + STORED_LEN)?.as_deref()).filter(|t| !t.clear()),
+        local_moved: local_moved_of(r.get::<_, Option<String>>(15 + STORED_LEN)?.as_deref()),
     })
 }
 

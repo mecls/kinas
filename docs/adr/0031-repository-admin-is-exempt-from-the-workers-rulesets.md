@@ -1,7 +1,7 @@
 # 0031 · Repository admin is exempt from the workers' rulesets, not "Always allow"
 
 Date: 2026-11-26
-Status: accepted
+Status: superseded by 0032
 
 ## Context
 

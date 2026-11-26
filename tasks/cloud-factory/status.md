@@ -54,9 +54,10 @@
 
 ## Notes for a fresh session
 
-- **In force until 5b.1 exists (the captain, 2026-11-25):** workers take tasks only on the captain's own repositories
-  and Miraside's, never on outside content: a worker still holds the git key and `gh`'s token, so GitHub itself is an
-  exfiltration path the sandbox can't close.
+- **Standing rule (the captain, 2026-11-26; ADR 0032):** no worker task takes input written by someone else (issues,
+  PR comments from non-collaborators, scraped web content), whichever repository it is in. Workers push only where the
+  GitHub App is installed. The old limit, own and Miraside's repositories only until 5b, is lifted.
+- **`mecls/kinas-ruleset-check` is the regression test for the push path.** Keep it and its Firstmate registration.
 - The captain's ask (2026-11-16), after Zach Lloyd's talk "How to Build a Software Factory That Improves Itself" (AI
   Engineer, 9 Nov 2026): "have the agent that is used in Kinas (even if it's a Claude Code session or whatever it is)
   running in the cloud. This way Kinas becomes essentially the dashboard of the software factory that runs in the

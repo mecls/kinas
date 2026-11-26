@@ -35,8 +35,8 @@
   - Checked 2026-11-26: the captain installed both scripts by hand. The Mac's plan gauge reads `Claude Code status
     line · homelab`, and a session in `~/miraside/agent` starts with the packet. The Linux host's stale-limit fix
     (`0229fd6`) comes with the next Mac build.
-- [ ] Slice 5b · worker isolation (ADR 0029, approved 2026-11-26 with the captain's five additions). Built 2026-11-26,
-  with every check green; the acceptance run (5b.E) waits for the captain to register the App:
+- [x] Slice 5b · worker isolation (ADRs 0029–0031). Built 2026-11-26 and accepted on the home lab the same day, on a
+  scratch repository with the GitHub App and both rulesets (5b.E):
   - 5b.A: the GitHub App, and setup's GitHub App row.
   - 5b.B: each worker's token at launch. A worker can't read `~/.ssh`, `~/.config/gh` or the App key. GitHub's SSH
     remotes are rewritten to HTTPS, and Kinas's credential helper serves the token. Each worker has its own temp

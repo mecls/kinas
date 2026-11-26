@@ -15,6 +15,7 @@ import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
 import { launchRecordFile, readLaunchRecord, scanWorktree, worktreeState, type Scan } from "./plants.ts";
 import { type CpuSample, type HostOut, hostNow, planNow, type PlanOut, type UsageOut, usageNow } from "./machine.ts";
+import { liveTaskIds, tendTokens, type TokenDeps } from "./tokens.ts";
 
 export const READING_VERSION = 1;
 export const READ_EVERY_MS = 15_000;
@@ -106,6 +107,8 @@ export interface Deps {
   git?: (args: string[]) => Promise<ScriptOut>;
   /** herdr.ts's runner on `session`; replaced in tests. */
   herdr?: Herdr;
+  /** GitHub's API for the workers' tokens (ADR 0029): renewed and ended on each reading. Absent: left alone. */
+  tokens?: TokenDeps;
 }
 
 // ---- the fleet, only as far as choosing PRs needs ----
@@ -140,6 +143,10 @@ interface TaskPr {
    */
   reported?: boolean;
   landed?: boolean;
+  /** The backlog says `done` or `dropped`: its token ends (ADR 0029). */
+  ended?: boolean;
+  /** The row's landing mode (`fm-promote.sh --mode`): `no-mistakes`, `direct-PR` or `local-only`. */
+  mode?: string | null;
   /** The row's `paths.worktree.path`. */
   worktree?: string | null;
 }
@@ -152,8 +159,8 @@ export function tasksOf(snapshot: string): TaskPr[] {
   } catch {
     return [];
   }
-  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null; worktree: string | null; reported: string | null }>();
-  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null, worktree: null, reported: null });
+  const tasks = new Map<string, { pr: string | null; backlog: string | null; state: string | null; branch: string | null; project: string | null; worktree: string | null; reported: string | null; mode: string | null }>();
+  const record = (r: unknown) => ({ pr: text(r, ["pr_url"]), backlog: text(r, ["state"]), state: null as string | null, branch: null, project: null, worktree: null, reported: null, mode: null });
   for (const r of array(root, ["backlog", "records"])) {
     const id = text(r, ["id"]);
     if ((r as { structured?: unknown }).structured !== true || id === null || tasks.has(id)) continue;
@@ -165,7 +172,7 @@ export function tasksOf(snapshot: string): TaskPr[] {
     let t = tasks.get(id);
     if (!t) {
       const b = (row as { backlog?: unknown }).backlog;
-      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null, worktree: null, reported: null };
+      t = b && typeof b === "object" ? record(b) : { pr: null, backlog: null, state: null, branch: null, project: null, worktree: null, reported: null, mode: null };
       tasks.set(id, t);
     }
     t.state = text(row, ["current_state", "state"]);
@@ -174,6 +181,7 @@ export function tasksOf(snapshot: string): TaskPr[] {
     t.project = text(row, ["project"]);
     t.worktree = text(row, ["paths", "worktree", "path"]);
     t.reported = text(row, ["paths", "status_log", "last_event", "state"]);
+    t.mode = text(row, ["mode"]) || null;
   }
   return [...tasks].map(([id, t]) => ({
     id,
@@ -183,6 +191,8 @@ export function tasksOf(snapshot: string): TaskPr[] {
     ...(t.project !== null ? { project: t.project } : {}),
     reported: t.state === "done" || t.reported === "done",
     landed: t.backlog === "done",
+    ...(t.backlog === "done" || t.backlog === "dropped" ? { ended: true } : {}),
+    ...(t.mode !== null ? { mode: t.mode } : {}),
     ...(t.worktree !== null ? { worktree: t.worktree } : {}),
   }));
 }
@@ -509,6 +519,14 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   if (due.length > 0) deps.log(`companion: gh ${due.length} PRs`);
   const branches = await branchesNow(deps, tasks, prev?.branches ?? [], at);
   const worktrees = worktreesNow(deps, tasks, prev?.worktrees ?? [], at);
+  // ADR 0029: the workers' tokens, renewed or ended. A snapshot that didn't run lists no task: nothing ends then.
+  if (deps.tokens && ran(snapshot)) {
+    try {
+      await tendTokens(deps.tokens, tasks, liveTaskIds(paths.proc, deps.tokens.uid), deps.log);
+    } catch {
+      deps.log("companion: the tokens couldn't be tended");
+    }
+  }
 
   const reading: Reading = {
     ...base,

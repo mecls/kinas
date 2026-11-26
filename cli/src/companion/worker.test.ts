@@ -10,6 +10,8 @@ import { checks, HERDR_UNIT, UNIT_HEADER, type Check, type SetupDeps } from "./s
 import {
   answersMayFlow,
   crewHarness,
+  HELPER,
+  helperText,
   isToolCommand,
   launchedByWrapper,
   looseningKeys,
@@ -21,6 +23,7 @@ import {
   settingsFile,
   settingsText,
   sha256,
+  tokenDir,
   workerCheck,
   workerLaunch,
   workerPolicy,
@@ -39,9 +42,15 @@ const FM_ARGV = ["--dangerously-skip-permissions", "--add-dir", "/h/fm/state/ope
 
 describe("the policy (as approved, with the captain's conditions)", () => {
   const DENY = ["/wt/.claude", "/wt/.mcp.json", "/wt/packages/x/.mcp.json"];
-  const policy = workerPolicy({ home: "/home/claude/.local/share/kinas/firstmate", id: "t1", uid: 1001, tmp: "/tmp", deny: DENY }) as {
+  const policy = workerPolicy({ home: "/home/claude/.local/share/kinas/firstmate", id: "t1", uid: 1001, tmp: "/tmp", deny: DENY, workers: "/home/claude/.local/state/kinas/workers", wrapperDir: "/home/claude/.local/share/kinas/bin" }) as {
     permissions: { blockWritesOutsideWorkingDirectories: boolean; deny: string[] };
-    sandbox: { enabled: boolean; failIfUnavailable: boolean; allowUnsandboxedCommands: boolean; filesystem: { allowWrite: string[]; denyWrite: string[] }; network: { allowedDomains: string[]; strictAllowlist: boolean } };
+    sandbox: {
+      enabled: boolean;
+      failIfUnavailable: boolean;
+      allowUnsandboxedCommands: boolean;
+      filesystem: { allowWrite: string[]; denyWrite: string[]; denyRead: string[]; allowRead: string[] };
+      network: { allowedDomains: string[]; strictAllowlist: boolean };
+    };
     env: Record<string, string>;
   };
 
@@ -49,7 +58,8 @@ describe("the policy (as approved, with the captain's conditions)", () => {
     expect(policy.sandbox.enabled).toBe(true);
     expect(policy.sandbox.failIfUnavailable).toBe(true);
     expect(policy.sandbox.allowUnsandboxedCommands).toBe(false);
-    expect(policy.sandbox.filesystem.allowWrite).toEqual(["/home/claude/.local/share/kinas/firstmate/state/t1.status"]);
+    // ADR 0029: and its own temp folder, eight hex of its task id's sha256 under /tmp/kw.
+    expect(policy.sandbox.filesystem.allowWrite).toEqual(["/home/claude/.local/share/kinas/firstmate/state/t1.status", "/tmp/kw/628b49d9"]);
     // ADR 0028: the launch's `.claude` and `.mcp.json` paths, denied to every command the worker runs, by exact path.
     expect(policy.sandbox.filesystem.denyWrite).toEqual(DENY);
     expect(policy.permissions.blockWritesOutsideWorkingDirectories).toBe(true);
@@ -76,17 +86,36 @@ describe("the policy (as approved, with the captain's conditions)", () => {
     expect(deny).toContain("Edit(//home/claude/.local/share/kinas/firstmate/state/operational-inbox/**)");
     expect(deny).toContain("Edit(**/.mcp.json)");
     expect(deny).toContain("Edit(**/.claude/**)");
-    // The git key and gh stay readable, by the captain's word.
-    expect(deny.some((r) => r.includes(".ssh") || r.includes(".config/gh"))).toBe(false);
+    // ADR 0029 (superseding "the git key and gh stay readable"): the key, gh's login, git's other stores, the App's key.
+    for (const p of ["~/.ssh/**", "~/.config/gh/**", "~/.git-credentials", "~/.config/git/credentials", "~/.netrc", "~/.local/state/kinas/github-app/**"]) expect(deny).toContain(`Read(${p})`);
   });
 
-  test("each package manager's cache is the worker's own", () => {
+  test("ADR 0029: every worker's temp folder and the shared one hidden; its own temp folder and token folder given back", () => {
+    expect(policy.sandbox.filesystem.denyRead).toEqual(["/tmp/kw", "/tmp/claude-1001"]);
+    expect(policy.sandbox.filesystem.allowRead).toEqual(["/home/claude/.local/state/kinas/workers/t1", "/tmp/kw/628b49d9"]);
+  });
+
+  test("each package manager's cache is the worker's own; git and gh use its token only (ADR 0029)", () => {
     expect(policy.env).toEqual({
-      npm_config_cache: "/tmp/claude-1001/kinas-t1/npm",
-      BUN_INSTALL_CACHE_DIR: "/tmp/claude-1001/kinas-t1/bun",
-      PIP_CACHE_DIR: "/tmp/claude-1001/kinas-t1/pip",
-      UV_CACHE_DIR: "/tmp/claude-1001/kinas-t1/uv",
-      CARGO_HOME: "/tmp/claude-1001/kinas-t1/cargo",
+      npm_config_cache: "/tmp/kw/628b49d9/cache/npm",
+      BUN_INSTALL_CACHE_DIR: "/tmp/kw/628b49d9/cache/bun",
+      PIP_CACHE_DIR: "/tmp/kw/628b49d9/cache/pip",
+      UV_CACHE_DIR: "/tmp/kw/628b49d9/cache/uv",
+      CARGO_HOME: "/tmp/kw/628b49d9/cache/cargo",
+      GIT_CONFIG_COUNT: "5",
+      GIT_CONFIG_KEY_0: "url.https://github.com/.insteadOf",
+      GIT_CONFIG_VALUE_0: "git@github.com:",
+      GIT_CONFIG_KEY_1: "url.https://github.com/.insteadOf",
+      GIT_CONFIG_VALUE_1: "ssh://git@github.com/",
+      GIT_CONFIG_KEY_2: "credential.helper",
+      GIT_CONFIG_VALUE_2: "",
+      GIT_CONFIG_KEY_3: "credential.https://github.com.helper",
+      GIT_CONFIG_VALUE_3: "",
+      GIT_CONFIG_KEY_4: "credential.https://github.com.helper",
+      GIT_CONFIG_VALUE_4: "'/home/claude/.local/share/kinas/bin/kinas-git-credential' '/home/claude/.local/state/kinas/workers/t1/token'",
+      GIT_TERMINAL_PROMPT: "0",
+      GH_CONFIG_DIR: "/home/claude/.local/state/kinas/workers/t1/gh",
+      GH_PROMPT_DISABLED: "1",
     });
   });
 });
@@ -132,46 +161,83 @@ function world(opts: { helper?: boolean; tools?: boolean } = {}) {
     writeFileSync(join(dir, "apply-seccomp"), "");
   }
   const tools = opts.tools ?? true;
+  mkdirSync(paths.tmp, { recursive: true });
   const d: WorkerDeps = { paths, uid: 1001, home: join(root, "user"), node, arch: "x64", which: (n) => (tools ? `/usr/bin/${n}` : null) };
-  return { root, paths, d };
+  let n = 0;
+  /**
+   * A worktree of a clone under <home>/projects/, as Treehouse makes them: the worktree's `.git` is a file. The clone's
+   * origin/HEAD names origin/main (packed), and its local main is one commit behind.
+   */
+  const worktree = (name = "shop") => {
+    const git = join(paths.home, "projects", name, ".git");
+    n += 1;
+    mkdirSync(join(git, "worktrees", String(n)), { recursive: true });
+    mkdirSync(join(git, "refs", "remotes", "origin"), { recursive: true });
+    mkdirSync(join(git, "refs", "heads"), { recursive: true });
+    writeFileSync(join(git, "config"), '[remote "origin"]\n\turl = git@github.com:mecls/shop.git\n');
+    writeFileSync(join(git, "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/main\n");
+    writeFileSync(join(git, "packed-refs"), `# pack-refs with: peeled fully-peeled sorted\n${"a".repeat(40)} refs/remotes/origin/main\n`);
+    writeFileSync(join(git, "refs", "heads", "main"), `${"b".repeat(40)}\n`);
+    writeFileSync(join(git, "worktrees", String(n), "commondir"), "../..\n");
+    const cwd = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wt-")));
+    writeFileSync(join(cwd, ".git"), `gitdir: ${git}/worktrees/${n}\n`);
+    return cwd;
+  };
+  return { root, paths, d, worktree };
 }
 
 describe("worker-launch", () => {
   test("writes the worker's settings (0600, policy over Firstmate's keys), makes its status file, and answers the file and its SHA-256", () => {
-    const { paths, d } = world();
-    const cwd = mkdtempSync(join(tmpdir(), "kinas-wt-"));
+    const { paths, d, worktree } = world();
+    const cwd = worktree();
     const out = workerLaunch(d, {}, "t1", cwd, FM_ARGV);
     if ("refused" in out) throw new Error(out.refused);
     expect(out.file).toBe(settingsFile(paths, "t1"));
+    // ADR 0029: its own temp folder, made 700 under <tmp>/kw (700), answered for the wrapper's CLAUDE_CODE_TMPDIR.
+    expect(out.tmp).toBe(join(paths.tmp, "kw", "628b49d9"));
+    expect(statSync(out.tmp).mode & 0o777).toBe(0o700);
+    expect(statSync(join(paths.tmp, "kw")).mode & 0o777).toBe(0o700);
     const text = readFileSync(out.file, "utf8");
     expect(out.sha256).toBe(sha256(text));
     expect(statSync(out.file).mode & 0o777).toBe(0o600);
     const doc = JSON.parse(text);
     expect(doc.feedbackDrafts).toBe("off");
     const deny = [`${cwd}/.claude`, `${cwd}/.mcp.json`];
-    expect(doc.sandbox).toEqual(workerPolicy({ home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp, deny }).sandbox);
-    expect(text).toBe(settingsText({ feedbackDrafts: "off", attribution: { commit: "", pr: "", sessionUrl: false }, ...workerPolicy({ home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp, deny }) }));
-    // The launch record, Kinas's own and out of the worker's reach: the folder, the denies, Firstmate's file (none here).
-    expect(readLaunchRecord(launchRecordFile(paths.workers, "t1"))).toEqual({ v: 1, worktree: cwd, deny, firstmate_local: null });
+    const of = { home: paths.home, id: "t1", uid: 1001, tmp: paths.tmp, deny, workers: paths.workers, wrapperDir: paths.wrapperDir };
+    expect(doc.sandbox).toEqual(workerPolicy(of).sandbox);
+    expect(text).toBe(settingsText({ feedbackDrafts: "off", attribution: { commit: "", pr: "", sessionUrl: false }, ...workerPolicy(of) }));
+    // The launch record, Kinas's own and out of the worker's reach: the folder, the denies, Firstmate's file (none here);
+    // ADR 0029: its temp folder, origin/HEAD's commit (the review flag's base), the local default branch and its commit.
+    expect(readLaunchRecord(launchRecordFile(paths.workers, "t1"))).toEqual({
+      v: 1,
+      worktree: cwd,
+      deny,
+      firstmate_local: null,
+      tmp: out.tmp,
+      base: "a".repeat(40),
+      local_branch: "main",
+      local_commit: "b".repeat(40),
+    });
     expect(statSync(launchRecordFile(paths.workers, "t1")).mode & 0o777).toBe(0o600);
     expect(statSync(join(paths.home, "state", "t1.status")).isFile()).toBe(true);
     // A status file Firstmate already wrote is appended to, never emptied.
     writeFileSync(join(paths.home, "state", "t1.status"), "working\n");
+    // A respawn under the same task id keeps its own temp folder (build spec §12 5b, for the captain).
+    writeFileSync(join(out.tmp, "kept"), "x");
     expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
+    expect(readFileSync(join(out.tmp, "kept"), "utf8")).toBe("x");
     expect(readFileSync(join(paths.home, "state", "t1.status"), "utf8")).toBe("working\n");
   });
 
   test("ADR 0028: every .claude and .mcp.json in the folder, at any depth, is denied by path, the root's always", () => {
-    const { paths, d } = world();
-    const cwd = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wt-")));
+    const { paths, d, worktree } = world();
+    const cwd = worktree();
     for (const dir of [".claude", "packages/x/.claude/skills", "node_modules/y", "deep/a/b"]) mkdirSync(join(cwd, dir), { recursive: true });
     writeFileSync(join(cwd, ".claude", "settings.local.json"), '{"hooks":{}}\n');
     writeFileSync(join(cwd, "packages/x/.claude/skills/SKILL.md"), "x");
     writeFileSync(join(cwd, "node_modules/y/.mcp.json"), "{}");
     writeFileSync(join(cwd, "deep/a/b/.mcp.json"), "{}");
     symlinkSync("/tmp", join(cwd, "deep/a/.claude"));
-    // A repository's own .git folder holds no worktree file: never entered.
-    mkdirSync(join(cwd, ".git", "x", ".claude"), { recursive: true });
     const out = workerLaunch(d, {}, "t1", cwd, FM_ARGV);
     if ("refused" in out) throw new Error(out.refused);
     const doc = JSON.parse(readFileSync(out.file, "utf8"));
@@ -218,11 +284,12 @@ describe("worker-launch", () => {
     // Again: nothing added twice.
     expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
     expect(readFileSync(join(git, "info", "exclude"), "utf8")).toBe(text);
-    // A `.git` that points outside <home>/projects/ is not followed, and the worker still starts.
+    // A `.git` that points outside <home>/projects/ is not followed; since ADR 0029 that worker has no repository to be
+    // given a token for, and doesn't start.
     const other = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wt-")));
     const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), "kinas-git-")));
     writeFileSync(join(other, ".git"), `gitdir: ${elsewhere}\n`);
-    expect("refused" in workerLaunch(d, {}, "t2", other, FM_ARGV)).toBe(false);
+    expect(workerLaunch(d, {}, "t2", other, FM_ARGV)).toEqual({ refused: "the worker's folder isn't a worktree of a Firstmate project" });
     expect(existsSync(join(elsewhere, "info", "exclude"))).toBe(false);
   });
 
@@ -236,24 +303,41 @@ describe("worker-launch", () => {
       ["Firstmate passed --settings 0 times, not once", () => workerLaunch(world().d, {}, "t1", cwd, ["the brief"])],
       ["bwrap, socat missing: the sandbox would not hold", () => workerLaunch(world({ tools: false }).d, {}, "t1", cwd, FM_ARGV)],
       ["the seccomp helper missing: the sandbox would not hold", () => workerLaunch(world({ helper: false }).d, {}, "t1", cwd, FM_ARGV)],
-      ["Firstmate's --settings carries hooks, which Kinas does not pass to a sandboxed worker", () => workerLaunch(world().d, {}, "t1", cwd, ["--settings", '{"hooks":{}}'])],
+      ["the worker's folder isn't a worktree of a Firstmate project", () => workerLaunch(world().d, {}, "t1", cwd, FM_ARGV)],
+      [
+        "Firstmate's --settings carries hooks, which Kinas does not pass to a sandboxed worker",
+        () => {
+          const f = world();
+          return workerLaunch(f.d, {}, "t1", f.worktree(), ["--settings", '{"hooks":{}}']);
+        },
+      ],
+      [
+        "the worker's temp folder: a temp folder that is a link",
+        () => {
+          const f = world();
+          const at = join(f.paths.tmp, "kw");
+          symlinkSync(f.paths.tmp, at);
+          const out = workerLaunch(f.d, {}, "t1", f.worktree(), FM_ARGV);
+          return "refused" in out ? { refused: out.refused.replace(`${at} isn't a plain folder`, "a temp folder that is a link") } : out;
+        },
+      ],
     ];
     for (const [why, run] of cases) expect(run()).toEqual({ refused: why });
     const w = world();
     rmSync(join(w.paths.home, "state"), { recursive: true });
-    expect(workerLaunch(w.d, {}, "t1", cwd, FM_ARGV)).toEqual({ refused: "Firstmate's home has no state folder" });
+    expect(workerLaunch(w.d, {}, "t1", w.worktree(), FM_ARGV)).toEqual({ refused: "Firstmate's home has no state folder" });
     expect(existsSync(w.paths.workers)).toBe(false);
     // A status file that is a link is not followed.
     const v = world();
     symlinkSync("/etc/passwd", join(v.paths.home, "state", "t1.status"));
-    expect(workerLaunch(v.d, {}, "t1", cwd, FM_ARGV)).toEqual({ refused: "the task's status file can't be made" });
+    expect(workerLaunch(v.d, {}, "t1", v.worktree(), FM_ARGV)).toEqual({ refused: "the task's status file can't be made" });
     expect(lstatSync(join(v.paths.home, "state", "t1.status")).isSymbolicLink()).toBe(true);
   });
 });
 
 describe("the wrapper, run by /bin/sh with stand-ins for Claude Code and Kinas", () => {
   /** Runs the real wrapper text; the stand-in Claude Code writes its argv and environment, NUL-separated. */
-  async function runWrapper(argv: string[], env: Record<string, string>, kinasSays = "abc123\n/state/workers/t1.settings.json\n", kinasExit = 0) {
+  async function runWrapper(argv: string[], env: Record<string, string>, kinasSays = "abc123\n/state/workers/t1.settings.json\n/tmp/kw/628b49d9\n", kinasExit = 0) {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "kinas-wrap-")));
     const real = join(dir, "real-claude");
     const kinas = join(dir, "kinas");
@@ -281,7 +365,7 @@ describe("the wrapper, run by /bin/sh with stand-ins for Claude Code and Kinas",
   });
 
   test("a worker: Kinas's flags first, Firstmate's --settings value replaced by the file, every other argument as given", async () => {
-    const r = await runWrapper(FM_ARGV, { FM_TASK_ID: "t1", VERCEL_TOKEN: "x", ANTHROPIC_API_KEY: "x", PARALLEL_API_KEY: "x", KEEP_ME: "1" });
+    const r = await runWrapper(FM_ARGV, { FM_TASK_ID: "t1", VERCEL_TOKEN: "x", ANTHROPIC_API_KEY: "x", PARALLEL_API_KEY: "x", GH_TOKEN: "x", GITHUB_TOKEN: "x", SSH_AUTH_SOCK: "/tmp/agent.1", KEEP_ME: "1" });
     expect(r.code).toBe(0);
     expect(r.kinasArgs).toEqual(["companion", "worker-launch", "t1", r.wt, ...FM_ARGV]);
     expect(r.realArgs).toEqual([
@@ -304,7 +388,9 @@ describe("the wrapper, run by /bin/sh with stand-ins for Claude Code and Kinas",
     expect(r.env).toContain("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1");
     expect(r.env).toContain("FM_TASK_ID=t1");
     expect(r.env).toContain("KEEP_ME=1");
-    for (const k of ["VERCEL_TOKEN", "ANTHROPIC_API_KEY", "PARALLEL_API_KEY"]) expect(r.env).not.toContain(`${k}=`);
+    for (const k of ["VERCEL_TOKEN", "ANTHROPIC_API_KEY", "PARALLEL_API_KEY", "GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK"]) expect(r.env).not.toContain(`${k}=`);
+    // ADR 0029: Claude Code's temp folder is the worker's own, as Kinas answered it.
+    expect(r.env).toContain("CLAUDE_CODE_TMPDIR=/tmp/kw/628b49d9");
   });
 
   test("FM_TASK_ID set but empty is still a worker: Kinas is asked, never skipped", async () => {
@@ -319,7 +405,7 @@ describe("the wrapper, run by /bin/sh with stand-ins for Claude Code and Kinas",
     expect(refused.code).toBe(REFUSED_EXIT);
     expect(refused.realArgs).toBeNull();
     expect(refused.stderr).toContain("it would run outside Kinas's sandbox");
-    for (const says of ["abc123", "", "\n/state/x"]) {
+    for (const says of ["abc123", "", "\n/state/x", "abc123\n/state/x", "abc123\n/state/x\n"]) {
       const bad = await runWrapper(FM_ARGV, { FM_TASK_ID: "t1" }, says);
       expect(bad.code).toBe(REFUSED_EXIT);
       expect(bad.realArgs).toBeNull();
@@ -339,10 +425,11 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
     rmSync(paths.realClaude, { force: true });
     symlinkSync(join(versions, "2.1.332"), paths.realClaude);
     const exe = join(versions, "2.1.332");
-    const wt = join(w.root, "wt");
-    mkdirSync(wt);
+    const wt = w.worktree();
     const out = workerLaunch(d, {}, "t1", wt, FM_ARGV);
     if ("refused" in out) throw new Error(out.refused);
+    // ADR 0029: the token step makes its folder (tokens.ts); the wrapper exports its temp folder.
+    mkdirSync(tokenDir(paths.workers, "t1"), { mode: 0o700 });
     const wrapper = join(paths.wrapperDir, "claude");
     const worker: FakeProc = {
       pid: 100,
@@ -350,7 +437,7 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
       exe,
       cwd: wt,
       cmdline: [paths.realClaude, "--setting-sources", "user", "--strict-mcp-config", "--add-dir", wt, ...FM_ARGV.map((a) => (a === FM_SETTINGS ? out.file : a))],
-      env: { FM_TASK_ID: "t1", [MARKER]: out.sha256, PATH: "/usr/bin" },
+      env: { FM_TASK_ID: "t1", [MARKER]: out.sha256, PATH: "/usr/bin", CLAUDE_CODE_TMPDIR: out.tmp },
     };
     const pane: FakeProc = { pid: 90, ppid: 50, exe: "/usr/bin/bash", cmdline: ["/bin/bash"], env: { PATH: `${paths.wrapperDir}:/usr/bin` } };
     const server: FakeProc = { pid: 50, ppid: 1, exe: paths.herdr, cmdline: [paths.herdr, "server", "--session", "default"], env: { PATH: `${paths.wrapperDir}:/usr/bin` } };
@@ -450,6 +537,20 @@ describe("the runtime check (the captain's condition 1), on a fake /proc", () =>
     expect(red([server, worker, launcher, bwrap, bridge, stage, { ...tool, ns: HOST_NS }, { ...tool, pid: 105, ns: HOST_NS }])).toEqual(["t1: a tool command ran outside the sandbox"]);
     // A Claude Code process that can't be read is not taken on trust.
     expect(red([server, { ...worker, noEnviron: true }])).toEqual(["a Claude Code process (pid 100) can't be read"]);
+  });
+
+  test("ADR 0029: a GitHub token or the ssh agent in its environment, no temp folder of its own, or its token folder gone: red", () => {
+    const m = machine();
+    const { worker, pane, server } = m.all;
+    const problems = (w: FakeProc) => m.check([w, pane, server]).problems;
+    expect(problems(worker)).toEqual([]);
+    expect(problems({ ...worker, env: { ...worker.env, GH_TOKEN: "x" } })).toEqual(["t1: its environment carries GH_TOKEN"]);
+    expect(problems({ ...worker, env: { ...worker.env, SSH_AUTH_SOCK: "/tmp/agent.1" } })).toEqual(["t1: its environment carries SSH_AUTH_SOCK"]);
+    const { CLAUDE_CODE_TMPDIR: _own, ...shared } = worker.env!;
+    expect(problems({ ...worker, env: shared })).toEqual(["t1: it started without its own temp folder"]);
+    expect(problems({ ...worker, env: { ...worker.env, CLAUDE_CODE_TMPDIR: "/tmp" } })).toEqual(["t1: it started without its own temp folder"]);
+    rmSync(tokenDir(m.paths.workers, "t1"), { recursive: true });
+    expect(problems(worker)).toEqual(["t1: its token folder is gone"]);
   });
 
   test("a settings file edited since, or one that is not today's policy, is red even with a matching marker", () => {
@@ -571,6 +672,11 @@ describe("the row and its install (ADR 0027)", () => {
     expect(readFileSync(wrapper, "utf8")).toBe(wrapperText(paths.realClaude, join(paths.bin, "kinas")));
     expect(statSync(wrapper).mode & 0o111).not.toBe(0);
     expect(readWritten(paths)[wrapper]?.item).toBe("worker-sandbox");
+    // ADR 0029: the credential helper beside it, executable and recorded as Kinas's.
+    const helper = join(paths.wrapperDir, HELPER);
+    expect(readFileSync(helper, "utf8")).toBe(helperText());
+    expect(statSync(helper).mode & 0o777).toBe(0o755);
+    expect(readWritten(paths)[helper]?.item).toBe("worker-sandbox");
     expect(readFileSync(join(paths.units, HERDR_UNIT), "utf8")).toContain(`Environment=PATH=${paths.wrapperDir}:`);
     expect(m.ran.some((a) => a.includes("daemon-reload"))).toBe(true);
     expect(m.ran.some((a) => a.includes("restart"))).toBe(false);

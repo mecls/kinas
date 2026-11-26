@@ -158,6 +158,12 @@ const sha256Bytes = (b: Buffer) => createHash("sha256").update(b).digest("hex");
  * folder's `commondir`. Only a real `.git` folder of a clone directly under `<home>/projects/` is answered.
  */
 export function cloneExcludeFile(home: string, worktree: string): string | null {
+  const common = cloneCommonDir(home, worktree);
+  return common === null ? null : join(common, "info", "exclude");
+}
+
+/** The clone's own `.git` folder for a worktree, real and directly under `<home>/projects/<name>/`; else null. */
+export function cloneCommonDir(home: string, worktree: string): string | null {
   const dotgit = join(worktree, ".git");
   let gitdir: string;
   try {
@@ -180,10 +186,43 @@ export function cloneExcludeFile(home: string, worktree: string): string | null 
     const parts = relative(projects, real).split("/");
     if (parts.length !== 2 || parts[0] === "" || parts[0] === ".." || parts[1] !== ".git") return null;
     const st = lstatSync(real);
-    return st.isDirectory() && !st.isSymbolicLink() ? join(real, "info", "exclude") : null;
+    return st.isDirectory() && !st.isSymbolicLink() ? real : null;
   } catch {
     return null;
   }
+}
+
+const REF = /^refs\/[A-Za-z0-9._/-]{1,240}$/;
+const COMMIT = /^[0-9a-f]{40}$/;
+
+/**
+ * A ref in a git folder, read as files (never by running git): a loose ref, a symbolic one followed at most four
+ * times, or a line of `packed-refs`. Its final name and commit; null when it can't be read as one.
+ */
+export function readRef(gitDir: string, ref: string, depth = 0): { ref: string; commit: string } | null {
+  if (!REF.test(ref) || ref.split("/").some((s) => s === ".." || s === "." || s === "") || depth > 4) return null;
+  const loose = smallText(join(gitDir, ref), 4096)?.trim();
+  if (loose !== undefined) {
+    if (COMMIT.test(loose)) return { ref, commit: loose };
+    const sym = /^ref: (\S+)$/.exec(loose);
+    return sym ? readRef(gitDir, sym[1]!, depth + 1) : null;
+  }
+  for (const line of (smallText(join(gitDir, "packed-refs"), 16 * 1024 * 1024) ?? "").split("\n")) {
+    const [sha, name] = line.trim().split(" ");
+    if (name === ref && sha !== undefined && COMMIT.test(sha)) return { ref, commit: sha };
+  }
+  return null;
+}
+
+/**
+ * The clone's commits at a worker's launch (ADR 0029), read outside the sandbox: where `origin/HEAD` points, the base
+ * the review flag reads the branch against; and the local default branch it names, for a local-only landing's check.
+ */
+export function launchCommits(common: string): { base: string | null; local_branch: string | null; local_commit: string | null } {
+  const head = readRef(common, "refs/remotes/origin/HEAD");
+  const branch = head?.ref.startsWith("refs/remotes/origin/") ? head.ref.slice("refs/remotes/origin/".length) : null;
+  const local = branch === null ? null : readRef(common, `refs/heads/${branch}`);
+  return { base: head?.commit ?? null, local_branch: local === null ? null : branch, local_commit: local?.commit ?? null };
 }
 
 export const EXCLUDE_HEADER = "# Kinas (ADR 0028): Claude Code's sandbox leaves these as empty placeholders in a worker's worktree";
@@ -223,6 +262,13 @@ export interface LaunchRecord {
   deny: string[];
   /** The sha256 of Firstmate's `.claude/settings.local.json` at launch; null when there was none. */
   firstmate_local: string | null;
+  /** ADR 0029, from slice 5b: the worker's own temp folder, `<tmp>/kw/<8 hex>`. */
+  tmp?: string;
+  /** The commit `refs/remotes/origin/HEAD` named at launch: the review flag's base. */
+  base?: string | null;
+  /** The clone's local default branch at launch, and its commit: a local-only landing is checked against them. */
+  local_branch?: string | null;
+  local_commit?: string | null;
 }
 
 export const launchRecordFile = (workers: string, id: string) => join(workers, `${id}.launch.json`);

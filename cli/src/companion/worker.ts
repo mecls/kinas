@@ -16,10 +16,10 @@
 //   written (firstmate.ts's gate on `note`); the Settings row says which and why.
 
 import { createHash } from "node:crypto";
-import { closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { chmodSync, closeSync, constants, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Paths } from "./paths.ts";
-import { addExcludeLines, cloneExcludeFile, denyCoversRoot, firstmateLocal, launchDenies, launchRecordFile, placeholderLines, readLaunchRecord, walkClaude, type LaunchRecord } from "./plants.ts";
+import { addExcludeLines, cloneCommonDir, cloneExcludeFile, denyCoversRoot, firstmateLocal, launchCommits, launchDenies, launchRecordFile, placeholderLines, readLaunchRecord, walkClaude, type LaunchRecord } from "./plants.ts";
 import { childrenOf, descendants, ownPidNs, readProcs, type Proc } from "./proc.ts";
 import { archOf, claudeExe, cloned, HERDR_UNIT, readText, UNIT_HEADER, type Check, type SetupDeps } from "./setup.ts";
 import { isKinasCopy, writeWhole } from "./written.ts";
@@ -54,6 +54,14 @@ export const RESERVED_READS = [
   "~/.local/state/kinas/**",
   // The captain's, 2026-11-26: Kinas's backups and staged files (Firstmate settings, ~/.claude.json, test transcripts).
   "~/backups/**",
+  // ADR 0029: the git key and gh's login, git's other stores, and the App's key (named though ~/.local/state/kinas covers
+  // it). A worker pushes only with its task's own token.
+  "~/.ssh/**",
+  "~/.config/gh/**",
+  "~/.git-credentials",
+  "~/.config/git/credentials",
+  "~/.netrc",
+  "~/.local/state/kinas/github-app/**",
 ] as const;
 
 /** Claude Code's own records no worker may read. */
@@ -79,6 +87,12 @@ export const REMOVED_ENV = [
   "TWITTERAPI_IO_KEY",
   "YOUTUBE_API_KEY",
   "AGENTWIKIS_API_KEY",
+  // ADR 0029: any GitHub token, and the ssh agent's socket.
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+  "GH_ENTERPRISE_TOKEN",
+  "GITHUB_ENTERPRISE_TOKEN",
+  "SSH_AUTH_SOCK",
 ] as const;
 
 /** Firstmate's own settings keys a worker keeps; any other key in its `--settings` refuses the launch. */
@@ -108,6 +122,17 @@ export function settingsFile(paths: Pick<Paths, "workers">, id: string): string 
   return join(paths.workers, `${id}.settings.json`);
 }
 
+/**
+ * A worker's own temp folder (ADR 0029): `<tmp>/kw/` and the first 8 hex of its task id's sha256. Short on purpose —
+ * Claude Code ignores a CLAUDE_CODE_TMPDIR whose `claude-<uid>` folder would be longer than about 30 bytes — and all the
+ * same length, so no worker's is a prefix of another's.
+ */
+export const workerTmp = (tmp: string, id: string) => join(tmp, "kw", createHash("sha256").update(id).digest("hex").slice(0, 8));
+/** A worker's own token folder (ADR 0029): the only folder under ~/.local/state/kinas it may read. */
+export const tokenDir = (workers: string, id: string) => join(workers, id);
+/** git's credential helper for workers, beside the wrapper. */
+export const HELPER = "kinas-git-credential";
+
 export interface PolicyOf {
   /** Firstmate's home, absolute. */
   home: string;
@@ -117,13 +142,21 @@ export interface PolicyOf {
   tmp: string;
   /** The worker's `denyWrite` (ADR 0028, `plants.ts` `launchDenies`): absolute paths, as its launch record holds them. */
   deny: readonly string[];
+  /** ~/.local/state/kinas/workers: its token folder is `<workers>/<id>` (ADR 0029). */
+  workers: string;
+  /** ~/.local/share/kinas/bin: the credential helper is there. */
+  wrapperDir: string;
 }
+
+const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /** The policy, as answer-path-design.md "The policy each worker gets" with the captain's conditions. */
 export function workerPolicy(o: PolicyOf): Record<string, unknown> {
   const userTmp = `${o.tmp}/claude-${o.uid}`;
   const mate = `${userTmp}/${tempName(o.home)}`;
-  const caches = `${userTmp}/kinas-${o.id}`;
+  const own = workerTmp(o.tmp, o.id);
+  const caches = `${own}/cache`;
+  const tokens = tokenDir(o.workers, o.id);
   return {
     permissions: {
       blockWritesOutsideWorkingDirectories: true,
@@ -142,19 +175,82 @@ export function workerPolicy(o: PolicyOf): Record<string, unknown> {
       enabled: true,
       failIfUnavailable: true,
       allowUnsandboxedCommands: false,
-      filesystem: { allowWrite: [`${o.home}/state/${o.id}.status`], denyWrite: [...o.deny] },
+      // ADR 0029: every worker's temp folder and the shared one hidden, its own given back; its token folder the one
+      // readable place under ~/.local/state/kinas. Measured on Claude Code 2.1.332: allowRead re-opens a folder inside a
+      // denied one, for the shell too.
+      filesystem: {
+        allowWrite: [`${o.home}/state/${o.id}.status`, own],
+        denyWrite: [...o.deny],
+        denyRead: [`${o.tmp}/kw`, userTmp],
+        allowRead: [tokens, own],
+      },
       network: { allowedDomains: [...WORKER_HOSTS], strictAllowlist: true },
     },
     // Each package manager's cache in the worker's own folder: the shared ones are read-only in the sandbox, and a
     // package planted there would later be installed by the captain's own sessions, outside it.
+    // git and gh with the task's own token only (ADR 0029): GitHub's ssh remotes rewritten to https, every inherited
+    // credential helper emptied, then Kinas's, which answers with this worker's token file; gh reads its own folder.
     env: {
       npm_config_cache: `${caches}/npm`,
       BUN_INSTALL_CACHE_DIR: `${caches}/bun`,
       PIP_CACHE_DIR: `${caches}/pip`,
       UV_CACHE_DIR: `${caches}/uv`,
       CARGO_HOME: `${caches}/cargo`,
+      GIT_CONFIG_COUNT: "5",
+      GIT_CONFIG_KEY_0: "url.https://github.com/.insteadOf",
+      GIT_CONFIG_VALUE_0: "git@github.com:",
+      GIT_CONFIG_KEY_1: "url.https://github.com/.insteadOf",
+      GIT_CONFIG_VALUE_1: "ssh://git@github.com/",
+      GIT_CONFIG_KEY_2: "credential.helper",
+      GIT_CONFIG_VALUE_2: "",
+      GIT_CONFIG_KEY_3: "credential.https://github.com.helper",
+      GIT_CONFIG_VALUE_3: "",
+      GIT_CONFIG_KEY_4: "credential.https://github.com.helper",
+      GIT_CONFIG_VALUE_4: `${sq(join(o.wrapperDir, HELPER))} ${sq(join(tokens, "token"))}`,
+      GIT_TERMINAL_PROMPT: "0",
+      GH_CONFIG_DIR: join(tokens, "gh"),
+      GH_PROMPT_DISABLED: "1",
     },
   };
+}
+
+/**
+ * A folder that is this user's own, real (never a link) and mode 700: made when it isn't there, kept when it is — a
+ * worker Firstmate respawns under its task id finds its own (build spec §12 5b, for the captain). Anything else at that
+ * name refuses.
+ */
+export function ownFolder(path: string, uid = process.getuid?.() ?? -1): "made" | "kept" | { refused: string } {
+  try {
+    const st = lstatSync(path);
+    if (!st.isDirectory() || st.isSymbolicLink()) return { refused: `${path} isn't a plain folder` };
+    if (st.uid !== uid || (st.mode & 0o777) !== 0o700) return { refused: `${path} isn't this user's alone` };
+    return "kept";
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") return { refused: `${path} can't be read` };
+  }
+  try {
+    mkdirSync(path, { mode: 0o700 });
+    chmodSync(path, 0o700);
+    return "made";
+  } catch {
+    return { refused: `${path} can't be made` };
+  }
+}
+
+/** The credential helper (ADR 0029): `get` answers with the one token file it is given, as x-access-token; nothing else. */
+export function helperText(): string {
+  return `#!/bin/sh
+# Written by \`kinas companion install\` (Kinas, ADR 0029). Kinas rewrites this file.
+# git's credential helper for a Firstmate worker: \`<this> <token file> get\` answers with that file's token, as
+# x-access-token. Every other action, and a file that doesn't hold one token, answers nothing.
+[ "$#" -eq 2 ] && [ "$2" = get ] || { cat >/dev/null; exit 0; }
+cat >/dev/null
+[ -f "$1" ] && [ -r "$1" ] || exit 0
+t=$(head -c 4200 "$1")
+case $t in ghs_*) ;; *) exit 0 ;; esac
+case $t in *[!A-Za-z0-9_.-]*) exit 0 ;; esac
+printf 'username=x-access-token\\npassword=%s\\n' "$t"
+`;
 }
 
 /** Firstmate's inline `--settings` value with the policy over it; any key Kinas does not let through refuses. */
@@ -216,7 +312,7 @@ export function missingPieces(d: WorkerDeps): string[] {
   return out;
 }
 
-export type Launch = { file: string; sha256: string } | { refused: string };
+export type Launch = { file: string; sha256: string; tmp: string } | { refused: string };
 
 /** `kinas companion worker-launch`: everything a worker needs before it starts, or why it must not. */
 export function workerLaunch(d: WorkerDeps, env: Record<string, string | undefined>, id: string, cwd: string, argv: readonly string[]): Launch {
@@ -232,7 +328,11 @@ export function workerLaunch(d: WorkerDeps, env: Record<string, string | undefin
   const walk = walkClaude(cwd);
   if ("unfinished" in walk) return { refused: `the worker's folder can't be checked for .claude and .mcp.json (${walk.unfinished})` };
   const deny = launchDenies(cwd, walk.found);
-  const merged = mergeSettings(arg.value, workerPolicy({ home, id, uid: d.uid, tmp: d.paths.tmp, deny }));
+  // ADR 0029: a worker's token comes from its clone's origin, so a folder that isn't a Firstmate project's worktree
+  // can't start one.
+  const common = cloneCommonDir(home, cwd);
+  if (common === null) return { refused: "the worker's folder isn't a worktree of a Firstmate project" };
+  const merged = mergeSettings(arg.value, workerPolicy({ home, id, uid: d.uid, tmp: d.paths.tmp, deny, workers: d.paths.workers, wrapperDir: d.paths.wrapperDir }));
   if ("refused" in merged) return merged;
   // On Linux a sandbox can only allow writing a file that exists: the task's status file is made before the start.
   const state = join(home, "state");
@@ -242,8 +342,13 @@ export function workerLaunch(d: WorkerDeps, env: Record<string, string | undefin
   } catch {
     return { refused: "the task's status file can't be made" };
   }
+  const own = workerTmp(d.paths.tmp, id);
+  for (const f of [join(d.paths.tmp, "kw"), own]) {
+    const r = ownFolder(f);
+    if (typeof r === "object") return { refused: `the worker's temp folder: ${r.refused}` };
+  }
   const text = settingsText(merged.settings);
-  const record: LaunchRecord = { v: 1, worktree: cwd, deny, firstmate_local: firstmateLocal(cwd) };
+  const record: LaunchRecord = { v: 1, worktree: cwd, deny, firstmate_local: firstmateLocal(cwd), tmp: own, ...launchCommits(common) };
   try {
     mkdirSync(d.paths.workers, { recursive: true, mode: 0o700 });
     writeWhole(launchRecordFile(d.paths.workers, id), `${JSON.stringify(record, null, 2)}\n`, 0o600);
@@ -259,7 +364,7 @@ export function workerLaunch(d: WorkerDeps, env: Record<string, string | undefin
   } catch {
     // Left as it was.
   }
-  return { file: settingsFile(d.paths, id), sha256: sha256(text) };
+  return { file: settingsFile(d.paths, id), sha256: sha256(text), tmp: own };
 }
 
 function realOr(path: string): string {
@@ -269,8 +374,6 @@ function realOr(path: string): string {
     return path;
   }
 }
-
-const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /** Kinas's wrapper, with the real Claude Code and Kinas's own binary filled in. */
 export function wrapperText(realClaude: string, kinas: string): string {
@@ -291,8 +394,10 @@ out=$("$KINAS" companion worker-launch "$FM_TASK_ID" "$PWD" "$@") || {
 nl='
 '
 sum=\${out%%"$nl"*}
-file=\${out#*"$nl"}
-if [ -z "$sum" ] || [ -z "$file" ] || [ "$sum" = "$out" ]; then
+rest=\${out#*"$nl"}
+file=\${rest%%"$nl"*}
+tmp=\${rest#*"$nl"}
+if [ -z "$sum" ] || [ -z "$file" ] || [ -z "$tmp" ] || [ "$rest" = "$out" ] || [ "$tmp" = "$rest" ]; then
   echo "kinas: this worker did not start: Kinas's answer was not read" >&2
   exit ${REFUSED_EXIT}
 fi
@@ -310,7 +415,8 @@ done
 shift "$n"
 ${MARKER}=$sum
 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1
-export ${MARKER} CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD
+CLAUDE_CODE_TMPDIR=$tmp
+export ${MARKER} CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD CLAUDE_CODE_TMPDIR
 exec "$REAL" --setting-sources user --strict-mcp-config --add-dir "$PWD" "$@"
 `;
 }
@@ -386,12 +492,22 @@ function judgeWorker(d: WorkerDeps, p: Proc, id: string): string | null {
   const record = readLaunchRecord(launchRecordFile(d.paths.workers, id));
   if (record === null) return `${id}: its launch record is gone`;
   if (record.worktree !== p.cmdline[5] || !denyCoversRoot(record)) return `${id}: its launch record doesn't match how it started`;
-  const policy = workerPolicy({ home: d.paths.home, id, uid: d.uid, tmp: d.paths.tmp, deny: record.deny });
+  const policy = workerPolicy({ home: d.paths.home, id, uid: d.uid, tmp: d.paths.tmp, deny: record.deny, workers: d.paths.workers, wrapperDir: d.paths.wrapperDir });
   for (const k of Object.keys(doc)) {
     if (!(k in policy) && !(FIRSTMATE_KEYS as readonly string[]).includes(k)) return `${id}: its settings carry ${k}`;
   }
   for (const [k, v] of Object.entries(policy)) {
     if (JSON.stringify((doc as Record<string, unknown>)[k]) !== JSON.stringify(v)) return `${id}: its settings aren't Kinas's policy today`;
+  }
+  // ADR 0029: nothing that reaches GitHub or another key in its environment, its own temp folder, its token folder there.
+  const carried = REMOVED_ENV.find((k) => p.environ!.has(k));
+  if (carried !== undefined) return `${id}: its environment carries ${carried}`;
+  if (p.environ!.get("CLAUDE_CODE_TMPDIR") !== workerTmp(d.paths.tmp, id)) return `${id}: it started without its own temp folder`;
+  try {
+    const st = lstatSync(tokenDir(d.paths.workers, id));
+    if (!st.isDirectory() || st.isSymbolicLink()) return `${id}: its token folder isn't a folder`;
+  } catch {
+    return `${id}: its token folder is gone`;
   }
   return null;
 }
@@ -515,7 +631,10 @@ export async function wrapperState(d: Pick<SetupDeps, "paths">): Promise<Wrapper
   const text = readText(file);
   if (text === null) return existsSync(file) ? "foreign" : "none";
   if (!(await isKinasCopy(d.paths, file))) return "foreign";
-  return text === wrapperText(d.paths.realClaude, join(d.paths.bin, "kinas")) ? "kinas" : "old";
+  if (text !== wrapperText(d.paths.realClaude, join(d.paths.bin, "kinas"))) return "old";
+  // The credential helper is the wrapper's other half (ADR 0029): one that isn't Kinas's, or is older, wants Install.
+  const helper = join(d.paths.wrapperDir, HELPER);
+  return readText(helper) === helperText() && (await isKinasCopy(d.paths, helper)) ? "kinas" : "old";
 }
 
 const row = (state: Check["state"], detail: string, extra: Partial<Check> = {}): Check => ({ id: "worker-sandbox", state, detail, ...extra });

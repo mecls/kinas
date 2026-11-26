@@ -43,7 +43,7 @@ import {
   type SetupDeps,
 } from "./setup.ts";
 import { validFolder, validRepo } from "./validate.ts";
-import { herdrUnitPath, SANDBOX_RUNTIME, seccompHelper, unitPathOf, wrapperState, wrapperText } from "./worker.ts";
+import { HELPER, helperText, herdrUnitPath, SANDBOX_RUNTIME, seccompHelper, unitPathOf, wrapperState, wrapperText } from "./worker.ts";
 import { recordWritten, writeWhole } from "./written.ts";
 
 export type Cannot =
@@ -351,16 +351,23 @@ async function workerSandbox(d: SetupDeps): Promise<Outcome> {
   }
   const wrapper = join(d.paths.wrapperDir, "claude");
   if ((await wrapperState(d)) === "foreign") return cannot("foreign");
-  const text = wrapperText(d.paths.realClaude, join(d.paths.bin, "kinas"));
+  // ADR 0029: the credential helper beside it. One Kinas didn't write is left as it is, like the wrapper.
+  const helperFile = join(d.paths.wrapperDir, HELPER);
+  if (existsSync(helperFile) && !(await isKinasCopy(d.paths, helperFile))) return cannot("foreign");
   mkdirSync(d.paths.wrapperDir, { recursive: true });
-  writeWhole(wrapper, text, 0o755);
-  chmodSync(wrapper, 0o755);
-  const sum = await sha256Of(wrapper);
-  if (sum === null) return cannot("record");
-  try {
-    recordWritten(d.paths, wrapper, { item: "worker-sandbox", version: "1", sha256: sum, at: d.now() }, d.now());
-  } catch {
-    return cannot("record");
+  for (const [file, text] of [
+    [wrapper, wrapperText(d.paths.realClaude, join(d.paths.bin, "kinas"))],
+    [helperFile, helperText()],
+  ] as const) {
+    writeWhole(file, text, 0o755);
+    chmodSync(file, 0o755);
+    const sum = await sha256Of(file);
+    if (sum === null) return cannot("record");
+    try {
+      recordWritten(d.paths, file, { item: "worker-sandbox", version: "1", sha256: sum, at: d.now() }, d.now());
+    } catch {
+      return cannot("record");
+    }
   }
   writeWhole(unitFile, herdrUnit(d.paths.herdr, SESSION, await herdrUnitPath(d, unitPath(d.home)), UNIT_HEADER));
   const r = await d.run([d.paths.systemctl, "--user", "daemon-reload"], { timeoutMs: SYSTEMCTL_MS });

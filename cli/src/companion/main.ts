@@ -13,6 +13,7 @@ import { companionPath, companionPaths, nodeDir, type Paths } from "./paths.ts";
 import { MAX_REQUEST_BYTES, rpc, versionIn } from "./rpc.ts";
 import { lastReading, loop, readOnce, type Deps } from "./run.ts";
 import type { SetupDeps } from "./setup.ts";
+import { workerToken, type TokenDeps } from "./tokens.ts";
 import { answersMayFlow, REFUSED_EXIT, workerLaunch, type WorkerDeps } from "./worker.ts";
 
 export const COMPANION_USAGE = [
@@ -41,6 +42,11 @@ function workerDeps(paths: Paths): WorkerDeps {
   return { paths, uid: process.getuid?.() ?? -1, home, node: nodeDir(home, executable), arch: process.arch, which: (name) => Bun.which(name, { PATH: path }) };
 }
 
+/** GitHub's API for the App's tokens (ADR 0029). */
+function tokenDeps(paths: Paths): TokenDeps {
+  return { paths, uid: process.getuid?.() ?? -1, fetch: (url, init) => fetch(url, init), now: Date.now };
+}
+
 function runDeps(paths: Paths): Deps {
   const path = companionPath(homedir(), executable);
   const workers = workerDeps(paths);
@@ -54,6 +60,7 @@ function runDeps(paths: Paths): Deps {
     clock: Date.now,
     // One line per event, never a fleet's words: journald keeps it.
     log: (line) => process.stderr.write(`${line}\n`),
+    tokens: tokenDeps(paths),
   };
 }
 
@@ -135,12 +142,19 @@ export async function companion(args: string[]): Promise<number> {
   }
   if (sub === "worker-launch" && rest.length >= 2) {
     const [id, cwd, ...argv] = rest as [string, string, ...string[]];
-    const out = workerLaunch(workerDeps(companionPaths()), process.env, id, cwd, argv);
+    const paths = companionPaths();
+    const out = workerLaunch(workerDeps(paths), process.env, id, cwd, argv);
     if ("refused" in out) {
       process.stderr.write(`kinas: ${out.refused}\n`);
       return REFUSED_EXIT;
     }
-    process.stdout.write(`${out.sha256}\n${out.file}\n`);
+    // ADR 0029: the task's own GitHub token, or the worker doesn't start.
+    const token = await workerToken(tokenDeps(paths), id, cwd);
+    if ("refused" in token) {
+      process.stderr.write(`kinas: ${token.refused}\n`);
+      return REFUSED_EXIT;
+    }
+    process.stdout.write(`${out.sha256}\n${out.file}\n${out.tmp}\n`);
     return 0;
   }
   process.stderr.write(`usage:\n${COMPANION_USAGE.join("\n")}\n`);

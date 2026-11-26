@@ -55,6 +55,22 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     - The reserved paths no worker may read: `~/vault`, `~/.config/last30days`, `~/.config/brain`, `~/.config/search.env`, `~/.config/parallel.env`, `~/.config/agentwikis.env`, `~/.local/share/com.vercel.cli`, `~/.now`, `~/.local/share/now`, `~/.config/obsidian-headless` and `~/.local/state/kinas`. Amended 2026-11-26 (the captain's word): and `~/backups`,
       where every Kinas backup and staged file goes, in `~/backups/kinas/<date>-<purpose>/`. Those copies hold Firstmate
       settings, `~/.claude.json` and test transcripts.
+  - Amended 2026-11-26 (slice 5b, ADR 0029, superseding "the git key and `gh` stay readable"):
+    - **Reserved reads:** the workers' list also holds `~/.ssh`, `~/.config/gh`, `~/.git-credentials`,
+      `~/.config/git/credentials`, `~/.netrc` and the App's folder. A worker pushes only with its task's own token
+      (`github-app.md`).
+    - `~/.local/share/kinas/bin/kinas-git-credential`: git's credential helper, beside the wrapper and in Kinas's
+      record.
+    - **Each worker's token folder:** `~/.local/state/kinas/workers/<id>/` (700), and `<id>.github.json` beside it.
+    - **Its own temp folder,** `/tmp/kw/<first 8 hex of sha256(id)>` (700, in `/tmp/kw`, 700). The wrapper passes it
+      as `CLAUDE_CODE_TMPDIR`, and the package managers' caches are under it. `/tmp/kw` and `/tmp/claude-<uid>` are
+      hidden from workers.
+    - **The launch record** also keeps that folder, the commit `origin/HEAD` named and the clone's local default branch
+      with its commit.
+    - **The wrapper** also unsets `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN` and
+      `SSH_AUTH_SOCK`.
+    - **The runtime check** also wants each worker's environment free of those, its own temp folder, and its token
+      folder there.
 - **Claude Code** at `~/.local/bin/claude`, signed in by the captain, in the VPS's terminal, with their own
   subscription. `ANTHROPIC_API_KEY` must not be set there: its presence (never its value) is checked.
   - Amended 2026-11-25 (slices 5.1 and 5.3). The captain installs two scripts there by hand, each staged by Kinas

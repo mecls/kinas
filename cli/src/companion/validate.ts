@@ -2,7 +2,9 @@
 // document on stdin; anything that is not exactly one of these shapes — an unknown verb, an extra field, a field of the
 // wrong type, a string too long — is refused, and nothing runs. Verbs join as their slices land (§11.2).
 
+import { answerWords, decisionKey, requestId } from "./answer.ts";
 import { INSTALL_ITEMS, type InstallItem } from "./setup.ts";
+import { validTaskId } from "./worker.ts";
 
 export interface Cursor {
   epoch: string;
@@ -18,6 +20,8 @@ export type Request =
   | { verb: "launch-first-mate" }
   | { verb: "focus"; workspace: string }
   | { verb: "open-workspace"; folder: string; label: string }
+  // Slice 6: the Mac's answer. A phone's comes through the cloud store (slice 10), never through this door.
+  | { verb: "answer"; task: string; key: string; words: string; request_id: string; from: "mac" }
   | { verb: "install"; item: InstallItem; folder?: string; repo?: string; adopt?: boolean; restart?: boolean };
 
 export type Validated = Request | { refused: string };
@@ -101,6 +105,16 @@ export function validate(input: unknown): Validated {
       if (!relativeFolder(input.folder)) return { refused: "folder is not a folder under the projects folder" };
       if (!label(input.label)) return { refused: "label is not a workspace label" };
       return { verb: "open-workspace", folder: input.folder, label: input.label };
+    }
+    case "answer": {
+      const extra = onlyKeys(input, ["verb", "task", "key", "words", "request_id", "from"]);
+      if (extra) return { refused: extra };
+      if (typeof input.task !== "string" || !validTaskId(input.task)) return { refused: "task is not a task id" };
+      if (!decisionKey(input.key)) return { refused: "key is not a decision key" };
+      if (!answerWords(input.words)) return { refused: "words are empty, hold a NUL, or are over 8,192 bytes" };
+      if (!requestId(input.request_id)) return { refused: "request_id is not a request id" };
+      if (input.from !== "mac") return { refused: "from is not mac" };
+      return { verb: "answer", task: input.task, key: input.key, words: input.words, request_id: input.request_id, from: "mac" };
     }
     case "install": {
       // Slice 4 (§17 2026-11-25 #4): one item; `clone` names its folder and repository, `adopt` only Herdr's service.

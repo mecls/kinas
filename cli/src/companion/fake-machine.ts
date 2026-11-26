@@ -175,3 +175,10 @@ export function fakeMachine(over: Partial<MachineState> = {}, setup: Partial<Set
   };
   return { deps, state, root, sessionDir, ran, herdrCalls };
 }
+
+/** A Firstmate runner for an rpc test that runs no script: any call fails the test. */
+export const NO_FIRSTMATE: import("./firstmate.ts").Firstmate = {
+  run: async (call) => {
+    throw new Error(`no Firstmate in this test: ${call.script}`);
+  },
+};

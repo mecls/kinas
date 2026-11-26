@@ -135,7 +135,8 @@ export async function companion(args: string[]): Promise<number> {
       await readOnce(runDeps(paths), prev, prev?.companion.since ?? Date.now());
     };
     const herdr = herdrAt(paths.herdr, SESSION, companionPath(homedir(), executable));
-    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr, setup: setupDeps(paths, herdr) };
+    const reader = runDeps(paths);
+    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr, setup: setupDeps(paths, herdr), fm: reader.fm, log: reader.log };
     const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;

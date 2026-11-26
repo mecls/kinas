@@ -5,10 +5,13 @@
 // (actions.ts) — `launch-first-mate`, `focus`, `open-workspace` — whose outcome is `{ done }` or `{ cannot }`, exit 0
 // either way: "not there" is an answer the Mac puts in words, and a non-zero exit would lose it at the door. Since
 // slice 4, `hello` carries setup's checks (setup.ts) and the client folders already cloned, and `install` (install.ts)
-// answers the same way.
+// answers the same way. Since slice 6, `answer` delivers the captain's answer as a note in Firstmate's inbox (answer.ts),
+// and `bundle` carries what became of each answer, never its words.
 
 import { readFile } from "node:fs/promises";
 import { focusWorkspace, launchFirstMate, openWorkspace, viewNow } from "./actions.ts";
+import { answersForBundle, deliver } from "./answer.ts";
+import type { Firstmate } from "./firstmate.ts";
 import type { Herdr } from "./herdr.ts";
 import { install } from "./install.ts";
 import type { Paths } from "./paths.ts";
@@ -32,6 +35,10 @@ export interface RpcDeps {
   herdr: Herdr;
   /** What setup's checks and installs run with (slice 4). */
   setup: SetupDeps;
+  /** Firstmate's runner, with the note's sandbox gate (ADR 0027), for `answer` (slice 6). */
+  fm: Firstmate;
+  /** One line per event, never an answer's words or a task's name. */
+  log: (line: string) => void;
 }
 
 /** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
@@ -93,6 +100,18 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
       return { reply: { v: RPC_VERSION, ...(await focusWorkspace(deps, request.workspace)) }, exit: 0 };
     case "open-workspace":
       return { reply: { v: RPC_VERSION, ...(await openWorkspace(deps, request.folder, request.label)) }, exit: 0 };
+    case "answer":
+      // Every outcome and refusal is an answer the Mac puts in words: exit 0, since the door drops a reply on any other.
+      try {
+        const reply = await deliver(
+          { paths: deps.paths, fm: deps.fm, clock: deps.now, log: deps.log },
+          { task: request.task, key: request.key, words: request.words, requestId: request.request_id, from: request.from },
+        );
+        return { reply: { v: RPC_VERSION, ...reply }, exit: 0 };
+      } catch {
+        deps.log("companion: answer failed (its record couldn't be written)");
+        return { reply: { v: RPC_VERSION, error: "answer-failed" }, exit: 1 };
+      }
     case "install": {
       const { verb: _, ...req } = request;
       return { reply: { v: RPC_VERSION, ...(await install(req, deps.setup)) }, exit: 0 };
@@ -112,7 +131,8 @@ async function bundle(deps: RpcDeps, cursor: Cursor | null): Promise<RpcResult> 
     if (reading.v !== RPC_VERSION) return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
     // The ledger is read now, from the Mac's own cursor: the reading on disk is shared, the cursor is the Mac's.
     // `served_at`: this machine's clock now, so the Mac reads the heartbeat's age on one clock, never across two.
-    return { reply: { ...reading, served_at: deps.now(), ledger: ledgerSince(deps.paths.home, cursor) }, exit: 0 };
+    // `answers`: what became of each answer (slice 6, point 7), from the companion's own record, without the words.
+    return { reply: { ...reading, served_at: deps.now(), ledger: ledgerSince(deps.paths.home, cursor), answers: answersForBundle(deps.paths) }, exit: 0 };
   } catch {
     return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
   }

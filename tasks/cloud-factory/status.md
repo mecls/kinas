@@ -48,6 +48,13 @@
   - 5b.D: the review flag reads against the commit recorded at launch, and a local-only task's card says when `main`
     moved.
 - [ ] Slice 6 · answers from the Mac, as inbox notes → ship point 1
+  - 6.1 done, 2026-11-26: the companion's `answer` verb (`cli/src/companion/answer.ts`).
+    - **Open check:** ADR 0033's, from a fresh snapshot, and for a hold the hold check, with each exit mapped.
+    - **The item:** `<task>@<key>@<opened_at>`, from the reading's new `questions[]`.
+    - **`answers.jsonl`:** no words.
+    - **Receipts:** read in each reading, without `body`.
+    - **The bundle:** carries `answers[]`.
+    - **Tests:** CLI 322/322. Next is 6.2, the Mac side.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

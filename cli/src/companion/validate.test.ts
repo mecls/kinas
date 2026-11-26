@@ -58,4 +58,19 @@ describe("the companion's request validator (ADR 0024)", () => {
     expect(validate({ verb: "install", item: "clone", folder: "shop" })).toEqual({ refused: "repo is not a GitHub owner/repo" });
     expect(validate({ verb: "install", item: "herdr", url: "https://x" })).toEqual({ refused: 'unknown field "url"' });
   });
+
+  test("answer (slice 6): a task id, a decision key, the words, Kinas's request id, from the Mac", () => {
+    const ok = { verb: "answer" as const, task: "t1-9c2e", key: "api-shape.v2_9c2e", words: "On t1-9c2e (api-shape.v2_9c2e): REST\nand JSON", request_id: "mac-01JX:2", from: "mac" as const };
+    expect(validate(ok)).toEqual(ok);
+    expect(validate({ ...ok, words: "é".repeat(4_096) })).toMatchObject({ verb: "answer" });
+    expect(validate({ ...ok, extra: 1 })).toEqual({ refused: 'unknown field "extra"' });
+    for (const task of ["", "-t", "t 1", "t/1", "x".repeat(65), 1]) expect(validate({ ...ok, task })).toEqual({ refused: "task is not a task id" });
+    for (const key of ["", "a b", "a/b", "a]b", "x".repeat(129), null]) expect(validate({ ...ok, key })).toEqual({ refused: "key is not a decision key" });
+    for (const words of ["", "  \n", "a\u0000b", "x".repeat(8_193), "é".repeat(4_097), 7]) {
+      expect(validate({ ...ok, words })).toEqual({ refused: "words are empty, hold a NUL, or are over 8,192 bytes" });
+    }
+    for (const request_id of ["", ".x", "a/b", "a b", "x".repeat(97), 3]) expect(validate({ ...ok, request_id })).toEqual({ refused: "request_id is not a request id" });
+    // A phone's answer comes through the cloud store (slice 10), never through the Mac's door.
+    for (const from of ["phone", undefined, "MAC"]) expect(validate({ ...ok, from })).toEqual({ refused: "from is not mac" });
+  });
 });

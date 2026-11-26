@@ -10,6 +10,7 @@
 import { run } from "@kinas/context";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { questionsOf, tendReceipts, type QuestionOut } from "./answer.ts";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
@@ -80,6 +81,11 @@ export interface Reading {
   cpu?: CpuSample | null;
   /** Slice 5.1: token counts by day and model from this machine's transcripts, recounted at most every 5 minutes. */
   usage?: UsageOut | null;
+  /**
+   * Slice 6: the open questions, each with its opening (answer.ts `questionsOf`), so an answer names one item. A snapshot
+   * that didn't run keeps the last reading's.
+   */
+  questions?: QuestionOut[];
 }
 
 export interface WorktreeOut extends Scan {
@@ -558,6 +564,13 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
   const branches = await branchesNow(deps, tasks, prev?.branches ?? [], at);
   const worktrees = worktreesNow(deps, tasks, prev?.worktrees ?? [], at);
   const localMoved = localMovedNow(deps, tasks);
+  const questions = (ran(snapshot) ? questionsOf(snapshot.stdout, prev, at) : null) ?? prev?.questions ?? [];
+  // Slice 6: read and replied, for the answers delivered and not yet read (answer.ts). Never the notes' words.
+  try {
+    await tendReceipts({ paths, fm, clock: deps.clock, log: deps.log });
+  } catch {
+    deps.log("companion: receipts couldn't be recorded");
+  }
   // ADR 0029: the workers' tokens, renewed or ended. A snapshot that didn't run lists no task: nothing ends then.
   if (deps.tokens && ran(snapshot)) {
     try {
@@ -582,6 +595,7 @@ export async function readOnce(deps: Deps, prev: Reading | null, since: number):
     branches,
     worktrees,
     local_moved: localMoved,
+    questions,
   };
   writeReading(paths, reading);
   return reading;
@@ -628,7 +642,8 @@ export async function loop(deps: Deps, sleep: (ms: number) => Promise<void> = (m
   for (;;) {
     const started = deps.clock();
     try {
-      prev = await readOnce(deps, prev, since);
+      // The reading on disk, when there is one: an rpc `refresh` may have written a newer one than this loop's.
+      prev = await readOnce(deps, lastReading(deps.paths) ?? prev, since);
       deps.log(`companion: reading in ${deps.clock() - started} ms`);
     } catch (e) {
       deps.log(`companion: reading failed (${(e as Error).name})`);

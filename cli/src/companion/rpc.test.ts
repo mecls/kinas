@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Firstmate } from "./firstmate.ts";
 import { companionPaths } from "./paths.ts";
-import { fakeMachine } from "./fake-machine.ts";
+import { fakeMachine, NO_FIRSTMATE } from "./fake-machine.ts";
 import { rpc, versionIn } from "./rpc.ts";
 import { CHECK_IDS } from "./setup.ts";
 
@@ -20,6 +21,8 @@ function deps() {
     now: () => 1_794_834_015_000,
     herdr: async () => ({ ok: false, stdout: "" }),
     setup: m.deps,
+    fm: NO_FIRSTMATE,
+    log: (_: string) => {},
   };
 }
 
@@ -102,7 +105,7 @@ describe("kinas companion rpc (slice 1)", () => {
     writeFileSync(d.paths.reading, readFileSync(FIXTURE, "utf8"));
     const { reply, exit } = await rpc('{"verb":"bundle","cursor":null}', d);
     expect(exit).toBe(0);
-    expect(reply).toEqual({ ...JSON.parse(readFileSync(FIXTURE, "utf8")), served_at: 1_794_834_015_000, ledger: null });
+    expect(reply).toEqual({ ...JSON.parse(readFileSync(FIXTURE, "utf8")), served_at: 1_794_834_015_000, ledger: null, answers: [] });
   });
 
   test("bundle with a cursor returns only the newer complete ledger lines; another file or a shorter one starts at 0", async () => {
@@ -154,5 +157,34 @@ describe("kinas companion rpc (slice 1)", () => {
     expect(await rpc('{"verb":"install","item":"relay-rule"}', d)).toEqual({ reply: { v: 1, cannot: "no-firstmate" }, exit: 0 });
     expect(await rpc('{"verb":"install","item":"companion-service"}', d)).toEqual({ reply: { v: 1, done: true }, exit: 0 });
     expect((await rpc('{"verb":"install","item":"anything"}', d)).exit).toBe(2);
+  });
+
+  test("answer (slice 6): delivered through the door with exit 0, its outcome then in the bundle, never its words", async () => {
+    const d = deps();
+    mkdirSync(d.paths.state, { recursive: true });
+    writeFileSync(d.paths.reading, JSON.stringify({ v: 1, at: 1_794_834_000_000, questions: [{ task: "t1-9c2e", key: "k-9c2e", hold: false, opened_at: 1_794_833_000_000 }] }));
+    const stdin: string[] = [];
+    const fm: Firstmate = {
+      run: async (call) => {
+        if (call.script === "fm-fleet-snapshot.sh") {
+          const snap = { schema: "fm-fleet-snapshot.v1", backlog: { records: [] }, tasks: [{ id: "t1-9c2e", hints: { open_decisions: [{ key: "k-9c2e", verb: "needs-decision", summary: "s" }] } }] };
+          return { exit: 0, timed_out: false, stdout: JSON.stringify(snap), stderr_first: null };
+        }
+        if (call.script === "fm-inbox.sh" && "stdin" in call) {
+          stdin.push(call.stdin);
+          return { exit: 0, timed_out: false, stdout: '{"schema":"fm-inbox-note.v1","outcome":"created"}', stderr_first: null };
+        }
+        throw new Error(call.script);
+      },
+    };
+    const request = { verb: "answer", task: "t1-9c2e", key: "k-9c2e", words: "On t1-9c2e (k-9c2e): yes-words-4b1c", request_id: "m1", from: "mac" };
+    const said = await rpc(JSON.stringify(request), { ...d, fm });
+    expect(said).toEqual({ reply: { v: 1, outcome: "delivered", item: "t1-9c2e@k-9c2e@1794833000000", at: 1_794_834_015_000, woken: true, replay: false }, exit: 0 });
+    expect(stdin).toEqual(["On t1-9c2e (k-9c2e): yes-words-4b1c"]);
+    const bundle = (await rpc('{"verb":"bundle"}', { ...d, fm })).reply as { answers: { request_id: string; state: string }[] };
+    expect(bundle.answers.map((a) => [a.request_id, a.state])).toEqual([["m1", "delivered"]]);
+    expect(JSON.stringify(bundle)).not.toContain("yes-words");
+    // Refused requests run nothing.
+    expect((await rpc(JSON.stringify({ ...request, from: "phone" }), d)).exit).toBe(2);
   });
 });

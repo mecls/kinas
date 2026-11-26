@@ -91,6 +91,23 @@ describe("the companion's reading", () => {
     expect(JSON.parse(readFileSync(w.deps.paths.reading, "utf8"))).toEqual(r);
   });
 
+  test("slice 6: the open questions, each opening carried; a failed snapshot keeps them; a delivered answer's receipts looked at", async () => {
+    const w = world({ clones: false });
+    const first = await readOnce(w.deps, null, 0);
+    expect(first.questions).toEqual([{ task: "stock-webhook-9c2e", key: "stock-webhook-9c2e", hold: true, opened_at: w.now.t }]);
+    w.now.t += 15_000;
+    const second = await readOnce(w.deps, first, 0);
+    expect(second.questions).toEqual(first.questions);
+    const failing: Deps = { ...w.deps, fm: { run: async (c, l) => (c.script === "fm-fleet-snapshot.sh" ? { exit: 1, timed_out: false, stdout: "", stderr_first: null } : w.deps.fm.run(c, l)) } };
+    w.now.t += 15_000;
+    expect((await readOnce(failing, second, 0)).questions).toEqual(first.questions);
+    expect(w.calls().filter((c) => c.startsWith("fm-inbox.sh"))).toEqual([]);
+    // A delivered answer not yet read: the reading asks the receipts (the fake home has no inbox, so they are unread).
+    writeFileSync(join(w.deps.paths.state, "answers.jsonl"), `${JSON.stringify({ v: 1, t: "outcome", request_id: "r1", item: "i", task: "stock-webhook-9c2e", key: "stock-webhook-9c2e", from: "mac", at: w.now.t, outcome: "delivered" })}\n`);
+    await readOnce(w.deps, second, 0);
+    expect(w.lines).toContain("companion: receipts unread");
+  });
+
   test("a second reading within the gap asks gh nothing and keeps the last answers", async () => {
     const w = world({ clones: false });
     const first = await readOnce(w.deps, null, 0);

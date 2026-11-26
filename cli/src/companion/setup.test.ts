@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { FIRSTMATE_PIN } from "@kinas/commands/crew-tools";
 import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fakeMachine, fakeReleases } from "./fake-machine.ts";
+import { fakeMachine, fakeReleases, NO_FIRSTMATE } from "./fake-machine.ts";
 import { fakeProc, SANDBOX_NS, type FakeProc } from "./fake-proc.ts";
 import { readWritten } from "./written.ts";
 import { install } from "./install.ts";
@@ -212,6 +212,8 @@ describe("AC-8: whether ANTHROPIC_API_KEY is set, never its value (invariant 3)"
       now: () => 1,
       herdr: m.deps.herdr,
       setup: m.deps,
+      fm: NO_FIRSTMATE,
+      log: (_: string) => {},
     };
     const origWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: string | Uint8Array) => (logged.push(String(chunk)), true)) as typeof process.stderr.write;
@@ -337,7 +339,7 @@ describe("the projects folders the captain names (slice 5.3)", () => {
     const m = named();
     mkdirSync(join(m.deps.paths.root!, "personal", "notes"), { recursive: true });
     mkdirSync(join(m.deps.paths.root!, "personal", "site"), { recursive: true });
-    const deps = { paths: m.deps.paths, version: "0.1.0", herdrVersion: async () => null, readNow: async () => {}, now: () => 1, herdr: m.deps.herdr, setup: m.deps };
+    const deps = { paths: m.deps.paths, version: "0.1.0", herdrVersion: async () => null, readNow: async () => {}, now: () => 1, herdr: m.deps.herdr, setup: m.deps, fm: NO_FIRSTMATE, log: (_: string) => {} };
     const said = await rpc('{"verb":"hello"}', deps);
     expect((said.reply as { folders: string[] }).folders).toEqual(["notes", "portal", "site"]);
   });

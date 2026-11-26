@@ -1,7 +1,7 @@
 # 0029 · Workers push with a per-task GitHub App token, can't read the SSH key or gh's login, and keep their own temp folder
 
 Date: 2026-11-26
-Status: accepted
+Status: superseded by 0030
 
 ## Context
 

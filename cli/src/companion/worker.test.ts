@@ -17,6 +17,7 @@ import {
   looseningKeys,
   MARKER,
   mergeSettings,
+  ownFolder,
   REFUSED_EXIT,
   RESERVED_READS,
   settingsArg,
@@ -227,6 +228,24 @@ describe("worker-launch", () => {
     expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
     expect(readFileSync(join(out.tmp, "kept"), "utf8")).toBe("x");
     expect(readFileSync(join(paths.home, "state", "t1.status"), "utf8")).toBe("working\n");
+  });
+
+  test("ADR 0030: a respawn keeps a real folder of this user's, mode 700; anything else at the name refuses, untouched", () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "kinas-own-")));
+    const at = (n: string) => join(base, n);
+    expect(ownFolder(at("new"))).toBe("made");
+    expect(statSync(at("new")).mode & 0o777).toBe(0o700);
+    expect(ownFolder(at("new"))).toBe("kept");
+    mkdirSync(at("open"), { mode: 0o755 });
+    chmodSync(at("open"), 0o755);
+    expect(ownFolder(at("open"))).toEqual({ refused: `${at("open")} isn't this user's alone` });
+    expect(statSync(at("open")).mode & 0o777).toBe(0o755);
+    writeFileSync(at("file"), "x");
+    expect(ownFolder(at("file"))).toEqual({ refused: `${at("file")} isn't a plain folder` });
+    symlinkSync(at("new"), at("link"));
+    expect(ownFolder(at("link"))).toEqual({ refused: `${at("link")} isn't a plain folder` });
+    // Another user's folder, as this user reads it.
+    expect(ownFolder(at("new"), process.getuid!() + 1)).toEqual({ refused: `${at("new")} isn't this user's alone` });
   });
 
   test("ADR 0028: every .claude and .mcp.json in the folder, at any depth, is denied by path, the root's always", () => {

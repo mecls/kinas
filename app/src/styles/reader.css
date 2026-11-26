@@ -189,6 +189,10 @@
   font-size: var(--fs-sm);
   line-height: 1.4;
 }
+/* A refusal the shell says here (slice 6.2: an answer not delivered) is an error, in --danger. */
+.reader-status[data-kind="error"] {
+  color: var(--danger);
+}
 
 .reader-main {
   position: relative;

@@ -437,7 +437,9 @@ function SidebarNotice({ notice, panelOpen }: { notice: Notice | null; panelOpen
 
   if (!shown || panelOpen) return null;
   return (
-    <Toast className="sidebar-notice">{shown.text}</Toast>
+    <Toast className="sidebar-notice" kind={shown.kind}>
+      {shown.text}
+    </Toast>
   );
 }
 

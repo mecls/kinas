@@ -64,6 +64,10 @@ pub(crate) struct Bundle {
     pub host: Option<serde_json::Value>,
     #[serde(default)]
     pub usage: Option<serde_json::Value>,
+    /// What became of each answer (slice 6, point 7; `crew/answer.rs` `apply_states`): the companion's record without
+    /// the words, kept raw like the machine's readings, so a row that does not read is dropped alone.
+    #[serde(default)]
+    pub answers: Option<serde_json::Value>,
 }
 
 /// A local-only task whose clone's local default branch moved since its launch (ADR 0029, `run.ts` `localMovedNow`).
@@ -230,6 +234,20 @@ mod tests {
         assert_eq!(decode(v2).unwrap_err(), "the Linux machine answered with reading version 2; this Kinas reads version 1");
         assert_eq!(decode(serde_json::json!({"error": "no-reading"})).unwrap_err(), "the Linux machine's answer is not a reading");
         assert_eq!(decode(serde_json::json!({"v": 1})).unwrap_err(), "the Linux machine's reading could not be read");
+    }
+
+    /// Slice 6.2: the answers' states arrive raw, so a list the Mac can't read never drops the reading with it; the
+    /// open questions (`questions[]`) are the companion's, and the Mac doesn't read them.
+    #[test]
+    fn answers_arrive_raw_and_never_drop_the_reading() {
+        let mut with = fixture();
+        with["answers"] = serde_json::json!([{ "request_id": "r-1", "state": "delivered" }]);
+        with["questions"] = serde_json::json!([{ "task": "t1", "key": "k", "hold": false, "opened_at": 1 }]);
+        assert_eq!(decode(with).unwrap().answers.unwrap()[0]["request_id"], "r-1");
+        let mut garbage = fixture();
+        garbage["answers"] = serde_json::json!("not a list");
+        assert!(decode(garbage).unwrap().answers.is_some());
+        assert!(decode(fixture()).unwrap().answers.is_none(), "an older companion sends none");
     }
 
     #[test]

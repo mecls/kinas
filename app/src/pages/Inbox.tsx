@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { openCrewPr, type CrewDecision, type CrewSnapshot } from "../api.ts";
 import { fleetAsOf } from "../crew/board.ts";
-import { ageText, copiedText, heldLine, inboxGroups, reconcileRows, titleOf } from "../crew/inbox.ts";
+import { ageText, answeredText, copiedText, heldLine, inboxGroups, reconcileRows, replyText, titleOf } from "../crew/inbox.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import { Dot, EmptyState, InboxItem, Section, SectionHeader, TitleRow } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
@@ -27,6 +27,7 @@ const itemId = (d: CrewDecision) => `${d.task_id}\u0000${d.key}`;
 function Item({
   d,
   held,
+  byNote,
   folders,
   now,
   box,
@@ -37,6 +38,8 @@ function Item({
 }: {
   d: CrewDecision;
   held: boolean;
+  /** A Linux machine: the answer goes as a note (slice 6.2). */
+  byNote: boolean;
   folders: readonly SeatedFolder[];
   now: number;
   box: InboxBox["kind"] | null;
@@ -73,7 +76,10 @@ function Item({
         answer={text}
         onAnswerChange={onText}
         copyDisabled={box === "answer" && text.trim() === ""}
-        copied={copiedText(d.copied_at) ?? undefined}
+        copied={byNote ? undefined : (copiedText(d.copied_at) ?? undefined)}
+        byNote={byNote}
+        answered={answeredText(d.answered) ?? undefined}
+        reply={replyText(d.answered) ?? undefined}
         // 1.12: Open the PR on a held item that names one — a task id to Rust, never a URL; a refusal changes nothing here.
         extra={held && d.pr_number !== null ? { label: "Open the PR", onClick: () => void openCrewPr(d.task_id).catch(() => {}) } : undefined}
         onApprove={() => onAnswer("approve", "")}
@@ -102,7 +108,10 @@ export function InboxPage({
   request?: (InboxBox & { seq: number }) | null;
   /** An item the palette chose (interface polish, rule 16): scrolled to and focused, where its keys work. */
   focus?: { task: string; key: string; seq: number } | null;
-  /** Resolves true once the line is on the clipboard — a launcher refusal after that still counts as copied. */
+  /**
+   * Resolves true once the answer is done with: on the clipboard (a launcher refusal after that still counts as copied),
+   * or, on a Linux machine, delivered or no longer wanted — a door that failed keeps the box for a resend.
+   */
   onAnswer?: (task: string, key: string, kind: AnswerKind, text: string) => Promise<boolean>;
 }) {
   const [box, setBox] = useState<(InboxBox & { text: string }) | null>(null);
@@ -158,6 +167,7 @@ export function InboxPage({
               key={itemId(d)}
               d={d}
               held={held}
+              byNote={crew.answers_by_note}
               folders={folders}
               now={crew.now}
               box={open?.kind ?? null}

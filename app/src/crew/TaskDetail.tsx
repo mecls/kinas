@@ -6,7 +6,7 @@ import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, 
 import { inboxKey } from "../ui/inboxKeys.ts";
 import { BADGE_OF, lanesOf, localMovedLine, reviewLine, shortCommit, worktreeLine } from "./board.ts";
 import { bareHead, checksOf, detailFailure, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
-import { ageText, copiedText } from "./inbox.ts";
+import { ageText, answeredText, copiedText, replyText } from "./inbox.ts";
 
 // The right panel's second occupant (build spec §4 Task detail; mockup task-detail.html): what Firstmate reports about
 // one task, read from Rust with `crew_task`, beside the reader in the aside and switched by `hidden` — the reader stays
@@ -143,7 +143,9 @@ export function TaskDetail({
                   <p className="ui-ink2">
                     {d.verb === "captain-hold" ? "held for you" : <>key <span className="ui-mono">{d.key}</span></>} · {ageText(d.opened_at, Date.now())}
                   </p>
-                  {d.copied_at !== null && <p className="ui-ink2 inbox-copied">{copiedText(d.copied_at)}</p>}
+                  {d.copied_at !== null && d.answered === null && <p className="ui-ink2 inbox-copied">{copiedText(d.copied_at)}</p>}
+                  {d.answered && <p className="ui-ink2 inbox-answered">{answeredText(d.answered)}</p>}
+                  {replyText(d.answered) && <p className="ui-ink2 inbox-reply">{replyText(d.answered)}</p>}
                 </div>
               ))}
             </>

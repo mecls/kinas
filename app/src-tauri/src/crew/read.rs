@@ -34,6 +34,9 @@ pub struct CrewSnapshot {
     /// Free lanes (Firstmate, current): the last good lane reading, only while the captain's lane cap opens the gate;
     /// filled by the command, which reads the gate outside the guard.
     pub lanes: Option<LanesView>,
+    /// With the agents on a Linux machine an answer is delivered as a note (slice 6.2), not put on the clipboard: the
+    /// box's button reads Send. Filled by the command, which reads the place.
+    pub answers_by_note: bool,
 }
 
 /// The last lane reading as the pages draw it: free and cap, auto, whether Firstmate holds dispatch and why.
@@ -121,6 +124,18 @@ pub struct DecisionRow {
     /// The PR a held task names (Firstmate, current; PRD rule 8): its number, only for a `captain-hold` item and only
     /// from an https URL. The URL itself never reaches the webview: `crew_open_pr` reads it by task id.
     pub pr_number: Option<u32>,
+    /// With the agents on a Linux machine (slice 6.2): the answer delivered for this opening, if one was.
+    pub answered: Option<AnsweredView>,
+}
+
+/// An answer delivered as a note (`crew_answers`): where from, when (this Mac's clock), when the first mate read it, and
+/// its reply. The words are not here: they are in Firstmate's inbox on the Linux machine.
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub struct AnsweredView {
+    pub from: String,
+    pub at: i64,
+    pub read_at: Option<i64>,
+    pub reply: Option<String>,
 }
 
 /// A worker row this old no longer shows its pane's button (§7 Worker: stale after 15 s).
@@ -146,6 +161,7 @@ pub(crate) fn snapshot_view(conn: &Connection, org: &str, now: i64, installed: b
         overnight_since: crate::crew::focus::overnight_since(&crate::crew::focus::stamps(conn, org), now),
         crew_repos: task_repos(conn, org)?,
         lanes: None,
+        answers_by_note: false,
     })
 }
 
@@ -410,9 +426,28 @@ fn decisions(conn: &Connection, org: &str, task: Option<&str>) -> rusqlite::Resu
             opened_at: r.get(6)?,
             copied_at: r.get(7)?,
             pr_number: r.get::<_, Option<String>>(8)?.as_deref().and_then(held_pr_number),
+            answered: None,
         })
     })?;
-    rows.collect()
+    let mut rows = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    for d in &mut rows {
+        d.answered = answered(conn, org, &d.task_id, &d.key, d.opened_at)?;
+    }
+    Ok(rows)
+}
+
+/// The first answer delivered for a decision's current opening: under its task and key (the item `<task>@<key>@…`),
+/// delivered at or after the row opened on this Mac. An earlier opening's answer came before it closed.
+fn answered(conn: &Connection, org: &str, task: &str, key: &str, opened_at: i64) -> rusqlite::Result<Option<AnsweredView>> {
+    conn.query_row(
+        "SELECT origin, delivered_at, read_at, reply FROM crew_answers
+         WHERE org_id = ?1 AND task_id = ?2 AND outcome = 'delivered' AND delivered_at >= ?4
+           AND substr(item_key, 1, length(?3)) = ?3
+         ORDER BY delivered_at, request_id LIMIT 1",
+        params![org, task, format!("{task}@{key}@"), opened_at],
+        |r| Ok(AnsweredView { from: r.get(0)?, at: r.get(1)?, read_at: r.get(2)?, reply: r.get(3)? }),
+    )
+    .optional()
 }
 
 /// A held PR's number (Firstmate, current): `https://<host>/…/pull/<n>` only — any forge's https PR, never http.
@@ -679,6 +714,36 @@ mod tests {
         let open = decisions(&conn, org, None).unwrap();
         assert_eq!(open.iter().map(|d| d.key.as_str()).collect::<Vec<_>>(), ["copied", "open"]);
         assert_eq!(open[0].copied_at, Some(5));
+    }
+
+    /// Slice 6.2: an open decision carries the first delivered answer of its current opening — one given since the row
+    /// opened on this Mac, under its task and key — with when the first mate read it and its reply.
+    #[test]
+    fn a_decision_carries_its_delivered_answer() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let conn = store.conn();
+        let org = store.org_id();
+        conn.execute("INSERT INTO crew_decisions (org_id, task_id, key, verb, summary, opened_at) VALUES (?1, 't1', 'k', 'needs-decision', 's', 100)", params![org]).unwrap();
+        conn.execute("INSERT INTO crew_decisions (org_id, task_id, key, verb, summary, opened_at) VALUES (?1, 't1', 'k2', 'needs-decision', 's', 100)", params![org]).unwrap();
+        let add = |id: &str, item: &str, outcome: &str, origin: &str, at: Option<i64>, read_at: Option<i64>, reply: Option<&str>| {
+            conn.execute(
+                "INSERT INTO crew_answers (org_id, request_id, task_id, item_key, kind, origin, outcome, delivered_at, read_at, reply) VALUES (?1, ?2, 't1', ?3, 'approve', ?4, ?5, ?6, ?7, ?8)",
+                params![org, id, item, origin, outcome, at, read_at, reply],
+            )
+            .unwrap();
+        };
+        assert!(decisions(&conn, org, None).unwrap().iter().all(|d| d.answered.is_none()), "none yet");
+        add("before", "t1@k@10", "delivered", "mac", Some(50), Some(60), Some("old"));
+        add("refused", "t1@k@90", "not_open", "mac", None, None, None);
+        add("lost", "t1@k@unknown", "unreachable", "mac", None, None, None);
+        add("k2-only", "t1@k2@90", "delivered", "phone", Some(140), None, None);
+        add("first", "t1@k@90", "delivered", "mac", Some(150), Some(160), Some("On it-9c2e"));
+        add("second", "t1@k@90", "delivered", "phone", Some(170), None, None);
+        let open = decisions(&conn, org, None).unwrap();
+        let of = |key: &str| open.iter().find(|d| d.key == key).unwrap().answered.clone();
+        assert_eq!(of("k"), Some(AnsweredView { from: "mac".into(), at: 150, read_at: Some(160), reply: Some("On it-9c2e".into()) }));
+        assert_eq!(of("k2"), Some(AnsweredView { from: "phone".into(), at: 140, read_at: None, reply: None }), "k2's own, not k's");
     }
 
     #[test]

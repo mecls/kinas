@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 pub(crate) const RPC_LIMIT: Duration = Duration::from_secs(20);
 /// Setup's `install` (slice 4): a download, a clone or an npm install on the VPS takes minutes, not seconds.
 pub(crate) const INSTALL_LIMIT: Duration = Duration::from_secs(300);
+/// An answer (slice 6.2): the companion waits up to 20 s for another answer's lock, then takes a fresh snapshot (20 s),
+/// a hold's check (5 s) and the note (10 s).
+pub(crate) const ANSWER_LIMIT: Duration = Duration::from_secs(60);
 pub(crate) const RPC_CAP: usize = 8 * 1024 * 1024;
 /// Run in the login directory, so the path needs no `~`: `kinas` as setup installs it.
 pub(crate) const REMOTE_COMMAND: [&str; 3] = [".local/bin/kinas", "companion", "rpc"];
@@ -113,6 +116,9 @@ pub(crate) enum Request {
     Focus { workspace: String },
     /// Open in the terminal: a Mac folder's twin under the VPS's projects folder, by its relative path and label.
     OpenWorkspace { folder: String, label: String },
+    /// The captain's answer (slice 6, ADR 0033): the line the first mate reads, delivered as a note in Firstmate's inbox
+    /// while its question is still open there. `request_id` makes a resend after a lost reply the same note.
+    Answer { task: String, key: String, words: String, request_id: String, from: Origin },
     /// Setup (slice 4, §17 2026-11-25 #4): one item, each the captain's click. `folder` and `repo` only for `clone`,
     /// `adopt` only for Herdr's service; an absent one is left out of the JSON, as the companion's validator wants.
     Install {
@@ -127,6 +133,14 @@ pub(crate) enum Request {
         #[serde(skip_serializing_if = "Option::is_none")]
         restart: Option<bool>,
     },
+}
+
+/// Where an answer was given: this Mac through the door; the phone's come through the cloud store (slice 10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Origin {
+    Mac,
+    Phone,
 }
 
 /// What setup installs on the VPS, as the companion names it (`cli/src/companion/setup.ts` INSTALL_ITEMS).
@@ -155,14 +169,16 @@ impl Request {
             Request::LaunchFirstMate => "launch-first-mate",
             Request::Focus { .. } => "focus",
             Request::OpenWorkspace { .. } => "open-workspace",
+            Request::Answer { .. } => "answer",
             Request::Install { .. } => "install",
         }
     }
 
-    /// How long the door waits for this one: `install` may download, clone or run npm.
+    /// How long the door waits for this one: `install` may download, clone or run npm; `answer` checks, then writes.
     pub fn limit(&self) -> Duration {
         match self {
             Request::Install { .. } => INSTALL_LIMIT,
+            Request::Answer { .. } => ANSWER_LIMIT,
             _ => RPC_LIMIT,
         }
     }
@@ -371,6 +387,20 @@ mod tests {
             Ok((ran(Exit::Code(0), "{}", None, None), false))
         });
         assert_eq!(*seen.borrow(), INSTALL_LIMIT);
+    }
+
+    /// Slice 6.2: the answer as the companion's validator takes it (cli/src/companion/validate.ts), and the door waits
+    /// 60 s for it: another answer's lock (20 s), the snapshot (20 s), the hold check (5 s) and the note (10 s).
+    #[test]
+    fn answer_is_the_companion_s_shape_and_waits_a_minute() {
+        let a = Request::Answer { task: "t1".into(), key: "api-shape".into(), words: "On t1 (api-shape): Approved — go ahead.".into(), request_id: "r-1".into(), from: Origin::Mac };
+        assert_eq!(
+            serde_json::to_string(&a).unwrap(),
+            r#"{"verb":"answer","task":"t1","key":"api-shape","words":"On t1 (api-shape): Approved — go ahead.","request_id":"r-1","from":"mac"}"#
+        );
+        assert_eq!(a.name(), "answer");
+        assert_eq!(a.limit(), ANSWER_LIMIT);
+        assert_eq!(ANSWER_LIMIT, Duration::from_secs(60));
     }
 
     #[test]

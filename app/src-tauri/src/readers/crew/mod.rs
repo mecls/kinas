@@ -509,6 +509,10 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo, sta
             }
             let mut conn = store.conn();
             let written = mirror::record(&mut conn, store.org_id(), &outcome, &found, now);
+            // Read by the first mate, its reply, and a delivery the door lost (slice 6.2): the Mac's own answers only.
+            if let Err(e) = crate::crew::answer::apply_states(&conn, store.org_id(), b.answers.as_ref(), b.served_at, now) {
+                log::warn!("crew: answers' states not applied: {e}");
+            }
             let words = crate::crew::read::worker_words(&conn, store.org_id()).unwrap_or_default();
             drop(conn);
             live.set_worker_words(words);

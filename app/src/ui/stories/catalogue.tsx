@@ -438,6 +438,45 @@ export const STORIES: Story[] = [
           </Inbox>
         ),
       },
+      // 1.14 (slice 6.2): with the agents on a Linux machine, the box sends a note, and the item says what became of it.
+      {
+        name: "answering-by-note",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={1}
+              keys
+              byNote
+              state="answering"
+              question="Keep the CSV import as a fallback for one release?"
+              context={<>Webhook for stock changes · <span className="ui-mono">fallback</span> · 25 min ago</>}
+              answer="Yes — keep it for one release, then remove it."
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
+      {
+        name: "answered",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={2}
+              keys
+              byNote
+              question="Ship dark mode behind a setting or on for everyone?"
+              context={<>Dark mode for the portal · <span className="ui-mono">rollout</span> · 1 h ago</>}
+              answered="Answered from the Mac at 14:05 · read by the first mate at 14:06"
+              reply="The first mate: Behind a setting it is; I've told the worker."
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
       {
         name: "compact",
         node: (

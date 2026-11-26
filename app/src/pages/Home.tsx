@@ -1,6 +1,6 @@
 import { useEffect, useMemo, type KeyboardEvent } from "react";
 import type { CrewDecision, CrewSnapshot, ProjectRow, UsageSnapshot } from "../api.ts";
-import { ageText, copiedText, heldLine, titleOf } from "../crew/inbox.ts";
+import { ageText, answeredText, copiedText, heldLine, replyText, titleOf } from "../crew/inbox.ts";
 import { useCleared } from "../crew/useCleared.ts";
 import { seatFolders, shownFolders } from "../shell/folders.ts";
 import { Button, Chip, EmptyState, Gauge, Gauges, InboxItem, MetricRow, ProgressList, ProgressRow, Rows, Section, SectionHeader, TitleRow } from "../ui/index.ts";
@@ -213,7 +213,9 @@ function Waiting({
         onKeyDown={onKeyDown}
         question={d.summary || titleOf(d)}
         context={d.verb === "captain-hold" ? heldLine(d, now) : `${titleOf(d)} · ${ageText(d.opened_at, now)}`}
-        copied={copiedText(d.copied_at) ?? undefined}
+        copied={d.answered ? undefined : (copiedText(d.copied_at) ?? undefined)}
+        answered={answeredText(d.answered) ?? undefined}
+        reply={replyText(d.answered) ?? undefined}
         onApprove={() => onApprove(d.task_id, d.key)}
         onAnswer={() => onOpenBox(d.task_id, d.key, "answer")}
         onDeny={() => onOpenBox(d.task_id, d.key, "deny")}

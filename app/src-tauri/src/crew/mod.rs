@@ -108,6 +108,7 @@ pub async fn crew_snapshot(app: AppHandle) -> Result<CrewSnapshot, CrewError> {
         let mut view = read::snapshot_view(&conn, store.org_id(), now_ms(), installed, running, generated).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
         let facts = read::reconcile_facts(&conn, store.org_id()).map_err(|e| CrewError::internal(format!("could not read the crew: {e}")))?;
         view.lanes = if lanes_on { read::lanes(&conn, store.org_id()) } else { None };
+        view.answers_by_note = on_vps;
         drop(conn);
         view.blocked = blocked;
         // The reconcile lines (§7): from the mirror, Herdr's last view and the last snapshot's orphans; the worktree's
@@ -284,13 +285,39 @@ pub async fn crew_seen(app: AppHandle, surface: seen::Surface, ids: Vec<String>)
     .map_err(|e| CrewError::internal(format!("the stamp did not finish: {e}")))?
 }
 
-/// An Inbox answer (§11.3 Answering; ADR 0017): the line from the open decision row onto the clipboard, `copied_at`
-/// stamped and `crew_changed` said — the item reads Copied and still counts — then the launcher, so the first mate's
-/// pane is where the captain pastes it. A launcher refusal is this command's rejection; the line stays on the
-/// clipboard. No Firstmate script runs, and the answer's words are never logged.
+/// What an answer did: on this Mac, the line on the clipboard and the launcher's outcome; on a Linux machine, what
+/// became of the note (slice 6.2).
+#[derive(Debug, Serialize)]
+pub struct AnswerResult {
+    sent: Option<answer::Sent>,
+    launched: Option<launch::Launched>,
+}
+
+/// Point 4's resends, for the app's life: never written down.
+static RESENDS: std::sync::LazyLock<answer::Resends> = std::sync::LazyLock::new(answer::Resends::default);
+
+/// An Inbox answer, by place. **This Mac** (§11.3 Answering; ADR 0017): the line from the open decision row onto the
+/// clipboard, `copied_at` stamped and `crew_changed` said — the item reads Copied and still counts — then the launcher,
+/// so the first mate's pane is where the captain pastes it. A launcher refusal is this command's rejection; the line
+/// stays on the clipboard. **A Linux machine** (flow E; ADR 0033): the same line, delivered through the door as a note
+/// in Firstmate's inbox while its question is still open there; the outcome's row, then `crew_changed`. A refusal that
+/// keeps no row is the rejection, in the companion's words. No Firstmate script runs on this Mac, and the answer's
+/// words are never logged.
 #[tauri::command]
-pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer::AnswerKind, text: String) -> Result<launch::Launched, CrewError> {
+pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer::AnswerKind, text: String) -> Result<AnswerResult, CrewError> {
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some((target, label)) = on_vps::vps(&app) {
+            let started = std::time::Instant::now();
+            let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
+            let sent = {
+                let store = app.state::<Store>();
+                answer::deliver(&store, &label, &task, &key, kind, &text, &RESENDS, now_ms, |req| crate::remote::call(&target, &data_dir, req))?
+            };
+            let _ = app.emit(crate::readers::runtime::CREW_CHANGED, ());
+            crate::tray::refresh(&app);
+            log::info!("crew: answer sent in {} ms", started.elapsed().as_millis());
+            return Ok(AnswerResult { sent: Some(sent), launched: None });
+        }
         let main = app.clone();
         {
             let store = app.state::<Store>();
@@ -303,7 +330,7 @@ pub async fn crew_answer(app: AppHandle, task: String, key: String, kind: answer
         let launched = launch_by_place(&app)?;
         log::info!("crew: launched ({}) in {} ms", launched.word(), started.elapsed().as_millis());
         app.state::<ReaderControl>().crew_herdr();
-        Ok(launched)
+        Ok(AnswerResult { sent: None, launched: Some(launched) })
     })
     .await
     .map_err(|e| CrewError::internal(format!("the answer did not finish: {e}")))?

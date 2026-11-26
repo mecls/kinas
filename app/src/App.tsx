@@ -5,6 +5,7 @@ import {
   addToCrew,
   answerCrew,
   BEFORE_COPY,
+  NOT_SENT,
   crewErrorCode,
   crewErrorOf,
   focusCrewPane,
@@ -52,6 +53,7 @@ import { HomePage } from "./pages/Home.tsx";
 import { InboxPage, type AnswerKind, type InboxBox } from "./pages/Inbox.tsx";
 import { TaskDetail } from "./crew/TaskDetail.tsx";
 import { taskHidden } from "./crew/detail.ts";
+import { sentDone, sentNotice } from "./crew/inbox.ts";
 import { useCrew } from "./crew/useCrew.ts";
 import { useMachine } from "./shell/useMachine.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
@@ -374,7 +376,7 @@ export function App() {
     return () => window.removeEventListener("focus", load);
   }, []);
 
-  const say = useCallback((text: string) => setNotice({ text, seq: ++noticeSeq.current }), []);
+  const say = useCallback((text: string, kind?: "error") => setNotice({ text, kind, seq: ++noticeSeq.current }), []);
 
   // The client folders, at launch, whenever the window comes forward (a clone made in the terminal should show
   // without a relaunch — Rust walks the root again once a minute at most) and after Settings changes one.
@@ -560,22 +562,29 @@ export function App() {
   // Each client folder's crew state for the sidebar (rules 20–21), from the one crew reading the board shows.
   const folderStateMap = useMemo(() => (crew ? folderStates(crew.tasks, folders, crew.now) : new Map<string, FolderState>()), [crew, folders]);
 
-  // An Inbox answer (§11.3 Answering; ADR 0017): Rust puts the line on the clipboard, then runs the launcher; the Work
-  // page shows with the terminal holding the keys, and the notice says what to paste. A refusal says why in the
-  // notice; one from the launcher came after the copy, so the item reads Copied all the same. Resolves whether the
-  // line reached the clipboard.
+  // An Inbox answer (§11.3 Answering; ADR 0017): on this Mac, Rust puts the line on the clipboard, then runs the
+  // launcher; the Work page shows with the terminal holding the keys, and the notice says what to paste. A refusal says
+  // why in the notice; one from the launcher came after the copy, so the item reads Copied all the same. On a Linux
+  // machine (slice 6.2), Rust delivers it as a note: the notice says what became of it, and the page stays. Resolves
+  // whether the box is done with: the line copied, or the note's question answered or no longer waiting.
   const answer = useCallback(
     async (task: string, key: string, kind: AnswerKind, text: string): Promise<boolean> => {
       try {
-        await answerCrew(task, key, kind, text);
+        const result = await answerCrew(task, key, kind, text);
+        if (result.sent) {
+          const n = sentNotice(result.sent);
+          say(n.text, n.error ? "error" : undefined);
+          return sentDone(result.sent.outcome);
+        }
         say("Your answer is on the clipboard — paste it into the first mate's pane.");
         wantTerminalFocus.current = true;
         goTo("work");
         setFocusTick((n) => n + 1);
         return true;
       } catch (e) {
-        say(crewErrorOf(e));
-        return !BEFORE_COPY.has(crewErrorCode(e) ?? "internal");
+        say(crewErrorOf(e), "error");
+        const code = crewErrorCode(e) ?? "internal";
+        return !BEFORE_COPY.has(code) && !NOT_SENT.has(code);
       } finally {
         reloadCrew();
       }

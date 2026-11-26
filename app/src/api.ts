@@ -194,6 +194,15 @@ export interface CrewDecision {
   copied_at: number | null;
   /** A held item's PR number (Firstmate, current); the URL stays in Rust (`openCrewPr`). */
   pr_number: number | null;
+  /** With the agents on a Linux machine (slice 6.2): the answer delivered for this opening of the question. */
+  answered: CrewAnswered | null;
+}
+/** An answer delivered as a note in Firstmate's inbox: where from, when, when the first mate read it, its reply. */
+export interface CrewAnswered {
+  from: "mac" | "phone";
+  at: number;
+  read_at: number | null;
+  reply: string | null;
 }
 export interface CrewSnapshot {
   now: number;
@@ -211,6 +220,8 @@ export interface CrewSnapshot {
   crew_repos: string[];
   /** Free lanes (Firstmate, current): the last lane reading while the captain's lane cap is set; null otherwise. */
   lanes: CrewLanes | null;
+  /** With the agents on a Linux machine an answer goes as a note, not on the clipboard (slice 6.2): the box says Send. */
+  answers_by_note: boolean;
 }
 /** Firstmate's lane verdict as Kinas last read it (`fm-capacity.sh --json`). */
 export interface CrewLanes {
@@ -296,15 +307,35 @@ export const getCrewTask = (id: string) => invoke<CrewTaskDetail | null>("crew_t
 export type CrewSurface = "board" | "overnight";
 /** What a page just showed finished: Rust stamps each one still finished and not yet stamped; answers how many. */
 export const crewSeen = (surface: CrewSurface, ids: readonly string[]) => invoke<number>("crew_seen", { surface, ids });
+/** What became of an answer sent as a note (slice 6.2), each keeping a row: `crew/answer.rs` `Sent`. */
+export type AnswerOutcome = "delivered" | "already" | "not_open" | "unreachable";
+export interface SentAnswer {
+  outcome: AnswerOutcome;
+  /** Delivered: Firstmate woke the first mate; otherwise it reads the note at its next turn. */
+  woken: boolean;
+  /** Already: when the question's first answer was delivered, on this Mac's clock. */
+  answered_at: number | null;
+  /** Unreachable: `can't reach homelab: timed out`. */
+  why: string | null;
+}
+/** On this Mac, the launcher's outcome; on a Linux machine, what became of the note. */
+export interface AnswerResult {
+  sent: SentAnswer | null;
+  launched: "focused" | "run" | "created" | null;
+}
 /**
- * An Inbox answer (ADR 0017): Rust builds `On <task> (<key>): <answer>` from the open decision, puts it on the clipboard,
- * marks it copied, then runs the launcher. A rejection with a launcher's code (a missing tool, Herdr) came after the
- * copy; `empty`, `too_long`, `not_open` and `clipboard` came before it.
+ * An Inbox answer. On this Mac (ADR 0017): Rust builds `On <task> (<key>): <answer>` from the open decision, puts it on
+ * the clipboard, marks it copied, then runs the launcher. A rejection with a launcher's code (a missing tool, Herdr) came
+ * after the copy; `empty`, `too_long`, `not_open` and `clipboard` came before it. On a Linux machine (slice 6.2): the
+ * same line, delivered as a note while the question is open there; a rejection is a refusal that sent nothing, in the
+ * companion's words (`cannot_tell`, `gate`, `note_failed`, `note_unknown`, `request_reused`, `busy`).
  */
 export const answerCrew = (task: string, key: string, kind: "approve" | "deny" | "answer", text: string) =>
-  invoke<"focused" | "run" | "created">("crew_answer", { task, key, kind, text });
+  invoke<AnswerResult>("crew_answer", { task, key, kind, text });
 /** The refusals that leave nothing on the clipboard. */
 export const BEFORE_COPY = new Set(["empty", "too_long", "not_open", "clipboard", "internal"]);
+/** A Linux machine's refusals (slice 6.2): nothing was sent, so the box keeps the words. */
+export const NOT_SENT = new Set(["cannot_tell", "gate", "note_failed", "note_unknown", "request_reused", "busy", "refused"]);
 export const crewErrorCode = (e: unknown): string | null =>
   e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string" ? (e as { code: string }).code : null;
 /** The menu bar's `N waiting on you`: open a page in the window (build spec §4 Menu bar). */

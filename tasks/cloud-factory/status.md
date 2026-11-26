@@ -35,7 +35,15 @@
   - Checked 2026-11-26: the captain installed both scripts by hand. The Mac's plan gauge reads `Claude Code status
     line · homelab`, and a session in `~/miraside/agent` starts with the packet. The Linux host's stale-limit fix
     (`0229fd6`) comes with the next Mac build.
-- [ ] Slice 5b · worker isolation: a per-task GitHub token scoped to the task's repository, with the shared SSH key and `gh`'s credentials denied to workers so they push only with that token; and a temporary folder per worker — APPROVED 2026-11-25, after slice 5 and before slice 6 (build spec §12)
+- [ ] Slice 5b · worker isolation (ADR 0029, approved 2026-11-26 with the captain's five additions). Built 2026-11-26,
+  with every check green; the acceptance run (5b.E) waits for the captain to register the App:
+  - 5b.A: the GitHub App, and setup's GitHub App row.
+  - 5b.B: each worker's token at launch. A worker can't read `~/.ssh`, `~/.config/gh` or the App key. GitHub's SSH
+    remotes are rewritten to HTTPS, and Kinas's credential helper serves the token. Each worker has its own temp
+    folder at `/tmp/kw/<8 hex>`.
+  - 5b.C: tokens renewed, and revoked when a task ends.
+  - 5b.D: the review flag reads against the commit recorded at launch, and a local-only task's card says when `main`
+    moved.
 - [ ] Slice 6 · answers from the Mac, as inbox notes → ship point 1
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading

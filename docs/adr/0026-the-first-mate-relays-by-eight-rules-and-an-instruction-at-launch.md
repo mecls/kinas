@@ -1,7 +1,7 @@
 # 0026 · The first mate relays answers by eight exact rules, with an instruction passed at launch
 
 Date: 2026-11-25
-Status: accepted
+Status: superseded by 0033
 
 ## Context
 

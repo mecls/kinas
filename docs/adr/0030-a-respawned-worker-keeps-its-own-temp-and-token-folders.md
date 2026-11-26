@@ -1,7 +1,7 @@
 # 0030 · A respawned worker keeps its own temp and token folders; anything else at their names refuses the launch
 
 Date: 2026-11-26
-Status: accepted
+Status: superseded by 0031
 
 ## Context
 

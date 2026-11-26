@@ -206,7 +206,10 @@ export function workerPolicy(o: PolicyOf): Record<string, unknown> {
       GIT_CONFIG_KEY_3: "credential.https://github.com.helper",
       GIT_CONFIG_VALUE_3: "",
       GIT_CONFIG_KEY_4: "credential.https://github.com.helper",
-      GIT_CONFIG_VALUE_4: `${sq(join(o.wrapperDir, HELPER))} ${sq(join(tokens, "token"))}`,
+      // A leading `!` makes git run the rest through the shell, quotes intact, with the action (`get`) appended. Without
+      // it git runs only a value starting with `/` as a path, and took `'/…'` for a helper named `credential-'/…'`
+      // (5b's acceptance, 2026-11-26).
+      GIT_CONFIG_VALUE_4: `!${sq(join(o.wrapperDir, HELPER))} ${sq(join(tokens, "token"))}`,
       GIT_TERMINAL_PROMPT: "0",
       GH_CONFIG_DIR: join(tokens, "gh"),
       GH_PROMPT_DISABLED: "1",

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeMachine } from "./fake-machine.ts";
@@ -113,7 +114,7 @@ describe("the policy (as approved, with the captain's conditions)", () => {
       GIT_CONFIG_KEY_3: "credential.https://github.com.helper",
       GIT_CONFIG_VALUE_3: "",
       GIT_CONFIG_KEY_4: "credential.https://github.com.helper",
-      GIT_CONFIG_VALUE_4: "'/home/claude/.local/share/kinas/bin/kinas-git-credential' '/home/claude/.local/state/kinas/workers/t1/token'",
+      GIT_CONFIG_VALUE_4: "!'/home/claude/.local/share/kinas/bin/kinas-git-credential' '/home/claude/.local/state/kinas/workers/t1/token'",
       GIT_TERMINAL_PROMPT: "0",
       GH_CONFIG_DIR: "/home/claude/.local/state/kinas/workers/t1/gh",
       GH_PROMPT_DISABLED: "1",
@@ -228,6 +229,34 @@ describe("worker-launch", () => {
     expect("refused" in workerLaunch(d, {}, "t1", cwd, FM_ARGV)).toBe(false);
     expect(readFileSync(join(out.tmp, "kept"), "utf8")).toBe("x");
     expect(readFileSync(join(paths.home, "state", "t1.status"), "utf8")).toBe("working\n");
+  });
+
+  test("ADR 0029, run by real git: the policy's credential config answers github.com with the worker's own token, and nothing else", () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "kinas-cred- '")));
+    const wrapperDir = join(base, "bin dir");
+    const tokens = join(base, "workers", "t1");
+    mkdirSync(wrapperDir, { recursive: true });
+    mkdirSync(tokens, { recursive: true });
+    writeFileSync(join(wrapperDir, HELPER), helperText(), { mode: 0o755 });
+    writeFileSync(join(tokens, "token"), "ghs_abcdefghijklmnop0123", { mode: 0o600 });
+    const env = (workerPolicy({ home: join(base, "fm"), id: "t1", uid: 1001, tmp: "/tmp", deny: [], wrapperDir, workers: join(base, "workers") }) as { env: Record<string, string> }).env;
+    // An inherited helper (the shared login's) is emptied first; git reads no global or system config here.
+    const run = (url: string, extra: Record<string, string> = {}) =>
+      spawnSync("git", ["-c", "credential.helper=!echo password=leaked", "credential", "fill"], {
+        input: `url=${url}\n\n`,
+        env: { PATH: process.env.PATH, HOME: base, GIT_CONFIG_NOSYSTEM: "1", ...env, ...extra },
+        encoding: "utf8",
+      });
+    const gh = run("https://github.com/mecls/shop.git");
+    expect(gh.stdout).toContain("username=x-access-token\npassword=ghs_abcdefghijklmnop0123\n");
+    expect(gh.stdout).not.toContain("leaked");
+    // Another host gets nothing from Kinas, and no prompt: git fails rather than ask.
+    const other = run("https://gitlab.com/mecls/shop.git");
+    expect(other.status).not.toBe(0);
+    expect(other.stdout).not.toContain("ghs_");
+    // GitHub's ssh remotes are rewritten to https.
+    const rewritten = spawnSync("git", ["ls-remote", "--get-url", "git@github.com:mecls/shop.git"], { env: { PATH: process.env.PATH, HOME: base, GIT_CONFIG_NOSYSTEM: "1", ...env }, encoding: "utf8" });
+    expect(rewritten.stdout.trim()).toBe("https://github.com/mecls/shop.git");
   });
 
   test("ADR 0030: a respawn keeps a real folder of this user's, mode 700; anything else at the name refuses, untouched", () => {

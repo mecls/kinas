@@ -54,7 +54,14 @@
     - **`answers.jsonl`:** no words.
     - **Receipts:** read in each reading, without `body`.
     - **The bundle:** carries `answers[]`.
-    - **Tests:** CLI 322/322. Next is 6.2, the Mac side.
+    - **Tests:** CLI 322/322.
+  - 6.2 done, 2026-11-26: the Mac side (`crew/answer.rs` `deliver`, `apply_states`).
+    - **Routing:** with a Linux machine set, `crew_answer` delivers through the door (`Request::Answer`, 60 s).
+    - **Rows:** `crew_answers` keeps delivered, already, not open and unreachable. A refusal keeps none and shows the
+      companion's words.
+    - **The item:** `Answered from the Mac at 14:05 · read by the first mate at 14:06`, and the reply on its own line.
+      The box's button reads Send.
+    - **Tests:** `bun run check` green. Next is 6.3, the fake Firstmate's inbox and `vps.e2e.ts` AC-3.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

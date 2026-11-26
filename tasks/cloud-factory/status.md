@@ -61,7 +61,12 @@
       companion's words.
     - **The item:** `Answered from the Mac at 14:05 · read by the first mate at 14:06`, and the reply on its own line.
       The box's button reads Send.
-    - **Tests:** `bun run check` green. Next is 6.3, the fake Firstmate's inbox and `vps.e2e.ts` AC-3.
+    - **Tests:** `bun run check` green.
+  - 6.3 done, 2026-11-26: AC-3 through the fake VPS (`vps.e2e.ts`, the fake Firstmate's `fm-inbox.sh` and
+    `fm-captain-hold.sh`).
+    - **The case:** the sandbox gate refuses with its words; then one note, the words on stdin only; Deny is
+      `Already answered`, with no Firstmate call; then read, with the reply.
+    - **Tests:** `vps.e2e.ts` 7/7 alone, and `bun run check` green. Next is 6.4, ship point 1.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

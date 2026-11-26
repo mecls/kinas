@@ -1,7 +1,7 @@
 # 0028 · A worker can't write its worktree's `.claude` or `.mcp.json`, and Kinas scans the worktree for new ones before landing
 
 Date: 2026-11-25
-Status: accepted
+Status: superseded by 0029
 
 ## Context
 

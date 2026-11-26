@@ -17,6 +17,9 @@
   Herdr, Herdr's version in `hello` with the machine's pin at 0.9.5, any Linux with systemd (with ADR 0024 for the
   wording). Approved as written; the approvals above stand for everything else.
 
+- Gates 3–4 · amendment for slice 6 (answers): IN PROGRESS — written 2026-11-26 in `build-spec.md` §12 under slice 6
+  (the `not_open` rule first, then eight smaller changes), waiting for the captain's approval; no slice 6 code before it
+
 ## Slices (build-spec.md §12)
 - [x] Slice 0 · ground, docs first (ADRs 0021–0023, DESIGN.md 1.13 — now 1.14 —, ⌘6; ADR 0024 superseded 0021 on 2026-11-24), and the probe on the captain's VPS — 0.1 baseline green and 0.2 docs done 2026-11-17 (`0a40b60`); 0.3 the probe ran on 2026-11-24 on the home lab: it stopped at the note (the first mate read the answer and auto mode blocked its relay; `receipts --json` refused), the captain chose an allow rule and ADR 0025 (supersedes 0022), and with the rule a fresh first mate relayed the note; `herdr --remote` from the Mac carried a paste; torn down (build spec §19)
 - [x] Slice 1 · tracer bullet: the Crew board drawn from a VPS, through the door (stub companion, fixture bundle) — done 2026-11-24: the door, the place, the companion's `rpc` (`hello` with Herdr's version, `bundle`), the remote reading, migration 0008 (tables only), the ssh guard, Settings → Where agents run (This Mac / VPS, target, label, Reachable with both Herdrs), the Crew page's state from the VPS, and `vps.e2e.ts` case 1 through a stub ssh and a fake VPS; `bun run check` green (bun 1,008, cargo 519 + 3 ignored, clippy clean) and the spec green alone

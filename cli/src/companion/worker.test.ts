@@ -69,7 +69,7 @@ describe("the policy (as approved, with the captain's conditions)", () => {
     expect(deny).toContain("Edit(//tmp/claude-1001/-home-claude--local-share-kinas-firstmate/**)");
     // The captain's list, always in full: ~/vault, ~/.config/last30days/ and ~/.config/brain/ among it.
     for (const p of RESERVED_READS) expect(deny).toContain(`Read(${p})`);
-    for (const p of ["~/vault/**", "~/.config/last30days/**", "~/.config/brain/**", "~/.local/share/com.vercel.cli/**", "~/.config/obsidian-headless/**", "~/.local/state/kinas/**"]) {
+    for (const p of ["~/vault/**", "~/.config/last30days/**", "~/.config/brain/**", "~/.local/share/com.vercel.cli/**", "~/.config/obsidian-headless/**", "~/.local/state/kinas/**", "~/backups/**"]) {
       expect(deny).toContain(`Read(${p})`);
     }
     expect(deny).toContain("Edit(//home/claude/.local/share/kinas/firstmate/.agents/**)");

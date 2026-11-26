@@ -52,6 +52,8 @@ export const RESERVED_READS = [
   "~/.local/share/now/**",
   "~/.config/obsidian-headless/**",
   "~/.local/state/kinas/**",
+  // The captain's, 2026-11-26: Kinas's backups and staged files (Firstmate settings, ~/.claude.json, test transcripts).
+  "~/backups/**",
 ] as const;
 
 /** Claude Code's own records no worker may read. */

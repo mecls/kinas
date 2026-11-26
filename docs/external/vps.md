@@ -52,7 +52,9 @@ Kinas's companion. The Mac then runs Kinas only. Without a VPS set, nothing here
     - In each task clone's `.git/info/exclude` (ADR 0028): one root-anchored line for each path Claude Code's sandbox protects that was missing from a worktree at launch (its empty placeholders), under Firstmate's own `.claude/settings.local.json` line. Lines are only added.
     - Workers run in Claude Code's sandbox, which needs `bwrap`, `socat` and `@anthropic-ai/sandbox-runtime` in Node's global folder (the seccomp helper `vendor/seccomp/<arch>/apply-seccomp`).
     - All four files are in Kinas's record. The runtime check reads `/proc` for the user's own processes: environment, command line, PID namespace and seccomp mode.
-    - The reserved paths no worker may read: `~/vault`, `~/.config/last30days`, `~/.config/brain`, `~/.config/search.env`, `~/.config/parallel.env`, `~/.config/agentwikis.env`, `~/.local/share/com.vercel.cli`, `~/.now`, `~/.local/share/now`, `~/.config/obsidian-headless` and `~/.local/state/kinas`.
+    - The reserved paths no worker may read: `~/vault`, `~/.config/last30days`, `~/.config/brain`, `~/.config/search.env`, `~/.config/parallel.env`, `~/.config/agentwikis.env`, `~/.local/share/com.vercel.cli`, `~/.now`, `~/.local/share/now`, `~/.config/obsidian-headless` and `~/.local/state/kinas`. Amended 2026-11-26 (the captain's word): and `~/backups`,
+      where every Kinas backup and staged file goes, in `~/backups/kinas/<date>-<purpose>/`. Those copies hold Firstmate
+      settings, `~/.claude.json` and test transcripts.
 - **Claude Code** at `~/.local/bin/claude`, signed in by the captain, in the VPS's terminal, with their own
   subscription. `ANTHROPIC_API_KEY` must not be set there: its presence (never its value) is checked.
   - Amended 2026-11-25 (slices 5.1 and 5.3). The captain installs two scripts there by hand, each staged by Kinas

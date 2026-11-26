@@ -3,8 +3,8 @@
 # line to state/calls.log — never the words, which come on stdin only — and keeps each note's words in
 # state/inbox/<request id>, as the real inbox keeps a note.
 #
-# `note --request-id <id> --json -` saves the words once and prints `{"outcome":"saved"}`; the same id again prints
-# `replay` and saves nothing, as Firstmate's idempotent note does. `receipts` prints fm-inbox-receipts.v1 with every note
+# `note --request-id <id> --json -` saves the words once and prints fm-inbox-note.v1 with `created`; the same id again
+# prints `replay` and saves nothing, as Firstmate's idempotent note does. `receipts` prints fm-inbox-receipts.v1 with every note
 # pending — or handled once a spec leaves fixtures/inbox-handled, with the reply in fixtures/inbox-reply when there is
 # one — and, as the real one does, each note's words in `body`, which Kinas must never carry off the machine.
 set -u
@@ -31,11 +31,11 @@ case "${1:-}" in
     esac
     if [ -f "$inbox/$id" ]; then
       cat > /dev/null
-      printf '{"outcome":"replay","request_id":"%s"}\n' "$id"
+      printf '{"schema":"fm-inbox-note.v1","outcome":"replay","request_id":"%s","saved":true,"announced":true}\n' "$id"
       exit 0
     fi
     cat > "$inbox/$id.tmp" && mv "$inbox/$id.tmp" "$inbox/$id"
-    printf '{"outcome":"saved","request_id":"%s"}\n' "$id"
+    printf '{"schema":"fm-inbox-note.v1","outcome":"created","request_id":"%s","saved":true,"announced":true}\n' "$id"
     exit 0
     ;;
   receipts)

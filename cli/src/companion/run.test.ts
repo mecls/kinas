@@ -102,9 +102,14 @@ describe("the companion's reading", () => {
     w.now.t += 15_000;
     expect((await readOnce(failing, second, 0)).questions).toEqual(first.questions);
     expect(w.calls().filter((c) => c.startsWith("fm-inbox.sh"))).toEqual([]);
-    // A delivered answer not yet read: the reading asks the receipts (the fake home has no inbox, so they are unread).
+    // A delivered answer not yet read: the reading asks the receipts (the fake inbox has no note of it, so it stays
+    // unread); and when receipts can't be read, the reading says so and goes on.
     writeFileSync(join(w.deps.paths.state, "answers.jsonl"), `${JSON.stringify({ v: 1, t: "outcome", request_id: "r1", item: "i", task: "stock-webhook-9c2e", key: "stock-webhook-9c2e", from: "mac", at: w.now.t, outcome: "delivered" })}\n`);
     await readOnce(w.deps, second, 0);
+    expect(w.calls().filter((c) => c.startsWith("fm-inbox.sh"))).toEqual(["fm-inbox.sh receipts"]);
+    expect(w.lines).not.toContain("companion: receipts unread");
+    const noReceipts: Deps = { ...w.deps, fm: { run: async (c, l) => (c.script === "fm-inbox.sh" ? { exit: 2, timed_out: false, stdout: "", stderr_first: null } : w.deps.fm.run(c, l)) } };
+    await readOnce(noReceipts, second, 0);
     expect(w.lines).toContain("companion: receipts unread");
   });
 

@@ -125,3 +125,46 @@ export function plantHerdrRelease(root: string): void {
   writeFileSync(join(dir, "pins.json"), JSON.stringify([{ name: "herdr", version: "0.9.5", repo: "fake/herdr", kind: "raw", assets: { x64: asset, arm64: asset } }]));
   rmSync(join(root, "bin", "herdr"), { force: true });
 }
+
+/** The pid namespace a fake /proc gives the companion and every process planted beside it. */
+const HOST_NS = "pid:[4026531836]";
+/** The process `plantSandbox` plants outside the sandbox. */
+export const OUTSIDER_PID = 4242;
+
+/**
+ * Slice 6.3 (ADR 0027): what the companion's note gate reads, so a note can be written on the fake VPS — `bwrap` and
+ * `socat` on its PATH, Node's folder with the sandbox runtime's seccomp helper, and a /proc under the companion's root
+ * holding the companion's own namespace. Stand-ins all: the gate only finds them, it never runs them. With `outsider`,
+ * a task's process (`FM_TASK_ID` that task) runs outside Kinas's sandbox, and the gate refuses every note; without it,
+ * none does.
+ */
+export function plantSandbox(dataDir: string, outsider: string | null): void {
+  const home = join(dataDir, "fake-vps", "home");
+  const root = join(dataDir, "fake-vps", "companion");
+  for (const tool of ["bwrap", "socat"]) script(join(home, ".local", "bin", tool), "exit 1");
+  const node = join(home, ".local", "share", "fnm", "aliases", "default", "bin");
+  mkdirSync(node, { recursive: true });
+  script(join(node, "node"), "exit 1");
+  const arch = process.arch === "x64" ? "x64" : "arm64";
+  const helper = join(node, "..", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime", "vendor", "seccomp", arch);
+  mkdirSync(helper, { recursive: true });
+  script(join(helper, "apply-seccomp"), "exit 1");
+  const proc = join(root, "proc");
+  const link = (target: string, at: string) => {
+    rmSync(at, { force: true });
+    symlinkSync(target, at);
+  };
+  mkdirSync(join(proc, "self", "ns"), { recursive: true });
+  link(HOST_NS, join(proc, "self", "ns", "pid"));
+  const dir = join(proc, String(OUTSIDER_PID));
+  rmSync(dir, { recursive: true, force: true });
+  if (outsider === null) return;
+  const uid = process.getuid?.() ?? 0;
+  mkdirSync(join(dir, "ns"), { recursive: true });
+  writeFileSync(join(dir, "status"), `Name:\tpython3\nPPid:\t1\nUid:\t${uid}\t${uid}\t${uid}\t${uid}\nNoNewPrivs:\t0\nSeccomp:\t0\n`);
+  writeFileSync(join(dir, "cmdline"), "python3\0worker.py\0");
+  writeFileSync(join(dir, "environ"), `FM_TASK_ID=${outsider}\0`);
+  link("/usr/bin/python3", join(dir, "exe"));
+  link("/", join(dir, "cwd"));
+  link(HOST_NS, join(dir, "ns", "pid"));
+}

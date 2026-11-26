@@ -2,8 +2,8 @@ import { $, browser, expect } from "@wdio/globals";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { writeSnapshot } from "../fake-firstmate/make.ts";
-import { LABEL, plantHerdrRelease, setCompanion, setDown, TARGET } from "../fake-vps/make.ts";
+import { inboxNotes, setInboxHandled, setSnapshot, writeSnapshot } from "../fake-firstmate/make.ts";
+import { LABEL, plantHerdrRelease, plantSandbox, setCompanion, setDown, TARGET } from "../fake-vps/make.ts";
 import { APP_LOG, herdr, herdrSnapshot } from "../helpers.ts";
 import { VPS_SESSION } from "./vps.setup.ts";
 
@@ -24,6 +24,12 @@ import { VPS_SESSION } from "./vps.setup.ts";
 // Case 5, slice 4.14 (ADR 0028): a worker on the VPS reports done with a `.claude` and a `.mcp.json` planted in its
 // worktree. This build's own companion scans the folder as files, the bundle carries the scan, and the card and the task
 // detail say so in red — while the repository's own `.claude` file, the same in the clone, is not named.
+// Case 7, slice 6.3 (AC-3; ADRs 0027, 0033): an answer from the Mac is a note in Firstmate's inbox on the VPS. While a
+// task's process runs outside Kinas's sandbox, Approve says why and writes no note. Sandboxed, Approve writes one note
+// with the line on stdin only, and the item reads answered from the Mac; Deny on the same item is Already answered and
+// makes no Firstmate call; once the first mate has handled the note and replied, the item reads read, with the reply.
+// The words are in the inbox there and nowhere else: not the Mac's store, its log, the door's argv or the companion's
+// record.
 
 const dataDir = process.env.KINAS_DATA_DIR!;
 const calls = join(dataDir, "fake-vps", "calls.log");
@@ -44,7 +50,7 @@ async function waitInPage<T>(read: () => T, ok: (v: T) => boolean, timeoutMsg: s
 }
 
 /** A click in the page on a sidebar row by its label (the row also carries its chord since the interface polish). */
-const go = (label: "Crew" | "Settings" | "Home" | "Work") =>
+const go = (label: "Crew" | "Settings" | "Home" | "Work" | "Inbox") =>
   browser.execute(
     (l: string) =>
       [...document.querySelectorAll<HTMLButtonElement>(".sidebar button")]
@@ -472,5 +478,134 @@ describe("agents on a VPS", () => {
     expect(hostRows.length).toBe(2);
     const log = logSinceStart();
     expect(log.includes("e2e-5-2") || log.includes(session)).toBe(false);
+  });
+
+  it("AC-3: delivers an answer from the Mac once, as a note on the Linux machine, and says it was read (slice 6.3)", async () => {
+    const TASK = "stock-webhook-9c2e";
+    const LINE = `On ${TASK}: Approved — go ahead.`;
+    const fmHome = join(dataDir, "fake-vps", "companion", "firstmate");
+    const fmCalls = join(fmHome, "state", "calls.log");
+    const fmLines = () => (existsSync(fmCalls) ? readFileSync(fmCalls, "utf8").trim().split("\n").filter(Boolean) : []);
+    const sql = (q: string) => execFileSync("/usr/bin/sqlite3", [join(dataDir, "kinas.sqlite"), q], { encoding: "utf8" }).trim();
+    const refresh = () =>
+      browser.execute(() =>
+        (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("refresh_readings").then(
+          () => "ok",
+          (e: unknown) => String(e),
+        ),
+      );
+    const item = `section[data-page="inbox"] li.inbox-item[data-task="${TASK}"][data-key="${TASK}"]`;
+    /** The item's quiet lines and whether its box is open. */
+    const lines = () =>
+      browser.execute((sel: string) => {
+        const el = document.querySelector(sel);
+        return el
+          ? JSON.stringify({
+              answered: el.querySelector(".inbox-answered")?.textContent ?? null,
+              reply: el.querySelector(".inbox-reply")?.textContent ?? null,
+              copied: el.querySelector(".inbox-copied")?.textContent ?? null,
+              box: el.querySelector("textarea.inbox-answer") !== null,
+            })
+          : null;
+      }, item);
+    const click = (label: string) =>
+      browser.execute(
+        (sel: string, l: string) =>
+          [...document.querySelectorAll<HTMLButtonElement>(`${sel} button`)].find((b) => b.textContent?.replace(/[ARD]$/, "").trim() === l)!.click(),
+        item,
+        label,
+      );
+    /** The shell's notice, wherever it shows (the reader's status line, or the sidebar's foot), with its kind. */
+    const notice = (text: string | RegExp) =>
+      waitInPage(
+        () =>
+          [...document.querySelectorAll<HTMLElement>(".reader-status, .ui-toast.sidebar-notice")].map((n) => JSON.stringify({ text: n.textContent?.trim() ?? "", kind: n.dataset.kind ?? null })),
+        (shown) => shown.some((n) => (typeof text === "string" ? JSON.parse(n).text === text : text.test(JSON.parse(n).text))),
+        `the notice never said ${text}`,
+      ).then((shown) => shown.map((n) => JSON.parse(n) as { text: string; kind: string | null }).find((n) => (typeof text === "string" ? n.text === text : text.test(n.text)))!);
+
+    // The fixture's fleet again, with its held task; a worker's process outside the sandbox on the machine.
+    setSnapshot(fmHome, "firstmate-fleet-snapshot.current.synthetic.json");
+    plantSandbox(dataDir, TASK);
+    expect(await refresh()).toBe("ok");
+    await go("Inbox");
+    await waitInPage(() => document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"]') !== null, (v) => v, "the held task never reached the Inbox", 60000);
+
+    // The gate (ADR 0027): Approve says why, and no note is written.
+    const before = fmLines().length;
+    await click("Approve");
+    const refused = await notice("stock-webhook-9c2e: python3 runs outside Kinas's sandbox — no answers are sent until it ends");
+    expect(refused.kind).toBe("error");
+    expect(fmLines().slice(before).filter((l) => l.startsWith("fm-inbox.sh"))).toEqual([]);
+    expect(inboxNotes(fmHome)).toEqual({});
+    expect(sql("SELECT count(*) FROM crew_answers")).toBe("0");
+    expect(JSON.parse((await lines())!)).toEqual({ answered: null, reply: null, copied: null, box: false });
+
+    // Sandboxed: Approve writes one note, the line on its stdin only, and the item reads answered from the Mac.
+    plantSandbox(dataDir, null);
+    await click("Approve");
+    const sent = await notice("Sent to the first mate");
+    expect(sent.kind).toBe(null);
+    const answeredLine = await waitInPage(
+      () => document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"] .inbox-answered')?.textContent ?? null,
+      (v) => v !== null,
+      "the item never read answered",
+    );
+    expect(answeredLine).toMatch(/^Answered from the Mac at \d\d:\d\d$/);
+    const notes = inboxNotes(fmHome);
+    expect(Object.values(notes)).toEqual([LINE]);
+    const [id] = Object.keys(notes);
+    expect(id).toMatch(/^kinas-[0-9a-f-]{36}$/);
+    const noteCalls = fmLines().filter((l) => l.startsWith("fm-inbox.sh note"));
+    expect(noteCalls).toEqual([`fm-inbox.sh note --request-id ${id} --json -`]);
+    // The question was checked open first, in a fresh reading: the snapshot, then the hold's own check.
+    const sinceGate = fmLines().slice(before);
+    expect(sinceGate.filter((l) => l.startsWith("fm-captain-hold.sh"))).toEqual([`fm-captain-hold.sh open ${TASK} --distinguish-absent`, `fm-captain-hold.sh open ${TASK} --distinguish-absent`]);
+
+    // Deny on the same item: Already answered, from the companion's own record, with no Firstmate call at all.
+    const beforeDeny = fmLines().length;
+    await click("Deny");
+    await waitInPage(() => document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"] textarea.inbox-answer') !== null, (v) => v, "Deny never opened the box");
+    const sendButton = await browser.execute((sel: string) => [...document.querySelectorAll(`${sel} button`)].map((b) => b.textContent?.trim()), item);
+    expect(sendButton).toContain("Send");
+    await click("Send");
+    const already = await notice(/^Already answered at \d\d:\d\d$/);
+    expect(already.kind).toBe("error");
+    expect(fmLines().slice(beforeDeny)).toEqual([]);
+    expect(Object.keys(inboxNotes(fmHome))).toEqual([id]);
+    await waitInPage(() => document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"] textarea.inbox-answer') === null, (v) => v, "the box stayed open after Already answered");
+
+    // The first mate handles the note and replies; the next reading carries it, and the item says so.
+    setInboxHandled(fmHome, true, "On it-9c2e");
+    expect(await refresh()).toBe("ok");
+    const read = await waitInPage(
+      () => {
+        const el = document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"]');
+        return el ? JSON.stringify({ answered: el.querySelector(".inbox-answered")?.textContent ?? null, reply: el.querySelector(".inbox-reply")?.textContent ?? null }) : null;
+      },
+      (v) => v !== null && JSON.parse(v).reply !== null,
+      "the item never read read by the first mate",
+      60000,
+    );
+    const r = JSON.parse(read!) as { answered: string; reply: string };
+    expect(r.answered).toMatch(/^Answered from the Mac at \d\d:\d\d · read by the first mate at \d\d:\d\d$/);
+    expect(r.answered.startsWith(answeredLine!)).toBe(true);
+    expect(r.reply).toBe("The first mate: On it-9c2e");
+
+    // The Mac's rows: the delivery, then the refusal for the same item; no words, only the reply.
+    expect(sql("SELECT kind || ' ' || origin || ' ' || outcome || ' ' || (delivered_at IS NOT NULL) || ' ' || (read_at IS NOT NULL) || ' ' || COALESCE(reply, '-') FROM crew_answers ORDER BY rowid").split("\n")).toEqual([
+      "approve mac delivered 1 1 On it-9c2e",
+      "deny mac already 0 0 -",
+    ]);
+    expect(sql("SELECT DISTINCT item_key FROM crew_answers")).toMatch(new RegExp(`^${TASK}@${TASK}@\\d+$`));
+    // The words are in the inbox there and nowhere else.
+    const words = "Approved — go ahead";
+    expect(execFileSync("/usr/bin/sqlite3", [join(dataDir, "kinas.sqlite"), ".dump"], { encoding: "utf8" }).includes(words)).toBe(false);
+    expect(logSinceStart().includes(words)).toBe(false);
+    expect(readFileSync(calls, "utf8").includes(words)).toBe(false);
+    expect(readFileSync(join(dataDir, "fake-vps", "companion", "state", "answers.jsonl"), "utf8").includes(words)).toBe(false);
+    expect(logSinceStart()).toMatch(/crew: answer delivered/);
+    expect(logSinceStart()).toMatch(/crew: answer already/);
+    expect(logSinceStart()).toMatch(/crew: answer refused \(gate\)/);
   });
 });

@@ -12,6 +12,7 @@ export const CHECK_LABELS: Record<string, string> = {
   "relay-instruction": "Relay instruction",
   "first-mate-launch": "First mate's launch",
   "worker-sandbox": "Workers sandboxed",
+  "github-app": "GitHub App",
   "permission-mode": "Workers' permission mode",
   tools: "Crew tools",
   node: "Node",

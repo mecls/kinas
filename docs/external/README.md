@@ -13,6 +13,7 @@ One file per thing outside this repository that an agent needs to know exists: w
 | `kinas-cli-link.md` | `~/.local/bin/kinas` and the never-clobber rule |
 | `herdr-default-session.md` | Herdr's `default` session, which tests never touch, and the throwaway sessions they use instead |
 | `crew-tools.md` | The crew's tools at their pinned versions, where `kinas crew setup` puts them, and the `setup hooks` it never runs |
+| `github-app.md` | The GitHub App that gives each worker a token for one repository: what the captain places, what Kinas asks GitHub, and what the token can't do |
 | `github-cli.md` | `gh`, signed in as the captain: what Kinas asks it, and that Kinas stores no token |
 | `vps.md` | The VPS where every agent runs when Settings says so: the one door, the companion, what lives there, and that Kinas holds no key and never provisions it |
 | `kinas-cloud.md` | The Convex deployment that holds only summaries, the phone page, Web Push, and the names of their secrets |

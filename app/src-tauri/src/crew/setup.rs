@@ -13,7 +13,7 @@ use serde::Serialize;
 use std::path::Path;
 
 /// The rows' ids, in the order the companion sends and Settings draws them (`setup.ts` CHECK_IDS).
-pub const CHECK_IDS: [&str; 17] = [
+pub const CHECK_IDS: [&str; 18] = [
     "system",
     "herdr",
     "herdr-server",
@@ -22,6 +22,7 @@ pub const CHECK_IDS: [&str; 17] = [
     "relay-instruction",
     "first-mate-launch",
     "worker-sandbox",
+    "github-app",
     "permission-mode",
     "tools",
     "node",

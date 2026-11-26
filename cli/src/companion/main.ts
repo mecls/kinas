@@ -88,6 +88,7 @@ function setupDeps(paths: Paths, herdr: Herdr): SetupDeps {
     },
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     now: Date.now,
+    fetch: (url, init) => fetch(url, init),
   };
 }
 

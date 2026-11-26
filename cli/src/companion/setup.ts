@@ -14,6 +14,7 @@ import { packageVersion } from "../crew-setup.ts";
 import { HERDR, serverOf, type Herdr } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
 import { ownPidNs, readProcs } from "./proc.ts";
+import { githubAppRow, type Fetch } from "./github-app.ts";
 import { workerSandboxRow } from "./worker.ts";
 import { isKinasCopy, sha256Of } from "./written.ts";
 
@@ -28,6 +29,7 @@ export const CHECK_IDS = [
   "relay-instruction",
   "first-mate-launch",
   "worker-sandbox",
+  "github-app",
   "permission-mode",
   "tools",
   "node",
@@ -110,6 +112,8 @@ export interface SetupDeps {
   machine: () => { cores: number; memBytes: number; freeBytes: number | null };
   sleep: (ms: number) => Promise<void>;
   now: () => number;
+  /** GitHub's API, for the App's row and a worker's token (ADR 0029): never called in tests. */
+  fetch: Fetch;
 }
 
 /** The first line of every unit setup writes: one without it is not Kinas's, and is never overwritten. */
@@ -509,6 +513,7 @@ const ROWS: Record<CheckId, (d: SetupDeps) => Promise<Check>> = {
   "relay-instruction": relayInstructionRow,
   "first-mate-launch": firstMateLaunch,
   "worker-sandbox": workerSandboxRow,
+  "github-app": (d) => githubAppRow(d),
   "permission-mode": permissionMode,
   tools,
   node,

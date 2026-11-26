@@ -170,6 +170,7 @@ export function fakeMachine(over: Partial<MachineState> = {}, setup: Partial<Set
     machine: () => ({ cores: 8, memBytes: 15 * 1024 ** 3, freeBytes: 296 * 1024 ** 3 }),
     sleep: async () => {},
     now: () => 1_795_000_000_000,
+    fetch: async () => ({ status: 599, text: async () => "" }),
     ...setup,
   };
   return { deps, state, root, sessionDir, ran, herdrCalls };

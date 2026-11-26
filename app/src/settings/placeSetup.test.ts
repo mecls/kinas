@@ -12,6 +12,7 @@ describe("setup's words in Settings (slice 4.3)", () => {
       "relay-instruction",
       "first-mate-launch",
       "worker-sandbox",
+      "github-app",
       "permission-mode",
       "tools",
       "node",

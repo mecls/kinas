@@ -188,7 +188,12 @@ test("companion.env is read only when it is private, the user's own and names a 
   const body = `# the cloud\nCONVEX_URL=https://happy-otter-123.convex.cloud\nKINAS_COMPANION_SECRET="${"s".repeat(40)}"\n`;
   writeFileSync(file, body);
   chmodSync(file, 0o600);
-  expect(readCompanionEnv(file, process.getuid?.() ?? -1)).toEqual({ url: "https://happy-otter-123.convex.cloud", secret: "s".repeat(40), label: "Linux machine" });
+  expect(readCompanionEnv(file, process.getuid?.() ?? -1)).toEqual({ url: "https://happy-otter-123.convex.cloud", secret: "s".repeat(40), label: "Linux machine", phoneUrl: null });
+  writeFileSync(file, `${body}KINAS_PHONE_URL=https://kinas-phone.example.vercel.app\n`);
+  expect(readCompanionEnv(file, -1)).toMatchObject({ phoneUrl: "https://kinas-phone.example.vercel.app" });
+  writeFileSync(file, `${body}KINAS_PHONE_URL=http://insecure.example.com\n`);
+  expect(readCompanionEnv(file, -1)).toEqual({ error: "KINAS_PHONE_URL is not an https address" });
+  writeFileSync(file, body);
   writeFileSync(file, `${body}KINAS_COMPANION_LABEL=homelab\n`);
   expect(readCompanionEnv(file, -1)).toMatchObject({ label: "homelab" });
   writeFileSync(file, `${body}KINAS_COMPANION_LABEL=Home Lab!\n`);

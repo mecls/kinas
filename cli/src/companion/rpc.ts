@@ -11,9 +11,11 @@
 import { readFile } from "node:fs/promises";
 import { focusWorkspace, launchFirstMate, openWorkspace, viewNow } from "./actions.ts";
 import { answersForBundle, deliver } from "./answer.ts";
+import type { Cloud } from "./cloud.ts";
 import type { Firstmate } from "./firstmate.ts";
 import type { Herdr } from "./herdr.ts";
 import { install } from "./install.ts";
+import { pairStart, phonesOf } from "./pair.ts";
 import type { Paths } from "./paths.ts";
 import { ledgerSince } from "./run.ts";
 import { checks, folders, type SetupDeps } from "./setup.ts";
@@ -39,6 +41,10 @@ export interface RpcDeps {
   fm: Firstmate;
   /** One line per event, never an answer's words or a task's name. */
   log: (line: string) => void;
+  /** The cloud store, when this machine has one (slice 8.1): pairing goes through it. */
+  cloud?: Cloud | null;
+  /** The phone page's address, for the pairing link; absent when `companion.env` names none. */
+  phoneUrl?: string | null;
 }
 
 /** The first `major.minor.patch` in a version line (`herdr 0.9.5` → `0.9.5`), as the Mac's `tools::version_in`. */
@@ -112,6 +118,25 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
         deps.log("companion: answer failed (its record couldn't be written)");
         return { reply: { v: RPC_VERSION, error: "answer-failed" }, exit: 1 };
       }
+    case "pair-start":
+      return { reply: { v: RPC_VERSION, ...(await pairStart(deps.cloud ?? null, deps.phoneUrl ?? null, deps.now())) }, exit: 0 };
+    case "phones": {
+      if (!deps.cloud) return { reply: { v: RPC_VERSION, error: "no-cloud" }, exit: 0 };
+      try {
+        return { reply: { v: RPC_VERSION, phones: phonesOf(await deps.cloud.phones()) }, exit: 0 };
+      } catch {
+        return { reply: { v: RPC_VERSION, error: "cloud-failed" }, exit: 0 };
+      }
+    }
+    case "unpair": {
+      if (!deps.cloud) return { reply: { v: RPC_VERSION, error: "no-cloud" }, exit: 0 };
+      try {
+        await deps.cloud.unpair(request.id);
+        return { reply: { v: RPC_VERSION, phones: phonesOf(await deps.cloud.phones()) }, exit: 0 };
+      } catch {
+        return { reply: { v: RPC_VERSION, error: "cloud-failed" }, exit: 0 };
+      }
+    }
     case "install": {
       const { verb: _, ...req } = request;
       return { reply: { v: RPC_VERSION, ...(await install(req, deps.setup)) }, exit: 0 };

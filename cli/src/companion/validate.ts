@@ -22,6 +22,10 @@ export type Request =
   | { verb: "open-workspace"; folder: string; label: string }
   // Slice 6: the Mac's answer. A phone's comes through the cloud store (slice 10), never through this door.
   | { verb: "answer"; task: string; key: string; words: string; request_id: string; from: "mac" }
+  // Slice 8.1: pairing a phone through the cloud store (the companion holds the secret, the Mac never does).
+  | { verb: "pair-start" }
+  | { verb: "phones" }
+  | { verb: "unpair"; id: string }
   | { verb: "install"; item: InstallItem; folder?: string; repo?: string; adopt?: boolean; restart?: boolean };
 
 export type Validated = Request | { refused: string };
@@ -84,6 +88,8 @@ export function validate(input: unknown): Validated {
     case "hello":
     case "refresh":
     case "view":
+    case "phones":
+    case "pair-start":
     case "launch-first-mate": {
       const extra = onlyKeys(input, ["verb"]);
       return extra ? { refused: extra } : { verb: input.verb };
@@ -93,6 +99,11 @@ export function validate(input: unknown): Validated {
       if (extra) return { refused: extra };
       const cursor = cursorOf(input.cursor);
       return typeof cursor === "string" ? { refused: cursor } : { verb: "bundle", cursor };
+    }
+    case "unpair": {
+      const extra = onlyKeys(input, ["verb", "id"]);
+      if (extra) return { refused: extra };
+      return typeof input.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(input.id) ? { verb: "unpair", id: input.id } : { refused: "id is not a phone's id" };
     }
     case "focus": {
       const extra = onlyKeys(input, ["verb", "workspace"]);

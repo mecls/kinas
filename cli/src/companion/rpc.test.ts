@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Cloud } from "./cloud.ts";
 import type { Firstmate } from "./firstmate.ts";
 import { companionPaths } from "./paths.ts";
 import { fakeMachine, NO_FIRSTMATE } from "./fake-machine.ts";
@@ -186,5 +187,55 @@ describe("kinas companion rpc (slice 1)", () => {
     expect(JSON.stringify(bundle)).not.toContain("yes-words");
     // Refused requests run nothing.
     expect((await rpc(JSON.stringify({ ...request, from: "phone" }), d)).exit).toBe(2);
+  });
+});
+
+describe("the pairing verbs (slice 8.1)", () => {
+  const cloudOf = (over: Partial<Cloud> = {}): Cloud & { calls: string[] } => {
+    const calls: string[] = [];
+    return {
+      calls,
+      replaceReading: async () => {},
+      heartbeat: async () => {},
+      takeAnswers: async () => [],
+      settleAnswer: async () => {},
+      startPairing: async (h, at) => void calls.push(`pair ${h.length} ${at}`),
+      phones: async () => [{ id: "k1", name: "Phone", pairedAt: 1, lastSeenAt: 2, push: false }],
+      unpair: async (id) => void calls.push(`unpair ${id}`),
+      ...over,
+    };
+  };
+  const depsWith = (cloud: Cloud | null, phoneUrl: string | null = null) => ({ ...deps(), cloud, phoneUrl, now: () => 5_000 });
+
+  test("pair-start hands the Mac a code, a link when the page is known, and ten minutes", async () => {
+    const cloud = cloudOf();
+    const { reply, exit } = await rpc(JSON.stringify({ verb: "pair-start" }), depsWith(cloud, "https://kinas-phone.example.app"));
+    expect(exit).toBe(0);
+    const r = reply as { v: number; code: string; url: string; expires_at: number };
+    expect(r.code).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
+    expect(r.url).toBe(`https://kinas-phone.example.app/#pair=${r.code}`);
+    expect(r.expires_at).toBe(5_000 + 600_000);
+    expect(cloud.calls).toEqual([`pair 64 ${605_000}`]);
+    expect(JSON.stringify(cloud.calls)).not.toContain(r.code);
+  });
+
+  test("without a cloud the verbs say so, and a cloud that fails is a word, never its words", async () => {
+    for (const request of [{ verb: "pair-start" }, { verb: "phones" }, { verb: "unpair", id: "k1" }]) {
+      expect((await rpc(JSON.stringify(request), depsWith(null))).reply).toEqual({ v: 1, error: "no-cloud" });
+    }
+    const down = cloudOf({ startPairing: async () => { throw new Error("https://private.convex.cloud SECRET"); }, phones: async () => { throw new Error("SECRET"); } });
+    for (const request of [{ verb: "pair-start" }, { verb: "phones" }, { verb: "unpair", id: "k1" }]) {
+      const text = JSON.stringify((await rpc(JSON.stringify(request), depsWith(down))).reply);
+      expect(text).toContain("cloud-failed");
+      expect(text).not.toContain("SECRET");
+    }
+  });
+
+  test("phones lists names and times; unpair removes one and answers with what is left", async () => {
+    const cloud = cloudOf();
+    expect((await rpc(JSON.stringify({ verb: "phones" }), depsWith(cloud))).reply).toEqual({ v: 1, phones: [{ id: "k1", name: "Phone", paired_at: 1, last_seen_at: 2, push: false }] });
+    const out = await rpc(JSON.stringify({ verb: "unpair", id: "k1" }), depsWith(cloud));
+    expect(cloud.calls).toEqual(["unpair k1"]);
+    expect((out.reply as { phones: unknown[] }).phones).toHaveLength(1);
   });
 });

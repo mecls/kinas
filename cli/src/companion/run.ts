@@ -128,7 +128,7 @@ export interface Deps {
   /** GitHub's API for the workers' tokens (ADR 0029): renewed and ended on each reading. Absent: left alone. */
   tokens?: TokenDeps;
   /** The cloud store (ADR 0023), with the machine's label for the phone. Absent: nothing leaves the machine. */
-  cloud?: { cloud: Cloud; label: string };
+  cloud?: { cloud: Cloud; label: string; phoneUrl?: string | null };
 }
 
 // ---- the fleet, only as far as choosing PRs needs ----

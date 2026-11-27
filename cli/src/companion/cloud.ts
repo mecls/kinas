@@ -288,7 +288,7 @@ export function fileCloud(path: string): Cloud {
 
 // ---- companion.env ----
 
-export interface CloudEnv { url: string; secret: string; label: string }
+export interface CloudEnv { url: string; secret: string; label: string; phoneUrl: string | null }
 
 /** What the phone calls the machine when `companion.env` names none. */
 export const DEFAULT_LABEL = "Linux machine";
@@ -296,7 +296,7 @@ export const DEFAULT_LABEL = "Linux machine";
 /**
  * `~/.config/kinas/companion.env` (docs/external/vps.md): `CONVEX_URL` and `KINAS_COMPANION_SECRET`, one per line. The
  * file must be the user's own and private (mode 0600); `KINAS_COMPANION_LABEL` (a-z, 0-9, `-`, up to 32) names the machine
- * on the phone. A secret in a file others can read is refused, and nothing else
+ * on the phone, and `KINAS_PHONE_URL` the phone page's https address, for the pairing link. A secret in a file others can read is refused, and nothing else
  * is said about it. Never returns the secret in an error.
  */
 export function readCompanionEnv(path: string, uid: number): CloudEnv | { error: string } {
@@ -320,7 +320,9 @@ export function readCompanionEnv(path: string, uid: number): CloudEnv | { error:
   if (secret.length < 32) return { error: "KINAS_COMPANION_SECRET is missing or too short" };
   const label = values.get("KINAS_COMPANION_LABEL") ?? DEFAULT_LABEL;
   if (label !== DEFAULT_LABEL && !/^[a-z0-9-]{1,32}$/.test(label)) return { error: "KINAS_COMPANION_LABEL is not a label" };
-  return { url, secret, label };
+  const phoneUrl = values.get("KINAS_PHONE_URL") ?? null;
+  if (phoneUrl !== null && !/^https:\/\/[A-Za-z0-9.-]+(:\d+)?(\/[A-Za-z0-9._~\/-]*)?$/.test(phoneUrl)) return { error: "KINAS_PHONE_URL is not an https address" };
+  return { url, secret, label, phoneUrl };
 }
 
 // ---- tending the cloud from the run loop ----

@@ -54,16 +54,16 @@ function tokenDeps(paths: Paths): TokenDeps {
  * `~/.config/kinas/companion.env`. With neither, or with a file that is not private, nothing leaves the machine and the
  * log says why in a word.
  */
-export function cloudOf(env: Record<string, string | undefined>, paths: Paths, home: string, uid: number, log: (line: string) => void): { cloud: Cloud; label: string } | null {
+export function cloudOf(env: Record<string, string | undefined>, paths: Paths, home: string, uid: number, log: (line: string) => void): { cloud: Cloud; label: string; phoneUrl: string | null } | null {
   const file = env.KINAS_COMPANION_CLOUD;
-  if (file !== undefined && file.startsWith("file:") && paths.root !== null) return { cloud: fileCloud(file.slice("file:".length)), label: DEFAULT_LABEL };
+  if (file !== undefined && file.startsWith("file:") && paths.root !== null) return { cloud: fileCloud(file.slice("file:".length)), label: DEFAULT_LABEL, phoneUrl: env.KINAS_PHONE_URL ?? null };
   if (paths.root !== null) return null;
   const read = readCompanionEnv(join(home, ".config", "kinas", "companion.env"), uid);
   if ("error" in read) {
     if (read.error !== "no companion.env") log(`companion: no cloud (${read.error})`);
     return null;
   }
-  return { cloud: convexCloud(read.url, read.secret), label: read.label };
+  return { cloud: convexCloud(read.url, read.secret), label: read.label, phoneUrl: read.phoneUrl };
 }
 
 function runDeps(paths: Paths): Deps {
@@ -156,7 +156,7 @@ export async function companion(args: string[]): Promise<number> {
     };
     const herdr = herdrAt(paths.herdr, SESSION, companionPath(homedir(), executable));
     const reader = runDeps(paths);
-    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr, setup: setupDeps(paths, herdr), fm: reader.fm, log: reader.log };
+    const deps = { paths, version: COMPANION_VERSION, herdrVersion: () => versionOf(paths.herdr), readNow, now: Date.now, herdr, setup: setupDeps(paths, herdr), fm: reader.fm, log: reader.log, cloud: reader.cloud?.cloud ?? null, phoneUrl: reader.cloud?.phoneUrl ?? null };
     const { reply, exit } = await rpc(await readStdin(MAX_REQUEST_BYTES), deps);
     process.stdout.write(`${JSON.stringify(reply)}\n`);
     return exit;

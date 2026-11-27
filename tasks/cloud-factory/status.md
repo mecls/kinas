@@ -73,6 +73,9 @@
   - 6.4, third full run (2026-11-27, `d8b4046`): 42 of 43 again; `settings` hit its 120 s limit in one test and passed
     alone (13 of 13). The failing spec differs each run and each passes alone. The captain decides: accept, or one
     more full run.
+  - 6.4 done, 2026-11-27: the captain accepted the checks (42 of 43 in two full runs alone, each failing spec passing
+    alone) and asked for no further full run. Still the captain's: the push and merge, the Mac app's install, the
+    companion's deploy to the home lab, and the smoke on the real Linux machine.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

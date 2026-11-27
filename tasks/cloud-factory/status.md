@@ -70,6 +70,9 @@
   - 6.4 checks, 2026-11-27 (not done): `bun run check` green; the full e2e alone gave 42 of 43, and the one failure
     (`reader-editor`, a menu timing wait) passed 3 of 3 alone. A full run with no failure, then the captain's push
     and merge, are still to do.
+  - 6.4, third full run (2026-11-27, `d8b4046`): 42 of 43 again; `settings` hit its 120 s limit in one test and passed
+    alone (13 of 13). The failing spec differs each run and each passes alone. The captain decides: accept, or one
+    more full run.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

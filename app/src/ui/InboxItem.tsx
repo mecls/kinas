@@ -9,7 +9,8 @@ import "./InboxItem.css";
 // open a text box whose button is Copy and go, with one quiet hint line; after a copy the item says so in one quiet
 // line and keeps its actions. The box owns its keys: Enter copies, ⇧Enter is a new line, Esc closes. 1.14 (slice 6.2):
 // with the agents on a Linux machine the answer goes as a note, so the box's button is Send, and an answered item says
-// so in one quiet line, with the first mate's reply on its own line under it.
+// so in one quiet line, with the first mate's reply on its own line under it, and its three actions are gone (a second
+// click could only be refused as Already answered) until Firstmate closes the item.
 
 export const ANSWER_HINT = "Goes on the clipboard for the first mate's pane · Enter copies, ⇧Enter a new line, Esc closes";
 export const SEND_HINT = "Goes to the first mate · Enter sends, ⇧Enter a new line, Esc closes";
@@ -57,7 +58,7 @@ export function InboxItem({
   copied?: string;
   /** The answer goes as a note in the first mate's inbox (a Linux machine): the box's button is Send. */
   byNote?: boolean;
-  /** `Answered from the Mac at 14:05 · read by the first mate at 14:06`, under the item. */
+  /** `Answered from the Mac at 14:05 · read by the first mate at 14:06`, under the item; the actions are gone while it shows. */
   answered?: string;
   /** The first mate's reply, on its own line under `answered`. */
   reply?: string;
@@ -126,7 +127,7 @@ export function InboxItem({
         {answered && <p className="ui-inbox-rec inbox-answered">{answered}</p>}
         {reply && <p className="ui-inbox-rec inbox-reply">{reply}</p>}
       </div>
-      {!answering && (
+      {!answering && !answered && (
         <div className="ui-inbox-acts">
           {extra && (
             <Button kind="text" className="ui-inbox-extra" onClick={extra.onClick}>

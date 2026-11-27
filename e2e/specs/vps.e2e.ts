@@ -26,8 +26,7 @@ import { VPS_SESSION } from "./vps.setup.ts";
 // detail say so in red — while the repository's own `.claude` file, the same in the clone, is not named.
 // Case 7, slice 6.3 (AC-3; ADRs 0027, 0033): an answer from the Mac is a note in Firstmate's inbox on the VPS. While a
 // task's process runs outside Kinas's sandbox, Approve says why and writes no note. Sandboxed, Approve writes one note
-// with the line on stdin only, and the item reads answered from the Mac; Deny on the same item is Already answered and
-// makes no Firstmate call; once the first mate has handled the note and replied, the item reads read, with the reply.
+// with the line on stdin only, and the item reads answered from the Mac, its three actions gone; once the first mate has handled the note and replied, the item reads read, with the reply.
 // The words are in the inbox there and nowhere else: not the Mac's store, its log, the door's argv or the companion's
 // record.
 
@@ -562,18 +561,13 @@ describe("agents on a VPS", () => {
     const sinceGate = fmLines().slice(before);
     expect(sinceGate.filter((l) => l.startsWith("fm-captain-hold.sh"))).toEqual([`fm-captain-hold.sh open ${TASK} --distinguish-absent`, `fm-captain-hold.sh open ${TASK} --distinguish-absent`]);
 
-    // Deny on the same item: Already answered, from the companion's own record, with no Firstmate call at all.
-    const beforeDeny = fmLines().length;
-    await click("Deny");
-    await waitInPage(() => document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"] textarea.inbox-answer') !== null, (v) => v, "Deny never opened the box");
-    const sendButton = await browser.execute((sel: string) => [...document.querySelectorAll(`${sel} button`)].map((b) => b.textContent?.trim()), item);
-    expect(sendButton).toContain("Send");
-    await click("Send");
-    const already = await notice(/^Already answered at \d\d:\d\d$/);
-    expect(already.kind).toBe("error");
-    expect(fmLines().slice(beforeDeny)).toEqual([]);
+    // The answered item has no actions left to press (1.14): nothing can be answered twice from here, and no further
+    // Firstmate call is made. (The refusal itself, Already answered, is Rust's and tested there.)
+    const actions = await browser.execute((sel: string) => [...document.querySelectorAll(`${sel} button`)].map((b) => b.textContent?.trim()), item);
+    expect(actions).not.toContain("Approve");
+    expect(actions).not.toContain("Answer");
+    expect(actions).not.toContain("Deny");
     expect(Object.keys(inboxNotes(fmHome))).toEqual([id]);
-    await waitInPage(() => document.querySelector('section[data-page="inbox"] li.inbox-item[data-task="stock-webhook-9c2e"] textarea.inbox-answer') === null, (v) => v, "the box stayed open after Already answered");
 
     // The first mate handles the note and replies; the next reading carries it, and the item says so.
     setInboxHandled(fmHome, true, "On it-9c2e");
@@ -592,10 +586,9 @@ describe("agents on a VPS", () => {
     expect(r.answered.startsWith(answeredLine!)).toBe(true);
     expect(r.reply).toBe("The first mate: On it-9c2e");
 
-    // The Mac's rows: the delivery, then the refusal for the same item; no words, only the reply.
+    // The Mac's row: the delivery; no words, only the reply.
     expect(sql("SELECT kind || ' ' || origin || ' ' || outcome || ' ' || (delivered_at IS NOT NULL) || ' ' || (read_at IS NOT NULL) || ' ' || COALESCE(reply, '-') FROM crew_answers ORDER BY rowid").split("\n")).toEqual([
       "approve mac delivered 1 1 On it-9c2e",
-      "deny mac already 0 0 -",
     ]);
     expect(sql("SELECT DISTINCT item_key FROM crew_answers")).toMatch(new RegExp(`^${TASK}@${TASK}@\\d+$`));
     // The words are in the inbox there and nowhere else.
@@ -605,7 +598,6 @@ describe("agents on a VPS", () => {
     expect(readFileSync(calls, "utf8").includes(words)).toBe(false);
     expect(readFileSync(join(dataDir, "fake-vps", "companion", "state", "answers.jsonl"), "utf8").includes(words)).toBe(false);
     expect(logSinceStart()).toMatch(/crew: answer delivered/);
-    expect(logSinceStart()).toMatch(/crew: answer already/);
     expect(logSinceStart()).toMatch(/crew: answer refused \(gate\)/);
   });
 });

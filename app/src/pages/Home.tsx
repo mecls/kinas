@@ -197,7 +197,7 @@ function Waiting({
 }) {
   const folder = d.repo ? folders.find((f) => !f.removed && f.repo === d.repo) : undefined;
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const action = inboxKey(e, { boxOpen: false });
+    const action = inboxKey(e, { boxOpen: false, answered: d.answered !== null });
     if (!action) return;
     e.preventDefault();
     if (action === "approve") onApprove(d.task_id, d.key);

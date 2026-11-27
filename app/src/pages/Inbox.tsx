@@ -57,7 +57,7 @@ function Item({
     </>
   );
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const action = inboxKey(e, { boxOpen: box !== null });
+    const action = inboxKey(e, { boxOpen: box !== null, answered: d.answered !== null });
     if (!action) return;
     e.preventDefault();
     if (action === "approve") onAnswer("approve", "");

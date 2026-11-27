@@ -42,3 +42,7 @@ On the login shell's `PATH` (`~/.local/bin`, npm's global prefix — under nvm o
 - Run a tool's `setup hooks`: setup prints the line for the captain to run.
 - Run `quota-axi` from Kinas, even for its version (ADR 0018).
 - Move a version or a floor without moving the Firstmate pin, and the pin only with the captain.
+
+Amended 2026-11-25 (setup, slice 4.1): the Linux releases are pinned in `LINUX_RELEASES` (`packages/commands/src/crew-tools.ts`, `app/src-tauri/src/crew/pin.rs`, held equal by `fixtures/crew-tools.json`): Herdr 0.9.5 from `herdrdev/herdr` (raw binaries `herdr-linux-x86_64`, `herdr-linux-aarch64`), treehouse 2.3.0 and no-mistakes 1.79.0 (`-linux-amd64.tar.gz`, `-linux-arm64.tar.gz`), each with the SHA-256 GitHub publishes for the asset. Those digests were checked against the two darwin pins above, which were computed from downloads: both equal. Kinas's own Linux CLI (`KINAS_LINUX`, `mecls/kinas`, `kinas-linux-x64`, `kinas-linux-arm64`) has no SHA-256 until the release step builds it (`bun scripts/build-cli.ts --target bun-linux-x64`) and pins it.
+
+Amended 2026-11-17 (the factory in the cloud): on a VPS the same tools are installed by `kinas companion install`, one yes each from Settings, as the captain's user — the npm tools at their exact versions, `treehouse`, `no-mistakes` and Herdr from their releases for `linux-x64` or `linux-arm64` with their own pinned checksums, and the Kinas CLI for Linux from the installed Kinas's release.

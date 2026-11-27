@@ -1,7 +1,7 @@
 # 0017 · Kinas's words reach the first mate only as one launch sentence, or on the clipboard for the captain to paste
 
 Date: 2026-09-23
-Status: accepted
+Status: superseded by 0022
 
 ## Context
 

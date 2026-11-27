@@ -123,6 +123,12 @@ fn last_assistant_time(projects_root: &Path, session_id: &str) -> Option<i64> {
 /// reading stamped after `now` is from before the wall clock stepped back: it is newer than nothing, and the next
 /// reading replaces it, as R12 promises when it reads such a row stale.
 pub fn apply(conn: &mut Connection, org_id: &str, windows: &[Window], data_time: i64, now: i64) -> Result<usize, String> {
+    apply_from(conn, org_id, windows, data_time, now, SOURCE)
+}
+
+/// `apply` with the source the gauge names: this Mac's status line, or the Linux machine's (slice 5.2). One plan, one
+/// gauge: whichever machine's reading is newest is the one shown.
+pub fn apply_from(conn: &mut Connection, org_id: &str, windows: &[Window], data_time: i64, now: i64, source: &str) -> Result<usize, String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let mut applied = 0;
     for w in windows {
@@ -142,7 +148,7 @@ pub fn apply(conn: &mut Connection, org_id: &str, windows: &[Window], data_time:
              VALUES (?1, 'claude-plan', ?2, ?3, ?4, NULL, ?5, ?6)
              ON CONFLICT (org_id, subscription, \"window\") DO UPDATE SET
                used_pct = excluded.used_pct, resets_at = excluded.resets_at, source = excluded.source, updated_at = excluded.updated_at",
-            params![org_id, w.window, w.used_pct, w.resets_at, SOURCE, data_time],
+            params![org_id, w.window, w.used_pct, w.resets_at, source, data_time],
         )
         .map_err(|e| e.to_string())?;
         applied += 1;

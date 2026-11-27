@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { ReaderView } from "../api.ts";
+import type { PlaceStatus, ReaderView } from "../api.ts";
 import { readingState } from "@kinas/store/staleness";
-import { asOf } from "../usage/format.ts";
-import { connectionOf } from "./connection.ts";
+import { asOf, lisbonClock } from "../usage/format.ts";
+import { connectionOf, machineOf } from "./connection.ts";
 
 const now = 1_800_000_000_000;
 const reader = (over: Partial<ReaderView>): ReaderView => ({
@@ -85,5 +85,28 @@ describe("one usage poller (build spec §11.1)", () => {
     // Positive control: the model judges the VPS with this file's connectionOf, from the snapshot it is handed.
     expect(model.includes("connectionOf(snapshot")).toBe(true);
     expect(sidebar.includes("ConnectionRow")).toBe(false);
+  });
+});
+
+describe("the agents' machine on the bar (DESIGN.md 1.14; build spec §4, Journey C)", () => {
+  const status = (over: Partial<PlaceStatus>): PlaceStatus => ({ label: "vps-1", state: "connected", since: null, last_success_at: now - 15_000, problem: null, ...over });
+  const at = (ms: number) => lisbonClock(ms, now);
+
+  test("no VPS set is no part", () => {
+    expect(machineOf(null, now)).toBeNull();
+  });
+
+  test("each of the four states has its word, and the hover says when", () => {
+    expect(machineOf(status({}), now)).toEqual({ name: "vps-1", state: "connected", word: "connected", detail: `vps-1 · connected · last reading ${at(now - 15_000)}`, since: null, failing: false });
+    expect(machineOf(status({ state: "reconnecting", since: now - 10_000, problem: "can't reach vps-1: timed out" }), now)?.detail).toBe(
+      `vps-1 · reconnecting · last reading ${at(now - 15_000)} · can't reach vps-1: timed out`,
+    );
+    const down = machineOf(status({ state: "unreachable", since: now - 120_000, last_success_at: now - 135_000, problem: "can't reach vps-1: not reachable" }), now);
+    expect(down?.word).toBe("unreachable");
+    expect(down?.detail).toBe(`vps-1 · unreachable since ${at(now - 120_000)} · last reading ${at(now - 135_000)} · can't reach vps-1: not reachable`);
+    const stopped = machineOf(status({ state: "not_running" }), now);
+    expect(stopped?.word).toBe("Kinas on the Linux machine is not running");
+    expect(stopped?.detail).toBe(`vps-1 · reached, but its reading loop has stopped · last reading ${at(now - 15_000)}`);
+    expect(machineOf(status({ state: "reconnecting", last_success_at: null }), now)?.detail).toBe("vps-1 · reconnecting · no reading yet");
   });
 });

@@ -4,9 +4,9 @@ import type { SeatedFolder } from "../shell/folders.ts";
 import type { KeyboardEvent } from "react";
 import { Button, ChecksList, PanelBody, PanelFooter, PanelHeader, QuestionCard, Timeline } from "../ui/index.ts";
 import { inboxKey } from "../ui/inboxKeys.ts";
-import { BADGE_OF, lanesOf } from "./board.ts";
+import { BADGE_OF, lanesOf, localMovedLine, reviewLine, shortCommit, worktreeLine } from "./board.ts";
 import { bareHead, checksOf, detailFailure, detailFor, prDetail, settingsLine, timelineOf, worktreeWord } from "./detail.ts";
-import { ageText, copiedText } from "./inbox.ts";
+import { ageText, answeredText, copiedText, replyText } from "./inbox.ts";
 
 // The right panel's second occupant (build spec §4 Task detail; mockup task-detail.html): what Firstmate reports about
 // one task, read from Rust with `crew_task`, beside the reader in the aside and switched by `hidden` — the reader stays
@@ -74,6 +74,9 @@ export function TaskDetail({
   const gone = shown?.task.word === "gone";
   const heldPr = shown && !gone ? shown.held_pr_number : null;
   const pr = shown ? prDetail(shown) : null;
+  const review = shown ? reviewLine(shown.task.review) : null;
+  const planted = shown ? worktreeLine(shown.task.worktree) : null;
+  const moved = shown ? shown.task.local_moved : null;
   const worktree = shown ? worktreeWord(shown) : null;
   /** The footer acts on the newest open decision — of the task selected, never of the one shown before it. */
   const decision = view.current && shown && !gone ? (shown.decisions[0] ?? null) : null;
@@ -140,7 +143,9 @@ export function TaskDetail({
                   <p className="ui-ink2">
                     {d.verb === "captain-hold" ? "held for you" : <>key <span className="ui-mono">{d.key}</span></>} · {ageText(d.opened_at, Date.now())}
                   </p>
-                  {d.copied_at !== null && <p className="ui-ink2 inbox-copied">{copiedText(d.copied_at)}</p>}
+                  {d.copied_at !== null && d.answered === null && <p className="ui-ink2 inbox-copied">{copiedText(d.copied_at)}</p>}
+                  {d.answered && <p className="ui-ink2 inbox-answered">{answeredText(d.answered)}</p>}
+                  {replyText(d.answered) && <p className="ui-ink2 inbox-reply">{replyText(d.answered)}</p>}
                 </div>
               ))}
             </>
@@ -155,10 +160,52 @@ export function TaskDetail({
             </Button>
           )}
 
-          {(shown.task.kind !== "scout" || pr || heldPr !== null) && (
+          {(shown.task.kind !== "scout" || pr || heldPr !== null || review || planted) && (
             <>
               <h4>PR</h4>
               {pr ? <p className="crew-pr" data-testid="crew-detail-pr">{pr}</p> : heldPr === null && <p className="ui-ink2">No PR yet</p>}
+              {/* 1.14, the captain's (b): what a merged hook or MCP server would run from, path by path. */}
+              {review && (
+                <>
+                  <p className="crew-review" data-testid="crew-detail-review">
+                    {review}
+                  </p>
+                  {shown.task.review!.paths.length > 0 && (
+                    <ul className="crew-review-paths">
+                      {shown.task.review!.paths.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+              {/* ADR 0028: what the worktree holds that isn't the repository's, path by path — before landing. */}
+              {planted && (
+                <>
+                  <p className="crew-review" data-testid="crew-detail-scan">
+                    {planted}
+                  </p>
+                  {shown.task.worktree!.paths.length > 0 && (
+                    <ul className="crew-review-paths" data-testid="crew-detail-scan-paths">
+                      {shown.task.worktree!.paths.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+              {/* ADR 0029: a local-only task's local default branch moved since launch — both commits, before landing. */}
+              {moved && (
+                <>
+                  <p className="crew-review" data-testid="crew-detail-local-moved">
+                    {localMovedLine(moved)}
+                  </p>
+                  <ul className="crew-review-paths" data-testid="crew-detail-local-moved-commits">
+                    <li>at launch {shortCommit(moved.was)}</li>
+                    <li>now {shortCommit(moved.now)}</li>
+                  </ul>
+                </>
+              )}
               {/* 1.12: the PR a held task names, opened by its task id — the URL stays in Rust. */}
               {heldPr !== null && shown.task.pr?.number !== heldPr && (
                 <p className="crew-pr" data-testid="crew-detail-held-pr">

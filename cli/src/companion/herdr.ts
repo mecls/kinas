@@ -1,0 +1,161 @@
+// The only file in the companion that names a Herdr verb, and its only runner (build spec §11.2; ADR 0024: every Herdr
+// call but the Work page's attach runs on the VPS through `kinas companion`, with the Mac's fixed argv —
+// app/src-tauri/src/herdr.rs). The list is a type: the session's snapshot, a pane's process info, focusing a
+// workspace, making one in a folder with a label, and `pane run` — which types the launcher's one command at a pane's
+// shell prompt (crew/launch.rs) and nothing else. Since slice 4 (§17 2026-11-25 #6), setup's two: `status --json`, to
+// know whether the session's server runs and where its socket is, and `server stop`, run only when the captain clicks
+// "Run Herdr under systemd". Never `session`, `pane close`, `workspace close`, `update` or `machine`; herdr.test.ts
+// holds the guard. Herdr's systemd unit is written here too, so no other file names a Herdr verb.
+//
+// Each runs as `<paths.herdr> --session <session> <args>`, by path, with the companion's PATH and HOME and no inherited
+// HERDR_* (a companion started from a Herdr pane would be refused as nested), stdin closed, killed at 5 s.
+
+import { run } from "@kinas/context";
+
+export type HerdrCall =
+  | { args: readonly ["api", "snapshot"] }
+  | { args: readonly ["pane", "process-info", "--pane", string] }
+  | { args: readonly ["workspace", "focus", string] }
+  | { args: readonly ["workspace", "create", "--cwd", string, "--label", string, "--focus"] }
+  | { args: readonly ["pane", "run", string, string] }
+  | { args: readonly ["status", "--json"] }
+  | { args: readonly ["server", "stop"] };
+
+/** The calls, by what they are for: the only way the rest of the companion names one. */
+export const HERDR = {
+  snapshot: (): HerdrCall => ({ args: ["api", "snapshot"] }),
+  processInfo: (pane: string): HerdrCall => ({ args: ["pane", "process-info", "--pane", pane] }),
+  focus: (workspace: string): HerdrCall => ({ args: ["workspace", "focus", workspace] }),
+  create: (cwd: string, label: string): HerdrCall => ({ args: ["workspace", "create", "--cwd", cwd, "--label", label, "--focus"] }),
+  run: (pane: string, command: string): HerdrCall => ({ args: ["pane", "run", pane, command] }),
+  status: (): HerdrCall => ({ args: ["status", "--json"] }),
+  serverStop: (): HerdrCall => ({ args: ["server", "stop"] }),
+} as const;
+
+/** What `status --json` says of the session's server, as Firstmate reads it (`.server.running`, `.server.socket`). */
+export function serverOf(json: string): { running: boolean; socket: string | null } | null {
+  try {
+    const server = (JSON.parse(json) as { server?: { running?: unknown; socket?: unknown } }).server;
+    if (typeof server !== "object" || server === null) return null;
+    return { running: server.running === true, socket: typeof server.socket === "string" && server.socket.startsWith("/") ? server.socket : null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The unit that keeps the session's server (§17 2026-11-25 #6): Firstmate's own start word for word —
+ * `HERDR_SESSION=<s> herdr server --session <s>` (`fm_backend_herdr_cli`, bin/backends/herdr.sh:395-396 at the pin,
+ * which Firstmate runs against 0.9.5) — by path, with the companion's PATH. `default` is the session plain `herdr`
+ * attaches: its socket is ~/.config/herdr/herdr.sock (Firstmate's docs/verification/runtime-backends.md).
+ */
+export function herdrUnit(herdr: string, session: string, path: string, header: string): string {
+  return [
+    header,
+    "[Unit]",
+    `Description=Herdr's ${session} session, kept by Kinas`,
+    "",
+    "[Service]",
+    `ExecStart=${herdr} server --session ${session}`,
+    `Environment=HERDR_SESSION=${session}`,
+    "Restart=always",
+    "RestartSec=5",
+    `Environment=PATH=${path}`,
+    "",
+    "[Install]",
+    "WantedBy=default.target",
+    "",
+  ].join("\n");
+}
+
+export const HERDR_LIMIT_MS = 5_000;
+
+export interface HerdrOut {
+  ok: boolean;
+  stdout: string;
+}
+
+export type Herdr = (call: HerdrCall) => Promise<HerdrOut>;
+
+/** The environment Herdr runs with: the companion's own, less any Herdr pane identity, with PATH and HOME set. */
+export function herdrEnv(parent: Record<string, string | undefined>, path: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parent)) if (v !== undefined && !k.toUpperCase().includes("HERDR")) env[k] = v;
+  env.PATH = path;
+  env.HOME = parent.HOME ?? "";
+  return env;
+}
+
+export function herdrAt(program: string, session: string, path: string, parent: Record<string, string | undefined> = process.env): Herdr {
+  const env = herdrEnv(parent, path);
+  return async (call) => {
+    const r = await run([program, "--session", session, ...call.args], { env, timeoutMs: HERDR_LIMIT_MS });
+    return { ok: r.ok, stdout: r.ok ? r.stdout : "" };
+  };
+}
+
+/** Herdr's view of the session, as `herdr.rs` `parse_view` reads `api snapshot`. */
+export interface View {
+  focusedPane: string | null;
+  workspaces: { id: string; label: string; number: number; focused: boolean }[];
+  panes: { id: string; workspaceId: string; focused: boolean }[];
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const list = (v: unknown): Record<string, unknown>[] =>
+  Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x)) : [];
+
+export function parseView(json: string): View | null {
+  let root: unknown;
+  try {
+    root = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  const snap = (root as { result?: { snapshot?: unknown } } | null)?.result?.snapshot;
+  if (typeof snap !== "object" || snap === null) return null;
+  const s = snap as Record<string, unknown>;
+  const workspaces = list(s.workspaces).flatMap((w) => {
+    const id = str(w.workspace_id);
+    const label = str(w.label);
+    if (id === null || label === null) return [];
+    return [{ id, label, number: typeof w.number === "number" ? w.number : Number.MAX_SAFE_INTEGER, focused: w.focused === true }];
+  });
+  const panes = list(s.panes).flatMap((p) => {
+    const id = str(p.pane_id);
+    const workspaceId = str(p.workspace_id);
+    return id === null || workspaceId === null ? [] : [{ id, workspaceId, focused: p.focused === true }];
+  });
+  return { focusedPane: str(s.focused_pane_id), workspaces, panes };
+}
+
+/** The workspace carrying `label`: of several, the focused one, else the lowest number (`herdr::workspace_with_label`). */
+export function workspaceWithLabel(view: View, label: string): string | null {
+  const found = view.workspaces.filter((w) => w.label === label).sort((a, b) => Number(b.focused) - Number(a.focused) || a.number - b.number);
+  return found[0]?.id ?? null;
+}
+
+/** A workspace's focused pane, else its first (`launch::first_mate_pane`). */
+export function paneOf(view: View, workspace: string): string | null {
+  const panes = view.panes.filter((p) => p.workspaceId === workspace);
+  return (panes.find((p) => p.focused) ?? panes[0])?.id ?? null;
+}
+
+/** `pane process-info` → each foreground process's `argv0`, never `name` (`herdr::parse_foreground`). */
+export function foregroundOf(json: string): string[] {
+  try {
+    const procs = (JSON.parse(json) as { result?: { process_info?: { foreground_processes?: unknown } } })?.result?.process_info?.foreground_processes;
+    return list(procs).flatMap((p) => (typeof p.argv0 === "string" ? [p.argv0] : []));
+  } catch {
+    return [];
+  }
+}
+
+/** `workspace create` → the new workspace's pane, `result.root_pane.pane_id` (`herdr::root_pane`). */
+export function rootPane(json: string): string | null {
+  try {
+    return str((JSON.parse(json) as { result?: { root_pane?: { pane_id?: unknown } } })?.result?.root_pane?.pane_id) ?? null;
+  } catch {
+    return null;
+  }
+}

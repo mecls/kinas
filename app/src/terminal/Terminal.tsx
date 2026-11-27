@@ -11,7 +11,8 @@ import { writeClipboard } from "./clipboard.ts";
 import { decideKey } from "./keyContract.ts";
 import { KittyKeyboardTracker } from "./kittyKeyboard.ts";
 import { EMPTY, feed } from "./orderLine.ts";
-import { recordOrder } from "../api.ts";
+import { onPlaceChanged, recordOrder } from "../api.ts";
+import { reattachDelay, type Attach } from "./reattach.ts";
 import { parseOsc52 } from "./osc52.ts";
 import { type SelectionSnapshot, selectionDeleteBytes } from "./selectionDelete.ts";
 import { registerTerminalCopy } from "../shell/focus.ts";
@@ -52,8 +53,13 @@ function terminalTheme(): ITheme {
   };
 }
 
-export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Shortcuts }) {
+export function Terminal({ active, shortcuts, onAttach }: { active: boolean; shortcuts: Shortcuts; onAttach?: (attach: Attach) => void }) {
   const host = useRef<HTMLDivElement>(null);
+  // Read through a ref: the terminal is set up once, and a new callback must never restart it.
+  const onAttachRef = useRef(onAttach);
+  useEffect(() => {
+    onAttachRef.current = onAttach;
+  }, [onAttach]);
   const term = useRef<XTerm | null>(null);
   const fit = useRef<FitAddon | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -221,30 +227,75 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
       }
     });
 
+    // With the agents on a VPS (build spec §11.2, slice 3.1) the pane is Herdr's remote client: when it exits — the
+    // machine unreachable, the Mac asleep — it is started again by itself, after a wait that grows while each attach
+    // ends quickly (reattach.ts); Enter starts it at once. `run` numbers the starts: a session ended by a newer start
+    // (the place changed) says nothing, so its exit never prints over the pane that replaced it.
+    let run = 0;
+    let retryTimer: number | undefined;
+    let quickExits = 0;
     const start = async () => {
+      const mine = ++run;
+      window.clearTimeout(retryTimer);
       kitty.reset();
+      let drawn = false;
+      const startedAt = Date.now();
+      let remote: string | null = null;
+      onAttachRef.current?.("connecting");
       const onData = new Channel<ArrayBuffer>();
       onData.onmessage = (chunk) => {
         const bytes = new Uint8Array(chunk);
         if (import.meta.env.TAURI_ENV_DEBUG === "true") rawTail = [...rawTail, ...bytes].slice(-4096);
         for (const reply of kitty.feed(bytes)) send(reply);
         xterm.write(bytes);
+        if (!drawn && mine === run) {
+          drawn = true;
+          onAttachRef.current?.("attached");
+        }
+      };
+      // The exit can arrive before `pty_start`'s answer says whether the pane is remote: it is handled once both are in.
+      let answered = false;
+      let ended = false;
+      const ending = () => {
+        if (disposed || mine !== run || !answered || !ended) return;
+        exited = true;
+        kitty.reset();
+        if (remote === null) {
+          xterm.write(EXITED);
+          return;
+        }
+        quickExits = Date.now() - startedAt < 30_000 ? quickExits + 1 : 0;
+        const wait = reattachDelay(quickExits);
+        onAttachRef.current?.("detached");
+        xterm.write(`\r\n[detached from ${remote} — attaching again in ${Math.round(wait / 1000)} s, or press Enter]\r\n`);
+        retryTimer = window.setTimeout(() => void start(), wait);
       };
       const onExit = new Channel<number | null>();
       onExit.onmessage = () => {
-        if (disposed) return;
-        exited = true;
-        kitty.reset();
-        xterm.write(EXITED);
+        ended = true;
+        ending();
       };
       try {
-        await invoke<number | null>("pty_start", { onData, onExit, cols: xterm.cols, rows: xterm.rows });
-        exited = false;
+        const started = await invoke<{ pid: number | null; remote: string | null }>("pty_start", { onData, onExit, cols: xterm.cols, rows: xterm.rows });
+        if (mine !== run) return;
+        remote = started.remote;
+        answered = true;
+        if (!ended) exited = false;
+        ending();
       } catch (e) {
+        if (mine !== run) return;
         exited = true;
+        onAttachRef.current?.("detached");
         xterm.write(`\r\n[could not start the terminal: ${String(e)} — press Enter to retry]\r\n`);
       }
     };
+    // The place changed in Settings: the pane starts again on the new one. The old session is ended by the new start.
+    const offPlaceChanged = onPlaceChanged(() => {
+      if (disposed) return;
+      quickExits = 0;
+      xterm.reset();
+      void start();
+    });
 
     xterm.onData((data) => {
       if (exited) {
@@ -325,6 +376,8 @@ export function Terminal({ active, shortcuts }: { active: boolean; shortcuts: Sh
 
     return () => {
       disposed = true;
+      window.clearTimeout(retryTimer);
+      void offPlaceChanged.then((stop) => stop());
       offThemeChange();
       observer.disconnect();
       window.clearTimeout(timer);

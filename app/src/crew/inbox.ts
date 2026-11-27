@@ -1,4 +1,4 @@
-import type { CrewDecision, CrewSnapshot } from "../api.ts";
+import type { AnswerOutcome, CrewAnswered, CrewDecision, CrewSnapshot, SentAnswer } from "../api.ts";
 import { clock } from "./detail.ts";
 
 // The Inbox's words (build spec §4 Inbox page; DESIGN.md 1.7; mockup inbox.html): pure, so inbox.test.ts holds them.
@@ -25,6 +25,39 @@ export function inboxGroups(c: CrewSnapshot): InboxGroups {
 export function copiedText(copiedAt: number | null): string | null {
   return copiedAt === null ? null : `Copied ${clock(copiedAt)} — paste it into the first mate's pane`;
 }
+
+/**
+ * With the agents on a Linux machine (slice 6.2; DESIGN.md 1.14): `Answered from the Mac at 14:05`, then `· read by the
+ * first mate at 14:06`; null before an answer is delivered.
+ */
+export function answeredText(a: CrewAnswered | null): string | null {
+  if (a === null) return null;
+  const read = a.read_at === null ? "" : ` · read by the first mate at ${clock(a.read_at)}`;
+  return `Answered from the ${a.from === "mac" ? "Mac" : "phone"} at ${clock(a.at)}${read}`;
+}
+
+/** The first mate's reply, on its own line under the answered one: `The first mate: <reply>`. */
+export function replyText(a: CrewAnswered | null): string | null {
+  return a?.reply ? `The first mate: ${a.reply}` : null;
+}
+
+/** The toast after a note (build spec §4): a delivery says so plainly; anything else is said in `--danger`. */
+export function sentNotice(s: SentAnswer): { text: string; error: boolean } {
+  switch (s.outcome) {
+    case "delivered":
+      return { text: s.woken ? "Sent to the first mate" : "Sent to the first mate — the first mate reads it at its next turn", error: false };
+    case "already":
+      return { text: s.answered_at === null ? "Already answered" : `Already answered at ${clock(s.answered_at)}`, error: true };
+    case "not_open":
+      return { text: "No longer waiting", error: true };
+    case "unreachable":
+      return { text: `Not delivered: ${s.why ?? "can't reach the Linux machine"}`, error: true };
+  }
+}
+
+/** Whether the box closes: the question has its answer, or no longer waits. A door that failed keeps the words for a
+ * resend, which Rust sends under the same request id (point 4). */
+export const sentDone = (o: AnswerOutcome): boolean => o !== "unreachable";
 
 /** "just now", "12 min ago", "5 h ago", "2 d ago". */
 export function ageText(openedAt: number, now: number): string {

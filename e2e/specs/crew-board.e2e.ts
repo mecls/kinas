@@ -92,7 +92,7 @@ const go = (label: string) =>
   browser.execute((l: string) => [...document.querySelectorAll<HTMLButtonElement>(".sidebar button")].find((b) => b.textContent?.trim() === l)!.click(), label);
 
 /** The card's parts as the page draws them, as one JSON string (WebDriver mangles some returned objects). */
-async function card(id: string): Promise<{ word: string; meta: string; pr: string | null; pane: boolean; selected: boolean } | null> {
+async function card(id: string): Promise<{ word: string; meta: string; pr: string | null; review: string | null; pane: boolean; selected: boolean } | null> {
   const json = (await browser.execute((task: string) => {
     const el = document.querySelector(`section[data-page="crew"] article.crew-card[data-task="${task}"]`);
     if (!el) return "null";
@@ -100,6 +100,7 @@ async function card(id: string): Promise<{ word: string; meta: string; pr: strin
       word: el.getAttribute("data-word"),
       meta: el.querySelector(".crew-meta")?.textContent ?? "",
       pr: el.querySelector(".crew-pr")?.textContent ?? null,
+      review: el.querySelector(".crew-review")?.textContent ?? null,
       pane: [...el.querySelectorAll("button")].some((b) => b.textContent === "Open its pane"),
       selected: el.getAttribute("data-selected") === "true",
     });
@@ -221,10 +222,13 @@ describe("the board, the PR and the task detail", () => {
     await file([{ id: SHOP, title: SHOP_TITLE, project: "shop-9c2e", backlog: "in_flight", state: "working", target, pr: PR_URL }]);
     await cardWord(SHOP, "CI red");
     expect((await card(SHOP))?.pr).toBe("PR #123 · checks 3/4 · 1 failing");
+    // The review flag (ADR 0027): this PR adds .claude/settings.json, so the card asks for the captain's review.
+    expect((await card(SHOP))?.review).toBe("touches .claude/ — review before merging");
     setGhAnswer(tools, 2);
     await refresh();
     await cardWord(SHOP, "ready");
     expect((await card(SHOP))?.pr).toBe("PR #123 · checks 4/4 · mergeable");
+    expect((await card(SHOP))?.review).toBeNull();
 
     expect(sql(`SELECT kind, text FROM crew_events WHERE task_id = '${SHOP}' AND kind IN ('pr', 'checks') ORDER BY id`).split("\n")).toEqual([
       "pr|PR #123 opened",

@@ -24,6 +24,7 @@ import { chordFromEvent } from "../settings/chord.ts";
 import { writeClipboard } from "../terminal/clipboard.ts";
 import { ConvexSection } from "../settings/ConvexSection.tsx";
 import { CrewSection } from "../settings/CrewSection.tsx";
+import { PlaceSection } from "../settings/PlaceSection.tsx";
 import { HostingerSection } from "../settings/HostingerSection.tsx";
 import { AccentField } from "../ui/AccentField.tsx";
 import { addedLine, listedFolders, removedFolders, seatFolders, type SeatedFolder } from "../shell/folders.ts";
@@ -342,6 +343,7 @@ export function SettingsPage({
               </div>
 
               <div className="settings-group" data-group="crew">
+                <PlaceSection active={active} />
                 <CrewSection active={active} />
               </div>
 

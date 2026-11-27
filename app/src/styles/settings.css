@@ -349,3 +349,63 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Settings → Where agents run (the factory in the cloud, DESIGN.md 1.14): the Reachable row, its connection on one line
+   and Herdr's two versions on the next, the second marked only while they differ. */
+.place-reachable {
+  align-items: flex-start;
+}
+.place-reach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.place-herdr {
+  color: var(--ink-2);
+}
+
+/* Slice 4 (DESIGN.md 1.14): setup — the checks table's state cell (a dot and the row's words), its Install or the
+   captain's command, the bootstrap command in mono with Copy, and the client folders to clone. */
+.place-check {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.place-action,
+.place-command {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.place-command code {
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
+}
+.place-bootstrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.place-bootstrap-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.place-setup {
+  min-width: 0;
+}
+.place-clones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

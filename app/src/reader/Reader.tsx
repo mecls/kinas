@@ -356,7 +356,7 @@ export function Reader({
   onPin: (path: string) => void;
   onUnpin: (path: string) => void;
   /** Something the shell wants said here, where the reader says things. `seq` makes a repeat a new notice. */
-  notice: { text: string; seq: number } | null;
+  notice: { text: string; seq: number; kind?: "error" } | null;
   /**
    * Whether Files and Contents show beside the text while the reader is wide, and the column's width
    * (reader-layout PRD rule 4). The shell owns it, because it is read at boot and stored; one call per gesture.
@@ -374,7 +374,7 @@ export function Reader({
   const [confirm, setConfirm] = useState<{ path: string; root: string } | null>(null);
   /** Several files matched a name: listed newest first, none opened until one is clicked (R1b). */
   const [picks, setPicks] = useState<{ paths: string[]; root: string } | null>(null);
-  const [status, setStatus] = useState<{ text: string; sticky: boolean } | null>(null);
+  const [status, setStatus] = useState<{ text: string; sticky: boolean; kind?: "error" } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   /** The open that put "Opening …" up (its generation): only that one takes it down, however it ends. */
   const openingOf = useRef(0);
@@ -428,11 +428,11 @@ export function Reader({
   const blobs = useRef(new Set<string>());
   const statusTimer = useRef<number | undefined>(undefined);
 
-  const say = useCallback((text: string, sticky = false) => {
+  const say = useCallback((text: string, sticky = false, kind?: "error") => {
     // Debug builds only: e2e reads what was said, since a 6 s line can come and go between two slow driver lookups.
     if (import.meta.env.TAURI_ENV_DEBUG === "true") statusLog.push(text);
     window.clearTimeout(statusTimer.current);
-    setStatus({ text, sticky });
+    setStatus({ text, sticky, kind });
     if (!sticky) statusTimer.current = window.setTimeout(() => setStatus(null), STATUS_MS);
   }, []);
 
@@ -1013,7 +1013,7 @@ export function Reader({
 
   // The shell speaks through the reader's status line: a pin's result, or Rust's reason for refusing one.
   useEffect(() => {
-    if (notice) say(notice.text);
+    if (notice) say(notice.text, false, notice.kind);
     // Keyed on the notice alone: `say` is stable, and a new `seq` is a new thing to say.
   }, [notice, say]);
 
@@ -1467,7 +1467,7 @@ export function Reader({
         onClose={close}
       />
       {status && (
-        <p className="reader-status" role="status">
+        <p className="reader-status" role="status" data-kind={status.kind}>
           {status.text}
         </p>
       )}

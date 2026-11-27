@@ -1,4 +1,9 @@
 {
+  "changedFiles": 2,
+  "files": [
+    { "path": "src/health.ts", "additions": 42, "deletions": 0, "changeType": "ADDED" },
+    { "path": "README.md", "additions": 3, "deletions": 1, "changeType": "MODIFIED" }
+  ],
   "isDraft": false,
   "mergeable": "MERGEABLE",
   "number": 123,

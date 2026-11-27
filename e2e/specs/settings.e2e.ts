@@ -244,7 +244,8 @@ describe("Settings' section list and search", () => {
     );
     expect(nav).toEqual([
       "Providers: Claude Code, Ollama Cloud, Convex, Hostinger VPS",
-      "Crew: Firstmate",
+      // DESIGN.md 1.14 (the factory in the cloud): Where agents run is the Crew group's first section.
+      "Crew: Where agents run, Firstmate",
       "Workspace: Projects folder, Client folders, Organisation",
       "Interface: Appearance, Keyboard shortcuts, Global hotkey, Menu bar, Reader",
       "System: Launch at login, kinas CLI",
@@ -268,13 +269,13 @@ describe("Settings' section list and search", () => {
     await browser.waitUntil(async () => (await page()).shownBlocks.length === 1, { timeout: 10000, timeoutMsg: "the search never narrowed the page" });
     const one = await page();
     expect({ blocks: one.shownBlocks, rows: one.shownRows }).toEqual({ blocks: ["convex"], rows: ["convex.key", "convex.url"] });
-    expect(one.dimmed).toBe(14);
+    expect(one.dimmed).toBe(15);
     if (process.env.KINAS_E2E_SHOTS) await browser.saveScreenshot(`${process.env.KINAS_E2E_SHOTS}/settings-search.png`);
     await search("zzz");
     await browser.waitUntil(async () => (await page()).empty !== null, { timeout: 10000, timeoutMsg: "no match was never said" });
     expect((await page()).empty).toBe("No setting matches “zzz”.");
     await search("");
-    await browser.waitUntil(async () => (await page()).shownBlocks.length === 15, { timeout: 10000, timeoutMsg: "clearing the search never brought every section back" });
+    await browser.waitUntil(async () => (await page()).shownBlocks.length === 16, { timeout: 10000, timeoutMsg: "clearing the search never brought every section back" });
     expect((await page()).dimmed).toBe(0);
   });
 
@@ -286,7 +287,8 @@ describe("Settings' section list and search", () => {
         desc: r.querySelector(".ui-setting-desc")?.textContent ?? "",
       })),
     );
-    expect(rows).toHaveLength(27);
+    // Where agents run's seven rows (where, target, label, reachable; since slice 4 bootstrap, setup, clones) among them.
+    expect(rows).toHaveLength(34);
     expect(rows.every((r) => r.label !== "" && r.desc !== "")).toBe(true);
     // Rule 35: the connection is never seen here, so the three lines are open, not folded.
     const lines = await browser.execute(() => ({

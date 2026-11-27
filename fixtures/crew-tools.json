@@ -1,5 +1,5 @@
 {
-  "about": "What installed means for the crew (build spec §9): Firstmate's repository, pin and home folder, the tools at their exact versions with Firstmate's floors, and the prerequisites. app/src-tauri/src/crew/pin.rs and packages/commands/src/crew-tools.ts each spell these out, and a test on each side holds them equal to this file.",
+  "about": "What installed means for the crew (build spec §9): Firstmate's repository, pin and home folder, the tools at their exact versions with Firstmate's floors, the prerequisites, and since 2026-11-25 (the factory in the cloud) the Linux releases the companion installs and Kinas's own Linux assets. app/src-tauri/src/crew/pin.rs and packages/commands/src/crew-tools.ts each spell these out, and a test on each side holds them equal to this file.",
   "firstmate": {
     "repo": "https://github.com/kunchenguid/firstmate",
     "pin": "427056c4181c41074ad24f051f79919330df0fa5",
@@ -15,5 +15,11 @@
     { "name": "chrome-devtools-axi", "version": "0.1.35", "floor": "0", "required": true, "source": "npm" },
     { "name": "lavish-axi", "version": "0.1.80", "floor": "0.1.80", "required": false, "source": "npm" }
   ],
-  "prereqs": ["git", "gh", "node", "npm", "jq", "python3", "perl", "herdr", "claude"]
+  "prereqs": ["git", "gh", "node", "npm", "jq", "python3", "perl", "herdr", "claude"],
+  "linux_releases": [
+    { "name": "herdr", "version": "0.9.5", "repo": "herdrdev/herdr", "kind": "raw", "assets": { "x64": { "asset": "herdr-linux-x86_64", "sha256": "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d" }, "arm64": { "asset": "herdr-linux-aarch64", "sha256": "17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c" } } },
+    { "name": "treehouse", "version": "2.3.0", "repo": "kunchenguid/treehouse", "kind": "tar.gz", "assets": { "x64": { "asset": "treehouse-v2.3.0-linux-amd64.tar.gz", "sha256": "94fd2b2c20c35aac1ddc2941317890ad82c9916f5ccecbac4a50cda783eed10f" }, "arm64": { "asset": "treehouse-v2.3.0-linux-arm64.tar.gz", "sha256": "408589ba72b58d5e942071ed863a83fd96566cfd1e514945daa59defde528bbb" } } },
+    { "name": "no-mistakes", "version": "1.79.0", "repo": "kunchenguid/no-mistakes", "kind": "tar.gz", "assets": { "x64": { "asset": "no-mistakes-v1.79.0-linux-amd64.tar.gz", "sha256": "d178c8a5134763b8e5f6d82545a3a76285fbbcdc13d09020d1091ec80a3f8da6" }, "arm64": { "asset": "no-mistakes-v1.79.0-linux-arm64.tar.gz", "sha256": "eac3f8e494c7d2487594b7eb513e605e59588be4ce147390b8fd184a7e6a8b05" } } }
+  ],
+  "kinas_linux": { "repo": "mecls/kinas", "version": "0.1.0", "assets": { "x64": { "asset": "kinas-linux-x64", "sha256": null }, "arm64": { "asset": "kinas-linux-arm64", "sha256": null } } }
 }

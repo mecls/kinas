@@ -37,6 +37,45 @@ pub const TOOLS: &[Tool] = &[
 ];
 pub const PREREQS: &[&str] = &["git", "gh", "node", "npm", "jq", "python3", "perl", "herdr", "claude"];
 
+/// The releases `kinas companion install` puts in `~/.local/bin` on a Linux machine (build spec §17 2026-11-25 #1),
+/// mirrored here only to be held to the CLI's by the fixture: the app installs nothing on the VPS itself.
+#[cfg(test)]
+pub struct LinuxRelease {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub repo: &'static str,
+    pub kind: &'static str,
+    /// (asset, sha256) for x64, then arm64.
+    pub assets: [(&'static str, &'static str); 2],
+}
+#[cfg(test)]
+#[rustfmt::skip]
+pub const LINUX_RELEASES: &[LinuxRelease] = &[
+  LinuxRelease { name: "herdr",       version: "0.9.5",  repo: "herdrdev/herdr",          kind: "raw",    assets: [
+    ("herdr-linux-x86_64",                     "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d"),
+    ("herdr-linux-aarch64",                    "17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c")] },
+  LinuxRelease { name: "treehouse",   version: "2.3.0",  repo: "kunchenguid/treehouse",   kind: "tar.gz", assets: [
+    ("treehouse-v2.3.0-linux-amd64.tar.gz",    "94fd2b2c20c35aac1ddc2941317890ad82c9916f5ccecbac4a50cda783eed10f"),
+    ("treehouse-v2.3.0-linux-arm64.tar.gz",    "408589ba72b58d5e942071ed863a83fd96566cfd1e514945daa59defde528bbb")] },
+  LinuxRelease { name: "no-mistakes", version: "1.79.0", repo: "kunchenguid/no-mistakes", kind: "tar.gz", assets: [
+    ("no-mistakes-v1.79.0-linux-amd64.tar.gz", "d178c8a5134763b8e5f6d82545a3a76285fbbcdc13d09020d1091ec80a3f8da6"),
+    ("no-mistakes-v1.79.0-linux-arm64.tar.gz", "eac3f8e494c7d2487594b7eb513e605e59588be4ce147390b8fd184a7e6a8b05")] },
+];
+
+/// Kinas's own Linux CLI on its release (§16): Settings prints the bootstrap command from it, and only for this version
+/// with its SHA-256 pinned — null until the release step uploads the binaries and pins them.
+pub struct KinasLinux {
+    pub repo: &'static str,
+    pub version: &'static str,
+    /// (arch, asset, sha256) — `x64`, then `arm64`, as Bun's `process.arch` names them.
+    pub assets: [(&'static str, &'static str, Option<&'static str>); 2],
+}
+pub const KINAS_LINUX: KinasLinux = KinasLinux {
+    repo: "mecls/kinas",
+    version: "0.1.0",
+    assets: [("x64", "kinas-linux-x64", None), ("arm64", "kinas-linux-arm64", None)],
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,5 +102,17 @@ mod tests {
             .collect();
         assert_eq!(fixture["tools"], Value::Array(tools));
         assert_eq!(fixture["prereqs"], json!(PREREQS));
+        let linux: Vec<Value> = LINUX_RELEASES
+            .iter()
+            .map(|r| {
+                json!({ "name": r.name, "version": r.version, "repo": r.repo, "kind": r.kind, "assets": {
+                    "x64": { "asset": r.assets[0].0, "sha256": r.assets[0].1 },
+                    "arm64": { "asset": r.assets[1].0, "sha256": r.assets[1].1 } } })
+            })
+            .collect();
+        assert_eq!(fixture["linux_releases"], Value::Array(linux));
+        let assets: serde_json::Map<String, Value> =
+            KINAS_LINUX.assets.iter().map(|(arch, asset, sha)| (arch.to_string(), json!({ "asset": asset, "sha256": sha }))).collect();
+        assert_eq!(fixture["kinas_linux"], json!({ "repo": KINAS_LINUX.repo, "version": KINAS_LINUX.version, "assets": assets }));
     }
 }

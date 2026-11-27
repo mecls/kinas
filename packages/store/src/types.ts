@@ -130,7 +130,10 @@ export interface StorageAdapter {
   schemaVersion(): number;
   getQuotas(): QuotaRow[];
   getReaderStatus(): ReaderRow[];
+  /** This Mac: the newest row that isn't the Linux machine's. */
   getHost(): HostRow | null;
+  /** The Linux machine's row, under the place's label, while the agents run there (slice 5.2). */
+  getLinuxHost?(): HostRow | null;
   /** One Europe/Lisbon date, summed per harness/provider/model. */
   getUsageDaily(date: string): UsageRow[];
 }

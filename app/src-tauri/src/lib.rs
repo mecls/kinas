@@ -5,6 +5,7 @@ mod herdr;
 mod keychain;
 mod login_path;
 mod paths;
+mod place;
 mod proc;
 mod projects;
 mod pty;
@@ -14,6 +15,7 @@ mod readers;
 mod readings;
 mod redact;
 mod recent;
+mod remote;
 mod search;
 mod staleness;
 mod store;
@@ -121,6 +123,11 @@ pub fn run() {
             crew::crew_snapshot,
             crew::set_crew_visible,
             crew::crew_settings,
+            place::get_place,
+            place::set_place,
+            crew::remote_cmds::remote_hello,
+            crew::remote_cmds::remote_install,
+            crew::remote_cmds::place_status,
             crew::crew_launch,
             crew::crew_task,
             crew::crew_focus_pane,

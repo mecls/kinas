@@ -52,6 +52,7 @@ const snapshot = (extra: Partial<UsageSnapshot> = {}): UsageSnapshot =>
     provider_metrics: [],
     readers: [reader("claude-plan"), reader("ollama-cloud"), reader("host"), reader("convex", "not_configured"), reader("hostinger", "not_configured")],
     host: null,
+    linux_host: null,
     usage: [],
     first_usage_date: null,
     days: [],
@@ -93,6 +94,9 @@ describe("statusModel (rules 23–24)", () => {
   test("the VPS is the sidebar's connection, from the same snapshot", () => {
     const s = snapshot({ readers: [reader("hostinger")] });
     expect(statusModel(s, null).vps).toEqual({ name: "Hostinger VPS", state: "connected", detail: "as of 13:51" });
+    const machine = { name: "vps-1", state: "unreachable" as const, word: "unreachable", detail: "vps-1 · unreachable since 14:02" };
+    expect(statusModel(s, null, null, machine).vps).toEqual(machine);
+    expect(statusModel(null, null, null, machine).vps).toEqual(machine);
   });
 });
 

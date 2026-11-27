@@ -100,13 +100,19 @@ pub struct UsageSnapshot {
     pub quotas: Vec<QuotaView>,
     pub provider_metrics: Vec<ProviderMetricView>,
     pub readers: Vec<ReaderView>,
+    /// This Mac: the newest row that isn't the Linux machine's.
     pub host: Option<HostView>,
+    /// The Linux machine's row, under the place's label, while the agents run there (slice 5.2).
+    pub linux_host: Option<HostView>,
     pub usage: Vec<UsageDay>,
     pub first_usage_date: Option<String>,
     pub days: Vec<String>,
     pub backfill: Backfill,
     pub claude_hook: HookStatus,
 }
+
+/// The Linux machine's host reading goes stale after twice the bundle's slowest cadence (5 minutes), as Hostinger's does.
+pub const LINUX_HOST_STALE_MS: i64 = 600_000;
 
 fn default_limits(reader: &str) -> (i64, i64) {
     let r = match reader {
@@ -236,14 +242,13 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
         })?
         .collect::<Result<_, _>>()?;
 
-    let host = conn
-        .prepare(
-            "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, updated_at FROM hosts
-             WHERE org_id = ?1 ORDER BY updated_at DESC LIMIT 1",
-        )?
-        .query_map(params![org_id], |r| {
+    // The Linux machine's label is kept when the place goes back to the Mac, so its row never reads as this Mac's.
+    let label = crate::system::get_setting(conn, org_id, crate::place::LABEL_KEY).and_then(|v| v.as_str().map(str::to_string));
+    // The Linux machine's row comes with the crew's bundle, read every 60 s while the Crew page shows and every 5 minutes
+    // otherwise: stale after twice that, as Hostinger's machine is, never this Mac's 2 minutes.
+    let host_row_within = |(stale, dead): (i64, i64)| {
+        move |r: &rusqlite::Row<'_>| -> rusqlite::Result<HostView> {
             let updated_at: i64 = r.get(7)?;
-            let (stale, dead) = limits_for("host");
             Ok(HostView {
                 machine: r.get(0)?,
                 cpu_pct: r.get(1)?,
@@ -255,7 +260,27 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
                 updated_at,
                 state: reading_state(Some(updated_at), stale, dead, None, now),
             })
-        })?
+        }
+    };
+    let host_row = host_row_within(limits_for("host"));
+    let linux_limits = (LINUX_HOST_STALE_MS, limits_for("host").1.max(LINUX_HOST_STALE_MS));
+    let linux_host = match crate::place::place(conn, org_id) {
+        crate::place::Place::Vps { label, .. } => conn
+            .prepare(
+                "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, updated_at FROM hosts
+                 WHERE org_id = ?1 AND machine = ?2",
+            )?
+            .query_map(params![org_id, label], host_row_within(linux_limits))?
+            .next()
+            .transpose()?,
+        crate::place::Place::Mac => None,
+    };
+    let host = conn
+        .prepare(
+            "SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb, disk_available_gb, updated_at FROM hosts
+             WHERE org_id = ?1 AND machine IS NOT ?2 ORDER BY updated_at DESC LIMIT 1",
+        )?
+        .query_map(params![org_id, label], host_row)?
         .next()
         .transpose()?;
 
@@ -281,7 +306,7 @@ pub fn snapshot(conn: &Connection, org_id: &str, now: i64, backfill: Backfill, c
         .collect::<Result<_, _>>()?;
     let first_usage_date: Option<String> = conn.query_row("SELECT min(date) FROM usage_daily WHERE org_id = ?1", params![org_id], |r| r.get(0))?;
 
-    Ok(UsageSnapshot { now, quotas, provider_metrics, readers, host, usage, first_usage_date, days, backfill, claude_hook })
+    Ok(UsageSnapshot { now, quotas, provider_metrics, readers, host, linux_host, usage, first_usage_date, days, backfill, claude_hook })
 }
 
 #[cfg(test)]
@@ -365,6 +390,35 @@ mod tests {
         });
         let host = snap.host.unwrap();
         assert_eq!((host.updated_at, host.state), (NOW - 5_000, ReadingState::Fresh), "the sample stamped after now waits for the next read");
+    }
+
+    /// Slice 5.2: the Linux machine's row is its own section while the agents run there, and never this Mac's, even
+    /// when it is the newest row or the place has gone back to the Mac.
+    #[test]
+    fn this_mac_is_never_the_linux_machines_row() {
+        use crate::place::{save, Place};
+        use crate::readers::host::{write_host, write_host_there, HostReading};
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let org = store.org_id().to_string();
+        let sample = HostReading { cpu_pct: 10.0, mem_used_gb: 1.0, mem_total_gb: 2.0, disk_used_gb: 1.0, disk_total_gb: 2.0, disk_available_gb: None };
+        write_host(&store.conn(), &org, "mac-9c2e", &sample, NOW - 5_000).unwrap();
+        write_host_there(&store.conn(), &org, "homelab", None, (3.0, 16.0), (40.0, 200.0, Some(150.0)), NOW - 1_000).unwrap();
+        save(&store.conn(), &org, &Place::Vps { target: "homelab-claude".into(), label: "homelab".into() }).unwrap();
+        let snap = read_now(&store, dir.path(), Backfill::default(), || NOW).unwrap();
+        assert_eq!(snap.host.as_ref().map(|h| h.machine.as_str()), Some("mac-9c2e"));
+        let linux = snap.linux_host.unwrap();
+        assert_eq!((linux.machine.as_str(), linux.cpu_pct, linux.disk_available_gb, linux.state), ("homelab", None, Some(150.0), ReadingState::Fresh));
+        // Read with the bundle every 5 minutes while the Crew page is hidden: 4 minutes old is fresh there, not here.
+        let later = read_now(&store, dir.path(), Backfill::default(), || NOW + 240_000).unwrap();
+        assert_eq!((later.host.unwrap().state, later.linux_host.unwrap().state), (ReadingState::Stale, ReadingState::Fresh));
+        let much_later = read_now(&store, dir.path(), Backfill::default(), || NOW + 700_000).unwrap();
+        assert_eq!(much_later.linux_host.unwrap().state, ReadingState::Stale);
+
+        save(&store.conn(), &org, &Place::Mac).unwrap();
+        let snap = read_now(&store, dir.path(), Backfill::default(), || NOW).unwrap();
+        assert_eq!(snap.host.as_ref().map(|h| h.machine.as_str()), Some("mac-9c2e"));
+        assert!(snap.linux_host.is_none());
     }
 
     /// The status line writes the hook's hand-off file from another process, with no guard shared: a capture it stamps

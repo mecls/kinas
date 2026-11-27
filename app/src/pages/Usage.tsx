@@ -87,6 +87,8 @@ export function UsagePage({
 
       <MacSection host={snapshot.host} reader={reader("host")} now={snapshot.now} />
 
+      {snapshot.linux_host && <HostSection title="Linux machine" host={snapshot.linux_host} now={snapshot.now} section="linux-host" />}
+
       <CrewSection crew={crew} error={crewError} />
     </div>
   );
@@ -299,6 +301,11 @@ function MacSection({ host, reader, now }: { host: HostView | null; reader: Read
       </Section>
     );
   }
+  return <HostSection title="This Mac" host={host} now={now} section="host" />;
+}
+
+/** A machine's CPU, memory and disk: this Mac's, or the Linux machine's from the companion (DESIGN 1.14, slice 5.2). */
+function HostSection({ title, host, now, section }: { title: string; host: HostView; now: number; section: string }) {
   const dead = host.state === "dead";
   const stale = host.state === "stale" ? " · stale" : "";
   const free = host.disk_total_gb - host.disk_used_gb;
@@ -307,8 +314,8 @@ function MacSection({ host, reader, now }: { host: HostView | null; reader: Read
   const diskPct = host.disk_total_gb > 0 ? (host.disk_used_gb / host.disk_total_gb) * 100 : null;
   const bar = (pct: number | null) => (dead ? null : pct);
   return (
-    <Section className="usage-provider" data-section="host">
-      <SectionHeader title="This Mac" caption={`${asOf(host.updated_at, now)}${stale}`} source={host.machine} />
+    <Section className="usage-provider" data-section={section}>
+      <SectionHeader title={title} caption={`${asOf(host.updated_at, now)}${stale}`} source={host.machine} />
       <Rows data-state={host.state}>
         <MetricRow label="CPU" used={null} value={host.cpu_pct === null || dead ? "—" : `${Math.round(host.cpu_pct)}%`} unit="all cores" data-metric="cpu" />
         <MetricRow label="Memory" used={bar(memPct)} value={dead ? "—" : gib(host.mem_used_gb)} unit={`of ${gib(host.mem_total_gb)} used`} tone={tone(memPct, host.state)} data-metric="memory" />

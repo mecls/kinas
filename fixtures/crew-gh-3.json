@@ -1,4 +1,8 @@
 {
+  "changedFiles": 1,
+  "files": [
+    { "path": "src/health.ts", "additions": 42, "deletions": 0, "changeType": "ADDED" }
+  ],
   "isDraft": false,
   "mergeable": "UNKNOWN",
   "number": 123,

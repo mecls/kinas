@@ -3,9 +3,11 @@
 //! Firstmate script would find the wrong session); the caller's variables applied on top; its own process group,
 //! killed whole at the limit, so a script's grandchildren go with it; both pipes drained on threads so a chatty child
 //! never blocks. Precedents: `reader/herdr.rs::run` (the drain) and `pty::terminate` (the group kill).
+//! `run_fed` is the same runner with bytes on the child's stdin and a ceiling on its stdout — the remote door's
+//! (ADR 0024): the request travels on stdin, never in argv.
 
 use std::ffi::OsString;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -51,14 +53,21 @@ impl Ran {
 
 /// Runs `r` to completion or its limit. `Err` only when the program could not be started.
 pub(crate) fn run(r: &Run) -> Result<Ran, String> {
-    run_with(r, std::env::vars_os())
+    run_with(r, std::env::vars_os(), None, usize::MAX).map(|(ran, _)| ran)
+}
+
+/// `run` with `input` written to the child's stdin (then closed) and its stdout kept to `cap` bytes; the rest is read
+/// and dropped so the child never blocks on a full pipe. The flag says whether anything was dropped.
+pub(crate) fn run_fed(r: &Run, input: &[u8], cap: usize) -> Result<(Ran, bool), String> {
+    run_with(r, std::env::vars_os(), Some(input), cap)
 }
 
 /// `run` with the inherited environment passed in, so a test can hand it HERDR* variables without touching the
 /// process's own environment.
-fn run_with(r: &Run, inherited: impl IntoIterator<Item = (OsString, OsString)>) -> Result<Ran, String> {
+fn run_with(r: &Run, inherited: impl IntoIterator<Item = (OsString, OsString)>, input: Option<&[u8]>, cap: usize) -> Result<(Ran, bool), String> {
     let mut command = Command::new(r.program);
-    command.args(r.args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0);
+    let stdin = if input.is_some() { Stdio::piped() } else { Stdio::null() };
+    command.args(r.args).stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0);
     command.env_clear();
     command.envs(inherited.into_iter().filter(|(k, _)| !k.to_string_lossy().to_ascii_uppercase().contains("HERDR")));
     for (key, value) in r.set {
@@ -69,8 +78,15 @@ fn run_with(r: &Run, inherited: impl IntoIterator<Item = (OsString, OsString)>) 
     }
     let started = Instant::now();
     let mut child = command.spawn().map_err(|e| format!("could not run {}: {e}", r.program.display()))?;
-    let stdout = drain(child.stdout.take());
-    let stderr = drain(child.stderr.take());
+    if let (Some(bytes), Some(mut pipe)) = (input, child.stdin.take()) {
+        // On its own thread: a child that never reads must not stall the wait below. Dropping the pipe is the EOF.
+        let bytes = bytes.to_vec();
+        std::thread::spawn(move || {
+            let _ = pipe.write_all(&bytes);
+        });
+    }
+    let stdout = drain(child.stdout.take(), cap);
+    let stderr = drain(child.stderr.take(), usize::MAX);
     let deadline = started + r.limit;
     let status = loop {
         match child.try_wait() {
@@ -103,26 +119,39 @@ fn run_with(r: &Run, inherited: impl IntoIterator<Item = (OsString, OsString)>) 
         out = out.or_else(|| collect(&stdout, grace));
         err = err.or_else(|| collect(&stderr, grace));
     }
-    let err = err.unwrap_or_default();
+    let (err, _) = err.unwrap_or_default();
     let mut lines = err.lines().map(str::trim).filter(|l| !l.is_empty());
     let first_err = lines.next().map(str::to_string);
     let last_err = lines.next_back().map(str::to_string).or_else(|| first_err.clone());
-    Ok(Ran { exit, stdout: out.unwrap_or_default(), first_err, last_err })
+    let (stdout, cut) = out.unwrap_or_default();
+    Ok((Ran { exit, stdout, first_err, last_err }, cut))
 }
 
-fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<String> {
+/// Reads a pipe to its end on a thread, keeping at most `cap` bytes; whether any were dropped comes back with them.
+fn drain<R: Read + Send + 'static>(pipe: Option<R>, cap: usize) -> Receiver<(String, bool)> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
-        let mut bytes = Vec::new();
+        let mut kept = Vec::new();
+        let mut cut = false;
         if let Some(mut p) = pipe {
-            let _ = p.read_to_end(&mut bytes);
+            let mut buf = [0u8; 64 * 1024];
+            loop {
+                match p.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let room = cap.saturating_sub(kept.len());
+                        kept.extend_from_slice(&buf[..n.min(room)]);
+                        cut |= n > room;
+                    }
+                }
+            }
         }
-        let _ = tx.send(String::from_utf8_lossy(&bytes).into_owned());
+        let _ = tx.send((String::from_utf8_lossy(&kept).into_owned(), cut));
     });
     rx
 }
 
-fn collect(rx: &Receiver<String>, until: Instant) -> Option<String> {
+fn collect(rx: &Receiver<(String, bool)>, until: Instant) -> Option<(String, bool)> {
     rx.recv_timeout(until.saturating_duration_since(Instant::now())).ok()
 }
 
@@ -199,8 +228,11 @@ mod tests {
                 limit: Duration::from_secs(5),
             },
             inherited,
+            None,
+            usize::MAX,
         )
-        .unwrap();
+        .unwrap()
+        .0;
         assert!(ran.ok(), "{ran:?}");
         let lines: Vec<&str> = ran.stdout.lines().collect();
         assert!(!lines.iter().any(|l| l.to_ascii_uppercase().contains("HERDR")), "{lines:?}");
@@ -209,6 +241,39 @@ mod tests {
         assert!(lines.contains(&"FM_HOME=/tmp/fm-home"), "{lines:?}");
         assert!(lines.contains(&"PWD=/"), "{lines:?}");
         assert_eq!(lines.last(), Some(&"STDIN-EOF"));
+    }
+
+    /// The remote door's request travels on stdin (ADR 0024): what is fed is what the child reads, then EOF.
+    #[test]
+    fn run_fed_writes_stdin_then_closes_it() {
+        let r = Run { program: Path::new("/bin/cat"), args: &[], cwd: None, set: &[], limit: Duration::from_secs(5) };
+        let (ran, cut) = run_fed(&r, b"{\"verb\":\"hello\"}\n", 1024).unwrap();
+        assert!(ran.ok(), "{ran:?}");
+        assert_eq!(ran.stdout, "{\"verb\":\"hello\"}\n");
+        assert!(!cut);
+    }
+
+    /// A reply over the ceiling is cut and flagged, and the child is still drained to its end, so it never blocks.
+    #[test]
+    fn run_fed_keeps_only_the_cap_and_says_so() {
+        let r = Run { program: Path::new("/bin/sh"), args: &["-c", "head -c 300000 /dev/zero | tr '\\0' x; echo done >&2"], cwd: None, set: &[], limit: Duration::from_secs(10) };
+        let (ran, cut) = run_fed(&r, b"", 1000).unwrap();
+        assert!(ran.ok(), "{ran:?}");
+        assert_eq!(ran.stdout.len(), 1000);
+        assert!(cut);
+        assert_eq!(ran.last_err.as_deref(), Some("done"));
+    }
+
+    /// A child that never reads its stdin does not stall the runner.
+    #[test]
+    fn run_fed_does_not_wait_on_a_child_that_never_reads() {
+        let big = vec![b'x'; 4 * 1024 * 1024];
+        let r = Run { program: Path::new("/bin/sh"), args: &["-c", "echo ok"], cwd: None, set: &[], limit: Duration::from_secs(5) };
+        let started = Instant::now();
+        let (ran, _) = run_fed(&r, &big, 1024).unwrap();
+        assert!(ran.ok(), "{ran:?}");
+        assert_eq!(ran.stdout, "ok\n");
+        assert!(started.elapsed() < Duration::from_secs(4), "{:?}", started.elapsed());
     }
 
     #[test]

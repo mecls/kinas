@@ -51,6 +51,19 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
+/* The review flag (DESIGN.md 1.14, the captain's (b)): one line in --danger text under the PR line; the detail lists the
+   paths in mono. */
+.crew-review {
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.crew-review-paths {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+}
 
 /* The panel's two occupants (DESIGN.md 1.4): the reader stays mounted while a task shows, only out of the layout, so
    its tabs and its place are kept. */

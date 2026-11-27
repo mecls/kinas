@@ -64,6 +64,26 @@ export function HealthBadge({ state, optional = false }: { state: HealthState; o
   );
 }
 
+/** The Work page's pane while it is not attached to the VPS (DESIGN.md 1.14, 4 Terminal chrome): the same pill with its
+ * own words — `connecting` until the pane first draws, `reconnecting`, `unreachable since 14:02`. */
+export type DetachedState = "connecting" | "reconnecting" | "unreachable";
+
+const DETACHED: Record<DetachedState, { word: string; color: string }> = {
+  connecting: { word: "connecting", color: "--stale" },
+  reconnecting: { word: "reconnecting", color: "--warn" },
+  unreachable: { word: "unreachable", color: "--danger" },
+};
+
+export function DetachedBadge({ state, since }: { state: DetachedState; since?: string | null }) {
+  const d = DETACHED[state];
+  return (
+    <span className="ui-badge" data-detached={state}>
+      <Dot color={d.color} kind="solid" />
+      {state === "unreachable" && since ? `${d.word} since ${since}` : d.word}
+    </span>
+  );
+}
+
 /** A row of badges, right-aligned, as the progress row and the phone's folder rows use them. */
 export function Badges({ children }: { children: ReactNode }) {
   return <span className="ui-badges">{children}</span>;

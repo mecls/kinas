@@ -438,6 +438,45 @@ export const STORIES: Story[] = [
           </Inbox>
         ),
       },
+      // 1.14 (slice 6.2): with the agents on a Linux machine, the box sends a note, and the item says what became of it.
+      {
+        name: "answering-by-note",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={1}
+              keys
+              byNote
+              state="answering"
+              question="Keep the CSV import as a fallback for one release?"
+              context={<>Webhook for stock changes · <span className="ui-mono">fallback</span> · 25 min ago</>}
+              answer="Yes — keep it for one release, then remove it."
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
+      {
+        name: "answered",
+        node: (
+          <Inbox>
+            <InboxItem
+              cat={2}
+              keys
+              byNote
+              question="Ship dark mode behind a setting or on for everyone?"
+              context={<>Dark mode for the portal · <span className="ui-mono">rollout</span> · 1 h ago</>}
+              answered="Answered from the Mac at 14:05 · read by the first mate at 14:06"
+              reply="The first mate: Behind a setting it is; I've told the worker."
+              onApprove={noop}
+              onAnswer={noop}
+              onDeny={noop}
+            />
+          </Inbox>
+        ),
+      },
       {
         name: "compact",
         node: (
@@ -527,6 +566,11 @@ export const STORIES: Story[] = [
       // DESIGN.md 1.4: the badge is a worker's only, so the shell and the first mate draw none.
       { name: "shell", node: <TerminalChrome session="shell" profile="plain shell" actions={[{ label: "Copy", onClick: noop }]} /> },
       { name: "first-mate", node: <TerminalChrome session="default · firstmate" profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
+      // DESIGN.md 1.14: on a VPS the place comes first; while the pane is not attached, the badge says so.
+      { name: "vps", node: <TerminalChrome session="vps-1 · default · firstmate" profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "connecting", node: <TerminalChrome session="vps-1 · default" detached={{ state: "connecting" }} actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "reconnecting", node: <TerminalChrome session="vps-1 · default · firstmate" detached={{ state: "reconnecting" }} profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
+      { name: "unreachable", node: <TerminalChrome session="vps-1 · default · firstmate" detached={{ state: "unreachable", since: "14:02" }} profile="claude" actions={[{ label: "Copy", onClick: noop }]} /> },
     ],
   },
   {

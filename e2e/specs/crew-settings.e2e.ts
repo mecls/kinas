@@ -77,7 +77,8 @@ describe("Settings grouped, and the crew's install", () => {
     );
     expect(groups).toEqual([
       ["providers", "Providers", "claude,ollama,convex,hostinger"],
-      ["crew", "Crew", "crew"],
+      // DESIGN.md 1.14: Where agents run is the Crew group's first section.
+      ["crew", "Crew", "place,crew"],
       ["workspace", "Workspace", "projects,folders,org"],
       ["interface", "Interface", "appearance,shortcuts,hotkey,menu-bar,reader"],
       ["system", "System", "login,cli"],

@@ -3,7 +3,7 @@ import type { CrewLanes, CrewTask, CrewWord } from "../api.ts";
 import { seatFolders } from "../shell/folders.ts";
 import { lanesCaption } from "./lanes.ts";
 import { BADGE } from "../ui/StatusBadge.tsx";
-import { BADGE_OF, cardOrder, duration, elapsedText, fleetAsOf, fleetShown, forgetComeBack, laneCounts, lanesOf, largestUnit, metaLine, onScreen, prLine, toStamp } from "./board.ts";
+import { BADGE_OF, cardOrder, duration, elapsedText, fleetAsOf, fleetShown, forgetComeBack, laneCounts, lanesOf, largestUnit, metaLine, onScreen, prLine, reviewLine, worktreeLine, localMovedLine, shortCommit, toStamp } from "./board.ts";
 
 // The board's rules (build spec §4 Crew page, PRD rules 18–19, AC-7): lanes by repository in the sidebar's order, then
 // the unmatched by name without chips; counts; card order; elapsed texts; PR lines.
@@ -34,6 +34,7 @@ const task = (id: string, word: CrewWord, extra: Partial<CrewTask> = {}): CrewTa
   dispatched_at: null,
   merged_at: null,
   merged_via: null,
+    review: null, worktree: null, local_moved: null,
   ...extra,
 });
 
@@ -121,6 +122,26 @@ test("elapsed: working since first seen working, done in, or nothing", () => {
 
 test("the PR line once gh has answered", () => {
   const pr = { number: 123, state: "OPEN", draft: false, mergeable: "MERGEABLE", checks_total: 4, checks_failed: 1 };
+  // The review flag (the captain's (b)): what kind, or that the reading could not see every path.
+  expect(reviewLine(null)).toBeNull();
+  expect(reviewLine({ paths: [], unknown: false })).toBeNull();
+  expect(reviewLine({ paths: [".claude/settings.json"], unknown: false })).toBe("touches .claude/ — review before merging");
+  expect(reviewLine({ paths: ["pkg/.mcp.json"], unknown: false })).toBe("touches .mcp.json — review before merging");
+  expect(reviewLine({ paths: [".claude/hooks/x.sh", ".mcp.json"], unknown: true })).toBe("touches .claude/ and .mcp.json — review before merging");
+  expect(reviewLine({ paths: [], unknown: true })).toBe("too many files to check — review before merging");
+  // ADR 0028: the worktree scan's own line, before landing.
+  // ADR 0029: a local-only task's moved default branch, by its own name; both commits short in the detail.
+  expect(localMovedLine(null)).toBeNull();
+  expect(localMovedLine({ branch: "main" })).toBe("local main moved since this task started — check before landing");
+  expect(localMovedLine({ branch: "trunk" })).toBe("local trunk moved since this task started — check before landing");
+  expect(shortCommit("d".repeat(40))).toBe("ddddddd");
+  expect(shortCommit(null)).toBe("unreadable");
+  expect(worktreeLine(null)).toBeNull();
+  expect(worktreeLine({ paths: [], unknown: false })).toBeNull();
+  expect(worktreeLine({ paths: ["sub/.claude/x"], unknown: false })).toBe("worktree holds .claude/ that isn't the repository's — review before landing");
+  expect(worktreeLine({ paths: ["sub/.mcp.json"], unknown: false })).toBe("worktree holds .mcp.json that isn't the repository's — review before landing");
+  expect(worktreeLine({ paths: ["sub/.claude/x", "sub/.mcp.json"], unknown: false })).toBe("worktree holds .claude/ and .mcp.json that aren't the repository's — review before landing");
+  expect(worktreeLine({ paths: [], unknown: true })).toBe("worktree could not be checked — review before landing");
   expect(prLine(null)).toBeNull();
   expect(prLine({ ...pr, state: null, mergeable: null, checks_total: null, checks_failed: null })).toBe("PR #123");
   expect(prLine(pr)).toBe("PR #123 · checks 3/4 · 1 failing");

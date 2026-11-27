@@ -19,6 +19,7 @@ registers it (PRD rule 5). A binding in code that is not listed here is a bug.
 | ⌘3 | Go to the Crew page (since 2026-09-24, the first mate) |
 | ⌘4 | Go to the Usage page |
 | ⌘5 | Go to the Inbox page (since 2026-09-25, the first mate) |
+| ⌘6 | Go to the Factory page (2026-11-17, the factory in the cloud; lands with its slice 12) |
 | ⌘S | Hide or show the sidebar (remembered across launches) |
 | ⌘, | Open the Settings page (also the gear at the foot of the sidebar) |
 | ⌘W | Hide the window (the app, readers and terminal keep running) |
@@ -56,6 +57,11 @@ Amended 2026-09-24 (slice 3): Go to the first mate follows Go to Crew — the la
 terminal holding the keys, as the Crew page's First mate.
 Amended 2026-09-25 (slice 5): ⌘5 and Go to Inbox landed — Go to Inbox follows Go to Crew in the palette and in
 Settings' list; the defaults are the eight above, and ⌘5 is no longer the terminal's.
+
+Amended 2026-11-17 (the factory in the cloud, Gate 1, `tasks/cloud-factory/prd.md`; lands with its slice 12): ⌘6 goes
+to the Factory page, a default Settings can rebind, so the defaults become nine — ⌘K, ⌘1 to ⌘6, ⌘S and ⌘, — and the
+rules above hold for all nine. Go to Factory follows Go to Usage in the palette and in Settings' list. Until slice 12
+lands, ⌘6 stays the terminal's.
 
 ## Command palette
 
@@ -97,7 +103,7 @@ The only ⌘ chords the app handles in the pane:
 | ⌘K | Open the palette |
 | ⌘C | Copy the selection, if there is one; otherwise nothing |
 | ⌘V | Paste (bracketed when the running program enabled bracketed paste) |
-| ⌘1 / ⌘2 / ⌘3 / ⌘4 / ⌘5 | Switch pages (⌘3 since 2026-09-24; ⌘5 since 2026-09-25) |
+| ⌘1 / ⌘2 / ⌘3 / ⌘4 / ⌘5 / ⌘6 | Switch pages (⌘3 since 2026-09-24; ⌘5 since 2026-09-25; ⌘6 with the factory's slice 12) |
 | ⌘S | Hide or show the sidebar |
 | ⌘, | Open Settings |
 | ⌘W ⌘H ⌘M ⌘Q | Standard macOS meanings, as above |

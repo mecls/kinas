@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, chmodSync, cpSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +34,7 @@ export function makeFakeHome(dataDir: string, snapshot: string, opts: { clones?:
     const remote = origin ? `[remote "origin"]\n\turl = ${origin}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n` : "";
     writeFileSync(join(home, "projects", name, ".git", "config"), `[core]\n\trepositoryformatversion = 0\n${remote}`);
   }
-  for (const script of ["fm-fleet-snapshot.sh", "fm-project-mode.sh", "fm-afk-contract.sh", "fm-capacity.sh"]) chmodSync(join(home, "bin", script), 0o755);
+  for (const script of ["fm-fleet-snapshot.sh", "fm-project-mode.sh", "fm-afk-contract.sh", "fm-capacity.sh", "fm-inbox.sh", "fm-captain-hold.sh"]) chmodSync(join(home, "bin", script), 0o755);
   writeFileSync(join(home, "config", "backend"), "herdr\n");
   writeFileSync(join(home, "data", "backlog.md"), "# Backlog\n\n## In flight\n\n## Queued\n\n## Done\n");
   setSnapshot(home, snapshot);
@@ -92,4 +92,28 @@ export function writeSnapshot(home: string, json: string, exit = 0): void {
   writeFileSync(`${target}.tmp`, text);
   renameSync(`${target}.tmp`, target);
   writeFileSync(join(home, "fixtures", "snapshot-exit"), `${exit}\n`);
+}
+
+/**
+ * The inbox's receipts (slice 6.3): every note handled by the first mate (`handled`), with `reply` as its reply when
+ * given; or pending again. As the captain's first mate would, never Kinas.
+ */
+export function setInboxHandled(home: string, handled: boolean, reply?: string): void {
+  const flag = join(home, "fixtures", "inbox-handled");
+  const said = join(home, "fixtures", "inbox-reply");
+  if (handled) writeFileSync(flag, "");
+  else rmSync(flag, { force: true });
+  if (handled && reply !== undefined) writeFileSync(said, reply);
+  else rmSync(said, { force: true });
+}
+
+/** The notes the fake inbox saved, by request id, each with the words that came on its stdin. */
+export function inboxNotes(home: string): Record<string, string> {
+  const dir = join(home, "state", "inbox");
+  if (!existsSync(dir)) return {};
+  return Object.fromEntries(
+    readdirSync(dir)
+      .filter((n) => !n.endsWith(".tmp"))
+      .map((n) => [n, readFileSync(join(dir, n), "utf8")]),
+  );
 }

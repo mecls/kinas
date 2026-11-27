@@ -1,4 +1,4 @@
-import type { CrewPage, CrewPr, CrewSurface, CrewTask, CrewWord } from "../api.ts";
+import type { CrewPage, CrewPr, CrewReview, CrewSurface, CrewTask, CrewWord } from "../api.ts";
 import type { SeatedFolder } from "../shell/folders.ts";
 import type { BadgeState } from "../ui/StatusBadge.tsx";
 import type { Category } from "../ui/Dot.tsx";
@@ -233,6 +233,39 @@ export function prLine(pr: CrewPr | null): string | null {
   else if (pr.draft) parts.push("draft");
   else if (pr.mergeable === "MERGEABLE") parts.push("mergeable");
   return parts.join(" · ");
+}
+
+/**
+ * The review flag's line (the captain's (b); DESIGN.md 1.14): what the PR or branch changes that a merged hook or MCP
+ * server would run from, in the captain's own sessions. Null when there is nothing to review.
+ */
+export function reviewLine(review: CrewReview | null): string | null {
+  if (!review || (review.paths.length === 0 && !review.unknown)) return null;
+  const claude = review.paths.some((p) => p.split("/").includes(".claude"));
+  const mcp = review.paths.some((p) => p.split("/").pop() === ".mcp.json");
+  const what = claude && mcp ? ".claude/ and .mcp.json" : claude ? ".claude/" : mcp ? ".mcp.json" : null;
+  return what ? `touches ${what} — review before merging` : "too many files to check — review before merging";
+}
+
+/** ADR 0029 (DESIGN.md 1.14, as built 5b): a local-only task's clone's local default branch moved since its launch. */
+export function localMovedLine(moved: { branch: string } | null): string | null {
+  return moved ? `local ${moved.branch} moved since this task started — check before landing` : null;
+}
+
+/** A commit as the task detail shows it: its first seven characters, or `unreadable`. */
+export const shortCommit = (sha: string | null) => (sha ? sha.slice(0, 7) : "unreadable");
+
+/**
+ * The worktree scan's line (ADR 0028; DESIGN.md 1.14, as built 4.14): what the task's worktree on the VPS holds that
+ * isn't the repository's and would be read by Claude Code there. Null when there is nothing to review.
+ */
+export function worktreeLine(worktree: CrewReview | null): string | null {
+  if (!worktree || (worktree.paths.length === 0 && !worktree.unknown)) return null;
+  const claude = worktree.paths.some((p) => p.split("/").includes(".claude"));
+  const mcp = worktree.paths.some((p) => p.split("/").pop() === ".mcp.json");
+  const what = claude && mcp ? ".claude/ and .mcp.json" : claude ? ".claude/" : mcp ? ".mcp.json" : null;
+  if (!what) return "worktree could not be checked — review before landing";
+  return `worktree holds ${what} that ${claude && mcp ? "aren't" : "isn't"} the repository's — review before landing`;
 }
 
 /** The card's quiet line: "ship · claude · working 12 min", without the parts it does not know. */

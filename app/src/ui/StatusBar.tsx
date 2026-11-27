@@ -26,12 +26,22 @@ export interface StatusCrewPart {
 
 export interface StatusVps {
   name: string;
-  state: "connected" | "stale" | "error";
+  /** The Hostinger reading's three, or the agents' machine's four (DESIGN.md 1.14). */
+  state: "connected" | "stale" | "error" | "reconnecting" | "unreachable" | "not_running";
+  /** The word shown, when it is not the state itself. */
+  word?: string;
   detail: string;
 }
 
 const TONE_COLOR = { warn: "--warn", danger: "--danger", stale: "--stale" } as const;
-const VPS_COLOR = { connected: "--ok", stale: "--stale", error: "--danger" } as const;
+const VPS_COLOR = {
+  connected: "--ok",
+  stale: "--stale",
+  error: "--danger",
+  reconnecting: "--warn",
+  unreachable: "--danger",
+  not_running: "--warn",
+} as const;
 
 export const StatusBar = forwardRef<
   HTMLButtonElement,
@@ -84,7 +94,7 @@ export const StatusBar = forwardRef<
           <ServerIcon size="sm" />
           {vps.name}
           <Dot color={VPS_COLOR[vps.state]} />
-          {vps.state}
+          {vps.word ?? vps.state}
         </button>
       )}
     </footer>

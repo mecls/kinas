@@ -123,9 +123,9 @@ export async function computePacket(config: KinasConfig, cache: ContextCache | n
     let commits = new Map<string, CommitRef[]>();
     const projects = await settle(
       async () => {
-        const reading = await withTimeout(readProjects(config.root), 10_000, "projects");
+        const reading = await withTimeout(readProjects(config.roots), 10_000, "projects");
         commits = reading.commits;
-        if (reading.rows.length === 0) throw new Error(`no git projects under ${config.root}`);
+        if (reading.rows.length === 0) throw new Error(`no git projects under ${config.roots.join(" or ")}`);
         return reading.rows;
       },
       [],
@@ -171,7 +171,7 @@ export async function computePacket(config: KinasConfig, cache: ContextCache | n
       version: KINAS_VERSION,
       store: join(config.dataDir, DB_FILE),
       cache: join(config.dataDir, CACHE_FILE),
-      root: config.root,
+      root: config.roots.join(" · "),
       harness,
       model,
       herdr: sessions.state === "ok" ? `running${sessions.data?.server ? ` (v${sessions.data.server})` : ""}` : (sessions.note ?? "not read yet"),

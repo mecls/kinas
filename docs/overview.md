@@ -80,6 +80,9 @@ session, then one section per provider with a single "as of" caption:
 - *Model usage by day* — tokens per provider over the last 30 days, counted from the Claude Code and Pi transcripts
   on disk, each message once; the models in the tooltip and in the Today and Month to date tables below.
 - *This Mac* — CPU, memory and disk, with disk shown the way Finder shows it.
+- *Linux machine* (2026-11-25), while the agents run there: the same three rows from the companion's reading, named
+  for the place's label. The Claude gauges take whichever machine's status line was read last. The model chart counts
+  both machines' transcripts: the Linux machine sends only the counts, never a transcript's text.
 
 Each section says once when its numbers are from and, on hover, where they came from; only a stale reading says so
 where it is. A failed read never overwrites a good value; a reading that is too old is shown as stale, and older

@@ -6,10 +6,12 @@
 //! `Found`, all of it read before the guard was taken (§6.15).
 
 use super::gh::{checks_text, PrFacts};
+use super::touches::Touches;
 use super::snapshot::{pr_number, Fleet, TaskFacts};
 use super::word::{word_of, word_without_gone, PrWordInput, WordInput};
 use crate::redact::{write_reader_status, Outcome, Reader};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// The last good lane reading (`capacity::Lanes`), in `settings`.
@@ -88,6 +90,38 @@ pub(crate) struct Found {
     pub lanes: Option<Result<super::capacity::Lanes, String>>,
     /// The fleet ledger since the cursor (Firstmate, current): None while the file is absent.
     pub ledger: Option<super::ledger::LedgerRead>,
+    /// Each task's branch read this cycle (the review flag, `touches.rs`), by task id; a task not read keeps its last.
+    pub branches: HashMap<String, Touches>,
+    /// Each task's worktree scanned this cycle on the VPS (ADR 0028), by task id; a task not scanned keeps its last.
+    pub worktrees: HashMap<String, Touches>,
+    /// ADR 0029: the Linux machine's local-only tasks whose local default branch moved since launch, the whole set this
+    /// cycle, by task id. None on the Mac, or from a companion that doesn't say: every task keeps what it had.
+    pub local_moved: Option<HashMap<String, LocalMoved>>,
+}
+
+/// A local-only task's clone's local default branch, at its launch and now (ADR 0029).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalMoved {
+    pub branch: String,
+    pub was: String,
+    pub now: Option<String>,
+}
+
+fn commit_ok(s: &str) -> bool {
+    s.len() == 40 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+impl LocalMoved {
+    /// Only a branch name `touches::branch_ok` accepts and full commits: anything else from the VPS is dropped.
+    pub fn checked(branch: &str, was: &str, now: Option<&str>) -> Option<LocalMoved> {
+        (super::touches::branch_ok(branch) && commit_ok(was) && now.is_none_or(commit_ok)).then(|| LocalMoved { branch: branch.to_string(), was: was.to_string(), now: now.map(str::to_string) })
+    }
+}
+
+/// The stored column's JSON back as a value; anything that doesn't read is none.
+pub(crate) fn local_moved_of(json: Option<&str>) -> Option<LocalMoved> {
+    let m: LocalMoved = serde_json::from_str(json?).ok()?;
+    LocalMoved::checked(&m.branch, &m.was, m.now.as_deref())
 }
 
 /// What the cycle has to say beside a good snapshot (Firstmate, current): one line per source that failed, for the
@@ -261,6 +295,22 @@ pub(crate) fn apply(tx: &Transaction, org: &str, fleet: &Fleet, found: &Found, n
         upsert(tx, org, facts, &fleet.generated, first_seen_at, first_working_at, now, done_at)?;
         repository(tx, org, facts, places.get(&facts.id), found)?;
         applied.events += pull_request(tx, org, facts, prior, found, now)?;
+        if let Some(touches) = found.branches.get(&facts.id) {
+            tx.execute(
+                "UPDATE crew_tasks SET branch_touches = ?3, branch_checked_at = ?4 WHERE org_id = ?1 AND id = ?2",
+                params![org, facts.id, touches_json(touches), now],
+            )?;
+        }
+        if let Some(touches) = found.worktrees.get(&facts.id) {
+            tx.execute(
+                "UPDATE crew_tasks SET worktree_touches = ?3, worktree_checked_at = ?4 WHERE org_id = ?1 AND id = ?2",
+                params![org, facts.id, touches_json(touches), now],
+            )?;
+        }
+        if let Some(moved) = &found.local_moved {
+            let json = moved.get(&facts.id).map(|m| serde_json::to_string(m).expect("a LocalMoved serializes"));
+            tx.execute("UPDATE crew_tasks SET local_moved = ?3 WHERE org_id = ?1 AND id = ?2", params![org, facts.id, json])?;
+        }
 
         let after = priors_one(tx, org, &facts.id)?.expect("the row was just written");
         let word = word_of(&after.input());
@@ -365,7 +415,7 @@ fn pull_request(tx: &Transaction, org: &str, facts: &TaskFacts, prior: Option<&S
     if prior.is_some_and(|p| p.pr_url.as_deref().is_some_and(|old| old != url)) {
         tx.execute(
             "UPDATE crew_tasks SET pr_state = NULL, pr_draft = NULL, pr_mergeable = NULL, pr_review = NULL, pr_checks_total = NULL,
-               pr_checks_failed = NULL, pr_checked_at = NULL WHERE org_id = ?1 AND id = ?2",
+               pr_checks_failed = NULL, pr_checked_at = NULL, pr_touches = NULL WHERE org_id = ?1 AND id = ?2",
             params![org, facts.id],
         )?;
     }
@@ -376,8 +426,8 @@ fn pull_request(tx: &Transaction, org: &str, facts: &TaskFacts, prior: Option<&S
     let (total, failed) = (pr.checks_total(), pr.checks_failed());
     tx.execute(
         "UPDATE crew_tasks SET pr_state = ?3, pr_draft = ?4, pr_mergeable = ?5, pr_review = ?6, pr_checks_total = ?7,
-           pr_checks_failed = ?8, pr_checked_at = ?9 WHERE org_id = ?1 AND id = ?2",
-        params![org, facts.id, pr.state, pr.draft, pr.mergeable, pr.review, total, failed, now],
+           pr_checks_failed = ?8, pr_checked_at = ?9, pr_touches = ?10 WHERE org_id = ?1 AND id = ?2",
+        params![org, facts.id, pr.state, pr.draft, pr.mergeable, pr.review, total, failed, now, touches_json(&pr.touches)],
     )?;
     let before = prior
         .filter(|p| p.pr_url.as_deref() == Some(url))
@@ -532,6 +582,16 @@ fn forget_seen(tx: &Transaction, org: &str, id: &str) -> rusqlite::Result<usize>
 
 /// The PR URLs whose last reading is open, of tasks not gone (done work clears, rule 2): the collector keeps reading a
 /// done task's PR while it is open, so the board keeps the card and its PR line stays current.
+/// A reading as stored: `{"paths": [...], "unknown": bool}`.
+pub(crate) fn touches_json(t: &Touches) -> String {
+    serde_json::to_string(t).unwrap_or_else(|_| r#"{"paths":[],"unknown":true}"#.into())
+}
+
+/// A stored reading; one that does not read as one asks for review.
+pub(crate) fn touches_of(text: Option<&str>) -> Option<Touches> {
+    text.map(|s| serde_json::from_str(s).unwrap_or(Touches { paths: Vec::new(), unknown: true }))
+}
+
 pub(crate) fn open_pr_urls(conn: &Connection, org: &str) -> rusqlite::Result<HashSet<String>> {
     let mut stmt = conn.prepare("SELECT pr_url FROM crew_tasks WHERE org_id = ?1 AND pr_state = 'OPEN' AND gone_at IS NULL AND pr_url IS NOT NULL")?;
     let rows = stmt.query_map(params![org], |r| r.get::<_, String>(0))?;

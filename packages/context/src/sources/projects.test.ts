@@ -173,4 +173,18 @@ describe("projects through git plumbing", () => {
     }
     expect((await readProjects(root)).rows.map((r) => r.name)).toEqual(["one/site", "two/site"]);
   });
+
+  test("two projects folders (the Linux machine's roots, slice 5.3): both read, a shared name told apart by its folder", async () => {
+    const base = tempDir();
+    const miraside = join(base, "miraside");
+    const personal = join(base, "personal");
+    for (const p of [join(miraside, "portal"), join(miraside, "notes"), join(personal, "notes")]) {
+      write(join(p, "x.txt"), "x\n");
+      git(p, "init", "-q", "-b", "main");
+    }
+    expect((await readProjects([miraside, personal])).rows.map((r) => r.name).sort()).toEqual(["miraside/notes", "personal/notes", "portal"]);
+    // A folder that isn't there is skipped; none there at all is the section's one line.
+    expect((await readProjects([join(base, "gone"), personal])).rows.map((r) => r.name)).toEqual(["notes"]);
+    await expect(readProjects([join(base, "gone"), join(base, "also-gone")])).rejects.toThrow(`no projects folder at ${join(base, "gone")} or ${join(base, "also-gone")}`);
+  });
 });

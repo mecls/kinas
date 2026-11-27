@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { write } from "../testing/world.ts";
-import { codexQuotas, codexWindows, freshness, storeQuotas } from "./quotas.ts";
+import { codexQuotas, codexWindows, freshness, openStore, storeQuotas } from "./quotas.ts";
 
 const base = mkdtempSync(join(tmpdir(), "kinas-q-"));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -104,3 +104,11 @@ test("a Codex log that is not a regular file is never opened: the reading still 
   expect(child.exitCode).toBe(0);
   expect(JSON.parse(child.stdout.toString())).toEqual([["Codex", 75]]);
 }, 30_000);
+
+test("on the Linux machine a missing store and a missing Codex folder say where they are (slice 5.3)", async () => {
+  const empty = join(tmpdir(), `kinas-no-store-${process.pid}`);
+  expect(openStore(empty, "linux")).toEqual({ ok: false, note: "read by the Kinas app on the Mac, not on this machine" });
+  expect(openStore(empty, "darwin")).toEqual({ ok: false, note: "the Kinas app has not run yet" });
+  expect((await codexQuotas(join(empty, "codex"), NOW, "linux"))[0]!.note).toBe("no Codex folder on this machine");
+  expect((await codexQuotas(join(empty, "codex"), NOW, "darwin"))[0]!.note).toBe("no Codex folder on this Mac");
+});

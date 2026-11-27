@@ -26,10 +26,14 @@ export function freshness(state: QuotaState, updatedAt: number | null, now: numb
 
 export type StoreOpen = { ok: true; store: SqliteReadOnlyStore } | { ok: false; note: string };
 
-export function openStore(dataDir: string): StoreOpen {
+/** "this Mac", or "this machine" on the Linux machine (slice 5.3). */
+export const here = (platform: string = process.platform) => (platform === "darwin" ? "this Mac" : "this machine");
+
+export function openStore(dataDir: string, platform: string = process.platform): StoreOpen {
   const opened = openReadOnly(dataDir);
   if (opened.ok) return opened;
-  if (opened.reason === "missing") return { ok: false, note: "the Kinas app has not run yet" };
+  // The Linux machine keeps no store: the plans are read by the app on the Mac (slice 5.3).
+  if (opened.reason === "missing") return { ok: false, note: platform === "linux" ? "read by the Kinas app on the Mac, not on this machine" : "the Kinas app has not run yet" };
   if (opened.reason === "newer") return { ok: false, note: "the app's store is newer than this CLI (stale ~/.local/bin link)" };
   return { ok: false, note: `the app's store could not be read (${opened.message})` };
 }
@@ -140,9 +144,9 @@ async function newestRollouts(sessions: string, limit: number): Promise<string[]
  * The newest reading in the session logs written last. `now` may be a clock, read once the logs are read, so a line
  * written meanwhile is not judged against an earlier moment.
  */
-export async function codexQuotas(codexHome: string, now: number | (() => number)): Promise<QuotaLine[]> {
+export async function codexQuotas(codexHome: string, now: number | (() => number), platform: string = process.platform): Promise<QuotaLine[]> {
   const none = (note: string): QuotaLine[] => [{ provider: "Codex", window: null, left_pct: null, resets_at: null, updated_at: null, state: "not_connected", note }];
-  if (!existsSync(codexHome)) return none("no Codex folder on this Mac");
+  if (!existsSync(codexHome)) return none(`no Codex folder on ${here(platform)}`);
   const tails = await Promise.all(
     (await newestRollouts(join(codexHome, "sessions"), 5)).map((file) => {
       const blob = Bun.file(file);

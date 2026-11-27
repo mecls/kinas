@@ -5,6 +5,7 @@ import {
   addToCrew,
   answerCrew,
   BEFORE_COPY,
+  NOT_SENT,
   crewErrorCode,
   crewErrorOf,
   focusCrewPane,
@@ -52,7 +53,9 @@ import { HomePage } from "./pages/Home.tsx";
 import { InboxPage, type AnswerKind, type InboxBox } from "./pages/Inbox.tsx";
 import { TaskDetail } from "./crew/TaskDetail.tsx";
 import { taskHidden } from "./crew/detail.ts";
+import { sentDone, sentNotice } from "./crew/inbox.ts";
 import { useCrew } from "./crew/useCrew.ts";
+import { useMachine } from "./shell/useMachine.ts";
 import { DEFAULT_PANEL_PCT } from "./shell/split.ts";
 import { useFullscreen } from "./shell/useFullscreen.ts";
 import { useSplit } from "./shell/useSplit.ts";
@@ -176,7 +179,9 @@ export function App() {
   const { crew, error: crewError, reload: reloadCrew } = useCrew(page === "crew" || page === "inbox" || page === "home");
   // The status bar (the interface polish, slice 6; shell/statusBar.ts): Home's three gauges, the crew's counts and the
   // VPS, from the same snapshot and crew reading the pages show, so the bar never disagrees with them.
-  const bar = useMemo(() => statusModel(usage.snapshot, crew, usage.error), [usage.snapshot, crew, usage.error]);
+  // With the agents on a VPS, the bar's VPS part is that machine (DESIGN.md 1.14), not Hostinger's reading.
+  const machine = useMachine();
+  const bar = useMemo(() => statusModel(usage.snapshot, crew, usage.error, machine), [usage.snapshot, crew, usage.error, machine]);
   const barCrew = useMemo(() => (bar.crew ? crewWords(bar.crew).map((w) => ({ ...w, color: CREW_DOT[w.key] })) : null), [bar.crew]);
   /** The Usage popover above the readings (rule 25): a fixed sibling of the shell, never wrapping the terminal. */
   const [usagePopover, setUsagePopover] = useState(false);
@@ -371,7 +376,7 @@ export function App() {
     return () => window.removeEventListener("focus", load);
   }, []);
 
-  const say = useCallback((text: string) => setNotice({ text, seq: ++noticeSeq.current }), []);
+  const say = useCallback((text: string, kind?: "error") => setNotice({ text, kind, seq: ++noticeSeq.current }), []);
 
   // The client folders, at launch, whenever the window comes forward (a clone made in the terminal should show
   // without a relaunch — Rust walks the root again once a minute at most) and after Settings changes one.
@@ -557,22 +562,29 @@ export function App() {
   // Each client folder's crew state for the sidebar (rules 20–21), from the one crew reading the board shows.
   const folderStateMap = useMemo(() => (crew ? folderStates(crew.tasks, folders, crew.now) : new Map<string, FolderState>()), [crew, folders]);
 
-  // An Inbox answer (§11.3 Answering; ADR 0017): Rust puts the line on the clipboard, then runs the launcher; the Work
-  // page shows with the terminal holding the keys, and the notice says what to paste. A refusal says why in the
-  // notice; one from the launcher came after the copy, so the item reads Copied all the same. Resolves whether the
-  // line reached the clipboard.
+  // An Inbox answer (§11.3 Answering; ADR 0017): on this Mac, Rust puts the line on the clipboard, then runs the
+  // launcher; the Work page shows with the terminal holding the keys, and the notice says what to paste. A refusal says
+  // why in the notice; one from the launcher came after the copy, so the item reads Copied all the same. On a Linux
+  // machine (slice 6.2), Rust delivers it as a note: the notice says what became of it, and the page stays. Resolves
+  // whether the box is done with: the line copied, or the note's question answered or no longer waiting.
   const answer = useCallback(
     async (task: string, key: string, kind: AnswerKind, text: string): Promise<boolean> => {
       try {
-        await answerCrew(task, key, kind, text);
+        const result = await answerCrew(task, key, kind, text);
+        if (result.sent) {
+          const n = sentNotice(result.sent);
+          say(n.text, n.error ? "error" : undefined);
+          return sentDone(result.sent.outcome);
+        }
         say("Your answer is on the clipboard — paste it into the first mate's pane.");
         wantTerminalFocus.current = true;
         goTo("work");
         setFocusTick((n) => n + 1);
         return true;
       } catch (e) {
-        say(crewErrorOf(e));
-        return !BEFORE_COPY.has(crewErrorCode(e) ?? "internal");
+        say(crewErrorOf(e), "error");
+        const code = crewErrorCode(e) ?? "internal";
+        return !BEFORE_COPY.has(code) && !NOT_SENT.has(code);
       } finally {
         reloadCrew();
       }
@@ -768,7 +780,7 @@ export function App() {
             <UsagePage snapshot={usage.snapshot} error={usage.error} crew={crew} crewError={crewError} />
           </section>
           <section className="page" data-page="work" hidden={page !== "work"}>
-            <WorkPage active={page === "work"} shortcuts={shortcuts} />
+            <WorkPage active={page === "work"} shortcuts={shortcuts} machine={machine} />
           </section>
           <section className="page" data-page="settings" hidden={page !== "settings"}>
             <SettingsPage
@@ -830,7 +842,7 @@ export function App() {
         open={usagePopover}
         onReadings={() => setUsagePopover((o) => !o)}
         onCrew={() => goTo("crew")}
-        onVps={showVps}
+        onVps={machine ? () => openSetting("place.reachable") : showVps}
         onSettings={() => openSetting("claude.connection")}
       />
       {usagePopover && usage.snapshot && (

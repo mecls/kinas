@@ -27,6 +27,7 @@ const snapshot = (extra: Partial<UsageSnapshot> = {}): UsageSnapshot =>
     provider_metrics: [],
     readers: [reader("claude-plan"), reader("ollama-cloud"), reader("host"), reader("convex", "not_configured"), reader("hostinger", "not_configured")],
     host: null,
+    linux_host: null,
     usage: [],
     first_usage_date: null,
     days: [],
@@ -123,6 +124,7 @@ describe("the Crew section on Usage", () => {
     dispatched_at: null,
     merged_at: null,
     merged_via: null,
+    review: null, worktree: null, local_moved: null,
   });
   const crew = { now: NOW, generated: new Date(NOW).toISOString(), reader: reader("crew"), page: "running", blocked: null, tasks: [task("a-9c2e")], decisions: [], reconcile: [], waiting: 0, overnight_since: NOW, crew_repos: [] } as CrewSnapshot;
 
@@ -137,5 +139,36 @@ describe("the Crew section on Usage", () => {
     const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const { join } = require("node:path") as typeof import("node:path");
     expect(readFileSync(join(import.meta.dir, "..", "App.tsx"), "utf8")).toMatch(/<UsagePage [^>]*crewError=\{crewError\}/);
+  });
+});
+
+describe("the Linux machine's section on Usage (DESIGN 1.14, slice 5.2)", () => {
+  const host = (machine: string, extra: Partial<NonNullable<UsageSnapshot["host"]>> = {}): NonNullable<UsageSnapshot["host"]> => ({
+    machine,
+    cpu_pct: 12,
+    mem_used_gb: 3,
+    mem_total_gb: 16,
+    disk_used_gb: 40,
+    disk_total_gb: 200,
+    disk_available_gb: 150,
+    updated_at: NOW - 5_000,
+    state: "fresh",
+    ...extra,
+  });
+  const sectionOf = (html: string, name: string) => html.slice(html.indexOf(`data-section="${name}"`), html.indexOf("</section>", html.indexOf(`data-section="${name}"`)));
+
+  test("follows This Mac, named for its label, with a dash for CPU until the companion has two samples", () => {
+    const html = usage({ snapshot: snapshot({ host: host("mac-9c2e"), linux_host: host("homelab", { cpu_pct: null }) }), error: null });
+    expect(html.indexOf('data-section="host"')).toBeLessThan(html.indexOf('data-section="linux-host"'));
+    const linux = sectionOf(html, "linux-host");
+    expect(linux).toContain("Linux machine");
+    expect(linux).toContain("homelab");
+    expect(linux).toMatch(/data-metric="cpu"[\s\S]*?—/);
+    expect(sectionOf(html, "host")).toContain("This Mac");
+    expect(sectionOf(html, "host")).not.toContain("homelab");
+  });
+
+  test("is not drawn while there is no Linux machine reading", () => {
+    expect(usage({ snapshot: snapshot({ host: host("mac-9c2e") }), error: null })).not.toContain('data-section="linux-host"');
   });
 });

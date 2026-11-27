@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { insideRoot, loadConfig } from "./config.ts";
+import { insideRoot, loadConfig, rootsOf } from "./config.ts";
 
 // The projects root, which `kinas open` and the app's reader both enforce (PRD R1). The Rust copy in
 // app/src-tauri/src/paths.rs (`projects_root_from`) is tested against the same cases, so the two cannot drift.
@@ -70,5 +70,54 @@ describe("Firstmate's home", () => {
     expect(loadConfig(withFile("fm-none.json", null)).firstmateHome).toBe(join(noStore, "firstmate"));
     expect(loadConfig(withFile("fm-file.json", '{"firstmate_home":"/from/file"}')).firstmateHome).toBe("/from/file");
     expect(loadConfig({ ...withFile("fm-env.json", '{"firstmate_home":"/from/file"}'), FM_HOME: "/from/env" }).firstmateHome).toBe("/from/env");
+  });
+});
+
+describe("on the Linux machine (the factory in the cloud, slice 5.3)", () => {
+  test("the defaults are the companion's folders, and what is set still wins", () => {
+    const env = { KINAS_CONFIG: join(dir, "linux-none.json") };
+    const linux = loadConfig(env, "linux");
+    expect([linux.root, linux.firstmateHome, linux.dataDir]).toEqual([
+      join(homedir(), "projects"),
+      join(homedir(), ".local/share/kinas/firstmate"),
+      join(homedir(), ".local/state/kinas"),
+    ]);
+    const set = loadConfig({ ...env, KINAS_ROOT: "/srv/clients", FM_HOME: "/srv/fm", KINAS_DATA_DIR: noStore }, "linux");
+    expect([set.root, set.firstmateHome, set.dataDir]).toEqual(["/srv/clients", "/srv/fm", noStore]);
+    // On the Mac, unchanged.
+    const mac = loadConfig({ ...env, KINAS_DATA_DIR: noStore }, "darwin");
+    expect([mac.root, mac.firstmateHome]).toEqual([join(homedir(), "Documents/Projects/SintraLabs"), join(noStore, "firstmate")]);
+  });
+});
+
+describe("the Linux machine's projects folders (slice 5.3)", () => {
+  test("roots names more than one; insideRoot takes any of them; on the Mac it is not read", () => {
+    const env = { ...withFile("roots.json", '{"roots":["~/miraside","~/personal"]}'), KINAS_DATA_DIR: noStore };
+    const linux = loadConfig(env, "linux");
+    expect(linux.roots).toEqual([join(homedir(), "miraside"), join(homedir(), "personal")]);
+    expect([linux.root, linux.problem]).toEqual([join(homedir(), "miraside"), null]);
+    expect(insideRoot(linux, join(homedir(), "personal", "notes"))).toBe(true);
+    expect(insideRoot(linux, join(homedir(), "miraside"))).toBe(true);
+    expect(insideRoot(linux, join(homedir(), "projects", "x"))).toBe(false);
+    expect(insideRoot(linux, join(homedir(), "personal-other"))).toBe(false);
+    const mac = loadConfig(env, "darwin");
+    expect(mac.roots).toEqual([join(homedir(), "Documents/Projects/SintraLabs")]);
+  });
+
+  test("KINAS_ROOT still wins, as one folder", () => {
+    const env = { ...withFile("roots-env.json", '{"roots":["~/miraside","~/personal"]}'), KINAS_DATA_DIR: noStore, KINAS_ROOT: "/srv/one" };
+    expect(loadConfig(env, "linux").roots).toEqual(["/srv/one"]);
+  });
+
+  test("an entry that isn't an absolute or ~/ folder, a repeat or one inside another is left out with one line", () => {
+    expect(rootsOf(["~/a", "relative", "~/a/inner", "/srv/b", "/srv/b/", 7, ""])).toEqual({
+      roots: [join(homedir(), "a"), "/srv/b"],
+      problem: 'roots: left out "relative", "~/a/inner", "/srv/b/", 7, "" (not an absolute or ~/ folder, or inside another)',
+    });
+    expect(rootsOf("~/a")).toEqual({ roots: [], problem: "roots is not a list of folders; using the default" });
+    expect(rootsOf(undefined)).toBeNull();
+    const bad = loadConfig({ ...withFile("roots-bad.json", '{"roots":"~/a"}'), KINAS_DATA_DIR: noStore }, "linux");
+    expect(bad.roots).toEqual([join(homedir(), "projects")]);
+    expect(bad.problem).toContain("roots is not a list of folders");
   });
 });

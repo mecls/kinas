@@ -15,9 +15,15 @@ export const DB_FILE = "kinas.sqlite";
  * Rust's `trim` has it) is unset, as the app reads it (paths.rs `data_dir_override`); any other value is the folder,
  * exactly as given — else the CLI read a store in a folder named "   " wherever it ran, and the app the default one.
  */
-export function dataDir(env: Record<string, string | undefined> = process.env): string {
+/**
+ * The app's data folder. On the Linux machine no app runs and no store is kept (the factory in the cloud, slice 5.3):
+ * the folder is the companion's own state folder (`cli/src/companion/paths.ts`), where the CLI's context cache sits
+ * beside the companion's reading.
+ */
+export function dataDir(env: Record<string, string | undefined> = process.env, platform: string = process.platform): string {
   const set = env.KINAS_DATA_DIR;
-  return set !== undefined && !/^\p{White_Space}*$/u.test(set) ? set : join(homedir(), "Library/Application Support/ai.sintralabs.kinas");
+  if (set !== undefined && !/^\p{White_Space}*$/u.test(set)) return set;
+  return platform === "linux" ? join(homedir(), ".local/state/kinas") : join(homedir(), "Library/Application Support/ai.sintralabs.kinas");
 }
 
 export type OpenResult =
@@ -146,15 +152,34 @@ export class SqliteReadOnlyStore implements StorageAdapter, CrewStore {
       .all(this.orgId()) as ReaderRow[];
   }
 
+  /** A setting's text as the app saved it (`place.rs`), or null. */
+  private settingText(key: string): string | null {
+    try {
+      const row = this.db.query("SELECT value FROM settings WHERE org_id = ?1 AND key = ?2").get(this.orgId(), key) as { value: string } | null;
+      const value: unknown = row ? JSON.parse(row.value) : null;
+      return typeof value === "string" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private hostColumns(): string {
+    return `machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb,
+            ${this.hasUsageDetails ? "disk_available_gb" : "NULL AS disk_available_gb"}, updated_at`;
+  }
+
+  /** This Mac: the newest row that isn't the Linux machine's, whose label is kept when the place goes back to the Mac. */
   getHost(): HostRow | null {
     return (this.db
-      .query(
-        `SELECT machine, cpu_pct, mem_used_gb, mem_total_gb, disk_used_gb, disk_total_gb,
-                ${this.hasUsageDetails ? "disk_available_gb" : "NULL AS disk_available_gb"}, updated_at
-         FROM hosts
-         WHERE org_id = ?1 ORDER BY updated_at DESC LIMIT 1`,
-      )
-      .get(this.orgId()) ?? null) as HostRow | null;
+      .query(`SELECT ${this.hostColumns()} FROM hosts WHERE org_id = ?1 AND machine IS NOT ?2 ORDER BY updated_at DESC LIMIT 1`)
+      .get(this.orgId(), this.settingText("vps_label")) ?? null) as HostRow | null;
+  }
+
+  /** The Linux machine's row, under the place's label, while the agents run there (slice 5.2). */
+  getLinuxHost(): HostRow | null {
+    const label = this.settingText("place") === "vps" ? this.settingText("vps_label") : null;
+    if (label === null) return null;
+    return (this.db.query(`SELECT ${this.hostColumns()} FROM hosts WHERE org_id = ?1 AND machine = ?2`).get(this.orgId(), label) ?? null) as HostRow | null;
   }
 
   getUsageDaily(date: string): UsageRow[] {

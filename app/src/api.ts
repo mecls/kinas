@@ -111,7 +111,10 @@ export interface UsageSnapshot {
   /** Read in the same pass as `quotas`, so the page never mixes readings from two moments (convex R§3). */
   provider_metrics: ProviderMetricView[];
   readers: ReaderView[];
+  /** This Mac: the newest row that isn't the Linux machine's. */
   host: HostView | null;
+  /** The Linux machine's row, under the place's label, while the agents run there (slice 5.2). */
+  linux_host: HostView | null;
   /** The last 30 Europe/Lisbon days, oldest first; days with no rows are absent. */
   usage: UsageDay[];
   /** The earliest date in usage_daily, so the chart can hatch the days before it (R26). */
@@ -160,6 +163,25 @@ export interface CrewTask {
   dispatched_at: number | null;
   merged_at: number | null;
   merged_via: "pr" | "local" | null;
+  /**
+   * The review flag (the captain's (b); ADR 0027): the PR's or branch's `.claude/` and `.mcp.json` paths, or that a
+   * reading could not see every path. Null when neither found anything.
+   */
+  review: CrewReview | null;
+  /**
+   * The worktree scan (ADR 0028), the VPS's: the `.claude` and `.mcp.json` paths in the task's worktree that aren't the
+   * repository's, or that the walk couldn't finish. Null when the last scan found nothing, or there was none.
+   */
+  worktree: CrewReview | null;
+  /**
+   * ADR 0029, the Linux machine's: a local-only task whose clone's local default branch is not the commit it was at the
+   * task's launch, from the reading in which its worker reported done until it landed. Null while nothing moved.
+   */
+  local_moved: { branch: string; was: string; now: string | null } | null;
+}
+export interface CrewReview {
+  paths: string[];
+  unknown: boolean;
 }
 export interface CrewDecision {
   task_id: string;
@@ -172,6 +194,15 @@ export interface CrewDecision {
   copied_at: number | null;
   /** A held item's PR number (Firstmate, current); the URL stays in Rust (`openCrewPr`). */
   pr_number: number | null;
+  /** With the agents on a Linux machine (slice 6.2): the answer delivered for this opening of the question. */
+  answered: CrewAnswered | null;
+}
+/** An answer delivered as a note in Firstmate's inbox: where from, when, when the first mate read it, its reply. */
+export interface CrewAnswered {
+  from: "mac" | "phone";
+  at: number;
+  read_at: number | null;
+  reply: string | null;
 }
 export interface CrewSnapshot {
   now: number;
@@ -189,6 +220,8 @@ export interface CrewSnapshot {
   crew_repos: string[];
   /** Free lanes (Firstmate, current): the last lane reading while the captain's lane cap is set; null otherwise. */
   lanes: CrewLanes | null;
+  /** With the agents on a Linux machine an answer goes as a note, not on the clipboard (slice 6.2): the box says Send. */
+  answers_by_note: boolean;
 }
 /** Firstmate's lane verdict as Kinas last read it (`fm-capacity.sh --json`). */
 export interface CrewLanes {
@@ -274,15 +307,35 @@ export const getCrewTask = (id: string) => invoke<CrewTaskDetail | null>("crew_t
 export type CrewSurface = "board" | "overnight";
 /** What a page just showed finished: Rust stamps each one still finished and not yet stamped; answers how many. */
 export const crewSeen = (surface: CrewSurface, ids: readonly string[]) => invoke<number>("crew_seen", { surface, ids });
+/** What became of an answer sent as a note (slice 6.2), each keeping a row: `crew/answer.rs` `Sent`. */
+export type AnswerOutcome = "delivered" | "already" | "not_open" | "unreachable";
+export interface SentAnswer {
+  outcome: AnswerOutcome;
+  /** Delivered: Firstmate woke the first mate; otherwise it reads the note at its next turn. */
+  woken: boolean;
+  /** Already: when the question's first answer was delivered, on this Mac's clock. */
+  answered_at: number | null;
+  /** Unreachable: `can't reach homelab: timed out`. */
+  why: string | null;
+}
+/** On this Mac, the launcher's outcome; on a Linux machine, what became of the note. */
+export interface AnswerResult {
+  sent: SentAnswer | null;
+  launched: "focused" | "run" | "created" | null;
+}
 /**
- * An Inbox answer (ADR 0017): Rust builds `On <task> (<key>): <answer>` from the open decision, puts it on the clipboard,
- * marks it copied, then runs the launcher. A rejection with a launcher's code (a missing tool, Herdr) came after the
- * copy; `empty`, `too_long`, `not_open` and `clipboard` came before it.
+ * An Inbox answer. On this Mac (ADR 0017): Rust builds `On <task> (<key>): <answer>` from the open decision, puts it on
+ * the clipboard, marks it copied, then runs the launcher. A rejection with a launcher's code (a missing tool, Herdr) came
+ * after the copy; `empty`, `too_long`, `not_open` and `clipboard` came before it. On a Linux machine (slice 6.2): the
+ * same line, delivered as a note while the question is open there; a rejection is a refusal that sent nothing, in the
+ * companion's words (`cannot_tell`, `gate`, `note_failed`, `note_unknown`, `request_reused`, `busy`).
  */
 export const answerCrew = (task: string, key: string, kind: "approve" | "deny" | "answer", text: string) =>
-  invoke<"focused" | "run" | "created">("crew_answer", { task, key, kind, text });
+  invoke<AnswerResult>("crew_answer", { task, key, kind, text });
 /** The refusals that leave nothing on the clipboard. */
 export const BEFORE_COPY = new Set(["empty", "too_long", "not_open", "clipboard", "internal"]);
+/** A Linux machine's refusals (slice 6.2): nothing was sent, so the box keeps the words. */
+export const NOT_SENT = new Set(["cannot_tell", "gate", "note_failed", "note_unknown", "request_reused", "busy", "refused"]);
 export const crewErrorCode = (e: unknown): string | null =>
   e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string" ? (e as { code: string }).code : null;
 /** The menu bar's `N waiting on you`: open a page in the window (build spec §4 Menu bar). */
@@ -297,6 +350,80 @@ export const focusCrewPane = (task: string) => invoke<void>("crew_focus_pane", {
 /** Open the PR (Firstmate, current): a task id goes to Rust, which opens the https URL it stored; never a URL from here. */
 export const openCrewPr = (taskId: string) => invoke<void>("crew_open_pr", { taskId });
 export const getCrewSettings = () => invoke<CrewSettings>("crew_settings");
+
+/** Where the agents run (the factory in the cloud, ADR 0024; `place.rs`): this Mac, or one VPS by its ssh target and label. */
+export type Place = { place: "mac" } | { place: "vps"; target: string; label: string };
+export const getPlace = () => invoke<Place>("get_place");
+/** Refused with the reason in `message` (a target that is not `user@host`, `host` or an alias; a label not `[a-z0-9-]`). */
+export const setPlace = (place: Place) => invoke<Place>("set_place", { place });
+/** The Reachable row (`crew/remote_cmds.rs` `Hello`): one call through the door, and Herdr's version on both sides. */
+/** Setup on the VPS (build spec §12 slice 4; crew/setup.rs): one row per piece, in a fixed order. */
+export type CheckState = "ok" | "warn" | "bad" | "later";
+export type InstallItem =
+  | "herdr"
+  | "herdr-service"
+  | "firstmate"
+  | "relay-rule"
+  | "relay-instruction"
+  | "worker-sandbox"
+  | "permission-mode"
+  | "crew-tools"
+  | "companion-service"
+  | "clone";
+export interface SetupCheck {
+  id: string;
+  state: CheckState;
+  detail: string;
+  install: InstallItem | null;
+  /** Install stops Herdr's server already running there: the button says so first. */
+  adopt: boolean;
+  /** Install restarts Herdr's server so new panes start in Kinas's wrapper (ADR 0027): it closes every pane there. */
+  restart: boolean;
+  /** A command for the captain to run there themselves. */
+  run: string | null;
+}
+export interface CloneOffer {
+  folder: string;
+  repo: string;
+  cloned: boolean;
+}
+export interface Bootstrap {
+  version: string;
+  /** One per architecture once this version's Linux build is published; empty until then. */
+  lines: { arch: string; command: string; sha256: string }[];
+  /** Until then: building and copying it by hand. `<target>` stands for the SSH target. */
+  by_hand: string[];
+}
+export interface RemoteHello {
+  reachable: boolean;
+  problem: string | null;
+  companion_version: string | null;
+  herdr_there: string | null;
+  herdr_here: string | null;
+  checked_at: number;
+  companion_missing: boolean;
+  checks: SetupCheck[];
+  clones: CloneOffer[];
+  bootstrap: Bootstrap;
+}
+export const remoteHello = () => invoke<RemoteHello>("remote_hello");
+/** One setup item, the captain's click; the checks again after. A refusal comes back as the command's error, in words. */
+export const remoteInstall = (item: InstallItem, opts: { folder?: string; adopt?: boolean; restart?: boolean } = {}) =>
+  invoke<RemoteHello>("remote_install", { item, folder: opts.folder ?? null, adopt: opts.adopt ?? null, restart: opts.restart ?? null });
+
+/** The status bar's VPS part (DESIGN.md 1.14): the agents' machine, as the crew's readings last found it. */
+export type MachineState = "connected" | "reconnecting" | "unreachable" | "not_running";
+export interface PlaceStatus {
+  label: string;
+  state: MachineState;
+  /** When the door started failing. */
+  since: number | null;
+  last_success_at: number | null;
+  /** `can't reach vps-1: timed out` while failing. */
+  problem: string | null;
+}
+/** Null while the agents run on this Mac. Reads Kinas's store only; it never calls the VPS. */
+export const getPlaceStatus = () => invoke<PlaceStatus | null>("place_status");
 /** The launcher: "focused" (it was running), "run" (its workspace was there without it), "created". */
 export const launchFirstMate = () => invoke<"focused" | "run" | "created">("crew_launch");
 /** A crew command's refusal, in its own words (CrewError), or the error as it came. */
@@ -304,6 +431,8 @@ export const crewErrorOf = (e: unknown): string =>
   e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string" ? (e as { message: string }).message : String(e);
 /** What the Work page's chrome says about the pane (build spec §4 Work). */
 export interface PaneState {
+  /** The VPS's label while the pane attaches one (DESIGN.md 1.14); null on this Mac. */
+  place: string | null;
   session: string;
   workspace: string | null;
   word: CrewWord | null;
@@ -311,6 +440,8 @@ export interface PaneState {
   stale: boolean;
 }
 export const crewPaneState = () => invoke<PaneState>("crew_pane_state");
+/** Settings → Where agents run changed the place: the Work page's pane starts again on the new one. */
+export const onPlaceChanged = (handler: () => void): Promise<UnlistenFn> => listen("place_changed", handler);
 export const setCrewVisible = (visible: boolean) => invoke<void>("set_crew_visible", { visible });
 export const onCrewChanged = (handler: () => void): Promise<UnlistenFn> => listen("crew_changed", handler);
 

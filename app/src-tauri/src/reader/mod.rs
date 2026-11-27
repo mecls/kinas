@@ -491,6 +491,12 @@ pub async fn reader_print(window: tauri::WebviewWindow) -> Result<(), ReaderErro
 /// thread, since three `herdr` calls can take up to 3 s each.
 #[tauri::command]
 pub async fn reader_open_in_editor(app: tauri::AppHandle, path: String) -> Result<(), ReaderError> {
+    // The editor opens in a pane split off the Work page's, which on a VPS is the VPS's: a Mac file is not there
+    // (reading the VPS's files is out of scope, build spec §2), so it is refused in one line rather than opened in a
+    // Herdr session no screen shows.
+    if let Some((_, label)) = crate::crew::on_vps::vps(&app) {
+        return Err(ReaderError::new("editor_failed", format!("Open in editor works with the agents on this Mac — the Work page shows {label}")));
+    }
     let (real, editor_command) = {
         let state = app.state::<ReaderState>();
         let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
@@ -516,7 +522,7 @@ pub async fn reader_open_in_editor(app: tauri::AppHandle, path: String) -> Resul
 /// `--cwd`).
 #[tauri::command]
 pub async fn reader_open_in_terminal(app: tauri::AppHandle, path: String) -> Result<workspace::Opened, ReaderError> {
-    let (real, label) = {
+    let (real, label, root) = {
         let state = app.state::<ReaderState>();
         let root = crate::paths::projects_root_of(&app.state::<crate::store::Store>());
         let (real, kind) = checked(&state, &root, &path)?;
@@ -524,10 +530,15 @@ pub async fn reader_open_in_terminal(app: tauri::AppHandle, path: String) -> Res
             return Err(ReaderError::new("not_dir", "Choose a folder to open in the terminal"));
         }
         let label = workspace::label_for(&real, &root, &home());
-        (real, label)
+        (real, label, root)
     };
     let started = std::time::Instant::now();
-    let opened = tauri::async_runtime::spawn_blocking(move || workspace::open_folder(&real, &label))
+    // With the agents on a VPS, the folder's twin there (PRD rule 6), through the companion.
+    let on_vps = app.clone();
+    let opened = tauri::async_runtime::spawn_blocking(move || match crate::crew::on_vps::vps(&on_vps) {
+        Some(_) => crate::crew::on_vps::open(&on_vps, &real, &root, &label),
+        None => workspace::open_folder(&real, &label),
+    })
         .await
         .map_err(|e| ReaderError::new("terminal_failed", e.to_string()))?
         .map_err(|message| ReaderError::new("terminal_failed", message))?;

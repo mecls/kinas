@@ -20,17 +20,22 @@ export function snapshotAdapter(s: UsageSnapshot): StorageAdapter {
         models: q.models,
       })),
     getReaderStatus: (): ReaderRow[] => s.readers.map((r) => ({ ...r })),
-    getHost: (): HostRow | null =>
-      s.host && {
-        machine: s.host.machine,
-        cpu_pct: s.host.cpu_pct,
-        mem_used_gb: s.host.mem_used_gb,
-        mem_total_gb: s.host.mem_total_gb,
-        disk_used_gb: s.host.disk_used_gb,
-        disk_total_gb: s.host.disk_total_gb,
-        disk_available_gb: s.host.disk_available_gb,
-        updated_at: s.host.updated_at,
-      },
+    getHost: (): HostRow | null => s.host && hostRow(s.host),
+    getLinuxHost: (): HostRow | null => s.linux_host && hostRow(s.linux_host),
     getUsageDaily: (date: string): UsageRow[] => s.usage.filter((u) => u.date === date).map((u) => ({ ...u })),
+  };
+}
+
+/** The snapshot's view of a machine as the store's row: the state is the status code's to judge again. */
+function hostRow(h: NonNullable<UsageSnapshot["host"]>): HostRow {
+  return {
+    machine: h.machine,
+    cpu_pct: h.cpu_pct,
+    mem_used_gb: h.mem_used_gb,
+    mem_total_gb: h.mem_total_gb,
+    disk_used_gb: h.disk_used_gb,
+    disk_total_gb: h.disk_total_gb,
+    disk_available_gb: h.disk_available_gb,
+    updated_at: h.updated_at,
   };
 }

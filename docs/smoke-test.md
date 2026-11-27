@@ -486,6 +486,32 @@ The pin moves to Firstmate `427056c`, and the crew pages show what it now publis
 - [ ] On the real install, the captain asks the first mate to turn on park on review, the ledger and a lane cap, and
       Settings → Crew says so within a minute — `outstanding — needs the captain`
 
+
+## Agents on a VPS
+
+Every agent on one Linux machine the captain owns or rents, called the VPS; Kinas its dashboard on the Mac and the
+phone (2026-11-17, `tasks/cloud-factory/prd.md`, ADRs 0022–0024; 0024 superseded 0021 on 2026-11-24). The steps named are `vps.e2e.ts`'s and `factory.e2e.ts`'s, as they are
+built; the rest are the captain's, on the real VPS and phone.
+
+- [ ] The probe: on the VPS, Herdr headless in `kinas-probe-0008`, a scratch Firstmate home at the pin, a first mate and
+      two `claude` workers; 30 readings parse with Kinas's parsers; a held task answered by a note in Firstmate's inbox
+      is acted on and shown handled; `herdr --remote` attaches it from the Mac and a paste reaches the first mate's pane
+      — `outstanding — slice 0`
+- [ ] Settings → Where agents run: the target refused when it is not `user@host`, a host or an alias; the bootstrap
+      command when the companion is missing; each check green after its Install — `outstanding — vps`
+- [ ] The Crew board, the Inbox and Usage read the VPS; with ssh failing, the sidebar says `unreachable` and nothing is
+      lost — `outstanding — vps`
+- [ ] The Work page is the VPS's `default` session; closing the lid and opening it reattaches by itself —
+      `outstanding — the captain`
+- [ ] Approve on the Mac delivers once, as a note; a second answer on the same item says `Already answered` —
+      `outstanding — vps`
+- [ ] `ANTHROPIC_API_KEY` set on the VPS shows the red line, and its value is nowhere — `outstanding — vps`
+- [ ] The phone pairs with a code; a held question notifies within a minute; Approve from the phone reaches the first
+      mate; `read by the first mate` follows — `outstanding — the captain`
+- [ ] The VPS unreachable for 10 minutes notifies once, and once more when it is back — `outstanding — the captain`
+- [ ] A day of the cloud store holds no path, branch, diff or key — `outstanding — the captain (AC-6)`
+- [ ] The Factory page's figures equal a count by hand; ⌘6 opens it — `outstanding — factory`
+
 ## The crew: launch
 
 The first mate in the pane (2026-09-24, slice 3).

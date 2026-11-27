@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StatusResult, StatusQuota } from "./status.ts";
 import type { StorageAdapter } from "@kinas/store/types";
-import { statusFromStore, statusLines } from "./status.ts";
+import { statusFromStore, statusJson, statusLines } from "./status.ts";
 
 const NOW = 1_790_000_000_000;
 
@@ -16,7 +16,7 @@ const usage = (tokens_in: number, tokens_cache_read: number, tokens_out: number)
   messages: 1,
 });
 
-const result = (usageToday: StatusResult["usageToday"]): StatusResult => ({ now: NOW, quotas: [] as StatusQuota[], missing: [], usageToday, host: null });
+const result = (usageToday: StatusResult["usageToday"]): StatusResult => ({ now: NOW, quotas: [] as StatusQuota[], missing: [], usageToday, host: null, linux_host: null });
 
 const todayLine = (r: StatusResult) => statusLines(r, false).find((l) => l.startsWith("  claude-code"))!;
 
@@ -79,5 +79,26 @@ describe("This Mac in kinas status", () => {
     expect(host(13 * 3_600_000)).toMatch(/^This Mac {11}CPU — · memory —\/16\.0 GiB · disk available — · as of (?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}$/);
     expect(host(5 * 60_000)).toMatch(/^This Mac {11}CPU 12% · memory 7\.2\/16\.0 GiB · disk available 300 GB · as of \d{2}:\d{2} \(stale\)$/);
     expect(host(30_000)).toMatch(/^This Mac {11}CPU 12% · memory 7\.2\/16\.0 GiB · disk available 300 GB · as of \d{2}:\d{2}$/);
+  });
+});
+
+describe("the Linux machine in kinas status (slice 5.2)", () => {
+  const store = (linux: boolean) =>
+    ({
+      schemaVersion: () => 10,
+      getReaderStatus: () => [],
+      getQuotas: () => [],
+      getHost: () => ({ machine: "mac-9c2e", cpu_pct: 12.4, mem_used_gb: 7.2, mem_total_gb: 16, disk_used_gb: 200, disk_total_gb: 460, disk_available_gb: 280, updated_at: NOW - 5_000 }),
+      getLinuxHost: () => (linux ? { machine: "homelab", cpu_pct: null, mem_used_gb: 3, mem_total_gb: 16, disk_used_gb: 40, disk_total_gb: 200, disk_available_gb: 150, updated_at: NOW - 5_000 } : null),
+      getUsageDaily: () => [],
+    }) as unknown as StorageAdapter;
+
+  test("a line under This Mac named for the label, with a dash for CPU until there are two samples; none without it", () => {
+    const lines = statusLines(statusFromStore(store(true), NOW), false);
+    const mac = lines.findIndex((l) => l.startsWith("This Mac"));
+    expect(lines[mac + 1]).toMatch(/^Linux machine · homelab CPU — · memory 3\.0\/16\.0 GiB · disk available 161 GB · as of /);
+    expect(statusJson(statusFromStore(store(true), NOW)).linux_host).toMatchObject({ machine: "homelab", cpu_pct: null, state: "fresh" });
+    expect(statusLines(statusFromStore(store(false), NOW), false).some((l) => l.startsWith("Linux machine"))).toBe(false);
+    expect(statusJson(statusFromStore(store(false), NOW)).linux_host).toBeNull();
   });
 });

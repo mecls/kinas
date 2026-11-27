@@ -3,6 +3,8 @@ export interface Notice {
   text: string;
   /** Makes a repeat of the same words a new notice. */
   seq: number;
+  /** A refusal, said in `--danger` (DESIGN.md §4 Toast: only errors take a colour). */
+  kind?: "error";
 }
 
 /** How long a notice stays, wherever it is shown — one number, so the two places cannot drift apart. */

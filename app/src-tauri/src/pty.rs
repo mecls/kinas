@@ -84,6 +84,43 @@ fn first_command(light: bool) -> Option<String> {
     Some(launch_then_herdr(cli.as_deref(), light))
 }
 
+/// The Work page with the agents on a VPS (ADR 0024; build spec §11.2, slice 3.1): this Mac's Herdr attaches the VPS's
+/// `default` session — `herdr --remote <target> --session default`, run by path with a fixed argv and no shell, so the
+/// target is one argument and never a word a shell reads. When the client exits (the machine unreachable, the Mac
+/// asleep) the Work page starts it again by itself. A debug build takes the local pane's test switches first:
+/// `KINAS_PANE_SHELL_ONLY=1`, every e2e spec's default (e2e/env.ts), gives a plain login shell; and
+/// `KINAS_E2E_HERDR_REMOTE=local` attaches the throwaway session `KINAS_HERDR_SESSION` on this Mac instead (`herdr
+/// --session <name>`). So no test reaches a machine, runs ssh, or attaches `default` (§13).
+pub fn remote_profile(herdr: &Path, target: &str) -> Profile {
+    let home = home_dir();
+    #[cfg_attr(not(debug_assertions), allow(unused_mut))]
+    let mut args = vec!["--remote".to_string(), target.to_string(), "--session".to_string(), "default".to_string()];
+    #[cfg(debug_assertions)]
+    {
+        if std::env::var("KINAS_PANE_SHELL_ONLY").as_deref() == Ok("1") {
+            return Profile::login_shell_then(&login_shell(), None, home, locale_lang());
+        }
+        if std::env::var("KINAS_E2E_HERDR_REMOTE").as_deref() == Ok("local") {
+            match crate::herdr::session() {
+                Some(name) => args = vec!["--session".to_string(), name],
+                None => return Profile::login_shell_then(&login_shell(), None, home, locale_lang()),
+            }
+        }
+    }
+    #[cfg_attr(not(debug_assertions), allow(unused_mut))]
+    let mut set_env = vec![
+        ("TERM".to_string(), "xterm-256color".to_string()),
+        ("COLORTERM".to_string(), "truecolor".to_string()),
+        ("TERM_PROGRAM".to_string(), "kinas".to_string()),
+        ("LANG".to_string(), locale_lang()),
+    ];
+    #[cfg(debug_assertions)]
+    if let Some(path) = std::env::var_os("KINAS_E2E_HERDR_CONFIG_PATH") {
+        set_env.push(("HERDR_CONFIG_PATH".into(), path.to_string_lossy().into_owned()));
+    }
+    Profile { program: herdr.to_string_lossy().into_owned(), args, cwd: home, set_env }
+}
+
 /// What the Work page's chrome names (DESIGN.md §4 Terminal chrome): the Herdr session the pane attaches, or a plain
 /// shell. Read from the same switches as `first_command`, so the chrome says what the pane was started to do.
 #[derive(Debug, PartialEq, serde::Serialize)]
@@ -496,6 +533,20 @@ mod tests {
         assert_eq!(pane_session_of(false, Some("kinas-e2e-editor")), PaneSession { session: "kinas-e2e-editor".into(), shell: false });
         assert_eq!(pane_session_of(false, Some("rm -rf")), PaneSession { session: "default".into(), shell: false });
         assert_eq!(pane_session_of(true, Some("anything")), PaneSession { session: "shell".into(), shell: true });
+    }
+
+    /// Build spec §11.2, slice 3.1; ADR 0024: the Work page on a VPS is Herdr's own client, by path, with the target as
+    /// one argument — never a shell string — and the pane's terminal settings.
+    #[test]
+    fn the_remote_profile_is_herdr_s_client_with_a_fixed_argv() {
+        let p = remote_profile(Path::new("/Users/c/.local/bin/herdr"), "captain@vps-1");
+        assert_eq!(p.program, "/Users/c/.local/bin/herdr");
+        if std::env::var("KINAS_E2E_HERDR_REMOTE").is_err() && std::env::var("KINAS_PANE_SHELL_ONLY").as_deref() != Ok("1") {
+            assert_eq!(p.args, ["--remote", "captain@vps-1", "--session", "default"]);
+        }
+        assert!(p.set_env.contains(&("TERM".into(), "xterm-256color".into())));
+        assert!(p.set_env.contains(&("TERM_PROGRAM".into(), "kinas".into())));
+        assert!(!p.args.iter().any(|a| a.contains(';') || a.contains(' ')), "{:?}", p.args);
     }
 
     #[test]

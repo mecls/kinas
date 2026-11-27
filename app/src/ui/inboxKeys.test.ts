@@ -20,3 +20,10 @@ test("⌘ chords and an open box are never the item's", () => {
   expect(inboxKey(key("r", { altKey: true }), { boxOpen: false })).toBeNull();
   expect(inboxKey(key("a"), { boxOpen: true })).toBeNull();
 });
+
+test("an answered item has no keys: its actions are gone until Firstmate closes it", () => {
+  expect(inboxKey(key("a"), { boxOpen: false, answered: true })).toBeNull();
+  expect(inboxKey(key("r"), { boxOpen: false, answered: true })).toBeNull();
+  expect(inboxKey(key("d"), { boxOpen: false, answered: true })).toBeNull();
+  expect(inboxKey(key("a"), { boxOpen: false, answered: false })).toBe("approve");
+});

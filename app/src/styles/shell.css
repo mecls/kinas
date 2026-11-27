@@ -425,6 +425,12 @@
   min-height: 0;
 }
 
+/* DESIGN.md 1.14: the pane dimmed while it is not attached to the VPS — what it shows is from before. The chrome above
+   says why; the pane keeps its place, so the terminal is never re-mounted. */
+.work-terminal.term-detached {
+  opacity: 0.5;
+}
+
 .terminal {
   position: absolute;
   inset: 0;

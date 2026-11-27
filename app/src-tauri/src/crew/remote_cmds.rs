@@ -206,6 +206,30 @@ pub async fn remote_pair_start(app: AppHandle) -> Result<PairStart, RemoteError>
     .map_err(|e| RemoteError { message: format!("pairing did not start: {e}") })?
 }
 
+/// `{ sent: true }`, or the companion's cloud error in words.
+fn test_sent(reply: &serde_json::Value) -> Result<(), String> {
+    if let Some(words) = cloud_words(reply) {
+        return Err(words.to_string());
+    }
+    if reply.get("sent") == Some(&serde_json::Value::Bool(true)) {
+        Ok(())
+    } else {
+        Err("the answer could not be read".into())
+    }
+}
+
+/// Settings' Send a test notification: the store pushes to each phone that has allowed them. Whether one arrived is for
+/// the phone to say; this only says the store was asked.
+#[tauri::command]
+pub async fn remote_test_notification(app: AppHandle) -> Result<(), RemoteError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let reply = phone_call(&app, Request::TestNotification)?;
+        test_sent(&reply).map_err(|message| RemoteError { message })
+    })
+    .await
+    .map_err(|e| RemoteError { message: format!("the test did not start: {e}") })?
+}
+
 #[tauri::command]
 pub async fn remote_phones(app: AppHandle) -> Result<Vec<Phone>, RemoteError> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -441,6 +465,15 @@ mod tests {
         assert_eq!(pair_of(&serde_json::json!({"v": 1, "error": "cloud-failed"})), Err("The cloud store didn't answer. Try again.".into()));
         assert_eq!(pair_of(&serde_json::json!({"v": 1})), Err("the answer could not be read".into()));
         assert_eq!(pair_of(&serde_json::json!({"v": 1, "error": "something <new>"})), Err("the answer could not be read".into()), "an unknown error is never put into words");
+    }
+
+    #[test]
+    fn a_test_notification_is_sent_or_says_why() {
+        assert_eq!(test_sent(&serde_json::json!({"v": 1, "sent": true})), Ok(()));
+        assert_eq!(test_sent(&serde_json::json!({"v": 1, "error": "no-cloud"})), Err("The cloud store isn't set up on the Linux machine.".into()));
+        assert_eq!(test_sent(&serde_json::json!({"v": 1, "error": "cloud-failed"})), Err("The cloud store didn't answer. Try again.".into()));
+        assert_eq!(test_sent(&serde_json::json!({"v": 1, "sent": false})), Err("the answer could not be read".into()));
+        assert_eq!(test_sent(&serde_json::json!({"v": 1})), Err("the answer could not be read".into()));
     }
 
     #[test]

@@ -16,6 +16,7 @@ function cloudWith(over: Partial<Cloud> = {}): Cloud & { calls: string[] } {
     startPairing: async (hash, at) => void calls.push(`pair ${hash} ${at}`),
     phones: async () => [],
     unpair: async (id) => void calls.push(`unpair ${id}`),
+    testNotification: async () => {},
     ...over,
   };
 }

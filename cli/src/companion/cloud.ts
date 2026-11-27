@@ -214,6 +214,8 @@ export interface Cloud {
   startPairing(codeHash: string, expiresAt: number): Promise<void>;
   phones(): Promise<{ id: string; name: string; pairedAt: number; lastSeenAt: number; push: boolean }[]>;
   unpair(id: string): Promise<void>;
+  /** Slice 9.2: push a test to every phone that has allowed notifications. */
+  testNotification(): Promise<void>;
 }
 
 /** Why a call failed, in words that carry no URL, secret or payload: the log line is `companion: cloud failed (<this>)`. */
@@ -258,6 +260,7 @@ export function convexCloud(url: string, secret: string, fetchImpl: (url: string
     startPairing: async (codeHash, expiresAt) => void (await call("mutation", "companion:startPairing", { codeHash, expiresAt })),
     phones: async () => ((await call("query", "companion:phones", {})) as Awaited<ReturnType<Cloud["phones"]>>) ?? [],
     unpair: async (id) => void (await call("mutation", "companion:unpair", { id })),
+    testNotification: async () => void (await call("mutation", "companion:testNotification", {})),
   };
 }
 
@@ -283,6 +286,7 @@ export function fileCloud(path: string): Cloud {
     startPairing: async (codeHash, expiresAt) => log("startPairing", { codeHash, expiresAt }),
     phones: async () => [],
     unpair: async (id) => log("unpair", { id }),
+    testNotification: async () => log("testNotification", {}),
   };
 }
 

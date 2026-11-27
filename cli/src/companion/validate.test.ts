@@ -77,6 +77,8 @@ describe("the companion's request validator (ADR 0024)", () => {
   test("the pairing verbs: pair-start and phones take nothing, unpair one phone's id", () => {
     expect(validate({ verb: "pair-start" })).toEqual({ verb: "pair-start" });
     expect(validate({ verb: "phones" })).toEqual({ verb: "phones" });
+    expect(validate({ verb: "test-notification" })).toEqual({ verb: "test-notification" });
+    expect(validate({ verb: "test-notification", id: "x" })).toHaveProperty("refused");
     expect(validate({ verb: "unpair", id: "k5788xyz_-" })).toEqual({ verb: "unpair", id: "k5788xyz_-" });
     for (const bad of [{ verb: "pair-start", code: "x" }, { verb: "phones", id: "a" }, { verb: "unpair" }, { verb: "unpair", id: "" }, { verb: "unpair", id: "a b" }, { verb: "unpair", id: "a".repeat(65) }, { verb: "unpair", id: 5 }, { verb: "unpair", id: "a", extra: 1 }]) {
       expect(validate(bad), JSON.stringify(bad)).toHaveProperty("refused");

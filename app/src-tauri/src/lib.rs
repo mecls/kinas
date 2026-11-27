@@ -129,6 +129,7 @@ pub fn run() {
             crew::remote_cmds::remote_install,
             crew::remote_cmds::remote_pair_start,
             crew::remote_cmds::remote_phones,
+            crew::remote_cmds::remote_test_notification,
             crew::remote_cmds::remote_unpair,
             crew::remote_cmds::place_status,
             crew::crew_launch,

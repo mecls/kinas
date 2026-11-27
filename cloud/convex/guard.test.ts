@@ -19,11 +19,13 @@ function publicFunctions(file: string): Map<string, string> {
 
 test("every function the companion may call checks its secret before it touches a table", () => {
   const fns = publicFunctions("companion.ts");
-  expect([...fns.keys()].sort()).toEqual(["heartbeat", "phones", "replaceReading", "settleAnswer", "startPairing", "takeAnswers", "unpair"]);
+  expect([...fns.keys()].sort()).toEqual(["heartbeat", "phones", "replaceReading", "settleAnswer", "startPairing", "takeAnswers", "testNotification", "unpair"]);
   for (const [name, body] of fns) {
     expect(body, name).toMatch(/args: \{\s*secret: v\.string\(\)/);
     const check = body.indexOf("await requireCompanion(secret)");
-    const first = body.indexOf("ctx.db");
+    // Touching is a table or the scheduler: either one writes.
+    const touches = [body.indexOf("ctx.db"), body.indexOf("ctx.scheduler")].filter((i) => i !== -1);
+    const first = touches.length === 0 ? Infinity : Math.min(...touches);
     expect(check, `${name} never checks the secret`).toBeGreaterThan(-1);
     expect(check, `${name} touches a table before it checks the secret`).toBeLessThan(first);
   }
@@ -67,5 +69,23 @@ test("no function reads or writes anything the summary list doesn't name: the sc
   const schema = source("schema.ts");
   for (const word of ["path", "branch", "diff", "transcript", "log", "brief", "report", "cwd", "worktree"]) {
     expect(schema, word).not.toMatch(new RegExp(`^\\s+${word}\\s*:`, "m"));
+  }
+});
+
+test("the VAPID keys are read in the push action alone, and no log line names a key, a secret, an endpoint or a payload", () => {
+  const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && f !== "_generated");
+  for (const f of files) {
+    const text = source(f);
+    if (f !== "push.ts") expect(text, f).not.toMatch(/VAPID_|process\.env\.(?!COMPANION_SECRET_SHA256)/);
+    for (const line of text.split("\n").filter((l) => l.includes("console.")))
+      expect(line, `${f}: ${line.trim()}`).not.toMatch(/\$\{[^}]*\b(priv|pub|subject|secret|subscription|endpoint|payload|token|key)\b/i);
+  }
+  expect(source("push.ts")).toMatch(/payloadViolation\(payload\)/);
+});
+
+test("the heartbeat watch and the retention job are the deployment's own crons, and a push is only ever sent by the push action", () => {
+  expect(source("crons.ts")).toMatch(/watch the heartbeat/);
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".ts") && !x.endsWith(".test.ts"))) {
+    if (f !== "push.ts") expect(source(f), f).not.toMatch(/sendNotification|web-push/);
   }
 });

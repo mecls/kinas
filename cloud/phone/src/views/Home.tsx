@@ -1,7 +1,8 @@
+import { Notifications } from "./Notifications.tsx";
 import { groupByProject, ago, captionOf, projectLine, type Freshness, type InboxItem, type Summary } from "../model.ts";
 
 /** Home: each project's one line, the items waiting on you, and the caption (build spec §4; phone-home mockup). */
-export function Home({ summary, items, fresh, label, now, onOpen }: { summary: Summary | null; items: InboxItem[]; fresh: Freshness; label: string; now: number; onOpen: (key: string) => void }) {
+export function Home({ token, summary, items, fresh, label, now, onOpen, onUnpaired }: { token: string; summary: Summary | null; items: InboxItem[]; fresh: Freshness; label: string; now: number; onOpen: (key: string) => void; onUnpaired: () => void }) {
   const groups = summary ? groupByProject(summary.board) : [];
   const waiting = items.filter((i) => i.answer === null || i.answer.status !== "delivered");
   return (
@@ -35,6 +36,7 @@ export function Home({ summary, items, fresh, label, now, onOpen }: { summary: S
           ))}
         </div>
       )}
+      <Notifications token={token} onUnpaired={onUnpaired} />
     </>
   );
 }

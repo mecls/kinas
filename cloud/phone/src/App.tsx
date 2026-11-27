@@ -67,7 +67,7 @@ function Paired({ token, onUnpaired }: { token: string; onUnpaired: () => void }
         {tab === "inbox" && itemKey !== null ? (
           <Item token={token} item={item} fresh={fresh} label={label} now={now} onBack={() => open(null)} onUnpaired={onUnpaired} />
         ) : tab === "home" ? (
-          <Home summary={summary} items={items} fresh={fresh} label={label} now={now} onOpen={(k) => { setTab("inbox"); open(k); }} />
+          <Home token={token} onUnpaired={onUnpaired} summary={summary} items={items} fresh={fresh} label={label} now={now} onOpen={(k) => { setTab("inbox"); open(k); }} />
         ) : tab === "inbox" ? (
           <Inbox items={items} loading={inbox === undefined} fresh={fresh} label={label} now={now} onOpen={open} />
         ) : tab === "crew" ? (

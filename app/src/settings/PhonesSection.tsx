@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { crewErrorOf, remotePairStart, remotePhones, remoteUnpair, type PairStart, type Phone } from "../api.ts";
+import { crewErrorOf, remotePairStart, remotePhones, remoteTestNotification, remoteUnpair, type PairStart, type Phone } from "../api.ts";
 import { writeClipboard } from "../terminal/clipboard.ts";
 import { Button, Table } from "../ui/index.ts";
 import { dayWords, expiryWords, groupCode, lastSeenWords, notificationsWords, REMOVE_WARNING } from "./phonesView.ts";
@@ -70,6 +70,15 @@ export function PhonesSection({ shown, active }: { shown: boolean; active: boole
         setNow(Date.now());
         setPair(p);
       })
+      .catch((e: unknown) => setMessage({ text: crewErrorOf(e), problem: true }))
+      .finally(() => setBusy(false));
+  };
+
+  const test = () => {
+    setBusy(true);
+    setMessage(null);
+    remoteTestNotification()
+      .then(() => setMessage({ text: "A test notification was sent. If it doesn't arrive, check the phone's notifications.", problem: false }))
       .catch((e: unknown) => setMessage({ text: crewErrorOf(e), problem: true }))
       .finally(() => setBusy(false));
   };
@@ -145,7 +154,12 @@ export function PhonesSection({ shown, active }: { shown: boolean; active: boole
           ) : phones.length === 0 ? (
             quiet("No phone is paired.")
           ) : (
-            <Table className="place-phones" caption="Paired phones" columns={COLUMNS} rows={rows} rowKey={(r) => String(r.id)} rowProps={(r) => ({ "data-phone": String(r.id) })} />
+            <>
+              <Table className="place-phones" caption="Paired phones" columns={COLUMNS} rows={rows} rowKey={(r) => String(r.id)} rowProps={(r) => ({ "data-phone": String(r.id) })} />
+              <Button className="button" disabled={busy} onClick={test}>
+                Send a test notification
+              </Button>
+            </>
           )
         ) : (
           quiet("Only with a Linux machine.")

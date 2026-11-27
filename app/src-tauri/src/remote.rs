@@ -123,6 +123,8 @@ pub(crate) enum Request {
     PairStart,
     /// The paired phones, by name and times.
     Phones,
+    /// Settings' Send a test notification (slice 9.2): the cloud store pushes to every phone that has allowed them.
+    TestNotification,
     /// Remove one phone by the id `Phones` gave: its token stops working.
     Unpair { id: String },
     /// Setup (slice 4, §17 2026-11-25 #4): one item, each the captain's click. `folder` and `repo` only for `clone`,
@@ -178,6 +180,7 @@ impl Request {
             Request::Answer { .. } => "answer",
             Request::PairStart => "pair-start",
             Request::Phones => "phones",
+            Request::TestNotification => "test-notification",
             Request::Unpair { .. } => "unpair",
             Request::Install { .. } => "install",
         }

@@ -25,6 +25,7 @@ export type Request =
   // Slice 8.1: pairing a phone through the cloud store (the companion holds the secret, the Mac never does).
   | { verb: "pair-start" }
   | { verb: "phones" }
+  | { verb: "test-notification" }
   | { verb: "unpair"; id: string }
   | { verb: "install"; item: InstallItem; folder?: string; repo?: string; adopt?: boolean; restart?: boolean };
 
@@ -89,6 +90,7 @@ export function validate(input: unknown): Validated {
     case "refresh":
     case "view":
     case "phones":
+    case "test-notification":
     case "pair-start":
     case "launch-first-mate": {
       const extra = onlyKeys(input, ["verb"]);

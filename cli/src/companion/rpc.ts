@@ -128,6 +128,15 @@ async function answer(request: Request, deps: RpcDeps): Promise<RpcResult> {
         return { reply: { v: RPC_VERSION, error: "cloud-failed" }, exit: 0 };
       }
     }
+    case "test-notification": {
+      if (!deps.cloud) return { reply: { v: RPC_VERSION, error: "no-cloud" }, exit: 0 };
+      try {
+        await deps.cloud.testNotification();
+        return { reply: { v: RPC_VERSION, sent: true }, exit: 0 };
+      } catch {
+        return { reply: { v: RPC_VERSION, error: "cloud-failed" }, exit: 0 };
+      }
+    }
     case "unpair": {
       if (!deps.cloud) return { reply: { v: RPC_VERSION, error: "no-cloud" }, exit: 0 };
       try {

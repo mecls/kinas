@@ -1,5 +1,5 @@
 // What the deployment does on its own (build spec §11.2): expire answers the companion didn't take in a minute, and drop
-// what closed a month ago. The heartbeat watch and the pushes arrive with slice 9.
+// what closed a month ago, and watch the companion's heartbeat: ten minutes of silence is one push, and its return another.
 
 import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
@@ -39,7 +39,16 @@ export const dropClosed = internalMutation({
   },
 });
 
+/** Once a minute: whether the companion has been silent for ten minutes, or is back; the action says and records it once. */
+export const heartbeatWatch = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.scheduler.runAfter(0, internal.push.notifyAlert, {});
+  },
+});
+
 const crons = cronJobs();
 crons.interval("expire pending answers", { minutes: 1 }, internal.crons.expirePendingAnswers, {});
+crons.interval("watch the heartbeat", { minutes: 1 }, internal.crons.heartbeatWatch, {});
 crons.interval("drop closed items", { hours: 24 }, internal.crons.dropClosed, {});
 export default crons;

@@ -3,6 +3,7 @@
 // or has a string over its cap, is refused whole.
 
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { PAIR_TTL_MS, companionOk } from "./lib/auth.ts";
 import { takeable } from "./lib/answers.ts";
@@ -39,6 +40,8 @@ export const replaceReading = mutation({
       const w = existing.find((r) => r.key === key);
       if (w) await ctx.db.patch(w._id, { closedAt: undefined });
     }
+    // One push for each item the store hasn't seen, within the minute: the action marks it notified once it is sent.
+    for (const item of diff.open) await ctx.scheduler.runAfter(0, internal.push.notifyItem, { key: item.key });
     return { opened: diff.open.map((i) => i.key), closed: diff.close.length };
   },
 });
@@ -125,5 +128,14 @@ export const unpair = mutation({
     if (!d) return { removed: false };
     await ctx.db.delete(id);
     return { removed: true };
+  },
+});
+
+/** Settings' Send a test notification: one push to every phone that has allowed them. */
+export const testNotification = mutation({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    await requireCompanion(secret);
+    await ctx.scheduler.runAfter(0, internal.push.sendTest, {});
   },
 });

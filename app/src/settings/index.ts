@@ -104,7 +104,7 @@ export const SETTINGS: readonly SettingEntry[] = [
     id: "place.phones",
     section: "place",
     label: "Paired phones",
-    description: "Each phone Kinas knows, when it last looked, and whether it takes notifications. Remove stops one working.",
+    description: "Each phone Kinas knows, when it last looked, and whether it takes notifications. Send a test notification, or Remove one.",
   },
   { id: "crew.firstmate", section: "crew", label: "Firstmate", description: "Its pinned commit, home, backend, tools and projects." },
   { id: "projects.root", section: "projects", label: "Projects folder", description: "Where kinas open and the palette look for files. The CLI reads it too." },

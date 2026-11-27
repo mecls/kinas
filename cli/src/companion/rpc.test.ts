@@ -202,6 +202,7 @@ describe("the pairing verbs (slice 8.1)", () => {
       startPairing: async (h, at) => void calls.push(`pair ${h.length} ${at}`),
       phones: async () => [{ id: "k1", name: "Phone", pairedAt: 1, lastSeenAt: 2, push: false }],
       unpair: async (id) => void calls.push(`unpair ${id}`),
+      testNotification: async () => void calls.push("test"),
       ...over,
     };
   };
@@ -229,6 +230,15 @@ describe("the pairing verbs (slice 8.1)", () => {
       expect(text).toContain("cloud-failed");
       expect(text).not.toContain("SECRET");
     }
+  });
+
+  test("a test notification asks the store to push to every phone, once", async () => {
+    const cloud = cloudOf();
+    expect((await rpc(JSON.stringify({ verb: "test-notification" }), depsWith(cloud))).reply).toEqual({ v: 1, sent: true });
+    expect(cloud.calls).toEqual(["test"]);
+    expect((await rpc(JSON.stringify({ verb: "test-notification" }), depsWith(null))).reply).toEqual({ v: 1, error: "no-cloud" });
+    const down = cloudOf({ testNotification: async () => { throw new Error("SECRET"); } });
+    expect(JSON.stringify((await rpc(JSON.stringify({ verb: "test-notification" }), depsWith(down))).reply)).toBe('{"v":1,"error":"cloud-failed"}');
   });
 
   test("phones lists names and times; unpair removes one and answers with what is left", async () => {

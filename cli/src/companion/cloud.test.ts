@@ -222,6 +222,7 @@ function recorder(fail: { on: boolean } = { on: false }): { cloud: Cloud; calls:
     startPairing: async () => {},
     phones: async () => [],
     unpair: async () => {},
+    testNotification: async () => {},
   };
   return { cloud, calls };
 }

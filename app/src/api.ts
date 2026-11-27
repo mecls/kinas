@@ -426,6 +426,8 @@ export interface Phone {
 }
 export const remotePairStart = () => invoke<PairStart>("remote_pair_start");
 export const remotePhones = () => invoke<Phone[]>("remote_phones");
+/** Ask the cloud store to push a test to every phone that has allowed notifications. */
+export const remoteTestNotification = () => invoke<void>("remote_test_notification");
 /** Remove one phone; the phones left come back. */
 export const remoteUnpair = (id: string) => invoke<Phone[]>("remote_unpair", { id });
 

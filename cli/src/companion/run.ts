@@ -12,6 +12,7 @@ import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, r
 import { join, dirname } from "node:path";
 import { questionsOf, tendReceipts, type QuestionOut } from "./answer.ts";
 import { freshTend, tendCloud, type Cloud } from "./cloud.ts";
+import { phoneLoop } from "./phone.ts";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
@@ -643,6 +644,9 @@ export async function loop(deps: Deps, sleep: (ms: number) => Promise<void> = (m
   const since = deps.clock();
   let prev = lastReading(deps.paths);
   const tend = freshTend();
+  // A phone's answers don't wait for the reading's fifteen seconds: their own loop takes them every five, and runs beside
+  // this one (the answer's lock keeps it and an rpc answer from writing at once).
+  if (deps.cloud) void phoneLoop({ cloud: deps.cloud.cloud, answer: { paths: deps.paths, fm: deps.fm, clock: deps.clock, log: deps.log }, clock: deps.clock, log: deps.log }, sleep);
   for (;;) {
     const started = deps.clock();
     try {

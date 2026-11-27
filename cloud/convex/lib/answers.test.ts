@@ -32,15 +32,15 @@ test("the same request id again is the same answer, however the item stands", ()
   expect(judgeSubmit({ ...base, companionBeatAt: null, forKey: [sent] })).toEqual({ replay: sent });
 });
 
-test("an Answer needs words; Approve and Deny don't; nothing holds a NUL or goes over 8,192 bytes", () => {
+test("an Answer needs words; Approve and Deny don't; nothing holds a NUL or goes over 4,096 bytes", () => {
   expect(wordsOk("answer", "  ")).toBe(false);
   expect(wordsOk("answer", "MIT")).toBe(true);
   expect(wordsOk("approve", "")).toBe(true);
   expect(wordsOk("deny", "")).toBe(true);
   expect(wordsOk("answer", "a\0b")).toBe(false);
-  expect(wordsOk("answer", "x".repeat(8_192))).toBe(true);
-  expect(wordsOk("answer", "x".repeat(8_193))).toBe(false);
-  expect(wordsOk("answer", "é".repeat(4_097))).toBe(false);
+  expect(wordsOk("answer", "x".repeat(4_096))).toBe(true);
+  expect(wordsOk("answer", "x".repeat(4_097))).toBe(false);
+  expect(wordsOk("answer", "é".repeat(2_049))).toBe(false);
   expect(judgeSubmit({ ...base, kind: "answer", text: "" })).toMatchObject({ refused: "words" });
 });
 

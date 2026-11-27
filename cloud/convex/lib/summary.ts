@@ -18,8 +18,8 @@ export const CAPS = {
   harness: 40,
   checks: 40,
   reply: 2_000,
-  /** The words of an answer, in UTF-8 bytes (the companion's own cap). */
-  words: 8_192,
+  /** The words an answer types, in UTF-8 bytes: the Mac's own cap (`fixtures/answer-lines.json`). */
+  words: 4_096,
   deviceName: 60,
   version: 40,
 } as const;

@@ -1,0 +1,14 @@
+[
+  { "task": "t1", "key": "api-shape", "kind": "approve", "typed": "", "line": "On t1 (api-shape): Approved — go ahead." },
+  { "task": "t1", "key": "api-shape", "kind": "approve", "typed": "ignored words", "line": "On t1 (api-shape): Approved — go ahead." },
+  { "task": "t1", "key": "t1", "kind": "approve", "typed": "", "line": "On t1: Approved — go ahead." },
+  { "task": "t1", "key": "api-shape", "kind": "deny", "typed": "", "line": "On t1 (api-shape): Denied." },
+  { "task": "t1", "key": "api-shape", "kind": "deny", "typed": "  not before Monday  ", "line": "On t1 (api-shape): Denied — not before Monday" },
+  { "task": "t1", "key": "t1", "kind": "deny", "typed": "no", "line": "On t1: Denied — no" },
+  { "task": "t1", "key": "api-shape", "kind": "answer", "typed": "REST", "line": "On t1 (api-shape): REST" },
+  { "task": "t1", "key": "t1", "kind": "answer", "typed": "  MIT  ", "line": "On t1: MIT" },
+  { "task": "t1", "key": "api-shape", "kind": "answer", "typed": "REST\u0000-9c2e", "line": "On t1 (api-shape): REST-9c2e" },
+  { "task": "t1", "key": "api-shape", "kind": "answer", "typed": "   ", "line": null },
+  { "task": "t1", "key": "api-shape", "kind": "answer", "typed": "", "line": null },
+  { "task": "t1", "key": "api-shape", "kind": "answer", "typed": "é", "line": "On t1 (api-shape): é" }
+]

@@ -6,7 +6,8 @@
     ".": "./src/registry.ts",
     "./theme": "./src/theme.ts",
     "./crew-tools": "./src/crew-tools.ts",
-    "./crew-words": "./src/crew-words.ts"
+    "./crew-words": "./src/crew-words.ts",
+    "./answer-line": "./src/answer-line.ts"
   },
   "dependencies": {
     "@kinas/store": "workspace:*"

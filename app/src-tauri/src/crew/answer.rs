@@ -339,6 +339,25 @@ mod tests {
         assert!(answer_text(AnswerKind::Answer, &"x".repeat(4_096)).is_ok());
     }
 
+    /// `fixtures/answer-lines.json`, which the companion's TypeScript (`packages/commands/src/answer-line.ts`) reads too: the
+    /// line a phone's answer becomes there is the one this Mac builds for the same words.
+    #[test]
+    fn the_line_is_the_companions_for_every_case_in_the_shared_fixture() {
+        let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/answer-lines.json")).unwrap();
+        let cases: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap();
+        assert!(cases.len() >= 10);
+        for c in cases {
+            let s = |k: &str| c[k].as_str().unwrap().to_string();
+            let kind = match s("kind").as_str() {
+                "approve" => AnswerKind::Approve,
+                "deny" => AnswerKind::Deny,
+                _ => AnswerKind::Answer,
+            };
+            let got = answer_text(kind, &s("typed")).ok().map(|words| line(&s("task"), &s("key"), &words));
+            assert_eq!(got.as_deref(), c["line"].as_str(), "{c}");
+        }
+    }
+
     #[test]
     fn line_names_the_task_and_its_key() {
         assert_eq!(line("t1", "api-shape", "Approved — go ahead."), "On t1 (api-shape): Approved — go ahead.");

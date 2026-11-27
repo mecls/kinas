@@ -45,3 +45,17 @@ write every companion table; a device token can only answer, finish its own pair
   SHA-256 hashes are stored; the VAPID private key lives only in the deployment's environment.
 - A production deployment, a new region, or a public page without pairing, without the captain's word.
 - Deleting factory events.
+
+## Slice 7–10 as built (2026-11-27)
+
+- **Convex functions** (`cloud/convex/`): `companion.ts` (`replaceReading`, `heartbeat`, `takeAnswers`, `settleAnswer`,
+  `startPairing`, `phones`, `unpair`, `testNotification`, each starting with the secret), `phone.ts` (`pair`, `reading`,
+  `inbox`, `submitAnswer`, `subscribe`, each but `pair` starting with the token), `push.ts` (`"use node"`: `notifyItem`,
+  `notifyAlert`, `sendTest`), `crons.ts` (expire answers at 60 s, the heartbeat watch every minute, drop what closed 30 days
+  ago). The pure rules are in `lib/` and tested without a deployment; source guards read the files as text.
+- **Companion** (`cli/src/companion/`): `cloud.ts` (`summaryOf`, the Convex HTTP door, the file fake), `pair.ts`, `phone.ts`
+  (the five-second answer loop and the receipts), `fleet.ts`.
+- **Phone page** (`cloud/phone/`): a Vite static app; `VITE_CONVEX_URL` and `VITE_VAPID_PUBLIC_KEY` at build time; its
+  Content-Security-Policy is written from the Convex address; `vercel.json` adds the frame and referrer headers.
+- **Environment names in the deployment:** `COMPANION_SECRET_SHA256`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT`, and optionally `KINAS_TIME_ZONE` (default `Europe/Lisbon`, for the unreachable notification's time).

@@ -76,6 +76,9 @@
   - 6.4 done, 2026-11-27: the captain accepted the checks (42 of 43 in two full runs alone, each failing spec passing
     alone) and asked for no further full run. Still the captain's: the push and merge, the Mac app's install, the
     companion's deploy to the home lab, and the smoke on the real Linux machine.
+  - Ship point 1 on the real machine, 2026-11-27: pushed at `10ba1d2`; the Mac app installed from it; the companion
+    deployed to the home lab (`302c8c1d`, all 18 rows ok). The captain's smoke: setup, the Work terminal and the empty
+    Crew board pass; one answer is still to do (it needs a task with an open question).
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

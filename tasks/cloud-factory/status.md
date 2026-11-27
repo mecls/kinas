@@ -82,10 +82,10 @@
     rolled back, so the first attempt was refused as `unknown verb`): delivered, read by the first mate, hold resolved
     with the captain's words. Open: an answered Inbox item keeps live buttons until the hold closes; the captain wants
     it gone.
-- [ ] Slice 7 · the cloud store: the companion writes summaries
-- [ ] Slice 8 · the phone: paired, reading
-- [ ] Slice 9 · notifications
-- [ ] Slice 10 · answers from the phone → ship point 2
+- [ ] Slice 7 · the cloud store: the companion writes summaries — 7.1 and 7.2 built 2026-11-27 on `feat/cloud-store` (the Convex schema and functions, their pure libraries and source guards; the companion's `summaryOf`, the Convex and file doors, `companion.env`, the run loop's change-only send and heartbeat); 7.3 is the captain's: the dev deployment and `companion.env`
+- [ ] Slice 8 · the phone: paired, reading — 8.1 and 8.2 built 2026-11-27 (pairing end to end through Settings, proven in the VPS e2e's case 8; the phone page: Pair, Home, Inbox, the item sheet, Crew); 8.3 is the captain's: the Vercel preview and the pairing from the phone
+- [ ] Slice 9 · notifications — built 2026-11-27 (one push per new item, unreachable after ten minutes and back, the worker, Allow notifications, Send a test notification); the VAPID keys and one real push are the captain's
+- [ ] Slice 10 · answers from the phone → ship point 2 — 10.1 and 10.2 built 2026-11-27 (the companion's five-second loop, the read and the reply back to the store); `bun run check` green (bun 1,373, cargo 578); AC-5 and ship point 2's close need the dev deployment, the phone and the captain: `ship-point-2-steps.md` (private)
 - [ ] Slice 11 · the factory's events
 - [ ] Slice 12 · the Factory page and tab → ship point 3
 

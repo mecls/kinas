@@ -6,6 +6,8 @@ import { LINUX_RELEASES } from "@kinas/commands/crew-tools";
 import { run } from "@kinas/context";
 import { accessSync, constants, statfsSync } from "node:fs";
 import { cpus, homedir, totalmem, userInfo } from "node:os";
+import { join } from "node:path";
+import { convexCloud, DEFAULT_LABEL, fileCloud, readCompanionEnv, type Cloud } from "./cloud.ts";
 import { firstmate } from "./firstmate.ts";
 import { herdrAt, herdrEnv, type Herdr } from "./herdr.ts";
 import { githubReleases, rootReleases } from "./install.ts";
@@ -47,6 +49,23 @@ function tokenDeps(paths: Paths): TokenDeps {
   return { paths, uid: process.getuid?.() ?? -1, fetch: (url, init) => fetch(url, init), now: Date.now };
 }
 
+/**
+ * The cloud store, when this machine has one (ADR 0023): `KINAS_COMPANION_CLOUD=file:<path>` (tests and the e2e), else
+ * `~/.config/kinas/companion.env`. With neither, or with a file that is not private, nothing leaves the machine and the
+ * log says why in a word.
+ */
+export function cloudOf(env: Record<string, string | undefined>, paths: Paths, home: string, uid: number, log: (line: string) => void): { cloud: Cloud; label: string } | null {
+  const file = env.KINAS_COMPANION_CLOUD;
+  if (file !== undefined && file.startsWith("file:") && paths.root !== null) return { cloud: fileCloud(file.slice("file:".length)), label: DEFAULT_LABEL };
+  if (paths.root !== null) return null;
+  const read = readCompanionEnv(join(home, ".config", "kinas", "companion.env"), uid);
+  if ("error" in read) {
+    if (read.error !== "no companion.env") log(`companion: no cloud (${read.error})`);
+    return null;
+  }
+  return { cloud: convexCloud(read.url, read.secret), label: read.label };
+}
+
 function runDeps(paths: Paths): Deps {
   const path = companionPath(homedir(), executable);
   const workers = workerDeps(paths);
@@ -61,6 +80,7 @@ function runDeps(paths: Paths): Deps {
     // One line per event, never a fleet's words: journald keeps it.
     log: (line) => process.stderr.write(`${line}\n`),
     tokens: tokenDeps(paths),
+    cloud: cloudOf(process.env, paths, homedir(), process.getuid?.() ?? -1, (line) => process.stderr.write(`${line}\n`)) ?? undefined,
   };
 }
 

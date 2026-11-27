@@ -11,6 +11,7 @@ import { run } from "@kinas/context";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { questionsOf, tendReceipts, type QuestionOut } from "./answer.ts";
+import { freshTend, tendCloud, type Cloud } from "./cloud.ts";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
 import type { Paths } from "./paths.ts";
@@ -126,6 +127,8 @@ export interface Deps {
   herdr?: Herdr;
   /** GitHub's API for the workers' tokens (ADR 0029): renewed and ended on each reading. Absent: left alone. */
   tokens?: TokenDeps;
+  /** The cloud store (ADR 0023), with the machine's label for the phone. Absent: nothing leaves the machine. */
+  cloud?: { cloud: Cloud; label: string };
 }
 
 // ---- the fleet, only as far as choosing PRs needs ----
@@ -639,12 +642,14 @@ export function lastReading(paths: Paths): Reading | null {
 export async function loop(deps: Deps, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<never> {
   const since = deps.clock();
   let prev = lastReading(deps.paths);
+  const tend = freshTend();
   for (;;) {
     const started = deps.clock();
     try {
       // The reading on disk, when there is one: an rpc `refresh` may have written a newer one than this loop's.
       prev = await readOnce(deps, lastReading(deps.paths) ?? prev, since);
       deps.log(`companion: reading in ${deps.clock() - started} ms`);
+      if (deps.cloud) await tendCloud(deps.cloud.cloud, prev, deps.cloud.label, deps.version, tend, deps.clock(), deps.log);
     } catch (e) {
       deps.log(`companion: reading failed (${(e as Error).name})`);
     }

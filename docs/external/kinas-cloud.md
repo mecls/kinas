@@ -13,7 +13,12 @@ which notifies through Web Push.
   `COMPANION_SECRET_SHA256`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 - **The phone page** — static files built from `cloud/phone/`, hosted on Vercel in Miraside's team; the build reads
   `VITE_CONVEX_URL` and `VITE_VAPID_PUBLIC_KEY`.
-- **On the VPS** — `~/.config/kinas/companion.env` (0600): `CONVEX_URL`, `KINAS_COMPANION_SECRET` (`vps.md`).
+- **On the VPS** — `~/.config/kinas/companion.env` (0600): `CONVEX_URL`, `KINAS_COMPANION_SECRET`, and optionally
+  `KINAS_COMPANION_LABEL` (a-z, 0-9, `-`, up to 32: the machine's name on the phone; `Linux machine` when absent) (`vps.md`).
+  The companion reads it only when it is the user's own and mode 0600, and the address must be a `*.convex.cloud` or
+  `*.convex.site` https one. *Added 2026-11-27 (slice 7.2).*
+- **Generated code** — `cloud/convex/_generated/` is written by `bun cloud/scripts/codegen-offline.ts` (Convex's own
+  templates) until the dev deployment exists; the first `npx convex dev` rewrites it, and what it writes is committed.
 - **Deploying** — `npx convex deploy` from the Mac with `CONVEX_DEPLOY_KEY` in that command's environment only, never
   saved by Kinas; this is a different key from the usage reader's (`convex-deploy-key.md`).
 - **Web Push** — Apple's push service (`*.push.apple.com`) for a home-screen web app on iOS 16.4 or later; standard

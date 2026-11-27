@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/registry.ts",
     "./theme": "./src/theme.ts",
-    "./crew-tools": "./src/crew-tools.ts"
+    "./crew-tools": "./src/crew-tools.ts",
+    "./crew-words": "./src/crew-words.ts"
   },
   "dependencies": {
     "@kinas/store": "workspace:*"

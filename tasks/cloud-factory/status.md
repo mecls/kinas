@@ -78,7 +78,10 @@
     companion's deploy to the home lab, and the smoke on the real Linux machine.
   - Ship point 1 on the real machine, 2026-11-27: pushed at `10ba1d2`; the Mac app installed from it; the companion
     deployed to the home lab (`302c8c1d`, all 18 rows ok). The captain's smoke: setup, the Work terminal and the empty
-    Crew board pass; one answer is still to do (it needs a task with an open question).
+    Crew board pass. **The one answer passed, 22:31:58** (after the companion was redeployed: the first swap had been
+    rolled back, so the first attempt was refused as `unknown verb`): delivered, read by the first mate, hold resolved
+    with the captain's words. Open: an answered Inbox item keeps live buttons until the hold closes; the captain wants
+    it gone.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

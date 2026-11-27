@@ -119,6 +119,12 @@ pub(crate) enum Request {
     /// The captain's answer (slice 6, ADR 0033): the line the first mate reads, delivered as a note in Firstmate's inbox
     /// while its question is still open there. `request_id` makes a resend after a lost reply the same note.
     Answer { task: String, key: String, words: String, request_id: String, from: Origin },
+    /// Pairing a phone (slice 8.1): the companion mints a code, tells the cloud store its hash, and answers with it once.
+    PairStart,
+    /// The paired phones, by name and times.
+    Phones,
+    /// Remove one phone by the id `Phones` gave: its token stops working.
+    Unpair { id: String },
     /// Setup (slice 4, §17 2026-11-25 #4): one item, each the captain's click. `folder` and `repo` only for `clone`,
     /// `adopt` only for Herdr's service; an absent one is left out of the JSON, as the companion's validator wants.
     Install {
@@ -170,6 +176,9 @@ impl Request {
             Request::Focus { .. } => "focus",
             Request::OpenWorkspace { .. } => "open-workspace",
             Request::Answer { .. } => "answer",
+            Request::PairStart => "pair-start",
+            Request::Phones => "phones",
+            Request::Unpair { .. } => "unpair",
             Request::Install { .. } => "install",
         }
     }

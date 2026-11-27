@@ -115,6 +115,121 @@ pub async fn place_status(app: AppHandle) -> Result<Option<PlaceStatus>, RemoteE
     .map_err(|e| RemoteError { message: format!("could not read the Linux machine's state: {e}") })?
 }
 
+/// A code to pair a phone: what the companion minted, once, and the link when it knows the page (slice 8.1). Kept nowhere:
+/// not in the store, not in the log, and not in the door's argv — it comes back on the reply and goes to the screen.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct PairStart {
+    pub code: String,
+    pub url: Option<String>,
+    pub expires_at: i64,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct Phone {
+    pub id: String,
+    pub name: String,
+    pub paired_at: i64,
+    pub last_seen_at: i64,
+    pub push: bool,
+}
+
+/// The words of the companion's two cloud errors; any other reply is a reply that could not be read.
+fn cloud_words(reply: &serde_json::Value) -> Option<&'static str> {
+    match reply.get("error").and_then(|e| e.as_str()) {
+        Some("no-cloud") => Some("The cloud store isn't set up on the Linux machine."),
+        Some("cloud-failed") => Some("The cloud store didn't answer. Try again."),
+        _ => None,
+    }
+}
+
+/// `^[0-9A-HJKMNP-TV-Z]{8}$` (Crockford's base32): a code anything else can't be.
+fn code_ok(code: &str) -> bool {
+    code.len() == 8 && code.bytes().all(|b| matches!(b, b'0'..=b'9' | b'A'..=b'H' | b'J' | b'K' | b'M' | b'N' | b'P'..=b'T' | b'V'..=b'Z'))
+}
+
+/// A link to the phone page: https, no spaces or quotes, short.
+fn page_url_ok(url: &str) -> bool {
+    url.starts_with("https://") && url.len() <= 300 && url.bytes().all(|b| b.is_ascii_graphic())
+}
+
+fn pair_of(reply: &serde_json::Value) -> Result<PairStart, String> {
+    if let Some(words) = cloud_words(reply) {
+        return Err(words.to_string());
+    }
+    let code = reply.get("code").and_then(|c| c.as_str()).filter(|c| code_ok(c));
+    let expires_at = reply.get("expires_at").and_then(|e| e.as_i64());
+    let (Some(code), Some(expires_at)) = (code, expires_at) else { return Err("the answer could not be read".into()) };
+    let url = reply.get("url").and_then(|u| u.as_str()).filter(|u| page_url_ok(u) && u.ends_with(&format!("#pair={code}"))).map(str::to_string);
+    Ok(PairStart { code: code.to_string(), url, expires_at })
+}
+
+fn phones_of(reply: &serde_json::Value) -> Result<Vec<Phone>, String> {
+    if let Some(words) = cloud_words(reply) {
+        return Err(words.to_string());
+    }
+    let Some(rows) = reply.get("phones").and_then(|p| p.as_array()) else { return Err("the answer could not be read".into()) };
+    Ok(rows
+        .iter()
+        .filter_map(|r| {
+            let id = r.get("id")?.as_str().filter(|i| (1..=64).contains(&i.len()) && i.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))?;
+            let name: String = r.get("name")?.as_str()?.chars().filter(|c| !c.is_control() && !matches!(c, '<' | '>')).take(60).collect();
+            Some(Phone { id: id.to_string(), name, paired_at: r.get("paired_at")?.as_i64()?, last_seen_at: r.get("last_seen_at")?.as_i64()?, push: r.get("push")?.as_bool()? })
+        })
+        .collect())
+}
+
+/// The VPS chosen, and its door's words for a failure, shared by the three phone commands.
+fn vps_of(app: &AppHandle) -> Result<(String, String), RemoteError> {
+    let store = app.state::<Store>();
+    let conn = store.conn();
+    match place(&conn, store.org_id()) {
+        Place::Vps { target, label } => Ok((target, label)),
+        Place::Mac => Err(RemoteError { message: "Agents run on this Mac.".into() }),
+    }
+}
+
+fn phone_call(app: &AppHandle, request: Request) -> Result<serde_json::Value, RemoteError> {
+    let (target, label) = vps_of(app)?;
+    let data_dir = app.state::<ReaderControl>().data_dir().to_path_buf();
+    remote::call(&target, &data_dir, &request).map_err(|why| RemoteError { message: why.words(&label) })
+}
+
+/// Pair a phone (Settings → Where agents run): a code for the captain to type on the phone, or its link. The code is on this
+/// reply and nowhere else; nothing here keeps it.
+#[tauri::command]
+pub async fn remote_pair_start(app: AppHandle) -> Result<PairStart, RemoteError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let reply = phone_call(&app, Request::PairStart)?;
+        pair_of(&reply).map_err(|message| RemoteError { message })
+    })
+    .await
+    .map_err(|e| RemoteError { message: format!("pairing did not start: {e}") })?
+}
+
+#[tauri::command]
+pub async fn remote_phones(app: AppHandle) -> Result<Vec<Phone>, RemoteError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let reply = phone_call(&app, Request::Phones)?;
+        phones_of(&reply).map_err(|message| RemoteError { message })
+    })
+    .await
+    .map_err(|e| RemoteError { message: format!("the phones could not be read: {e}") })?
+}
+
+/// Remove one phone; the phones that are left come back.
+#[tauri::command]
+pub async fn remote_unpair(app: AppHandle, id: String) -> Result<Vec<Phone>, RemoteError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if id.is_empty() || id.len() > 64 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+            return Err(RemoteError { message: "That is not a phone's id.".into() });
+        }
+        let reply = phone_call(&app, Request::Unpair { id })?;
+        phones_of(&reply).map_err(|message| RemoteError { message })
+    })
+    .await
+    .map_err(|e| RemoteError { message: format!("the phone was not removed: {e}") })?
+}
+
 /// A version as the screen may show it: at most 40 characters of digits, dots and letters.
 fn short_version(v: &serde_json::Value) -> Option<String> {
     v.as_str().map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-')).take(40).collect())
@@ -307,6 +422,39 @@ mod tests {
         assert_eq!(odd.problem.as_deref(), Some("can't reach vps-1: the answer could not be read"));
         let sly = hello_of("vps-1", Ok(serde_json::json!({"v": 1, "companion": {"version": "0.1.0"}, "herdr": {"version": "<b>9</b> /etc/passwd"}})), none(), 5);
         assert_eq!(sly.herdr_there.as_deref(), Some("b9betcpasswd"), "only digits, letters, dots and dashes reach the screen");
+    }
+
+    #[test]
+    fn a_pairing_reply_is_a_code_of_crockfords_alphabet_and_a_link_that_carries_it() {
+        let ok = pair_of(&serde_json::json!({"v": 1, "code": "AB3K9XZQ", "url": "https://kinas-phone.example.app/#pair=AB3K9XZQ", "expires_at": 605000}));
+        assert_eq!(ok, Ok(PairStart { code: "AB3K9XZQ".into(), url: Some("https://kinas-phone.example.app/#pair=AB3K9XZQ".into()), expires_at: 605000 }));
+        let no_page = pair_of(&serde_json::json!({"v": 1, "code": "AB3K9XZQ", "url": null, "expires_at": 1})).unwrap();
+        assert_eq!(no_page.url, None);
+        for bad in ["ab3k9xzq", "AB3K9XZ", "AB3K9XZQQ", "AB3I9XZQ", "AB3O9XZQ", "AB3L9XZQ", "AB3U9XZQ", "AB3K 9XZ", "<b>3K9XZQ"] {
+            assert!(pair_of(&serde_json::json!({"v": 1, "code": bad, "url": null, "expires_at": 1})).is_err(), "{bad}");
+        }
+        let wrong_link = pair_of(&serde_json::json!({"v": 1, "code": "AB3K9XZQ", "url": "https://evil.example/#pair=ZZZZZZZZ", "expires_at": 1})).unwrap();
+        assert_eq!(wrong_link.url, None, "a link that doesn't carry this code is dropped");
+        let http = pair_of(&serde_json::json!({"v": 1, "code": "AB3K9XZQ", "url": "http://kinas-phone.example.app/#pair=AB3K9XZQ", "expires_at": 1})).unwrap();
+        assert_eq!(http.url, None);
+        assert_eq!(pair_of(&serde_json::json!({"v": 1, "error": "no-cloud"})), Err("The cloud store isn't set up on the Linux machine.".into()));
+        assert_eq!(pair_of(&serde_json::json!({"v": 1, "error": "cloud-failed"})), Err("The cloud store didn't answer. Try again.".into()));
+        assert_eq!(pair_of(&serde_json::json!({"v": 1})), Err("the answer could not be read".into()));
+        assert_eq!(pair_of(&serde_json::json!({"v": 1, "error": "something <new>"})), Err("the answer could not be read".into()), "an unknown error is never put into words");
+    }
+
+    #[test]
+    fn the_phones_list_keeps_names_plain_and_drops_a_row_it_cannot_read() {
+        let reply = serde_json::json!({"v": 1, "phones": [
+            {"id": "k5788xyz", "name": "Miguel's iPhone", "paired_at": 1, "last_seen_at": 2, "push": true},
+            {"id": "k57<>", "name": "bad id", "paired_at": 1, "last_seen_at": 2, "push": true},
+            {"id": "k5788abc", "name": "<b>x</b>\u{7}", "paired_at": 3, "last_seen_at": 4, "push": false},
+            {"id": "k5788def", "name": "no times"}
+        ]});
+        let phones = phones_of(&reply).unwrap();
+        assert_eq!(phones.iter().map(|p| (p.id.as_str(), p.name.as_str())).collect::<Vec<_>>(), vec![("k5788xyz", "Miguel's iPhone"), ("k5788abc", "bx/b")]);
+        assert_eq!(phones_of(&serde_json::json!({"v": 1, "error": "no-cloud"})), Err("The cloud store isn't set up on the Linux machine.".into()));
+        assert!(phones_of(&serde_json::json!({"v": 1})).is_err());
     }
 
     #[test]

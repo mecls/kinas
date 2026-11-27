@@ -411,6 +411,24 @@ export const remoteHello = () => invoke<RemoteHello>("remote_hello");
 export const remoteInstall = (item: InstallItem, opts: { folder?: string; adopt?: boolean; restart?: boolean } = {}) =>
   invoke<RemoteHello>("remote_install", { item, folder: opts.folder ?? null, adopt: opts.adopt ?? null, restart: opts.restart ?? null });
 
+/** Pairing a phone (slice 8.1): a code, once, and the page's link when the companion knows it. Held in memory, never stored. */
+export interface PairStart {
+  code: string;
+  url: string | null;
+  expires_at: number;
+}
+export interface Phone {
+  id: string;
+  name: string;
+  paired_at: number;
+  last_seen_at: number;
+  push: boolean;
+}
+export const remotePairStart = () => invoke<PairStart>("remote_pair_start");
+export const remotePhones = () => invoke<Phone[]>("remote_phones");
+/** Remove one phone; the phones left come back. */
+export const remoteUnpair = (id: string) => invoke<Phone[]>("remote_unpair", { id });
+
 /** The status bar's VPS part (DESIGN.md 1.14): the agents' machine, as the crew's readings last found it. */
 export type MachineState = "connected" | "reconnecting" | "unreachable" | "not_running";
 export interface PlaceStatus {

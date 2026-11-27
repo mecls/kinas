@@ -409,3 +409,23 @@
   flex-direction: column;
   gap: var(--space-2);
 }
+.place-pair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.place-pair-code {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.place-pair-digits {
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  letter-spacing: 0.08em;
+}
+.place-phones {
+  min-width: 0;
+}

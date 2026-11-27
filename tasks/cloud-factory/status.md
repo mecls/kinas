@@ -67,6 +67,9 @@
     - **The case:** the sandbox gate refuses with its words; then one note, the words on stdin only; Deny is
       `Already answered`, with no Firstmate call; then read, with the reply.
     - **Tests:** `vps.e2e.ts` 7/7 alone, and `bun run check` green. Next is 6.4, ship point 1.
+  - 6.4 checks, 2026-11-27 (not done): `bun run check` green; the full e2e alone gave 42 of 43, and the one failure
+    (`reader-editor`, a menu timing wait) passed 3 of 3 alone. A full run with no failure, then the captain's push
+    and merge, are still to do.
 - [ ] Slice 7 · the cloud store: the companion writes summaries
 - [ ] Slice 8 · the phone: paired, reading
 - [ ] Slice 9 · notifications

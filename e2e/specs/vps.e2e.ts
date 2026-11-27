@@ -1,9 +1,10 @@
 import { $, browser, expect } from "@wdio/globals";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { inboxNotes, setInboxHandled, setSnapshot, writeSnapshot } from "../fake-firstmate/make.ts";
-import { LABEL, plantHerdrRelease, plantSandbox, setCompanion, setDown, TARGET } from "../fake-vps/make.ts";
+import { LABEL, PHONE_URL, plantHerdrRelease, plantSandbox, setCompanion, setDown, TARGET } from "../fake-vps/make.ts";
 import { APP_LOG, herdr, herdrSnapshot } from "../helpers.ts";
 import { VPS_SESSION } from "./vps.setup.ts";
 
@@ -599,5 +600,39 @@ describe("agents on a VPS", () => {
     expect(readFileSync(join(dataDir, "fake-vps", "companion", "state", "answers.jsonl"), "utf8").includes(words)).toBe(false);
     expect(logSinceStart()).toMatch(/crew: answer delivered/);
     expect(logSinceStart()).toMatch(/crew: answer refused \(gate\)/);
+  });
+
+  it("pairs a phone: a code and its link on screen for ten minutes, and the cloud learns only the hash (slice 8.1)", async () => {
+    await go("Settings");
+    await waitInPage(() => document.querySelector('[data-setting="place.pair"] button')?.textContent ?? null, (t) => t === "Pair a phone", "Pair a phone never drew");
+    expect(await browser.execute(() => document.querySelector('[data-setting="place.phones"]')?.textContent ?? "")).toContain("No phone is paired.");
+    const cloud = join(dataDir, "fake-vps", "cloud.jsonl");
+
+    await $('[data-setting="place.pair"] button').click();
+    const shown = await waitInPage(
+      () => ({
+        digits: document.querySelector('[data-setting="place.pair"] .place-pair-digits')?.textContent ?? null,
+        link: document.querySelector('[data-setting="place.pair"] .place-command code')?.textContent ?? null,
+        life: [...document.querySelectorAll('[data-setting="place.pair"] .crew-quiet-inline')].map((e) => e.textContent).join(" | "),
+      }),
+      (v) => v.digits !== null,
+      "the pairing code never showed",
+    );
+    expect(shown.digits).toMatch(/^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/);
+    const code = shown.digits!.replace("-", "");
+    expect(shown.link).toBe(`${PHONE_URL}/#pair=${code}`);
+    expect(shown.life).toMatch(/^Expires in (9|10) min, at \d\d:\d\d$/);
+
+    // The cloud was told one pairing: a SHA-256 and a time ten minutes on. The code is in none of the places it could leak.
+    const lines = readFileSync(cloud, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines).toHaveLength(1);
+    expect(lines[0].op).toBe("startPairing");
+    expect(lines[0].codeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(lines[0].codeHash).toBe(createHash("sha256").update(code).digest("hex"));
+    expect(readFileSync(cloud, "utf8").includes(code)).toBe(false);
+    expect(readFileSync(calls, "utf8").includes(code)).toBe(false);
+    expect(logSinceStart().includes(code)).toBe(false);
+    expect(execFileSync("/usr/bin/sqlite3", [join(dataDir, "kinas.sqlite"), ".dump"], { encoding: "utf8" }).includes(code)).toBe(false);
+    expect(readdirSync(join(dataDir, "fake-vps", "companion", "state")).some((f) => readFileSync(join(dataDir, "fake-vps", "companion", "state", f), "utf8").includes(code))).toBe(false);
   });
 });

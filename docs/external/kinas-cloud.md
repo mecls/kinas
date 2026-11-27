@@ -14,7 +14,8 @@ which notifies through Web Push.
 - **The phone page** — static files built from `cloud/phone/`, hosted on Vercel in Miraside's team; the build reads
   `VITE_CONVEX_URL` and `VITE_VAPID_PUBLIC_KEY`.
 - **On the VPS** — `~/.config/kinas/companion.env` (0600): `CONVEX_URL`, `KINAS_COMPANION_SECRET`, and optionally
-  `KINAS_COMPANION_LABEL` (a-z, 0-9, `-`, up to 32: the machine's name on the phone; `Linux machine` when absent) (`vps.md`).
+  `KINAS_COMPANION_LABEL` (a-z, 0-9, `-`, up to 32: the machine's name on the phone; `Linux machine` when absent) and
+  `KINAS_PHONE_URL` (the phone page's https address, for the pairing link; absent, the Mac shows the code alone) (`vps.md`).
   The companion reads it only when it is the user's own and mode 0600, and the address must be a `*.convex.cloud` or
   `*.convex.site` https one. *Added 2026-11-27 (slice 7.2).*
 - **Generated code** — `cloud/convex/_generated/` is written by `bun cloud/scripts/codegen-offline.ts` (Convex's own

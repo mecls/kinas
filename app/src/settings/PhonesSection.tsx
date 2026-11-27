@@ -27,7 +27,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 /** The two rows, shown while the Linux machine answers. `active` is Settings being on screen. */
-export function PhonesRows({ shown, active }: { shown: boolean; active: boolean }) {
+export function PhonesSection({ shown, active }: { shown: boolean; active: boolean }) {
   const [phones, setPhones] = useState<Phone[] | null>(null);
   const [pair, setPair] = useState<PairStart | null>(null);
   const [now, setNow] = useState(() => Date.now());

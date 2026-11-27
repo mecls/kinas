@@ -1,0 +1,100 @@
+@import "../../../app/src/styles/tokens.css";
+
+/* The phone page (DESIGN.md 3.3): one column, a large title, a bottom tab bar, every control --hit-touch tall. Semantic
+   tokens only; the mockup's own rules (tasks/cloud-factory/mockups/phone-*.html) are these. */
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  -webkit-text-size-adjust: 100%;
+}
+button, input, textarea { font: inherit; color: inherit; }
+
+.p-app { min-height: 100%; display: flex; flex-direction: column; }
+.p-body {
+  flex: 1;
+  padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) var(--space-4) max(var(--space-4), env(safe-area-inset-left));
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.p-pad { padding: var(--space-4); }
+.p-large { margin: var(--space-2) 0 0; font-size: var(--fs-num); line-height: var(--lh-num); font-weight: 600; }
+.p-title { margin: var(--space-2) 0 0; font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: 600; }
+.p-cap { font-size: var(--fs-md); line-height: var(--lh-md); color: var(--ink-2); margin: 0; }
+.p-meta { font-size: var(--fs-md); line-height: var(--lh-md); color: var(--ink-2); }
+.p-done { color: var(--ink-2); font-size: var(--fs-md); line-height: var(--lh-md); margin: 0; }
+.p-err { color: var(--danger); font-size: var(--fs-md); line-height: var(--lh-md); margin: 0; }
+.p-question { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+
+.p-group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+.p-row {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-top: 1px solid var(--line);
+  min-height: var(--hit-touch);
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
+}
+.p-row:first-child { border-top: 0; }
+.p-tap { cursor: pointer; }
+.p-row-top { display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
+.p-badge { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); white-space: nowrap; }
+.p-badge[data-word="needs decision"], .p-badge[data-word="in review"], .p-badge[data-word="ready"] { color: var(--warn); }
+.p-badge[data-word="blocked"], .p-badge[data-word="CI red"], .p-badge[data-word="failed"] { color: var(--danger); }
+
+.p-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  padding: var(--space-2) 0 max(var(--space-4), env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: 0;
+}
+.p-tabs button {
+  border: 0;
+  background: transparent;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+  min-height: var(--hit-touch);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+.p-tabs button[aria-current] { color: var(--accent); font-weight: 600; }
+.p-tabs b { font-weight: 600; color: var(--accent); }
+
+.p-back { border: 0; background: transparent; color: var(--accent); text-align: left; padding: 0; min-height: var(--hit-touch); font-size: var(--fs-md); }
+.p-form { display: grid; gap: var(--space-3); }
+.p-acts { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.p-acts .ui-button { height: var(--hit-touch); justify-content: center; font-size: var(--fs-lg); }
+.p-input {
+  min-height: var(--hit-touch);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  letter-spacing: 0.06em;
+}
+.p-area { padding: var(--space-3); font-family: inherit; font-size: var(--fs-lg); letter-spacing: normal; resize: vertical; }
+.p-pair { padding-top: max(var(--space-6), env(safe-area-inset-top)); }

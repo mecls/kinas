@@ -28,6 +28,8 @@ const fixtures = join(repo, "fixtures");
 /** The one target the stub answers. */
 export const TARGET = "captain@vps-e2e";
 export const LABEL = "vps-e2e";
+/** The phone page's address the fake companion knows (slice 8.1): the pairing link is `<this>/#pair=<code>`. */
+export const PHONE_URL = "https://kinas-phone.example.test";
 
 export interface FakeVps {
   /** The stub ssh: KINAS_E2E_SSH. */
@@ -85,7 +87,8 @@ export function makeFakeVps(dataDir: string, opts: { herdrSession?: string } = {
       `[ "$target" = '${TARGET}' ] || { echo "ssh: Could not resolve hostname $target: nodename nor servname provided" >&2; exit 255; }`,
       `[ -e '${join(dir, "down")}' ] && { echo "ssh: connect to host vps-e2e port 22: Operation timed out" >&2; exit 255; }`,
       `cd '${home}' || exit 255`,
-      `HOME='${home}' KINAS_COMPANION_ROOT='${root}' exec "$@"`,
+      // Slice 8.1: the companion's cloud is a JSONL file beside the calls log, and the phone page has an address.
+      `HOME='${home}' KINAS_COMPANION_ROOT='${root}' KINAS_COMPANION_CLOUD='file:${join(dir, "cloud.jsonl")}' KINAS_PHONE_URL='${PHONE_URL}' exec "$@"`,
     ].join("\n"),
   );
   return { ssh, root, calls, herdrCalls };

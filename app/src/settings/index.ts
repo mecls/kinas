@@ -94,6 +94,18 @@ export const SETTINGS: readonly SettingEntry[] = [
     label: "Client folders there",
     description: "Your folders with a GitHub origin, cloned into ~/projects there with gh, one yes each.",
   },
+  {
+    id: "place.pair",
+    section: "place",
+    label: "Pair a phone",
+    description: "A code for the phone, good for ten minutes, and the link that carries it. The phone sees summaries and can answer.",
+  },
+  {
+    id: "place.phones",
+    section: "place",
+    label: "Paired phones",
+    description: "Each phone Kinas knows, when it last looked, and whether it takes notifications. Remove stops one working.",
+  },
   { id: "crew.firstmate", section: "crew", label: "Firstmate", description: "Its pinned commit, home, backend, tools and projects." },
   { id: "projects.root", section: "projects", label: "Projects folder", description: "Where kinas open and the palette look for files. The CLI reads it too." },
   { id: "folders.list", section: "folders", label: "Client folders", description: "Their colours, which are in the sidebar, which are internal, and adding one." },

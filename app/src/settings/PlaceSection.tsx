@@ -4,7 +4,7 @@ import { clock } from "../crew/detail.ts";
 import { writeClipboard } from "../terminal/clipboard.ts";
 import { Button, Card, Dot, Table } from "../ui/index.ts";
 import { allOk, byHand, CHECK_LABELS, installLabel, secondClick, TONE } from "./placeSetup.ts";
-import { PhonesRows } from "./PhonesRows.tsx";
+import { PhonesSection } from "./PhonesSection.tsx";
 import { Block, Row } from "./Row.tsx";
 
 // Settings → Where agents run (the factory in the cloud, build spec §12 slice 1.4; DESIGN.md 1.14; ADR 0024): this Mac,
@@ -12,7 +12,7 @@ import { Block, Row } from "./Row.tsx";
 // choice, the two fields and the Reachable row. Slice 4 adds setup: the checks table with Install on a row Kinas can
 // fix (one item per click, as the captain's user), the command for the captain where only they can (claude, gh auth
 // login, the linger line), the bootstrap command while no companion answers there, and the client folders to clone.
-// Slice 8.1 adds the phones: Pair a phone and the paired phones (PhonesRows). Self-contained like CrewSection, and read
+// Slice 8.1 adds the phones: Pair a phone and the paired phones (PhonesSection). Self-contained like CrewSection, and read
 // again whenever Settings comes on screen.
 
 /** The Reachable row's words: connected and the companion's version, or why not, in the door's own fixed words. */
@@ -325,7 +325,7 @@ export function PlaceSection({ active }: { active: boolean }) {
             <span className="crew-quiet-inline">{onVps ? "Once Kinas answers there." : "Only with a Linux machine."}</span>
           )}
         </Row>
-        <PhonesRows shown={onVps && hello?.reachable === true} active={active} />
+        <PhonesSection shown={onVps && hello?.reachable === true} active={active} />
         <div className="settings-card-foot">
           <p className="settings-help">
             Kinas reaches the machine only with ssh and your own key, runs nothing there as root, and never buys, resizes or deletes it. Switching

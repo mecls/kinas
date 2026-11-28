@@ -19,7 +19,7 @@ function publicFunctions(file: string): Map<string, string> {
 
 test("every function the companion may call checks its secret before it touches a table", () => {
   const fns = publicFunctions("companion.ts");
-  expect([...fns.keys()].sort()).toEqual(["heartbeat", "phones", "replaceReading", "settleAnswer", "startPairing", "takeAnswers", "testNotification", "unpair"]);
+  expect([...fns.keys()].sort()).toEqual(["appendFactory", "heartbeat", "phones", "replaceReading", "settleAnswer", "startPairing", "takeAnswers", "testNotification", "unpair"]);
   for (const [name, body] of fns) {
     expect(body, name).toMatch(/args: \{\s*secret: v\.string\(\)/);
     const check = body.indexOf("await requireCompanion(secret)");
@@ -42,6 +42,13 @@ test("every function a phone may call but `pair` checks its token before it touc
     expect(check, `${name} never checks the token`).toBeGreaterThan(-1);
     expect(check, `${name} touches a table before it checks the token`).toBeLessThan(first);
   }
+});
+
+test("appendFactory validates the batch before it stores any of it, and stores each event once", () => {
+  const body = publicFunctions("companion.ts").get("appendFactory")!;
+  expect(body.indexOf("eventsViolation(events)")).toBeGreaterThan(-1);
+  expect(body.indexOf("eventsViolation(events)")).toBeLessThan(body.indexOf("ctx.db.insert"));
+  expect(body).toContain('.withIndex("by_key"');
 });
 
 test("a phone can't pair another phone, and the companion's functions aren't in the phone's file", () => {

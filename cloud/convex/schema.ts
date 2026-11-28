@@ -53,7 +53,7 @@ export default defineSchema({
   /** A pairing in progress: the SHA-256 of its code, never the code. */
   pairings: defineTable({ codeHash: v.string(), expiresAt: v.number(), usedAt: v.optional(v.number()), tries: v.number() }).index("by_expiresAt", ["expiresAt"]),
   /** The factory's events, immutable and never deleted (slice 11). */
-  factory_events: defineTable({ task: v.string(), project: v.string(), event: v.string(), at: v.number(), value: v.optional(nullableNumber) }).index("by_at", ["at"]),
+  factory_events: defineTable({ task: v.string(), project: v.string(), event: v.string(), at: v.number(), value: v.optional(nullableNumber) }).index("by_at", ["at"]).index("by_key", ["task", "event", "at"]),
   /** The last "unreachable" and "back" pushed, so a change sends one push. */
   alerts: defineTable({ kind: v.union(v.literal("unreachable"), v.literal("back")), at: v.number() }).index("by_kind", ["kind"]),
 });

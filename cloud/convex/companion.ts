@@ -7,6 +7,7 @@ import { internal } from "./_generated/api";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { PAIR_TTL_MS, companionOk } from "./lib/auth.ts";
 import { takeable } from "./lib/answers.ts";
+import { eventsViolation } from "./lib/factory.ts";
 import { CAPS, capsViolation, conforms, summary } from "./lib/summary.ts";
 import { diffWaiting, splitKey } from "./lib/waiting.ts";
 
@@ -137,5 +138,32 @@ export const testNotification = mutation({
   handler: async (ctx, { secret }) => {
     await requireCompanion(secret);
     await ctx.scheduler.runAfter(0, internal.push.sendTest, {});
+  },
+});
+
+/**
+ * The factory's events (slice 11.2): each is kept once, whatever the number of times the companion tells it, because a task,
+ * an event and a time are one thing that happened. Never changed after, and never deleted (a record, not a summary).
+ */
+export const appendFactory = mutation({
+  args: {
+    secret: v.string(),
+    events: v.array(v.object({ task: v.string(), project: v.string(), event: v.string(), at: v.number(), value: v.optional(v.number()) })),
+  },
+  handler: async (ctx, { secret, events }) => {
+    await requireCompanion(secret);
+    const wrong = eventsViolation(events);
+    if (wrong) throw new ConvexError(`refused: ${wrong}`);
+    let added = 0;
+    for (const e of events) {
+      const known = await ctx.db
+        .query("factory_events")
+        .withIndex("by_key", (q) => q.eq("task", e.task).eq("event", e.event).eq("at", e.at))
+        .first();
+      if (known) continue;
+      await ctx.db.insert("factory_events", e);
+      added++;
+    }
+    return added;
   },
 });

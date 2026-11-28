@@ -9,6 +9,9 @@ import { Row } from "./Row.tsx";
 // shows a code the captain types on the phone, and the link that carries it, each with Copy, for ten minutes; the paired
 // phones are a table with Remove. Nothing here keeps the code: it lives in this component's state and goes with it.
 
+/** How often the paired phones are read while a code is on screen. */
+const PHONES_REFRESH_MS = 4_000;
+
 const COLUMNS = [
   { key: "name", label: "Phone" },
   { key: "paired", label: "Paired" },
@@ -56,6 +59,13 @@ export function PhonesSection({ shown, active }: { shown: boolean; active: boole
     const id = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(id);
   }, [pair]);
+
+  // While a code shows, the phones are read again every few seconds, so the phone that just used it appears here.
+  useEffect(() => {
+    if (pair === null) return;
+    const id = window.setInterval(load, PHONES_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [pair, load]);
 
   // A code past its time is gone from the screen, not left to be copied.
   useEffect(() => {
@@ -140,6 +150,12 @@ export function PhonesSection({ shown, active }: { shown: boolean; active: boole
                   quiet("Open the phone page and type the code.")
                 )}
                 {quiet(expiryWords(pair.expires_at, now))}
+                <div className="row">
+                  <Button kind="text" className="button" disabled={busy} onClick={start}>
+                    {busy ? "Pairing…" : "New code"}
+                  </Button>
+                  {quiet("The code above stops working at once.")}
+                </div>
               </>
             )}
           </div>

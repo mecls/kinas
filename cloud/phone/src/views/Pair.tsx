@@ -39,7 +39,7 @@ export function Pair({ initialCode, removed, onPair }: { initialCode: string | n
         </div>
       </form>
       {error && <p className="p-err" role="alert">{error}</p>}
-      <p className="p-cap">Then add this page to the home screen and allow notifications.</p>
+      <p className="p-cap">On an iPhone, add this page to the home screen first and pair from its icon: the icon keeps its own pairing. Then allow notifications.</p>
     </main>
   );
 }

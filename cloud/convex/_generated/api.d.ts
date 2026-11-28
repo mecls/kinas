@@ -12,6 +12,7 @@ import type * as companion from "../companion.js";
 import type * as crons from "../crons.js";
 import type * as lib_answers from "../lib/answers.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_factory from "../lib/factory.js";
 import type * as lib_push from "../lib/push.js";
 import type * as lib_summary from "../lib/summary.js";
 import type * as lib_waiting from "../lib/waiting.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   "lib/answers": typeof lib_answers;
   "lib/auth": typeof lib_auth;
+  "lib/factory": typeof lib_factory;
   "lib/push": typeof lib_push;
   "lib/summary": typeof lib_summary;
   "lib/waiting": typeof lib_waiting;

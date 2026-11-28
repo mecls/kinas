@@ -87,6 +87,9 @@
         "@kinas/store": "workspace:*",
       },
     },
+    "packages/factory": {
+      "name": "@kinas/factory",
+    },
     "packages/store": {
       "name": "@kinas/store",
     },
@@ -233,6 +236,8 @@
     "@kinas/commands": ["@kinas/commands@workspace:packages/commands"],
 
     "@kinas/context": ["@kinas/context@workspace:packages/context"],
+
+    "@kinas/factory": ["@kinas/factory@workspace:packages/factory"],
 
     "@kinas/store": ["@kinas/store@workspace:packages/store"],
 

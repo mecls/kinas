@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { wordOfInput, type CrewWord } from "@kinas/commands/crew-words";
+import type { FactoryEvent } from "@kinas/factory";
 import { itemOf, type QuestionOut } from "./answer.ts";
 import { fleetOf, type FleetTask } from "./fleet.ts";
 import type { PrOut, Reading } from "./run.ts";
@@ -216,6 +217,8 @@ export interface Cloud {
   unpair(id: string): Promise<void>;
   /** Slice 9.2: push a test to every phone that has allowed notifications. */
   testNotification(): Promise<void>;
+  /** Slice 11.2: the factory's new events; the store keeps each (task, event, time) once, so telling it twice is harmless. */
+  appendFactory(events: FactoryEvent[]): Promise<void>;
 }
 
 /** Why a call failed, in words that carry no URL, secret or payload: the log line is `companion: cloud failed (<this>)`. */
@@ -261,6 +264,7 @@ export function convexCloud(url: string, secret: string, fetchImpl: (url: string
     phones: async () => ((await call("query", "companion:phones", {})) as Awaited<ReturnType<Cloud["phones"]>>) ?? [],
     unpair: async (id) => void (await call("mutation", "companion:unpair", { id })),
     testNotification: async () => void (await call("mutation", "companion:testNotification", {})),
+    appendFactory: async (events) => void (await call("mutation", "companion:appendFactory", { events })),
   };
 }
 
@@ -287,6 +291,7 @@ export function fileCloud(path: string): Cloud {
     phones: async () => [],
     unpair: async (id) => log("unpair", { id }),
     testNotification: async () => log("testNotification", {}),
+    appendFactory: async (events) => log("appendFactory", { events }),
   };
 }
 

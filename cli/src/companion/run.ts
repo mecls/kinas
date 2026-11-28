@@ -10,8 +10,9 @@
 import { run } from "@kinas/context";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { questionsOf, tendReceipts, type QuestionOut } from "./answer.ts";
-import { freshTend, tendCloud, type Cloud } from "./cloud.ts";
+import { answersForBundle, questionsOf, tendReceipts, type QuestionOut } from "./answer.ts";
+import { freshTend, summaryOf, tendCloud, type Cloud } from "./cloud.ts";
+import { freshFactory, tendFactory, viewOf, type FactoryDeps } from "./factory.ts";
 import { phoneLoop } from "./phone.ts";
 import { CALL, installed, laneConfig, LIMITS, type Firstmate, type ScriptOut } from "./firstmate.ts";
 import { HERDR, herdrAt, type Herdr, type HerdrCall } from "./herdr.ts";
@@ -644,6 +645,23 @@ export async function loop(deps: Deps, sleep: (ms: number) => Promise<void> = (m
   const since = deps.clock();
   let prev = lastReading(deps.paths);
   const tend = freshTend();
+  // The factory's events (slice 11.2): kept in `events.jsonl` on every machine, and sent to the cloud store when there is one.
+  const factory = freshFactory();
+  const factoryDeps: FactoryDeps = {
+    paths: deps.paths,
+    cloud: deps.cloud?.cloud ?? null,
+    log: deps.log,
+    ledger: (cursor) => {
+      const l = ledgerSince(deps.paths.home, cursor);
+      return l ? { epoch: l.epoch, to: l.to, text: l.text } : null;
+    },
+    answers: (view) => {
+      const project = new Map(view.board.map((t) => [t.task, t.project]));
+      return answersForBundle(deps.paths)
+        .filter((a) => a.state === "delivered")
+        .map((a) => ({ task: a.task, project: project.get(a.task) ?? "unknown", at: a.at }));
+    },
+  };
   // A phone's answers don't wait for the reading's fifteen seconds: their own loop takes them every five, and runs beside
   // this one (the answer's lock keeps it and an rpc answer from writing at once).
   if (deps.cloud) void phoneLoop({ cloud: deps.cloud.cloud, answer: { paths: deps.paths, fm: deps.fm, clock: deps.clock, log: deps.log }, clock: deps.clock, log: deps.log }, sleep);
@@ -654,6 +672,7 @@ export async function loop(deps: Deps, sleep: (ms: number) => Promise<void> = (m
       prev = await readOnce(deps, lastReading(deps.paths) ?? prev, since);
       deps.log(`companion: reading in ${deps.clock() - started} ms`);
       if (deps.cloud) await tendCloud(deps.cloud.cloud, prev, deps.cloud.label, deps.version, tend, deps.clock(), deps.log);
+      await tendFactory(factoryDeps, viewOf(summaryOf(prev, deps.cloud?.label ?? "Linux machine")), factory);
     } catch (e) {
       deps.log(`companion: reading failed (${(e as Error).name})`);
     }

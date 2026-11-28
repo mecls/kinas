@@ -50,6 +50,7 @@
         "@clack/prompts": "1.8.1",
         "@kinas/commands": "workspace:*",
         "@kinas/context": "workspace:*",
+        "@kinas/factory": "workspace:*",
         "@kinas/store": "workspace:*",
         "ink": "7.1.1",
         "react": "19.3.0",

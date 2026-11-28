@@ -223,6 +223,7 @@ function recorder(fail: { on: boolean } = { on: false }): { cloud: Cloud; calls:
     phones: async () => [],
     unpair: async () => {},
     testNotification: async () => {},
+    appendFactory: async () => {},
   };
   return { cloud, calls };
 }

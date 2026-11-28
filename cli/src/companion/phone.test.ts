@@ -66,6 +66,7 @@ function world() {
     phones: async () => [],
     unpair: async () => {},
     testNotification: async () => {},
+    appendFactory: async () => {},
   };
   const phone = (over: Partial<PendingAnswer> = {}): PendingAnswer => ({ requestId: "phone-p1", key: ITEM, task: TASK, decision: KEY, kind: "approve", text: "", submittedAt: T0 - 5_000, ...over });
   const state = freshPhone();

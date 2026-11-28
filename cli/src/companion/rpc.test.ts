@@ -203,6 +203,7 @@ describe("the pairing verbs (slice 8.1)", () => {
       phones: async () => [{ id: "k1", name: "Phone", pairedAt: 1, lastSeenAt: 2, push: false }],
       unpair: async (id) => void calls.push(`unpair ${id}`),
       testNotification: async () => void calls.push("test"),
+      appendFactory: async () => {},
       ...over,
     };
   };

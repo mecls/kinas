@@ -17,6 +17,7 @@ function cloudWith(over: Partial<Cloud> = {}): Cloud & { calls: string[] } {
     phones: async () => [],
     unpair: async (id) => void calls.push(`unpair ${id}`),
     testNotification: async () => {},
+    appendFactory: async () => {},
     ...over,
   };
 }

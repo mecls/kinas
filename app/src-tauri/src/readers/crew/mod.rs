@@ -449,9 +449,10 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo, sta
     let cursor = {
         let store = app.state::<Store>();
         let conn = store.conn();
-        crate::system::get_setting(&conn, store.org_id(), mirror::LEDGER_CURSOR_SETTING).and_then(|v| serde_json::from_value::<ledger::Cursor>(v).ok())
+        let ledger = crate::system::get_setting(&conn, store.org_id(), mirror::LEDGER_CURSOR_SETTING).and_then(|v| serde_json::from_value::<ledger::Cursor>(v).ok());
+        bundle::cursor_for(ledger, crate::crew::factory::cursor(&conn, store.org_id()))
     };
-    let reply = crate::remote::call(target, &data_dir, &crate::remote::Request::Bundle { cursor: cursor.map(bundle::cursor_for) });
+    let reply = crate::remote::call(target, &data_dir, &crate::remote::Request::Bundle { cursor: Some(cursor) });
     let now = now_ms();
     let decoded = reply.map(bundle::decode);
     let store = app.state::<Store>();
@@ -512,6 +513,10 @@ fn cycle_remote(app: &AppHandle, target: &str, label: &str, memo: &mut Memo, sta
             // Read by the first mate, its reply, and a delivery the door lost (slice 6.2): the Mac's own answers only.
             if let Err(e) = crate::crew::answer::apply_states(&conn, store.org_id(), b.answers.as_ref(), b.served_at, now) {
                 log::warn!("crew: answers' states not applied: {e}");
+            }
+            // The factory's events since the Mac's count (slice 11.2): each kept once, never removed.
+            if let Err(e) = crate::crew::factory::mirror(&mut conn, store.org_id(), b.factory.as_ref()) {
+                log::warn!("crew: factory events not kept: {e}");
             }
             let words = crate::crew::read::worker_words(&conn, store.org_id()).unwrap_or_default();
             drop(conn);
@@ -1092,7 +1097,9 @@ mod tests {
         let read = bundle::ledger_of(&chunk(v2, 100, 100 + v2.len() as u64));
         assert!(read.error.is_some());
         assert_eq!(read.cursor.offset, 100 + v2.find("{\"v\":2}").unwrap() as u64, "stops before the record it cannot read");
-        assert_eq!(bundle::cursor_for(ledger::Cursor { dev: 7, ino: 9, offset: 3 }), crate::remote::Cursor { epoch: "7:9".into(), offset: 3, events: 0 });
+        assert_eq!(bundle::cursor_for(Some(ledger::Cursor { dev: 7, ino: 9, offset: 3 }), 0), crate::remote::Cursor { epoch: "7:9".into(), offset: 3, events: 0 });
+        assert_eq!(bundle::cursor_for(Some(ledger::Cursor { dev: 7, ino: 9, offset: 3 }), 12), crate::remote::Cursor { epoch: "7:9".into(), offset: 3, events: 12 });
+        assert_eq!(bundle::cursor_for(None, 5), crate::remote::Cursor { epoch: String::new(), offset: 0, events: 5 }, "no ledger cursor yet still carries the factory's count");
     }
 
     /// A clone path is checked on the VPS's home as `repo::clone_repo` checks one here.

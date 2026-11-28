@@ -68,6 +68,10 @@ pub(crate) struct Bundle {
     /// the words, kept raw like the machine's readings, so a row that does not read is dropped alone.
     #[serde(default)]
     pub answers: Option<serde_json::Value>,
+    /// The factory's events after the Mac's count (slice 11.2, `crew/factory.rs`): `{from, taken, events}`, kept raw so
+    /// an event that does not read is dropped alone. None from a companion older than slice 11.
+    #[serde(default)]
+    pub factory: Option<serde_json::Value>,
 }
 
 /// A local-only task whose clone's local default branch moved since its launch (ADR 0029, `run.ts` `localMovedNow`).
@@ -120,9 +124,13 @@ pub(crate) fn heartbeat_here(info: &CompanionInfo, served_at: Option<i64>, now: 
     CompanionInfo { heartbeat_at, ..info.clone() }
 }
 
-/// The Mac's ledger cursor as the companion's: the file's identity and the byte after the last line taken.
-pub(crate) fn cursor_for(c: ledger::Cursor) -> crate::remote::Cursor {
-    crate::remote::Cursor { epoch: format!("{}:{}", c.dev, c.ino), offset: c.offset, events: 0 }
+/// The Mac's cursor as the companion's: the ledger file's identity and the byte after the last line taken (none yet: a
+/// start of the file, which no real epoch matches), and how many lines of the factory's log the Mac has taken.
+pub(crate) fn cursor_for(ledger: Option<ledger::Cursor>, events: u64) -> crate::remote::Cursor {
+    match ledger {
+        Some(c) => crate::remote::Cursor { epoch: format!("{}:{}", c.dev, c.ino), offset: c.offset, events },
+        None => crate::remote::Cursor { epoch: String::new(), offset: 0, events },
+    }
 }
 
 /// A chunk as the local reader's `LedgerRead`: the same `parse_lines`, and the cursor past what it consumed — `to` when
@@ -248,6 +256,18 @@ mod tests {
         garbage["answers"] = serde_json::json!("not a list");
         assert!(decode(garbage).unwrap().answers.is_some());
         assert!(decode(fixture()).unwrap().answers.is_none(), "an older companion sends none");
+    }
+
+    /// Slice 11.2: the factory's chunk arrives raw too, and an older companion sends none.
+    #[test]
+    fn the_factory_chunk_arrives_raw_and_never_drops_the_reading() {
+        let mut with = fixture();
+        with["factory"] = serde_json::json!({ "from": 0, "taken": 1, "events": [{ "task": "t" }] });
+        assert_eq!(decode(with).unwrap().factory.unwrap()["taken"], 1);
+        let mut garbage = fixture();
+        garbage["factory"] = serde_json::json!("not a chunk");
+        assert!(decode(garbage).unwrap().factory.is_some());
+        assert!(decode(fixture()).unwrap().factory.is_none(), "an older companion sends none");
     }
 
     #[test]

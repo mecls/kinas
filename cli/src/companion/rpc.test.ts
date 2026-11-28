@@ -106,7 +106,7 @@ describe("kinas companion rpc (slice 1)", () => {
     writeFileSync(d.paths.reading, readFileSync(FIXTURE, "utf8"));
     const { reply, exit } = await rpc('{"verb":"bundle","cursor":null}', d);
     expect(exit).toBe(0);
-    expect(reply).toEqual({ ...JSON.parse(readFileSync(FIXTURE, "utf8")), served_at: 1_794_834_015_000, ledger: null, answers: [] });
+    expect(reply).toEqual({ ...JSON.parse(readFileSync(FIXTURE, "utf8")), served_at: 1_794_834_015_000, ledger: null, answers: [], factory: { from: 0, taken: 0, events: [] } });
   });
 
   test("bundle with a cursor returns only the newer complete ledger lines; another file or a shorter one starts at 0", async () => {
@@ -127,6 +127,18 @@ describe("kinas companion rpc (slice 1)", () => {
     writeFileSync(ledger, '{"a":1}\n');
     const shorter = (await rpc(JSON.stringify({ verb: "bundle", cursor: { ...cursor, offset: 24 } }), d)).reply as { ledger: { from: number; text: string } };
     expect(shorter.ledger).toMatchObject({ from: 0, text: '{"a":1}\n' });
+  });
+
+  test("bundle carries the factory's events after the cursor's count (slice 11.2)", async () => {
+    const d = deps();
+    mkdirSync(d.paths.state, { recursive: true });
+    writeFileSync(d.paths.reading, readFileSync(FIXTURE, "utf8"));
+    const e = (n: number) => ({ task: `t${n}`, project: "p", event: "merged", at: 1_795_600_000_000 + n });
+    writeFileSync(join(d.paths.state, "events.jsonl"), [1, 2, 3].map((n) => `${JSON.stringify(e(n))}\n`).join(""));
+    const all = (await rpc('{"verb":"bundle","cursor":null}', d)).reply as { factory: unknown };
+    expect(all.factory).toEqual({ from: 0, taken: 3, events: [e(1), e(2), e(3)] });
+    const rest = (await rpc(JSON.stringify({ verb: "bundle", cursor: { epoch: "x", offset: 0, events: 2 } }), d)).reply as { factory: unknown };
+    expect(rest.factory).toEqual({ from: 2, taken: 1, events: [e(3)] });
   });
 
   test("refresh runs a reading now, and says so when it failed", async () => {

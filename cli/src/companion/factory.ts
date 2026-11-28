@@ -47,17 +47,10 @@ export function viewOf(s: Pick<Summary, "asOf" | "board" | "waiting">): View {
   };
 }
 
-/** The events in the log; a line that is not one is skipped, and no file is no events. */
-export function loadEvents(state: string): FactoryEvent[] {
-  let text: string;
-  try {
-    text = readFileSync(join(state, EVENTS_FILE), "utf8");
-  } catch {
-    return [];
-  }
+/** The events among these lines; a line that is not one is skipped. */
+function parseEvents(lines: string[]): FactoryEvent[] {
   const out: FactoryEvent[] = [];
-  for (const line of text.split("\n")) {
-    if (line === "") continue;
+  for (const line of lines) {
     try {
       const j = JSON.parse(line) as Record<string, unknown>;
       if (typeof j.task !== "string" || typeof j.project !== "string" || typeof j.event !== "string" || !NAMES.has(j.event) || !Number.isSafeInteger(j.at)) continue;
@@ -67,6 +60,15 @@ export function loadEvents(state: string): FactoryEvent[] {
     }
   }
   return out;
+}
+
+/** The events in the log; a line that is not one is skipped, and no file is no events. */
+export function loadEvents(state: string): FactoryEvent[] {
+  try {
+    return parseEvents(readFileSync(join(state, EVENTS_FILE), "utf8").split("\n").filter((l) => l !== ""));
+  } catch {
+    return [];
+  }
 }
 
 /** Add the events not yet in the log (by task, event and time), each as one whole line; returns the ones added. */
@@ -120,4 +122,29 @@ export async function tendFactory(deps: FactoryDeps, view: View, st: FactoryStat
   } catch (e) {
     deps.log(`companion: cloud failed (${e instanceof CloudError ? e.status : "error"})`);
   }
+}
+
+/** The most events one bundle carries; the Mac takes the rest on its next one. */
+export const CHUNK_CAP = 1000;
+
+export interface FactoryChunk {
+  /** The line this chunk begins at: the Mac's count, or 0 when the file is shorter than that (another file). */
+  from: number;
+  /** How many lines of the file it covers, counting any that were not events: the Mac's next count is `from + taken`. */
+  taken: number;
+  events: FactoryEvent[];
+}
+
+/** The events from line `from` of the log on, for `rpc bundle`: the log only grows, so the Mac's count is a place in it. */
+export function chunkSince(state: string, from: number, cap = CHUNK_CAP): FactoryChunk {
+  let text: string;
+  try {
+    text = readFileSync(join(state, EVENTS_FILE), "utf8");
+  } catch {
+    return { from: 0, taken: 0, events: [] };
+  }
+  const lines = text.split("\n").filter((l) => l !== "");
+  const start = Number.isSafeInteger(from) && from >= 0 && from <= lines.length ? from : 0;
+  const slice = lines.slice(start, start + cap);
+  return { from: start, taken: slice.length, events: parseEvents(slice) };
 }

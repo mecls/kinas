@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FactoryEvent, View } from "@kinas/factory";
 import { CloudError, type Cloud } from "./cloud.ts";
-import { EVENTS_FILE, appendEvents, freshFactory, loadEvents, tendFactory, viewOf, type FactoryDeps } from "./factory.ts";
+import { EVENTS_FILE, appendEvents, chunkSince, freshFactory, loadEvents, tendFactory, viewOf, type FactoryDeps } from "./factory.ts";
 
 // Slice 11.2 (build spec §11.3 B): after each reading the companion derives the factory's events (packages/factory), appends
 // the new ones to `events.jsonl` (append-only, each task-event-time once) and sends them to the cloud store, which keeps
@@ -184,4 +184,36 @@ test("appendEvents writes only what is new, each line complete, and says which i
   expect(appendEvents(w.state, seen, [a, a])).toEqual([a]);
   expect(appendEvents(w.state, seen, [a])).toEqual([]);
   expect(readFileSync(w.file, "utf8")).toBe(`${JSON.stringify(a)}\n`);
+});
+
+const ev = (n: number): FactoryEvent => ({ task: `t${n}`, project: "p", event: "merged", at: 1_795_600_000_000 + n });
+
+test("chunkSince: the events after the Mac's count, how many lines that took, and where it began", () => {
+  const w = world();
+  writeFileSync(w.file, [1, 2, 3].map((n) => `${JSON.stringify(ev(n))}\n`).join(""));
+  expect(chunkSince(w.state, 0)).toEqual({ from: 0, taken: 3, events: [ev(1), ev(2), ev(3)] });
+  expect(chunkSince(w.state, 2)).toEqual({ from: 2, taken: 1, events: [ev(3)] });
+  expect(chunkSince(w.state, 3)).toEqual({ from: 3, taken: 0, events: [] });
+});
+
+test("chunkSince: a count past the end of the file means another file, so it starts again at 0", () => {
+  const w = world();
+  writeFileSync(w.file, `${JSON.stringify(ev(1))}\n`);
+  expect(chunkSince(w.state, 5)).toEqual({ from: 0, taken: 1, events: [ev(1)] });
+  expect(chunkSince(w.state, -1)).toEqual({ from: 0, taken: 1, events: [ev(1)] }); // never a count below nothing
+});
+
+test("chunkSince: no file is nothing to take, and a line that is not an event is counted but not carried", () => {
+  const w = world();
+  expect(chunkSince(w.state, 0)).toEqual({ from: 0, taken: 0, events: [] });
+  writeFileSync(w.file, `${JSON.stringify(ev(1))}\nnot json\n${JSON.stringify(ev(2))}\n`);
+  expect(chunkSince(w.state, 0)).toEqual({ from: 0, taken: 3, events: [ev(1), ev(2)] });
+  expect(chunkSince(w.state, 1)).toEqual({ from: 1, taken: 2, events: [ev(2)] });
+});
+
+test("chunkSince carries at most the cap in one bundle, and the Mac asks again from where it got to", () => {
+  const w = world();
+  writeFileSync(w.file, Array.from({ length: 5 }, (_, i) => `${JSON.stringify(ev(i))}\n`).join(""));
+  expect(chunkSince(w.state, 0, 2)).toEqual({ from: 0, taken: 2, events: [ev(0), ev(1)] });
+  expect(chunkSince(w.state, 2, 2)).toEqual({ from: 2, taken: 2, events: [ev(2), ev(3)] });
 });

@@ -6,11 +6,12 @@
 // either way: "not there" is an answer the Mac puts in words, and a non-zero exit would lose it at the door. Since
 // slice 4, `hello` carries setup's checks (setup.ts) and the client folders already cloned, and `install` (install.ts)
 // answers the same way. Since slice 6, `answer` delivers the captain's answer as a note in Firstmate's inbox (answer.ts),
-// and `bundle` carries what became of each answer, never its words.
+// and `bundle` carries what became of each answer, never its words. Since slice 11.2, `bundle` also carries the factory's events after the Mac's count.
 
 import { readFile } from "node:fs/promises";
 import { focusWorkspace, launchFirstMate, openWorkspace, viewNow } from "./actions.ts";
 import { answersForBundle, deliver } from "./answer.ts";
+import { chunkSince } from "./factory.ts";
 import type { Cloud } from "./cloud.ts";
 import type { Firstmate } from "./firstmate.ts";
 import type { Herdr } from "./herdr.ts";
@@ -166,7 +167,7 @@ async function bundle(deps: RpcDeps, cursor: Cursor | null): Promise<RpcResult> 
     // The ledger is read now, from the Mac's own cursor: the reading on disk is shared, the cursor is the Mac's.
     // `served_at`: this machine's clock now, so the Mac reads the heartbeat's age on one clock, never across two.
     // `answers`: what became of each answer (slice 6, point 7), from the companion's own record, without the words.
-    return { reply: { ...reading, served_at: deps.now(), ledger: ledgerSince(deps.paths.home, cursor), answers: answersForBundle(deps.paths) }, exit: 0 };
+    return { reply: { ...reading, served_at: deps.now(), ledger: ledgerSince(deps.paths.home, cursor), answers: answersForBundle(deps.paths), factory: chunkSince(deps.paths.state, cursor?.events ?? 0) }, exit: 0 };
   } catch {
     return { reply: { v: RPC_VERSION, error: "bad-reading" }, exit: 1 };
   }

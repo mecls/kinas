@@ -5,7 +5,7 @@
 // log line saying which name is missing, never a value. The payload is built by lib/push.ts and checked before it is sent.
 
 import { v } from "convex/values";
-import webpush from "web-push";
+import * as webpush from "web-push";
 import { internal } from "./_generated/api";
 import { internalAction, type ActionCtx } from "./_generated/server";
 import { alertVerdict, backPayload, itemPayload, payloadViolation, testPayload, unreachablePayload, type Payload } from "./lib/push.ts";

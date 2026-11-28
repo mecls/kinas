@@ -1,0 +1,9 @@
+.env.local
+
+# Convex CLI wrote these agent files; they are not Kinas's (AGENTS.md at the root is)
+AGENTS.md
+CLAUDE.md
+.agents/
+.claude/
+skills-lock.json
+convex/_generated/ai/
